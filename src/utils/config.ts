@@ -1,0 +1,26 @@
+import 'dotenv/config';
+
+export const JWT_SECRET = process.env.JWT_SECRET
+
+export const NODE_ENV = process.env.NODE_ENV || 'development';
+export const PORT = process.env.PORT || 5000;
+
+export const MONGODB_URL = process.env.MONGODB_URL;
+
+export const MAIL_HOST = process.env.MAIL_HOST;
+export const MAIL_PORT = process.env.MAIL_PORT || 465;
+export const MAIL_USER = process.env.MAIL_USER;
+export const MAIL_PASSWORD = process.env.MAIL_PASSWORD;
+
+export const GOOGLE_ID = process.env.GOOGLE_ID;
+export const GOOGLE_SECRET = process.env.GOOGLE_SECRET;
+
+export const META_ID = process.env.META_ID;
+export const META_SECRET = process.env.META_SECRET;
+
+export const APPLE_ID = process.env.APPLE_ID;
+export const APPLE_SECRET = process.env.APPLE_SECRET;
+
+export const FRONTEND_URL = process.env.FRONTEND_URL;
+
+export const DEV_MAILS = process.env.DEV_MAILS?.split(',') || [];
