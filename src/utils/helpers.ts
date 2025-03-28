@@ -3,7 +3,7 @@ import { validationResult } from "express-validator";
 import bcrypt from "bcrypt"
 import * as jwt from 'jsonwebtoken';
 
-import { UnauthorizedException, UnprocessableContent } from "./service-error";
+import { SessionTimeout, UnauthorizedException, UnprocessableContent } from "./service-error";
 import { JWT_SECRET } from "./config";
 
 export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
@@ -86,7 +86,10 @@ export const createAccessToken = (id: string, options: jwt.SignOptions = {}) => 
 export const verifyAccessToken = (token: string): any => {
   return jwt.verify(token, String(JWT_SECRET), (err, decoded) => {
     if (err) {
-      throw new UnauthorizedException('Session expired');
+      if (err.name === "TokenExpiredError") {
+        throw new SessionTimeout();
+      }
+      throw new UnauthorizedException()
     }
     return decoded;
   });

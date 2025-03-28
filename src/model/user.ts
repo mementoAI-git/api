@@ -4,6 +4,9 @@ export interface IUser {
   email: string
   first_name: string
   last_name: string
+  gender: string
+  dob: string
+  country: string
   password: string
   providers: string[]
   verified: boolean
@@ -17,6 +20,9 @@ const user = new Schema<IUser>({
   },
   first_name: String,
   last_name: String,
+  gender: String,
+  dob: Date,
+  country: String,
   password: String,
   providers: [String],
   verified: {

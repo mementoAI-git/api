@@ -11,4 +11,5 @@ router.post("/register", valid.login, ctrl.register)
 router.post("/send-code", valid.sendAuthCode, ctrl.sendAuthCode)
 router.post("/verify-code", valid.verifyCode, ctrl.verifyCode)
 
+export const name = "auth"
 export default router

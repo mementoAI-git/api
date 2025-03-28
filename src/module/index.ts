@@ -21,7 +21,9 @@ function router(app: Application) {
     .filter(file => !file.startsWith('.') && !file.includes('index'))
     .forEach(file => {
       const route = require(`./${file}/routes`);
-      app.use(route.default || route);
+      const path = route?.name || file.replace(/\.[^/.]+$/, "")
+
+      app.use(`/${path}`, route.default || route);
     });
 
   app.get('/health', health);

@@ -79,8 +79,8 @@ export class UnprocessableContent extends ServiceError {
   }
 }
 
-export class Logintimeout extends ServiceError {
-  constructor(message: string, data?: any) {
+export class SessionTimeout extends ServiceError {
+  constructor(message: string = 'Session expired', data?: any) {
     super(message, 440, data, 'failed');
   }
 }

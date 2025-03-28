@@ -19,12 +19,17 @@ export default {
   login: [
     emailValidator,
     body("password")
-      .notEmpty().withMessage("Password is required")
-      .isStrongPassword(),
+      .notEmpty().withMessage("Password is required"),
     body("remember_for_30_days")
       .optional()
       .default(false)
       .toBoolean()
+  ],
+  register: [
+    emailValidator,
+    body("password")
+      .notEmpty().withMessage("Password is required")
+      .isStrongPassword().withMessage("Password must be strong"),
   ],
   sendAuthCode: emailValidator,
   verifyCode: [

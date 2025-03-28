@@ -32,7 +32,12 @@ class MailService {
   async sendAuthCode(email: string) {
     const code = random(6, "number")
     const expires_at = dayjs().add(10, "minutes").toISOString()
-    await AuthCode.create({ code, email, expires_at })
+    const authCode = await AuthCode.findOne({ email })
+    if (authCode) {
+      await authCode.updateOne({ code, expires_at })
+    } else {
+      await AuthCode.create({ code, email, expires_at })
+    }
 
     await this.send({
       to: email,
