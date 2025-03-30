@@ -5,6 +5,7 @@ import * as jwt from 'jsonwebtoken';
 
 import { SessionTimeout, UnauthorizedException, UnprocessableContent } from "./service-error";
 import { JWT_SECRET } from "./config";
+import { IPagination } from "./interface";
 
 export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
   if (type === "number") {
@@ -67,6 +68,15 @@ export const validateRequest = (req: Request) => {
     const message = errors.array()[0].msg;
     throw new UnprocessableContent(message, errors.array());
   }
+};
+
+export const getPagination = (req: Request): IPagination => {
+  let { limit = 25, page = 1 } = req.query;
+
+  limit = Math.max(Number(limit), 1);
+  page = Math.max(Number(page), 1)
+
+  return { limit, page, ...req.query };
 };
 
 export const hashPassword = async (password: string) => {

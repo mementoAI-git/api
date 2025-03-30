@@ -5,6 +5,7 @@ export interface IUser {
   first_name: string
   last_name: string
   gender: string
+  phone_number: string
   dob: string
   country: string
   password: string
@@ -25,6 +26,7 @@ const user = new Schema<IUser>({
   country: String,
   password: String,
   providers: [String],
+  phone_number: String,
   verified: {
     type: Boolean,
     default: false
