@@ -127,6 +127,10 @@ export async function verifyCode(payload: IVerifyCode) {
     throw new BadRequestException("Verification code has exipred")
   }
 
+  if (!user.verified) {
+    await user.updateOne({ verified: true })
+  }
+
   const access_token = createAccessToken(user.id, { expiresIn: "1h" })
   await authCode.deleteOne()
 

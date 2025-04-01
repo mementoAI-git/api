@@ -6,7 +6,7 @@ const providerValidator = param("provider")
   .isIn(Object.keys(OAUTH_PROVIDERS))
   .withMessage("Provider is not supported")
 
-const emailValidator = body("email")
+export const emailValidator = body("email")
   .notEmpty().withMessage("Email address is required")
   .isEmail().withMessage("Invalid email address")
 

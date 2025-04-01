@@ -1,4 +1,4 @@
-import nodemailer, { Transporter } from "nodemailer"
+import nodemailer from "nodemailer"
 import { MailOptions } from "nodemailer/lib/sendmail-transport";
 import { DEV_MAILS, MAIL_HOST, MAIL_PASSWORD, MAIL_PORT, MAIL_USER } from "../utils/config";
 import { random } from "../utils/helpers";

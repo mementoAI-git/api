@@ -1,9 +1,10 @@
-import { NextFunction, Response, Request } from "express"
+import { NextFunction, Response } from "express"
 import * as service from "./service"
 import { responsHandler, validateRequest } from "../../utils/helpers"
 import { StatusCodes } from "http-status-codes"
+import { IRequest } from "../../utils/interface"
 
-export async function updateProfile(req: Request, res: Response, next: NextFunction) {
+export async function updateProfile(req: IRequest, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
 
@@ -15,7 +16,7 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
   }
 }
 
-export async function getProfile(req: Request, res: Response, next: NextFunction) {
+export async function getProfile(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.getProfile(req.auth.id)
 
@@ -25,7 +26,7 @@ export async function getProfile(req: Request, res: Response, next: NextFunction
   }
 }
 
-export async function setPassword(req: Request, res: Response, next: NextFunction) {
+export async function setPassword(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.setPassword(req.body, req.auth.id)
 

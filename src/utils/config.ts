@@ -21,6 +21,8 @@ export const META_SECRET = process.env.META_SECRET;
 export const APPLE_ID = process.env.APPLE_ID;
 export const APPLE_SECRET = process.env.APPLE_SECRET;
 
+export const TEMP_PATH = process.env.TEMP_PATH || "./tmp";
+
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 
 export const DEV_MAILS = process.env.DEV_MAILS?.split(',') || [];

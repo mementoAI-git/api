@@ -3,6 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import dayjs from 'dayjs';
 import { isEmpty, responsHandler } from '../utils/helpers';
 import { ServiceError } from '../utils/service-error';
+import mail from '../services/mail';
 
 const errorHandler = async (
   err: any,
@@ -22,17 +23,14 @@ const errorHandler = async (
 
   const error_payload = { request, message, path, stackLines };
 
-  console.log('Error: ', JSON.stringify(error_payload, null, 2));
-
   if (err instanceof ServiceError) {
     return responsHandler(res, err.statusCode, err?.message, err?.data);
   }
-
-  // mail.send({
-  //   to: DEV_MAILS,
-  //   subject: 'Memento error',
-  //   text: JSON.stringify(error_payload, null, 2),
-  // });
+  console.log('Error: ', JSON.stringify(error_payload, null, 2));
+  mail.send({
+    subject: 'Memento error',
+    text: JSON.stringify(error_payload, null, 2),
+  });
   return responsHandler(
     res,
     StatusCodes.INTERNAL_SERVER_ERROR,
