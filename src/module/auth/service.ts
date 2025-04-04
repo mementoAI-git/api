@@ -2,7 +2,7 @@ import bcrypt from "bcrypt"
 
 import { ILogin, IOAuthAuthorization, IVerifyCode } from "./interface";
 import { OAUTH_PROVIDERS } from "../../utils/constant";
-import { compareStrings, createAccessToken, hashPassword, isEmpty } from "../../utils/helpers";
+import { compareStrings, createAccessToken, generateKeys, hashPassword, isEmpty } from "../../utils/helpers";
 import { BadRequestException, NotFoundException, UnauthorizedException } from "../../utils/service-error";
 import User from "../../model/user";
 import axios from "axios";
@@ -38,12 +38,15 @@ export async function oauthAuthorization({ code }: IOAuthAuthorization, provider
 
   let user = await User.findOne({ email: userinfo.email })
   if (!user) {
+    const keys = generateKeys()
+
     user = await User.create({
       email: userinfo.email,
       first_name: userinfo.first_name,
       last_name: userinfo.last_name,
       verified: true,
-      providers: [userinfo.provider]
+      providers: [userinfo.provider],
+      ...keys
     })
   }
 
@@ -90,7 +93,9 @@ export async function register(payload: ILogin) {
   }
 
   const password = await hashPassword(payload.password)
-  await User.create({ password, email })
+  const keys = generateKeys()
+
+  await User.create({ password, email, ...keys })
   await mail.sendAuthCode(email)
 
   return { data: null, message: "User registration successful" }

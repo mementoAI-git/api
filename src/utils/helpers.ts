@@ -2,6 +2,7 @@ import { Response, Request } from "express";
 import { validationResult } from "express-validator";
 import bcrypt from "bcrypt"
 import * as jwt from 'jsonwebtoken';
+import { ec } from "elliptic"
 
 import { SessionTimeout, UnauthorizedException, UnprocessableContent } from "./service-error";
 import { JWT_SECRET } from "./config";
@@ -83,6 +84,16 @@ export const hashPassword = async (password: string) => {
   const salt = await bcrypt.genSalt(10);
   return await bcrypt.hash(password, salt);
 };
+
+export const generateKeys = () => {
+  const EC = new ec("secp256k1")
+  const key = EC.genKeyPair();
+
+  const private_key = key.getPrivate("hex")
+  const public_key = key.getPublic("hex")
+
+  return { private_key, public_key }
+}
 
 export const createAccessToken = (id: string, options: jwt.SignOptions = {}) => {
   return jwt.sign({ id }, String(JWT_SECRET), {

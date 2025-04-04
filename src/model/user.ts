@@ -11,6 +11,8 @@ export interface IUser {
   password: string
   providers: string[]
   verified: boolean
+  private_key: string
+  public_key: string
 }
 
 const user = new Schema<IUser>({
@@ -25,6 +27,8 @@ const user = new Schema<IUser>({
   dob: Date,
   country: String,
   password: String,
+  private_key: String,
+  public_key: String,
   providers: [String],
   phone_number: String,
   verified: {
