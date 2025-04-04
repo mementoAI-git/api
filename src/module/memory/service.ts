@@ -1,4 +1,4 @@
-import Memory from "../../model/memory";
+import Memory, { IMemory } from "../../model/memory";
 import User from "../../model/user";
 import { IPagination } from "../../utils/interface";
 import { NotFoundException } from "../../utils/service-error";
@@ -40,6 +40,9 @@ export async function getMemory(id: string) {
   return { data, message: "User memory retrieved successfully" }
 }
 
-export function updateMemory() {
-
+export async function updateMemory(id: string, payload: Partial<IMemory>, user_id: string) {
+  const memory = await Memory.findOne({ _id: id, user: user_id })
+  if (!memory) {
+    throw new NotFoundException("Memory not found")
+  }
 }

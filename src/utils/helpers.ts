@@ -7,6 +7,7 @@ import { ec } from "elliptic"
 import { SessionTimeout, UnauthorizedException, UnprocessableContent } from "./service-error";
 import { JWT_SECRET } from "./config";
 import { IPagination } from "./interface";
+import dayjs from "dayjs";
 
 export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
   if (type === "number") {
@@ -103,6 +104,14 @@ export const createAccessToken = (id: string, options: jwt.SignOptions = {}) => 
     ...options
   });
 };
+
+export const reconstructFileName = (name: string) => {
+  const file_name = name.toLowerCase().replace(/\s+/g, "_");
+  const extension = name.split('.').pop();
+  const timestamp = dayjs().format("YYMMDDHHmmss");
+
+  return `${file_name.replace(/\.[^/.]+$/, '')}_${timestamp}.${extension}`;
+}
 
 export const verifyAccessToken = (token: string): any => {
   return jwt.verify(token, String(JWT_SECRET), (err, decoded) => {

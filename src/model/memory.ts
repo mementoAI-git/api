@@ -7,6 +7,7 @@ export interface IMemory {
   user: string
   attachments: string[]
   tags: string[]
+  status: string // draft
   level: number
   refrence: string
   last_opened: string
