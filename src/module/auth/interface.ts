@@ -4,9 +4,19 @@ export interface ILogin {
   remember_for_30_days?: boolean
 }
 
-export interface IVerifyCode {
+export interface IVerifyEmail {
   email: string
-  code: string
+  token: string
+}
+
+export interface ISetPassword {
+  password: string
+  token: string
+}
+
+export interface ISendLink {
+  email: string
+  type: string
 }
 
 export interface IOAuthAuthorization {

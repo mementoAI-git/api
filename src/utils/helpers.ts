@@ -96,13 +96,15 @@ export const generateKeys = () => {
   return { private_key, public_key }
 }
 
-export const createAccessToken = (id: string, options: jwt.SignOptions = {}) => {
-  return jwt.sign({ id }, String(JWT_SECRET), {
+export const createAccessToken = (id: string, expires_in = 24 * 60 * 60 * 1000) => {
+  const access_token = jwt.sign({ id }, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
-    expiresIn: "1d",
-    ...options
+    expiresIn: expires_in
   });
+
+  const expires_at = dayjs().add(expires_in, "millisecond").toISOString()
+  return { access_token, expires_at }
 };
 
 export const reconstructFileName = (name: string) => {

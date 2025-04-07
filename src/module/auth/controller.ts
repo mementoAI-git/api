@@ -43,20 +43,30 @@ export async function register(req: Request, res: Response, next: NextFunction) 
   }
 }
 
-export async function sendAuthCode(req: Request, res: Response, next: NextFunction) {
+export async function sendLink(req: Request, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
-    const { message, data } = await service.sendAuthCode(req.body)
+    const { message, data } = await service.sendLink(req.body)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
   }
 }
 
-export async function verifyCode(req: Request, res: Response, next: NextFunction) {
+export async function verifyEmail(req: Request, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
-    const { message, data } = await service.verifyCode(req.body)
+    const { message, data } = await service.verifyEmail(req.body)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function setPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.setPassword(req.body)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

@@ -1,10 +1,6 @@
 import { APPLE_ID, APPLE_SECRET, FRONTEND_URL, GOOGLE_ID, GOOGLE_SECRET, META_ID, META_SECRET } from "./config";
 
-const OAUTH_REDIRECT_URL = `${FRONTEND_URL}/auth/callback`
-
-export const GOOGLE_OAUTH_URL = `https://accounts.google.com/o/oauth2/auth?client_id=${GOOGLE_ID}&redirect_uri=${OAUTH_REDIRECT_URL}/google&response_type=code&scope=email profile openid`;
-export const APPLE_OAUTH_URL = `https://appleid.apple.com/auth/authorize?client_id=${APPLE_ID}&redirect_uri=${OAUTH_REDIRECT_URL}/apple&response_type=code&scope=email name`;
-export const META_OAUTH_URL = `https://www.facebook.com/v12.0/dialog/oauth?client_id=${META_ID}&redirect_uri=${OAUTH_REDIRECT_URL}/meta&scope=email,public_profile`
+const OAUTH_REDIRECT_URL = `${FRONTEND_URL}/oauth/callback`
 
 export const OAUTH_PROVIDERS = {
   google: {

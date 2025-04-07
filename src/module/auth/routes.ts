@@ -8,8 +8,8 @@ router.get("/oauth/:provider", valid.generateOauthUrl, ctrl.generateOauthUrl)
 router.post("/oauth/:provider", valid.authorization, ctrl.authorization)
 router.post("/login", valid.login, ctrl.login)
 router.post("/register", valid.login, ctrl.register)
-router.post("/send-code", valid.sendAuthCode, ctrl.sendAuthCode)
-router.post("/verify-code", valid.verifyCode, ctrl.verifyCode)
+router.post("/send-link", valid.sendLink, ctrl.sendLink)
+router.post("/verify-email", valid.verifyEmail, ctrl.verifyEmail)
+router.post("/set-password", valid.setPassword, ctrl.setPassword)
 
-export const name = "auth"
 export default router

@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt"
 
-import { ILogin, IOAuthAuthorization, IVerifyCode } from "./interface";
+import { ILogin, IOAuthAuthorization, ISendLink, ISetPassword, IVerifyEmail } from "./interface";
 import { OAUTH_PROVIDERS } from "../../utils/constant";
 import { compareStrings, createAccessToken, generateKeys, hashPassword, isEmpty } from "../../utils/helpers";
 import { BadRequestException, NotFoundException, UnauthorizedException } from "../../utils/service-error";
@@ -54,9 +54,9 @@ export async function oauthAuthorization({ code }: IOAuthAuthorization, provider
     await user.updateOne({ $addToSet: { providers: userinfo.provider } })
   }
 
-  const access_token = createAccessToken(user.id)
+  const data = createAccessToken(user.id)
 
-  return { data: { access_token }, message: "User signin is successful" }
+  return { data, message: "User signin is successful" }
 }
 
 export async function login(payload: ILogin) {
@@ -74,15 +74,16 @@ export async function login(payload: ILogin) {
     throw new BadRequestException("Incorrect password")
   }
   if (!user.verified) {
-    await mail.sendAuthCode(email)
+    await mail.sendLink(email, "verify")
     throw new BadRequestException(
       "Please verify your email address",
-      { requires_verification: true }
+      { requires_verification: true, email }
     )
   }
-  const access_token = createAccessToken(user.id, { expiresIn: remember_for_30_days ? "30d" : "7d" })
+  const expires_in = remember_for_30_days ? 30 : 7
+  const data = createAccessToken(user.id, expires_in * 24 * 60 * 60 * 1000)
 
-  return { data: { access_token }, message: "User login is successful" }
+  return { data, message: "User login is successful" }
 }
 
 export async function register(payload: ILogin) {
@@ -96,50 +97,67 @@ export async function register(payload: ILogin) {
   const keys = generateKeys()
 
   await User.create({ password, email, ...keys })
-  await mail.sendAuthCode(email)
+  await mail.sendLink(email, "verify")
 
-  return { data: null, message: "User registration successful" }
+  const data = { requires_verification: true, email }
+
+  return { data, message: "User registration successful" }
 }
 
-export async function sendAuthCode(payload: Pick<IVerifyCode, "email">) {
-  const { email } = payload
+export async function sendLink(payload: ISendLink) {
+  const { email, type = "reset" } = payload
   const user = await User.findOne({ email })
   if (!user) {
     throw new NotFoundException("User not found")
   }
 
-  await mail.sendAuthCode(email)
+  await mail.sendLink(email, type)
 
-  return { message: "Verification code has been sent successfully", data: null }
+  return { message: "Verification link has been sent successfully", data: { email } }
 }
 
-export async function verifyCode(payload: IVerifyCode) {
-  const { email, code } = payload
+export async function verifyEmail(payload: IVerifyEmail) {
+  const { token } = payload
 
-  const user = await User.findOne({ email })
-  if (!user) {
-    throw new NotFoundException("User not found")
-  }
-
-  const authCode = await AuthCode.findOne({ email })
+  const authCode = await AuthCode.findOne({ code: token })
   if (!authCode) {
-    throw new BadRequestException("No verification code found. Please request a new code and try again.")
-  }
-  if (authCode.code !== code) {
-    throw new BadRequestException("The verification code you entered is incorrect")
+    throw new BadRequestException("Invalid link")
   }
   if (dayjs().isAfter(authCode.expires_at)) {
-    throw new BadRequestException("Verification code has exipred")
+    throw new BadRequestException("Verification Link has exipred")
   }
 
-  if (!user.verified) {
-    await user.updateOne({ verified: true })
+  const user = await User.findOne({ email: authCode.email })
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+  await user.updateOne({ verified: true })
+
+  const data = createAccessToken(user.id, 1 * 60 * 60 * 1000) as typeof data & { email: string }
+  data.email = user.email;
+
+  await AuthCode.deleteMany({ email: user.email })
+
+  return { data, message: "Verification successful" }
+}
+
+export async function setPassword(payload: ISetPassword) {
+  const { token } = payload
+
+  const authCode = await AuthCode.findOne({ code: token })
+  if (!authCode) {
+    throw new BadRequestException("Invalid link")
+  }
+  if (dayjs().isAfter(authCode.expires_at)) {
+    throw new BadRequestException("Reset link has exipred")
   }
 
-  const access_token = createAccessToken(user.id, { expiresIn: "1h" })
-  await authCode.deleteOne()
+  const password = await hashPassword(payload.password)
 
-  return { data: { access_token }, message: "Verification successful" }
+  await User.updateOne({ email: authCode.email }, { password })
+  await AuthCode.deleteMany({ email: authCode.email })
+
+  return { data: null, message: "Password reset successful" }
 }
 
 async function getOauthUser(userinfo_url: string, token: string, provider: string) {

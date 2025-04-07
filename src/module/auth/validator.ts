@@ -31,10 +31,24 @@ export default {
       .notEmpty().withMessage("Password is required")
       .isStrongPassword().withMessage("Password must be strong"),
   ],
-  sendAuthCode: emailValidator,
-  verifyCode: [
+  sendLink: [
     emailValidator,
-    body("code").notEmpty().withMessage("Verification code is required")
+    body("type")
+      .notEmpty().withMessage("Link type is required")
+      .default("reset")
+      .isIn(["reset", "verify"]).withMessage("Invalid request type")
   ],
-
+  verifyEmail:
+    body("token")
+      .notEmpty().withMessage("Verification code is required")
+      .isUUID().withMessage("Invalid token")
+  ,
+  setPassword: [
+    body("token")
+      .notEmpty().withMessage("Verification code is required")
+      .isUUID().withMessage("Invalid token"),
+    body("password")
+      .notEmpty().withMessage("Password is required")
+      .isStrongPassword().withMessage("Password must be strong"),
+  ],
 }
