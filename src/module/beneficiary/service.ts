@@ -1,11 +1,18 @@
 import Beneficiary, { IBeneficiary } from "../../model/beneficiary";
-import { NotFoundException } from "../../utils/service-error";
+import { BadRequestException, NotFoundException } from "../../utils/service-error";
 
-export async function create(payload: IBeneficiary, user_id: string) {
+export async function create(payload: IBeneficiary, user: string) {
+  const { email, level } = payload
+
+  const beneficiary = await Beneficiary.findOne({ user, email })
+  if (beneficiary) {
+    throw new BadRequestException("Beneficiary already exist")
+  }
+
   const data = await Beneficiary.create({
-    email: payload.email,
-    level: payload?.level || 1,
-    user: user_id
+    email,
+    level: level || 1,
+    user
   })
 
   return { message: "Beneficiary added successfully", data }
