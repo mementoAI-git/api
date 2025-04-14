@@ -11,7 +11,7 @@ const errorHandler = async (
   res: Response,
   next: NextFunction,
 ): Promise<any> => {
-  if (isEmpty(err)) next();
+  if (isEmpty(err)) return next();
 
   const { method, url } = req;
   const timestamp = dayjs().format('DD/MM/YY HH:mm:ss');

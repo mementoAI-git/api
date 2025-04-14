@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import User, { IUser } from "../../model/user";
 import { hashPassword } from "../../utils/helpers";
 import { NotFoundException } from "../../utils/service-error";
@@ -46,4 +47,26 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
 
   const data = await User.findByIdAndUpdate(user_id, updatePayload, { new: true }).select("-password -providers -public_key -private_key")
   return { message: "User profile updated successfully", data }
+}
+
+export async function updateStreak(user_id: string) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+
+  const today = dayjs().format("YYYY-MM-DD")
+
+  if (user.last_seen !== today) {
+    const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
+
+    if (user.last_seen === yesterday) {
+      user.streak += 1
+    } else user.streak = 1;
+
+    user.last_seen = today
+    await user.save()
+  }
+
+  return { message: "Streak updated successfully", data: null }
 }

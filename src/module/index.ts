@@ -27,7 +27,6 @@ function router(app: Application) {
     });
 
   app.get('/health', health);
-  app.use(errorHandler);
   app.use((req, res, next) => {
     return responsHandler(
       res,
@@ -35,6 +34,8 @@ function router(app: Application) {
       'Resource does not exist, check endpoint or method',
     );
   });
+
+  app.use(errorHandler);
 }
 
 export default router;

@@ -10,6 +10,7 @@ export interface IMemory {
   status: string // draft
   level: number
   refrence: string
+  prompt?: string
   last_opened: string
   created_at: string
 }
@@ -25,6 +26,10 @@ const memory = new Schema<IMemory>({
   tags: String,
   level: Number,
   refrence: String,
+  prompt: {
+    type: String,
+    default: "prompt"
+  },
   last_opened: Date,
 }, {
   timestamps: {

@@ -35,3 +35,13 @@ export async function setPassword(req: IRequest, res: Response, next: NextFuncti
     next(error)
   }
 }
+
+export async function updateStreak(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.updateStreak(req.auth.id)
+
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

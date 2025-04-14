@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import { model, Schema } from 'mongoose';
 
 export interface IUser {
@@ -13,6 +14,8 @@ export interface IUser {
   verified: boolean
   private_key: string
   public_key: string
+  last_seen: string
+  streak: number
   newsletter_subscriber: boolean
 }
 
@@ -39,6 +42,14 @@ const user = new Schema<IUser>({
   newsletter_subscriber: {
     type: Boolean,
     default: false
+  },
+  last_seen: {
+    type: String,
+    default: () => dayjs().format("YYYY-MM-DD")
+  },
+  streak: {
+    type: Number,
+    default: 1
   }
 }, {
   timestamps: {

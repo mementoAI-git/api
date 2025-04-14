@@ -8,6 +8,7 @@ import { SessionTimeout, UnauthorizedException, UnprocessableContent } from "./s
 import { JWT_SECRET } from "./config";
 import { IPagination } from "./interface";
 import dayjs from "dayjs";
+import { UploadedFile } from "express-fileupload";
 
 export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
   if (type === "number") {
@@ -71,6 +72,25 @@ export const validateRequest = (req: Request) => {
     throw new UnprocessableContent(message, errors.array());
   }
 };
+
+export const getFiles = (req: Request, required = false) => {
+  let files: UploadedFile[] = [];
+
+  if (required && isEmpty(req?.files)) {
+    throw new UnprocessableContent("Upload a file")
+  }
+  if (isEmpty(req?.files)) return [];
+
+  if (!Array.isArray(req?.files?.file)) files.push(req.files.file);
+  else files = req.files.file;
+
+  const allowedTypes = new Set(["image/png", "image/jpeg", "video/webm", "application/pdf"])
+  if (files.some(f => !allowedTypes.has(f.mimetype))) {
+    throw new UnprocessableContent("Invalid file type. Only PNG, JPEG, and PDF allowed.")
+  }
+
+  return files
+}
 
 export const getPagination = (req: Request): IPagination => {
   let { limit = 25, page = 1 } = req.query;
