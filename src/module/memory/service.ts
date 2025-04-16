@@ -29,7 +29,11 @@ export async function getMemories(payload: IPagination, user_id: string) {
 
   const data = await Memory.paginate(
     { user: user_id },
-    { page, limit }
+    {
+      page,
+      limit,
+      populate: { path: "attachments", select: "-base64" }
+    }
   )
 
   return { data, message: "User memories retrieved successfully" }

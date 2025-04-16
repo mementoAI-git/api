@@ -9,6 +9,7 @@ export interface IMemory {
   tags: string[]
   status: string // draft
   level: number
+  bookmarked: boolean
   refrence: string
   prompt?: string
   last_opened: string
@@ -23,8 +24,12 @@ const memory = new Schema<IMemory>({
     type: String,
     ref: "file"
   }],
-  tags: String,
+  tags: [String],
   level: Number,
+  bookmarked: {
+    type: Boolean,
+    default: false
+  },
   refrence: String,
   prompt: {
     type: String,

@@ -44,6 +44,6 @@ export async function removeFile(name: string, user_id: string) {
     throw new UnauthorizedException()
   }
 
-  await file.deleteOne()
+  await File.deleteOne({ name })
   return { data: file, message: "File deleted successfully" }
 }

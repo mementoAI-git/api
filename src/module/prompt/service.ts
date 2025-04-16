@@ -14,7 +14,9 @@ export const getPrompts = async () => {
 }
 
 export const getUserPromptResponse = async (id: string, user_id: string) => {
-  const memory = await Memory.findOne({ user: user_id, prompt: id })
+  const memory = await Memory
+    .findOne({ user: user_id, prompt: id })
+    .populate({ path: "attachments", select: "-base64" })
   if (!memory) {
     throw new NotFoundException("No response to prompt")
   }
@@ -23,7 +25,7 @@ export const getUserPromptResponse = async (id: string, user_id: string) => {
 }
 
 export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files: UploadedFile[] | null = null) => {
-  const { prompt_id, text: body } = payload;
+  const { prompt_id, text: body, tags, level } = payload;
 
   const user = await User.findById(user_id)
   if (isEmpty(user)) {
@@ -35,7 +37,7 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
     throw new NotFoundException("Prompt not found")
   }
 
-  let attachments = []
+  let attachments = payload?.attachments || []
   if (!isEmpty(files)) {
     const unsavedFiles = files.map(file => {
       return {
@@ -47,7 +49,7 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
     })
 
     const savedFiles = await File.insertMany(unsavedFiles)
-    attachments = savedFiles.map(f => f.id)
+    attachments = [...attachments, ...savedFiles.map(f => f.id)]
   }
 
   let memory = await Memory.findOne({ user: user_id, prompt: prompt_id })
@@ -55,8 +57,10 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
     memory = await Memory.create({
       user: user_id,
       title: prompt?.title,
-      body,
       prompt: prompt_id,
+      body,
+      level,
+      tags,
       attachments
     })
   } else {
@@ -64,6 +68,8 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
       memory.id,
       {
         body: body || memory?.body,
+        level,
+        tags,
         $addToSet: { attachments: { $each: attachments } }
       },
       { new: true }

@@ -27,5 +27,6 @@ export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 export const TEMP_PATH = process.env.TEMP_PATH || "./tmp";
 
 export const FRONTEND_URL = process.env.FRONTEND_URL;
+export const BACKEND_URL = process.env.BACKEND_URL;
 
 export const DEV_MAILS = process.env.DEV_MAILS?.split(',') || [];
