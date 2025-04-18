@@ -17,10 +17,29 @@ export async function uploadFile(req: IRequest, res: Response, next: NextFunctio
 export async function getFile(req: Request, res: Response, next: NextFunction) {
   try {
     const { data } = await service.getFile(req.params.name)
+    const range = req.headers.range;
 
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader("Content-Type", data.type);
     res.setHeader("Content-Disposition", `inline; filename="${data.name}"`);
-    res.send(data.buffer);
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+    if (range) {
+      const byteRange = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(byteRange[0], 10);
+      const end = byteRange[1] ? parseInt(byteRange[1], 10) : data.buffer.length - 1;
+      const chunkSize = end - start + 1;
+
+      res.status(206);
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${data.buffer.length}`);
+      res.setHeader('Content-Length', chunkSize);
+
+      res.send(data.buffer.subarray(start, end + 1));
+    } else {
+      res.setHeader('Content-Length', data.buffer.length);
+      res.status(200).send(data.buffer);
+    }
   } catch (error) {
     next(error)
   }
