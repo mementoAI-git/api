@@ -1,5 +1,5 @@
 import rateLimit from 'express-rate-limit';
-import {responsHandler} from '../utils';
+import { responsHandler } from '../utils/helpers';
 
 export default function rateLimiter(window: number, max = 200) {
   return rateLimit({
