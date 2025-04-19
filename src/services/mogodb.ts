@@ -4,7 +4,7 @@ import { MONGODB_URL } from '../utils/config';
 export function connectMongodb() {
   mongoose.set('strictQuery', false);
   mongoose
-    .connect(MONGODB_URL as string, { autoIndex: false, dbName: "memento" })
+    .connect(MONGODB_URL as string, { autoIndex: false })
     .then(() => console.log('MongoDB connected successfully...'))
     .catch(err => console.log('MongoDB Error just occured ' + err));
 }
