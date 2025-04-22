@@ -68,5 +68,9 @@ export async function updateStreak(user_id: string) {
     await user.save()
   }
 
-  return { message: "Streak updated successfully", data: null }
+  const data = {
+    last_seen: user.last_seen,
+    streak: user.streak
+  }
+  return { message: "Streak updated successfully", data }
 }

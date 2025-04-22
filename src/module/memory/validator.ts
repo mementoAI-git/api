@@ -11,5 +11,10 @@ export default {
     body("attachments.*").isMongoId().withMessage("Invalid file id"),
     body("tags").isArray(),
     body("tags.*").notEmpty().isString().withMessage("Invalid tag")
+  ],
+  updateMemory: [
+    body("status").optional().isIn(["save"]),
+    body("attachments").optional().isArray(),
+    body("attachments.*").optional().isMongoId().withMessage("Invalid file id"),
   ]
 }

@@ -14,11 +14,21 @@ export const getPrompts = async () => {
 }
 
 export const getUserPromptResponse = async (id: string, user_id: string) => {
-  const memory = await Memory
+  let memory = await Memory
     .findOne({ user: user_id, prompt: id })
-    .populate({ path: "attachments", select: "-base64" })
+    .populate({ path: "attachments", select: "-base64" });
+
   if (!memory) {
-    throw new NotFoundException("No response to prompt")
+    const prompt = await Prompt.findById(id)
+    if (!prompt) {
+      throw new NotFoundException("Prompt not found")
+    }
+    memory = await Memory.create({
+      user: user_id,
+      status: "draft",
+      title: prompt.title,
+      prompt: id
+    })
   }
 
   return { data: memory, message: "User prompt response retrieved successfully" }

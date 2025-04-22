@@ -10,6 +10,7 @@ export interface IUser {
   dob: string
   country: string
   password: string
+  onbaorded: boolean
   providers: string[]
   verified: boolean
   private_key: string
@@ -35,6 +36,10 @@ const user = new Schema<IUser>({
   public_key: String,
   providers: [String],
   phone_number: String,
+  onbaorded: {
+    type: Boolean,
+    default: false,
+  },
   verified: {
     type: Boolean,
     default: false

@@ -31,3 +31,13 @@ export async function getMemory(req: IRequest, res: Response, next: NextFunction
     next(error)
   }
 }
+
+export async function updateMemory(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.updateMemory(req.params.id, req.body, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
