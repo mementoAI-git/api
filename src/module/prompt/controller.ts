@@ -29,7 +29,6 @@ export async function replyPrompt(req: IRequest, res: Response, next: NextFuncti
     const { message, data } = await service.replyPrompt(req.body, req.auth.id, files)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
-    console.log(error)
     next(error)
   }
 }

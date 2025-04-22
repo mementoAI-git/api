@@ -11,6 +11,7 @@ export interface IMemory {
   level: number
   bookmarked: boolean
   refrence: string
+  stage: string | "draft" | "save" | "queued" | "on_chain";
   prompt?: string
   last_opened: string
   created_at: string
@@ -20,12 +21,19 @@ const memory = new Schema<IMemory>({
   title: String,
   body: String,
   user: String,
+  stage: {
+    type: String,
+    default: "draft"
+  },
   attachments: [{
     type: String,
     ref: "file"
   }],
   tags: [String],
-  level: Number,
+  level: {
+    type: Number,
+    default: 1
+  },
   bookmarked: {
     type: Boolean,
     default: false
