@@ -28,7 +28,7 @@ export async function getMemories(payload: IPagination, user_id: string) {
   const { page, limit } = payload
 
   const data = await Memory.paginate(
-    { user: user_id, status: { $ne: "draft" } },
+    { user: user_id, status: { $nin: ["draft", "deleted"] } },
     {
       page,
       limit,
@@ -39,8 +39,14 @@ export async function getMemories(payload: IPagination, user_id: string) {
   return { data, message: "User memories retrieved successfully" }
 }
 
-export async function getMemory(id: string) {
-  const data = await Memory.findOne({ _id: id }).populate("attachments", "-base64")
+export async function getMemory(_id: string) {
+  const data = await Memory
+    .findOne({ _id, status: { $nin: ["draft", "deleted"] } })
+    .populate("attachments", "-base64")
+
+  if (!data) {
+    throw new NotFoundException("Memory not found")
+  }
   return { data, message: "User memory retrieved successfully" }
 }
 
@@ -64,4 +70,15 @@ export async function updateMemory(_id: string, payload: Partial<IMemory>, user_
   )
 
   return { data: memory, message: "Memory updated successfully" }
+}
+
+export async function deleteMemory(_id: string, user_id: string) {
+  let memory = await Memory.findOne({ _id, user: user_id })
+  if (!memory) {
+    throw new NotFoundException("Memory not found")
+  }
+
+  await memory.updateOne({ status: "deleted" })
+
+  return { data: memory, message: "Memory deleted successfully" }
 }

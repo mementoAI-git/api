@@ -41,3 +41,13 @@ export async function updateMemory(req: IRequest, res: Response, next: NextFunct
     next(error)
   }
 }
+
+export async function deleteMemory(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    console.log("Delete memories")
+    const { message, data } = await service.deleteMemory(req.params.id, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

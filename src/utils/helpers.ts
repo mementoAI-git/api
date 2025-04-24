@@ -84,7 +84,12 @@ export const getFiles = (req: Request, required = false) => {
   if (!Array.isArray(req?.files?.file)) files.push(req.files.file);
   else files = req.files.file;
 
-  const allowedTypes = new Set(["image/png", "image/jpeg", "audio/webm", "video/webm", "application/pdf"])
+  const allowedTypes = new Set([
+    "image/png", "image/jpeg",
+    "image/heic",
+    "audio/webm", "video/webm",
+    "application/pdf"
+  ])
   if (files.some(f => !allowedTypes.has(f.mimetype))) {
     throw new UnprocessableContent("Invalid file type. Only PNG, JPEG, and PDF allowed.")
   }

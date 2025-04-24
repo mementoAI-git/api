@@ -7,11 +7,10 @@ export interface IMemory {
   user: string
   attachments: string[]
   tags: string[]
-  status: string // draft
   level: number
   bookmarked: boolean
   refrence: string
-  stage: string | "draft" | "save" | "queued" | "on_chain";
+  status: string | "draft" | "save" | "queued" | "on_chain";
   prompt?: string
   last_opened: string
   created_at: string
@@ -21,7 +20,7 @@ const memory = new Schema<IMemory>({
   title: String,
   body: String,
   user: String,
-  stage: {
+  status: {
     type: String,
     default: "draft"
   },
