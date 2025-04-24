@@ -1,6 +1,6 @@
 import { NextFunction, Response } from "express"
 import * as service from "./service"
-import { responsHandler, validateRequest } from "../../utils/helpers"
+import { getFiles, responsHandler, validateRequest } from "../../utils/helpers"
 import { StatusCodes } from "http-status-codes"
 import { IRequest } from "../../utils/interface"
 
@@ -40,6 +40,15 @@ export async function updateStreak(req: IRequest, res: Response, next: NextFunct
   try {
     const { message, data } = await service.updateStreak(req.auth.id)
 
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+export async function uploadPicture(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const files = getFiles(req, true)
+    const { message, data } = await service.uploadPicture(files, req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

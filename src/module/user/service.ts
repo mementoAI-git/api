@@ -1,8 +1,10 @@
 import dayjs from "dayjs";
 import User, { IUser } from "../../model/user";
-import { hashPassword } from "../../utils/helpers";
+import { hashPassword, reconstructFileName } from "../../utils/helpers";
 import { NotFoundException } from "../../utils/service-error";
 import { ISetPassword } from "./interface";
+import { UploadedFile } from "express-fileupload";
+import File from "../../model/file";
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const user = await User.findById(user_id)
@@ -73,4 +75,28 @@ export async function updateStreak(user_id: string) {
     streak: user.streak
   }
   return { message: "Streak updated successfully", data }
+}
+
+export async function uploadPicture(payload: UploadedFile[], user_id: string) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+
+  const { name, mimetype, data } = payload[0]
+
+  const file = await File.create({
+    name: reconstructFileName(name),
+    base64: data.toString("base64"),
+    user: user_id,
+    type: mimetype
+  })
+
+  if (user.picture) {
+    await File.deleteOne({ name: user.picture })
+  }
+
+  await user.updateOne({ picture: file.name })
+
+  return { message: "Profile pics uploaded successfully", data: file }
 }

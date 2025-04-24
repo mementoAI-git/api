@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import { model, Schema } from 'mongoose';
+import { BACKEND_URL } from '../utils/config';
 
 export interface IUser {
   email: string
@@ -15,6 +16,8 @@ export interface IUser {
   verified: boolean
   private_key: string
   public_key: string
+  picture: string
+  picture_url?: string
   last_seen: string
   streak: number
   newsletter_subscriber: boolean
@@ -48,6 +51,7 @@ const user = new Schema<IUser>({
     type: Boolean,
     default: false
   },
+  picture: String,
   last_seen: {
     type: String,
     default: () => dayjs().format("YYYY-MM-DD")
@@ -61,7 +65,13 @@ const user = new Schema<IUser>({
     createdAt: 'created_at',
     updatedAt: 'updated_at',
   },
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 })
+
+user.virtual('picture_url').get(function () {
+  return `${BACKEND_URL}/files/${this.picture}`;
+});
 
 const User = model<IUser>('user', user);
 export default User;
