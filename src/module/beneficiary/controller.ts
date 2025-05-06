@@ -1,6 +1,6 @@
 import { NextFunction, Response } from "express";
 import { StatusCodes } from "http-status-codes"
-import { responsHandler, validateRequest } from "../../utils/helpers"
+import { getPagination, responsHandler, validateRequest } from "../../utils/helpers"
 import * as service from "./service"
 import { IRequest } from "../../utils/interface";
 
@@ -16,7 +16,7 @@ export async function create(req: IRequest, res: Response, next: NextFunction) {
 
 export async function list(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.list(req.auth.id)
+    const { message, data } = await service.list(getPagination(req), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

@@ -1,4 +1,5 @@
-import { model, Schema } from "mongoose"
+import { model, PaginateModel, Schema } from "mongoose"
+import mongoosePaginate from 'mongoose-paginate-v2';
 
 export interface IBeneficiary {
   name: string
@@ -20,7 +21,14 @@ const beneficiary = new Schema<IBeneficiary>({
     type: Number,
     default: 1
   }
+}, {
+  timestamps: {
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+  }
 })
 
-const Beneficiary = model("beneficiary", beneficiary)
+beneficiary.plugin(mongoosePaginate)
+
+const Beneficiary = model<IBeneficiary, PaginateModel<IBeneficiary>>("beneficiary", beneficiary)
 export default Beneficiary
