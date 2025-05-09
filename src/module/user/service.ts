@@ -35,6 +35,7 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
   const updateableFields = new Set([
     "first_name",
     "last_name",
+    "phone_number",
     "gender",
     "dob",
     "country"
@@ -47,7 +48,10 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     return acc
   }, {})
 
-  const data = await User.findByIdAndUpdate(user_id, updatePayload, { new: true }).select("-password -providers -public_key -private_key")
+  const data = await User
+    .findByIdAndUpdate(user_id, updatePayload, { new: true })
+    .select("-password -providers -public_key -private_key")
+
   return { message: "User profile updated successfully", data }
 }
 
