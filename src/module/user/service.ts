@@ -1,18 +1,25 @@
+import bcrypt from "bcrypt"
 import dayjs from "dayjs";
 import User, { IUser } from "../../model/user";
 import { hashPassword, reconstructFileName } from "../../utils/helpers";
-import { NotFoundException } from "../../utils/service-error";
+import { BadRequestException, NotFoundException } from "../../utils/service-error";
 import { ISetPassword } from "./interface";
 import { UploadedFile } from "express-fileupload";
 import File from "../../model/file";
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
+  const { new_password, old_password } = payload
   const user = await User.findById(user_id)
   if (!user) {
     throw new NotFoundException("User not found")
   }
 
-  const password = await hashPassword(payload.password)
+  let is_match = await bcrypt.compare(old_password, `${user?.password}`)
+  if (!is_match) {
+    throw new BadRequestException("Incorrect password")
+  }
+
+  const password = await hashPassword(new_password)
   await user.updateOne({ password })
 
   return { message: "Password updated successfully", data: null }

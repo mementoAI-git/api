@@ -1,3 +1,4 @@
 export interface ISetPassword {
-  password: string
+  new_password: string
+  old_password: string
 }
