@@ -1,11 +1,13 @@
 import bcrypt from "bcrypt"
 import dayjs from "dayjs";
 import User, { IUser } from "../../model/user";
-import { hashPassword, reconstructFileName } from "../../utils/helpers";
+import { hashPassword, isEmpty, reconstructFileName } from "../../utils/helpers";
 import { BadRequestException, NotFoundException } from "../../utils/service-error";
-import { ISetPassword } from "./interface";
+import { ISetPassword, IVerifyTOTP } from "./interface";
 import { UploadedFile } from "express-fileupload";
 import File from "../../model/file";
+import speakeasy from "speakeasy"
+import Qr from "qrcode"
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const { new_password, old_password } = payload
@@ -26,7 +28,7 @@ export async function setPassword(payload: ISetPassword, user_id: string) {
 }
 
 export async function getProfile(user_id: string) {
-  const user = await User.findById(user_id).select("-password -providers")
+  const user = await User.findById(user_id).select("-password -providers -two_factor.secret")
   if (!user) {
     throw new NotFoundException("User not found", null)
   }
@@ -110,4 +112,66 @@ export async function uploadPicture(payload: UploadedFile[], user_id: string) {
   await user.updateOne({ picture: file.name })
 
   return { message: "Profile pics uploaded successfully", data: file }
+}
+
+export async function setup2FA(user_id: string) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+
+  const secret = speakeasy.generateSecret({
+    name: `Memento (${user.email})`,
+  });
+
+  await user.updateOne({ "two_factor.secret": secret.base32 })
+  const qrcode = await Qr.toDataURL(secret.otpauth_url)
+
+  return {
+    data: { url: secret.otpauth_url, qrcode },
+    message: "2FA setup successful. Scan the QR code with your Authenticator app."
+  }
+}
+
+//verify time-base one-time-password
+export async function verifyTOTP({ token }: IVerifyTOTP, user_id: string) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+  if (isEmpty(user?.two_factor?.secret)) {
+    throw new BadRequestException("Token verification failed. You must set up 2FA before verifying.")
+  }
+
+  const verified = speakeasy.totp.verify({
+    secret: user.two_factor.secret,
+    encoding: 'base32',
+    token
+  });
+
+  if (!verified) {
+    throw new BadRequestException("Invalid token", { verified })
+  }
+
+  if (!user?.two_factor?.enabled) {
+    await user.updateOne({ "two_factor.enabled": true })
+  }
+
+  return { data: { verified }, message: "Verification successful" }
+}
+
+export async function disable2FA(user_id: string) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+
+  await user.updateOne({
+    two_factor: {
+      enabled: false,
+      secret: null
+    }
+  })
+
+  return { data: null, message: "2FA disabled successfully" }
 }

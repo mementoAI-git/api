@@ -7,5 +7,6 @@ export default {
       .isStrongPassword().withMessage("Password must be strong"),
     body("old_password")
       .notEmpty().withMessage("Old Password is required")
-  ]
+  ],
+  verifyTOTP: body("token").notEmpty().withMessage("Token is required")
 }

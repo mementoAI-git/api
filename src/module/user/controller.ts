@@ -54,3 +54,31 @@ export async function uploadPicture(req: IRequest, res: Response, next: NextFunc
     next(error)
   }
 }
+
+export async function verifyTOTP(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.verifyTOTP(req.body, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function setup2FA(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.setup2FA(req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function disable2FA(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.disable2FA(req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

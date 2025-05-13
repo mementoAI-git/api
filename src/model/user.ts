@@ -16,6 +16,10 @@ export interface IUser {
   verified: boolean
   private_key: string
   public_key: string
+  two_factor: {
+    secret: string
+    enabled: boolean
+  }
   picture: string
   picture_url?: string
   last_seen: string
@@ -37,6 +41,16 @@ const user = new Schema<IUser>({
   password: String,
   private_key: String,
   public_key: String,
+  two_factor: {
+    secret: {
+      type: String,
+      default: null
+    },
+    enabled: {
+      type: Boolean,
+      default: false
+    }
+  },
   providers: [String],
   phone_number: String,
   onbaorded: {
