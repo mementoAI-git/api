@@ -1,4 +1,5 @@
 import Beneficiary, { IBeneficiary } from "../../model/beneficiary";
+import { filterGenerator } from "../../utils/helpers";
 import { IPagination } from "../../utils/interface";
 import { BadRequestException, NotFoundException } from "../../utils/service-error";
 
@@ -21,8 +22,11 @@ export async function create(payload: IBeneficiary, user: string) {
   return { message: "Beneficiary added successfully", data }
 }
 
-export async function list({ page, limit }: IPagination, user_id: string) {
-  const data = await Beneficiary.paginate({ user: user_id }, { page, limit })
+export async function list({ page, limit, ...query }: IPagination, user_id: string) {
+  const filters = filterGenerator(query, ["name", "email", "relationship"])
+  filters.push({ user: user_id })
+
+  const data = await Beneficiary.paginate({ $and: filters }, { page, limit })
 
   return { message: "Beneficiary retrieved successfully", data }
 }

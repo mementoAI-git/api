@@ -9,6 +9,7 @@ import { JWT_SECRET } from "./config";
 import { IPagination } from "./interface";
 import dayjs from "dayjs";
 import { UploadedFile } from "express-fileupload";
+import { FilterQuery } from "mongoose";
 
 export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
   if (type === "number") {
@@ -150,4 +151,23 @@ export const verifyAccessToken = (token: string): any => {
     }
     return decoded;
   });
+};
+
+export const filterGenerator = (payload: object, fields: string[] = []) => {
+  const proccessed: FilterQuery<any>[] = [];
+  const queries = Object.entries(payload);
+  const allowed = fields.concat(["search"]);
+
+  for (let i = 0; i < queries.length; i++) {
+    if (!allowed.includes(queries[i][0])) continue;
+    if (queries[i][0] === "search") {
+      const search_filters: any[] = fields.map(key => ({
+        [key]: { $regex: new RegExp(`${queries[i][1]}`), $options: 'i' },
+      }));
+      proccessed.push({ $or: search_filters });
+    }
+    else proccessed.push({ [queries[i][0]]: queries[i][1] });
+  }
+
+  return proccessed;
 };
