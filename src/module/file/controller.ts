@@ -3,6 +3,8 @@ import { IRequest } from "../../utils/interface"
 import * as service from "./service"
 import { getFiles, responsHandler } from "../../utils/helpers"
 import { StatusCodes } from "http-status-codes"
+import dayjs from "dayjs"
+import { pipeline } from 'stream/promises';
 
 export async function uploadFile(req: IRequest, res: Response, next: NextFunction) {
   try {
@@ -16,31 +18,47 @@ export async function uploadFile(req: IRequest, res: Response, next: NextFunctio
 
 export async function getFile(req: Request, res: Response, next: NextFunction) {
   try {
-    const { data } = await service.getFile(req.params.name)
-    const range = req.headers.range;
+    const { name } = req.params;
+    const range = req.headers?.range;
+
+    const metadata = await service.getFileMetadata(name);
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader("Content-Type", data.type);
-    res.setHeader("Content-Disposition", `inline; filename="${data.name}"`);
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Content-Type', metadata.type);
+    res.setHeader('Content-Disposition', `inline; filename="${metadata.name}"`);
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
+
+    res.setHeader('ETag', metadata.etag);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 hour cache
+    res.setHeader('Last-Modified', dayjs(metadata.updated_at).toDate().toUTCString());
+
+    const { data } = await service.getFile(name, range)
 
     if (range) {
-      const byteRange = range.replace(/bytes=/, '').split('-');
-      const start = parseInt(byteRange[0], 10);
-      const end = byteRange[1] ? parseInt(byteRange[1], 10) : data.buffer.length - 1;
+      const { start, end } = data;
+      console.log(range, data?.start, data?.end)
       const chunkSize = end - start + 1;
 
       res.status(206);
       res.setHeader('Content-Range', `bytes ${start}-${end}/${data.buffer.length}`);
       res.setHeader('Content-Length', chunkSize);
 
-      res.send(data.buffer.subarray(start, end + 1));
+      const stream = service.createFileStream(data.buffer);
+      await pipeline(stream, res);
     } else {
       res.setHeader('Content-Length', data.buffer.length);
-      res.status(200).send(data.buffer);
+      res.status(200)
+
+      if (data.buffer.length < 1024 * 1024) {
+        res.send(data.buffer);
+      } else {
+        const stream = service.createFileStream(data.buffer);
+        await pipeline(stream, res);
+      }
     }
   } catch (error) {
+    console.log(error)
     next(error)
   }
 }

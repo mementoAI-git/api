@@ -5,7 +5,9 @@ import compression from "compression"
 import router from './module';
 import { connectMongodb } from './services/mogodb';
 import requestLogger from './middleware/request-logger';
+import redis from "./services/redis"
 
+redis.connect();
 connectMongodb();
 
 const app = express();

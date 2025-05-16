@@ -53,6 +53,7 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
       return {
         name: reconstructFileName(file.name),
         base64: file.data.toString("base64"),
+        size: file.size,
         user: user_id,
         type: file.mimetype
       }

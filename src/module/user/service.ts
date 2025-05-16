@@ -96,11 +96,12 @@ export async function uploadPicture(payload: UploadedFile[], user_id: string) {
     throw new NotFoundException("User not found")
   }
 
-  const { name, mimetype, data } = payload[0]
+  const { name, mimetype, data, size } = payload[0]
 
   const file = await File.create({
     name: reconstructFileName(name),
     base64: data.toString("base64"),
+    size,
     user: user_id,
     type: mimetype
   })
