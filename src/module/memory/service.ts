@@ -1,19 +1,41 @@
+import { UploadedFile } from "express-fileupload";
 import Memory, { IMemory } from "../../model/memory";
+import File from "../../model/file";
 import User from "../../model/user";
 import { IPagination } from "../../utils/interface";
 import { NotFoundException } from "../../utils/service-error";
 import { ICreateMemoryPayload } from "./interface";
+import { isEmpty, reconstructFileName } from "../../utils/helpers";
 
-export async function createMemory(payload: ICreateMemoryPayload, user_id: string) {
-  const { title, body, tags = [], attachments = [] } = payload
+export async function createMemory(payload: ICreateMemoryPayload, user_id: string, files: UploadedFile[] | null = null) {
+  const { title, body, tags = [], level = 1 } = payload
   const user = await User.findById(user_id)
   if (!user) {
     throw new NotFoundException("User not found")
   }
 
+  let attachments = payload?.attachments || []
+  if (!isEmpty(files)) {
+    const unsavedFiles = files.map(file => {
+      return {
+        name: reconstructFileName(file.name),
+        base64: file.data.toString("base64"),
+        size: file.size,
+        user: user_id,
+        type: file.mimetype
+      }
+    })
+
+    const savedFiles = await File.insertMany(unsavedFiles)
+    attachments = [...attachments, ...savedFiles.map(f => f.id)]
+  }
+
   const memory = await Memory.create({
     title,
+    user: user_id,
     body,
+    level,
+    status: "save",
     tags,
     attachments
   })
@@ -28,7 +50,10 @@ export async function getMemories(payload: IPagination, user_id: string) {
   const { page, limit } = payload
 
   const data = await Memory.paginate(
-    { user: user_id, status: { $nin: ["draft", "deleted"] } },
+    {
+      user: user_id,
+      status: { $nin: ["draft", "deleted"] }
+    },
     {
       page,
       limit,

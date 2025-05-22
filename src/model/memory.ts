@@ -38,10 +38,7 @@ const memory = new Schema<IMemory>({
     default: false
   },
   refrence: String,
-  prompt: {
-    type: String,
-    default: "prompt"
-  },
+  prompt: String,
   last_opened: Date,
 }, {
   timestamps: {

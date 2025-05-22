@@ -35,7 +35,7 @@ export const getUserPromptResponse = async (id: string, user_id: string) => {
 }
 
 export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files: UploadedFile[] | null = null) => {
-  const { prompt_id, text: body, tags, level } = payload;
+  const { prompt_id, body, tags = [], level = 1 } = payload;
 
   const user = await User.findById(user_id)
   if (isEmpty(user)) {

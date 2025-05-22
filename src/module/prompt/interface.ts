@@ -1,6 +1,6 @@
 export interface IReplyPrompt {
   prompt_id: string
-  text: string
+  body: string
   tags: string[]
   level: number
   attachments: string[]

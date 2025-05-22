@@ -1,3 +1,4 @@
+import { Response } from "express";
 import { UploadedFile } from "express-fileupload";
 import { isEmpty, reconstructFileName } from "../../utils/helpers";
 import User from "../../model/user";
@@ -40,40 +41,22 @@ export async function removeFile(name: string, user_id: string) {
   return { data: file, message: "File deleted successfully" }
 }
 
-export async function getFile(name: string, range?: string) {
-  const metadata = await getFileMetadata(name);
-  const buffer = await getFileBuffer(name, metadata.size, range)
-
-  // const file = await File.findOne({ name })
-  // if (!file) {
-  //   throw new NotFoundException("file not found")
-  // }
-
-  // const buffer = Buffer.from(file.base64, "base64");
-  const data = { ...metadata, ...buffer }
-
-  return { data, message: "File retrieved successfully" }
-}
-
 export async function getFileMetadata(name: string) {
   const key = `file-meta:${name}`
+
   const meta = await redis.get(key)
   if (meta) return JSON.parse(meta as string);
 
-  const file = await File.findOne({ name });
+  const file = await File.findOne({ name }).select("-base64");
   if (!file) {
     throw new NotFoundException("File not found");
   }
 
   const hash = createHash('md5');
-  hash.update(`${name}-${file?.size || file.base64.length}`);
+  hash.update(`${file.name}-${file.size}`);
   const etag = `${hash.digest('hex')}`;
 
-  const data = {
-    etag,
-    ...file.toJSON(),
-    size: file?.size || file.base64.length
-  }
+  const data = { etag, ...file.toJSON() }
 
   await redis.set(key, JSON.stringify(data));
 
@@ -83,12 +66,12 @@ export async function getFileMetadata(name: string) {
 export async function getFileBuffer(name: string, size: number, range?: string) {
   let start: number | undefined;
   let end: number | undefined;
+  const chunk_size = 0.5 * 1024 * 1024;
 
   if (range) {
-    const byteRange = range.replace(/bytes=/, '').split('-');
-    console.log({ byteRange })
-    start = parseInt(byteRange[0], 10);
-    end = byteRange[1] ? parseInt(byteRange[1], 10) : size - 1;
+    const byte_range = range.replace(/bytes=/, '').split('-');
+    start = parseInt(byte_range[0], 10);
+    end = Math.min(start + chunk_size, size - 1);
   }
 
   const rangeStr = range ? `-${start}-${end}` : '';
@@ -100,23 +83,7 @@ export async function getFileBuffer(name: string, size: number, range?: string) 
     return { ...result, buffer: Buffer.from(result.buffer.data) };
   }
 
-  let file: IFile;
-  if (range && (end - start) < (5 * 1024 * 1024)) {
-    console.log("range-")
-    const base64Start = Math.floor(start * (4 / 3));
-    const base64End = Math.ceil((end + 1) * (4 / 3));
-
-    file = await File.findOne({ name }).select({
-      name: 1,
-      type: 1,
-      size: 1,
-      base64: { $substr: ['$base64', base64Start, base64End - base64Start] }
-    });
-  } else {
-    console.log("direct")
-    file = await File.findOne({ name });
-  }
-
+  let file = await File.findOne({ name });
   if (!file) {
     throw new NotFoundException("File not found");
   }
@@ -124,14 +91,12 @@ export async function getFileBuffer(name: string, size: number, range?: string) 
   const buffer = Buffer.from(file.base64, "base64");
   const result = range ? buffer.subarray(start, end + 1) : buffer;
 
-  const data = { buffer: result, start, end };
-  if (result.length < 10 * 1024 * 1024) {
-    await redis.set(
-      key,
-      JSON.stringify(data),
-      { expiration: { type: "EX", value: 1800 } }
-    );
-  }
+  const data = { buffer: result, start, end, chunk_size };
+  await redis.set(
+    key,
+    JSON.stringify(data),
+    { expiration: { type: "EX", value: 1800 } }
+  );
 
   return data
 }
@@ -140,5 +105,6 @@ export function createFileStream(buffer: Buffer): Readable {
   const stream = new Readable();
   stream.push(buffer);
   stream.push(null);
+
   return stream;
 }

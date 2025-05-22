@@ -24,8 +24,6 @@ export const APPLE_SECRET = process.env.APPLE_SECRET;
 export const STORAGE_BASE_URL = process.env.STORAGE_BASE_URL;
 export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 
-export const TEMP_PATH = process.env.TEMP_PATH || "./tmp";
-
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const BACKEND_URL = process.env.BACKEND_URL;
 

@@ -24,7 +24,6 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     const metadata = await service.getFileMetadata(name);
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Content-Type', metadata.type);
     res.setHeader('Content-Disposition', `inline; filename="${metadata.name}"`);
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
@@ -33,24 +32,23 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 hour cache
     res.setHeader('Last-Modified', dayjs(metadata.updated_at).toDate().toUTCString());
 
-    const { data } = await service.getFile(name, range)
-
+    const data = await service.getFileBuffer(name, parseInt(metadata.size, 10), range)
     if (range) {
-      const { start, end } = data;
-      console.log(range, data?.start, data?.end)
-      const chunkSize = end - start + 1;
+      const { start, end, buffer } = data;
 
-      res.status(206);
-      res.setHeader('Content-Range', `bytes ${start}-${end}/${data.buffer.length}`);
-      res.setHeader('Content-Length', chunkSize);
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${metadata.size}`,
+        'Content-Length': end - start + 1,
+        'Accept-Ranges': 'bytes'
+      });
 
-      const stream = service.createFileStream(data.buffer);
+      const stream = service.createFileStream(buffer);
       await pipeline(stream, res);
     } else {
-      res.setHeader('Content-Length', data.buffer.length);
+      res.setHeader('Content-Length', metadata.size);
       res.status(200)
 
-      if (data.buffer.length < 1024 * 1024) {
+      if (Number(metadata.size) < data.chunk_size) {
         res.send(data.buffer);
       } else {
         const stream = service.createFileStream(data.buffer);
@@ -58,8 +56,7 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
       }
     }
   } catch (error) {
-    console.log(error)
-    next(error)
+    next(error);
   }
 }
 
