@@ -58,7 +58,11 @@ export async function getFileMetadata(name: string) {
 
   const data = { etag, ...file.toJSON() }
 
-  await redis.set(key, JSON.stringify(data));
+  await redis.set(
+    key,
+    JSON.stringify(data),
+    { expiration: { type: "EX", value: 1800 } }
+  );
 
   return data;
 }
