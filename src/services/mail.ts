@@ -1,7 +1,6 @@
 import nodemailer from "nodemailer"
 import { MailOptions } from "nodemailer/lib/sendmail-transport";
 import { DEV_MAILS, FRONTEND_URL, MAIL_HOST, MAIL_PASSWORD, MAIL_PORT, MAIL_USER } from "../utils/config";
-import { random } from "../utils/helpers";
 import AuthCode from "../model/auth-code";
 import dayjs from "dayjs";
 import { v4 as uuid } from "uuid";

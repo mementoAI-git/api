@@ -28,4 +28,6 @@ export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const BACKEND_URL = process.env.BACKEND_URL;
 
+export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
 export const DEV_MAILS = process.env.DEV_MAILS?.split(',') || [];
