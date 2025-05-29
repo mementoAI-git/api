@@ -10,7 +10,7 @@ process.on('unhandledRejection', (reason) => {
     console.log("Unhandled rejection: ", reason)
 });
 
-process.on('SIGTERM', () => {
+process.on('SIGINT', () => {
     console.log('Application shutting down...');
     process.exit(0);
 });
