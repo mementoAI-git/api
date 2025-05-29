@@ -1,0 +1,26 @@
+import { model, PaginateModel, Schema } from "mongoose"
+import mongoosePaginate from 'mongoose-paginate-v2';
+
+export interface IMessage {
+  user: string
+  text: string
+  role: string // user, ai
+  created_at: string
+  updated_at: string
+}
+
+const message = new Schema<IMessage>({
+  user: String,
+  text: String,
+  role: String,
+}, {
+  timestamps: {
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+  }
+})
+
+message.plugin(mongoosePaginate)
+
+const Message = model<IMessage, PaginateModel<IMessage>>("message", message)
+export default Message

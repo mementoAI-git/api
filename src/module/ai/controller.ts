@@ -1,27 +1,24 @@
 import { NextFunction, Response } from "express";
-import { StatusCodes } from "http-status-codes"
-import { responsHandler, validateRequest } from "../../utils/helpers"
+import { getPagination, responsHandler, validateRequest } from "../../utils/helpers"
 import * as service from "./service";
 import { IRequest } from "../../utils/interface";
-import { ServiceError } from "../../utils/service-error";
+import { StatusCodes } from "http-status-codes";
 
 export async function prompt(req: IRequest, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
     const response = await service.prompt(req.body, req.auth.id)
-
-    for await (const chunk of response) {
-      if (chunk.text) {
-        res.write(chunk.text);
-      }
-    }
-    res.end();
+    return await service.handleStreaming(req.auth.id, response, res)
   } catch (error) {
-    if (error instanceof ServiceError) {
-      next(error)
-    } else {
-      res.write(`event: error\ndata: ${JSON.stringify(error)}\n\n`);
-      res.end();
-    }
+    next(error)
+  }
+}
+
+export async function getUserMessages(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getUserMessages(getPagination(req), req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
   }
 }
