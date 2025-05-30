@@ -55,7 +55,7 @@
   resolved "https://registry.npmjs.org/@eslint/js/-/js-8.57.1.tgz"
   integrity sha512-d9zaMRSTIKDLhctzH12MtXvJKSSUhaHcjV+2Z+GK+EEY7XKpP5yR4x+N3TAcHTcu963nIr+TMcCb4DBCYX1z6Q==
 
-"@google/genai@^1.2.0":
+"@google/genai@^1.1.0":
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/@google/genai/-/genai-1.2.0.tgz#13b0bf320f8f3a64897f34f3977fd47619d00688"
   integrity sha512-jAYhzG7UrLJxeQr5cfL87O4AcyEu+E7AA7MJDYPrDWI3Hl25EAdx5mA4AuNfSXZO31LnSyrIkEzkmJOAdlPKOA==
