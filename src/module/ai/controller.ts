@@ -22,3 +22,12 @@ export async function getUserMessages(req: IRequest, res: Response, next: NextFu
     next(error)
   }
 }
+
+export async function transcribeAudio(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.transcribeAudio(req.body)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

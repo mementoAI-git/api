@@ -49,6 +49,14 @@ export const isEmpty = (mixedVar: any) => {
   return false;
 };
 
+export const getStringSize = (str: string, format: string = "base64") => {
+  if (format === "base64") {
+    const padding = str.endsWith('==') ? 2 : str.endsWith('=') ? 1 : 0;
+    return (str.length * (3 / 4)) - padding;
+  }
+  return Buffer.byteLength(str, 'utf8');
+}
+
 export const compareStrings = (str1: string, str2: string) => {
   return str1?.toLowerCase().trim() === str2?.toLowerCase().trim();
 };
