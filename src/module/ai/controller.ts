@@ -14,6 +14,15 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
   }
 }
 
+export async function greet(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const response = await service.greet(req.auth.id)
+    return await service.handleStreaming(req.auth.id, response, res)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export async function getUserMessages(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.getUserMessages(getPagination(req), req.auth.id)
