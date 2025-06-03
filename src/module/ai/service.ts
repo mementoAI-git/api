@@ -1,5 +1,5 @@
 import { createPartFromUri, createUserContent, GenerateContentResponse, PartListUnion } from "@google/genai";
-import Message from "../../model/message";
+import Message, { IMessage } from "../../model/message";
 import gemini, { GEMINI_MODEL } from "../../services/gemini";
 import { Response } from "express";
 import { isEmpty } from "../../utils/helpers";
@@ -10,11 +10,13 @@ import { NotFoundException } from "../../utils/service-error";
 import { TEMP_PATH } from "../../utils/config";
 import path from "path";
 import fs from "fs/promises"
+import { FilterQuery } from "mongoose";
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
 
 export async function prompt(payload: IPrompt, user: string) {
-  const messages = await Message.find({ user }).limit(25)
+  let messages = await Message.find({ user }).sort({ created_at: -1 }).limit(25)
+  messages = messages.reverse()
 
   let content: PartListUnion = [payload.text]
 
@@ -32,7 +34,12 @@ export async function prompt(payload: IPrompt, user: string) {
   }
 
   const response = await chat.sendMessageStream({ message: content });
-  await Message.create({ user, role: 'user', text: payload?.text })
+  await Message.create({
+    user,
+    role: 'user',
+    attatchments: payload?.attachments || [],
+    text: payload?.text
+  })
 
   return response
 }
@@ -50,18 +57,36 @@ export async function handleStreaming(user: string, payload: AsyncGenerator<Gene
     res.write(`ERROR: ${error?.message}`);
   } finally {
     if (!isEmpty(text)) {
-      await Message.create({ text, user, role: "ai" })
+      const aiMessage = await Message.create({ text, user, role: "ai" })
     }
     res.end();
   }
 }
 
-export async function getUserMessages({ page, limit }: IPagination, user: string) {
-  const data = await Message.paginate(
-    { user },
-    { page, limit }
-  )
+export async function getUserMessages({ limit, ...query }: IPagination & { next?: string }, user: string) {
+  const filter: FilterQuery<IMessage> = { user }
+  const fetch_limit = limit + 1;
 
+  if (!isEmpty(query?.next)) {
+    const message = await Message.findById(query?.next)
+    if (message) {
+      filter.created_at = { $lte: message.created_at };
+    }
+  }
+
+  const messages = await Message.find(filter)
+    .sort({ created_at: -1 })
+    .limit(fetch_limit)
+
+  let next = null;
+  let messagesToSend = messages;
+
+  if (messages.length === fetch_limit) {
+    next = messages[limit]?._id || null;
+    messagesToSend = messages.slice(0, limit);
+  }
+
+  const data = { messages: messagesToSend.reverse(), next }
   return { message: "User messages retrieved successfully", data }
 }
 
@@ -74,12 +99,18 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
     throw new NotFoundException("Invalid file type ")
   }
 
+  if (!isEmpty(file.transcription)) {
+    return { message: "Transcription successful", data: file.transcription }
+  }
+
   const prompt = "Generate a transcript of the speech."
   const processedFile = await processFile(file)
 
   let contents = createUserContent([prompt, processedFile])
 
   const response = await gemini.models.generateContent({ model: GEMINI_MODEL, contents });
+  await file.updateOne({ transcription: response.text })
+
   return { message: "Transcription successful", data: response.text }
 }
 

@@ -112,7 +112,7 @@ export const getPagination = (req: Request): IPagination => {
   limit = Math.max(Number(limit), 1);
   page = Math.max(Number(page), 1)
 
-  return { limit, page, ...req.query };
+  return { ...req.query, limit, page };
 };
 
 export const hashPassword = async (password: string) => {
