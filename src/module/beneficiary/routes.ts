@@ -1,5 +1,5 @@
 import { Router } from "express";
-import valid from "./validatory"
+import valid from "./validator"
 import * as ctrl from "./controller"
 import gaurd from "../../middleware/gaurd";
 
