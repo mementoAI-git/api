@@ -38,7 +38,7 @@ app.use(compression({
   },
 }))
 
-app.use(rateLimiter(1, 100))
+// app.use(rateLimiter(1, 100))
 router(app);
 
 app.disable('x-powered-by')

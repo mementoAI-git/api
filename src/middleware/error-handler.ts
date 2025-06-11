@@ -1,18 +1,18 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import dayjs from 'dayjs';
-import { isEmpty, responsHandler } from '../utils/helpers';
+import { responsHandler } from '../utils/helpers';
 import { ServiceError } from '../utils/service-error';
 import mail from '../services/mail';
 
-const errorHandler = async (
+const errorHandler = (
   err: any,
   req: Request | any,
-  res: Response
-): Promise<any> => {
-  console.log("Middleware Error:", err)
-
+  res: Response,
+  next: NextFunction
+) => {
   const { method, url } = req;
+
   const timestamp = dayjs().format('DD/MM/YY HH:mm:ss');
   const request = `[${timestamp}] ${method.toUpperCase()} ${url}`;
 
@@ -25,7 +25,7 @@ const errorHandler = async (
   if (err instanceof ServiceError) {
     return responsHandler(res, err.statusCode, err?.message, err?.data);
   }
-  console.log('Error: ', JSON.stringify(error_payload, null, 2));
+
   mail.send({
     subject: 'Memento error',
     text: JSON.stringify(error_payload, null, 2),
