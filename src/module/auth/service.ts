@@ -133,8 +133,8 @@ export async function verifyEmail(payload: IVerifyEmail) {
   }
   await user.updateOne({ verified: true })
 
-  const data = createAccessToken(user.id, 1 * 60 * 60 * 1000) as typeof data & { email: string }
-  data.email = user.email;
+  const { access_token } = createAccessToken(user.id, 1 * 60 * 60 * 1000)
+  const data = { access_token, email: user.email }
 
   await AuthCode.deleteMany({ email: user.email })
 

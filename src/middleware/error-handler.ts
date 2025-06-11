@@ -8,10 +8,9 @@ import mail from '../services/mail';
 const errorHandler = async (
   err: any,
   req: Request | any,
-  res: Response,
-  next: NextFunction,
+  res: Response
 ): Promise<any> => {
-  if (isEmpty(err)) return next();
+  console.log("Middleware Error:", err)
 
   const { method, url } = req;
   const timestamp = dayjs().format('DD/MM/YY HH:mm:ss');

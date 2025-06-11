@@ -2682,6 +2682,11 @@ range-parser@~1.2.1:
   resolved "https://registry.npmjs.org/range-parser/-/range-parser-1.2.1.tgz"
   integrity sha512-Hrgsx+orqoygnmhFbKaHE6c296J+HTAQXoxEF6gNupROmmGJRoyzfG3ccAveqCBrwr/2yxQ5BVd/GTl5agOwSg==
 
+rate-limit-redis@^4.2.1:
+  version "4.2.1"
+  resolved "https://registry.yarnpkg.com/rate-limit-redis/-/rate-limit-redis-4.2.1.tgz#ab753706f4727fddc08742cfa7600d07d943abc7"
+  integrity sha512-JsUsVmRVI6G/XrlYtfGV1NMCbGS/CVYayHkxD5Ism5FaL8qpFHCXbFkUeIi5WJ/onJOKWCgtB/xtCLa6qSXb4g==
+
 raw-body@2.5.2:
   version "2.5.2"
   resolved "https://registry.npmjs.org/raw-body/-/raw-body-2.5.2.tgz"

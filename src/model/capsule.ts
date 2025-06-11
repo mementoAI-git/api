@@ -8,7 +8,7 @@ export interface ICapsule {
   title: string
   body: string
   attachments: string[]
-  status: string // Scheduled draft delivered failed
+  status: string // scheduled draft delivered failed pause
   created_at: string
   updated_at: string
 }

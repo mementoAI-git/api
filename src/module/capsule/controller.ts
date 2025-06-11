@@ -1,4 +1,4 @@
-import { NextFunction, Response } from "express";
+import e, { NextFunction, Response } from "express";
 import { IRequest } from "../../utils/interface";
 import { getPagination, responsHandler, validateRequest } from "../../utils/helpers";
 import * as service from "./service"
@@ -13,9 +13,12 @@ export async function createCapsule(req: IRequest, res: Response, next: NextFunc
     next(error)
   }
 }
+
 export async function updateCapsule(req: IRequest, res: Response, next: NextFunction) {
   try {
-    return responsHandler(res, StatusCodes.OK, "message", {})
+    validateRequest(req)
+    const { message, data } = await service.updateCapsule(req.params.id, req.body, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
   }

@@ -6,6 +6,7 @@ import router from './module';
 import { connectMongodb } from './services/mogodb';
 import requestLogger from './middleware/request-logger';
 import redis from "./services/redis"
+import rateLimiter from './middleware/rate-limiter';
 
 redis.connect();
 connectMongodb();
@@ -37,6 +38,7 @@ app.use(compression({
   },
 }))
 
+app.use(rateLimiter(1, 100))
 router(app);
 
 app.disable('x-powered-by')
