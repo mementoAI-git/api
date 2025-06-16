@@ -25,10 +25,9 @@ export async function create(payload: IBeneficiary, user: string) {
 export async function list({ page, limit, ...query }: IPagination, user_id: string) {
   const filters = filterGenerator(query, ["name", "email", "relationship"])
   filters.push({ user: user_id })
-  console.log(user_id, filters)
   const data = await Beneficiary.paginate(
     { $and: filters },
-    { page, limit }
+    { page, limit, sort: { created_at: -1 } }
   )
 
   return { message: "Beneficiary retrieved successfully", data }

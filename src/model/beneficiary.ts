@@ -5,8 +5,10 @@ export interface IBeneficiary {
   name: string
   email: string
   relationship: string
+  status: string // pending accepted rejected
   level: number
   user: string
+  accepted_at: string
 }
 
 const beneficiary = new Schema<IBeneficiary>({
@@ -16,11 +18,16 @@ const beneficiary = new Schema<IBeneficiary>({
     type: String,
     ref: "user"
   },
+  status: {
+    type: String,
+    default: "pending"
+  },
   relationship: String,
   level: {
     type: Number,
     default: 1
-  }
+  },
+  accepted_at: Date
 }, {
   timestamps: {
     createdAt: 'created_at',
