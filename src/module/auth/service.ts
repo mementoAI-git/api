@@ -113,7 +113,7 @@ export async function sendLink(payload: ISendLink) {
 
   await mail.sendLink(email, type)
 
-  return { message: "Verification link has been sent successfully", data: { email } }
+  return { message: `${type === "reset" ? "Reset" : "Verification"} link has been sent successfully`, data: { email } }
 }
 
 export async function verifyEmail(payload: IVerifyEmail) {
@@ -133,8 +133,8 @@ export async function verifyEmail(payload: IVerifyEmail) {
   }
   await user.updateOne({ verified: true })
 
-  const { access_token } = createAccessToken(user.id, 1 * 60 * 60 * 1000)
-  const data = { access_token, email: user.email }
+  const { access_token, expires_at } = createAccessToken(user.id, 1 * 60 * 60 * 1000)
+  const data = { access_token, expires_at, email: user.email }
 
   await AuthCode.deleteMany({ email: user.email })
 
