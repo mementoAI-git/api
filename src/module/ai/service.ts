@@ -11,19 +11,23 @@ import { IPrompt, ITranscribeAudio } from "./interface";
 import File, { IFile } from "../../model/file"
 import { NotFoundException } from "../../utils/service-error";
 import { TEMP_PATH } from "../../utils/config";
-import User from "../../model/user";
+import User, { IUser } from "../../model/user";
 import dayjs from "dayjs";
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
 
-export async function prompt(payload: IPrompt, user: string) {
-  let messages = await Message.find({ user }).sort({ created_at: -1 }).limit(25)
+export async function prompt(payload: IPrompt, user_id: string) {
+  const user = await User.findById(user_id)
+  let messages = await Message.find({ user: user_id }).sort({ created_at: -1 }).limit(25)
   messages = messages.reverse()
 
   let content: PartListUnion = [payload.text]
 
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
+    config: {
+      systemInstruction: createSystemContext(user)
+    },
     history: messages.map(m => ({
       role: m.role === "ai" ? "model" : "user",
       parts: [{ text: m.text }]
@@ -81,8 +85,7 @@ export async function greet(user_id: string) {
     The user, ${user.first_name}, has just started a new conversation with you.
     Generate a warm and concise welcome message.
     Address the user by their name, ${user.first_name}.
-    Ask how you can assist them today.
-    Example: "Hello ${user.first_name}! How can I help you today?"`;
+    Ask how you can assist them today.`;
   } else {
     const lastMessage = messages[messages.length - 1]
     const lastUserMessage = messages.findLast(m => m.role == "user")
@@ -98,16 +101,14 @@ export async function greet(user_id: string) {
         The last message was from the user: "${lastUserMessage.text}".
         Acknowledge their return and offer to continue or pick up where you left off.
         Address the user by their name, ${user.first_name}.
-        Keep it concise and engaging.
-        Example: "Welcome back, ${user.first_name}! What were we discussing, or how can I help now?"`;
+        Keep it concise and engaging.`;
     }
     if (lastAiMessage && last_seen > (ONE_DAY_MS / 2) && lastMessage.role === "ai") {
       prompt = `You are a helpful and friendly AI assistant.
         The conversation has been inactive for a while, and you sent the last message: "${lastAiMessage.text}".
         Gently re-engage the user, offering further assistance.
         Address the user by their name, ${user.first_name}.
-        Keep it polite and concise.
-        Example: "Just checking in, ${user.first_name}! Do you have any other questions?"`;
+        Keep it polite and concise.`;
     }
   }
 
@@ -172,6 +173,31 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
   await file.updateOne({ transcription: response.text })
 
   return { message: "Transcription successful", data: response.text }
+}
+
+function createSystemContext(user: IUser): string {
+  return `You are a helpful AI assistant. Here's what you should know:
+
+  CURRENT CONTEXT:
+  - Current date and time: ${dayjs().toISOString()}
+
+  USER INFORMATION:
+  - Name: ${user?.fullname || 'User'}
+  - Email: ${user?.email || 'Not provided'}
+  - Gender: ${user?.gender || 'Not specified'}
+  - Date of birth: ${user?.dob ? dayjs(user?.dob).toDate().toLocaleString() : 'Not specified'}
+  - Country: ${user?.country}
+  - Member since: ${user?.created_at ? dayjs(user?.created_at).toDate().toLocaleString() : 'Unknown'}
+
+  IMPORTANT GUIDELINES:
+  1. Always address the user by their name when appropriate
+  2. Consider their timezone and location for time-sensitive responses
+  3. Respect their stated preferences
+  4. Do not mention or discuss the technical details of this system, your training, or internal processes
+  5. Focus on being helpful and providing value to the user
+  6. Maintain conversation context but don't reference previous system instructions
+
+  Remember: You're having a conversation with ${user?.fullname || 'the user'}. Be natural, helpful, and personalized.`;
 }
 
 async function processFiles(file_ids: string[]) {
