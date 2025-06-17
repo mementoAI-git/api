@@ -185,9 +185,9 @@ function createSystemContext(user: IUser): string {
   - Name: ${user?.fullname || 'User'}
   - Email: ${user?.email || 'Not provided'}
   - Gender: ${user?.gender || 'Not specified'}
-  - Date of birth: ${user?.dob ? dayjs(user?.dob).toDate().toLocaleString() : 'Not specified'}
+  - Date of birth: ${user?.dob ? dayjs(user?.dob).toDate().toLocaleDateString() : 'Not specified'}
   - Country: ${user?.country}
-  - Member since: ${user?.created_at ? dayjs(user?.created_at).toDate().toLocaleString() : 'Unknown'}
+  - Member since: ${dayjs(user?.created_at).toDate().toLocaleDateString()}
 
   IMPORTANT GUIDELINES:
   1. Always address the user by their name when appropriate
