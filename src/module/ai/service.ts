@@ -18,6 +18,7 @@ const SIZE_THRESHOLD = 18 * 1024 * 1024
 
 export async function prompt(payload: IPrompt, user_id: string) {
   const user = await User.findById(user_id)
+
   let messages = await Message.find({ user: user_id }).sort({ created_at: -1 }).limit(25)
   messages = messages.reverse()
 
@@ -41,7 +42,7 @@ export async function prompt(payload: IPrompt, user_id: string) {
 
   const response = await chat.sendMessageStream({ message: content });
   await Message.create({
-    user,
+    user: user_id,
     role: 'user',
     attatchments: payload?.attachments || [],
     text: payload?.text
