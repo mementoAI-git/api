@@ -2,11 +2,11 @@ import express from 'express'
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from "compression"
-import router from './module';
-import { connectMongodb } from './services/mogodb';
+import router from './module/api';
+import { connectMongodb } from './module/database/connection';
 import requestLogger from './middleware/request-logger';
 import redis from "./services/redis"
-import rateLimiter from './middleware/rate-limiter';
+import path from 'path';
 
 redis.connect();
 connectMongodb();
@@ -24,6 +24,7 @@ app.use(cors({
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: "100mb" }));
+app.use('/assets', express.static(path.join(__dirname, '../public')));
 
 app.use(requestLogger);
 

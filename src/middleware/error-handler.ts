@@ -3,7 +3,7 @@ import { StatusCodes } from 'http-status-codes';
 import dayjs from 'dayjs';
 import { responsHandler } from '../utils/helpers';
 import { ServiceError } from '../utils/service-error';
-import mail from '../services/mail';
+import mail from '../module/mail';
 
 const errorHandler = (
   err: any,
@@ -11,6 +11,7 @@ const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
+  console.log(err)
   const { method, url } = req;
 
   const timestamp = dayjs().format('DD/MM/YY HH:mm:ss');
@@ -25,7 +26,7 @@ const errorHandler = (
   if (err instanceof ServiceError) {
     return responsHandler(res, err.statusCode, err?.message, err?.data);
   }
-
+  console.log(error_payload)
   mail.send({
     subject: 'Memento error',
     text: JSON.stringify(error_payload, null, 2),
