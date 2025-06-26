@@ -19,7 +19,7 @@ const transport = nodemailer.createTransport({
 });
 
 class MailService {
-  private templatePath = path.join(__dirname, "template");
+  private templatePath = path.join(process.cwd(), "views", "mail");
 
   private async renderTemplate(templateName: string, data: any): Promise<string> {
     const templatePath = path.join(this.templatePath, `${templateName}.ejs`);
