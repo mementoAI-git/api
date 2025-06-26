@@ -24,7 +24,7 @@ app.use(cors({
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: "100mb" }));
-app.use('/assets', express.static(path.join(__dirname, '../public')));
+app.use('/assets', express.static(path.join(process.cwd(), 'public')));
 
 app.use(requestLogger);
 
