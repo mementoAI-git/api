@@ -74,7 +74,7 @@ export async function login(payload: ILogin) {
     throw new BadRequestException("Incorrect password")
   }
   if (!user.verified) {
-    await mail.sendLink(email, "verify")
+    await mail.sendLink(email, user.first_name, "verify")
     throw new BadRequestException(
       "Please verify your email address",
       { requires_verification: true, email }
@@ -97,7 +97,7 @@ export async function register(payload: ILogin) {
   const keys = generateKeys()
 
   await User.create({ password, email, ...keys })
-  await mail.sendLink(email, "verify")
+  await mail.sendLink(email, "", "verify")
 
   const data = { requires_verification: true, email }
 
@@ -111,7 +111,7 @@ export async function sendLink(payload: ISendLink) {
     throw new NotFoundException("User not found")
   }
 
-  await mail.sendLink(email, type)
+  await mail.sendLink(email, user.first_name, type)
 
   return { message: `${type === "reset" ? "Reset" : "Verification"} link has been sent successfully`, data: { email } }
 }

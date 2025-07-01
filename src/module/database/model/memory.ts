@@ -8,7 +8,6 @@ export interface IMemory {
   attachments: string[]
   tags: string[]
   level: number
-  bookmarked: boolean
   refrence: string
   status: string | "draft" | "save" | "queued" | "on_chain";
   prompt?: string
@@ -32,10 +31,6 @@ const memory = new Schema<IMemory>({
   level: {
     type: Number,
     default: 1
-  },
-  bookmarked: {
-    type: Boolean,
-    default: false
   },
   refrence: String,
   prompt: String,

@@ -23,7 +23,8 @@ class MailService {
 
   private async renderTemplate(templateName: string, data: any): Promise<string> {
     const templatePath = path.join(this.templatePath, `${templateName}.ejs`);
-    return ejs.renderFile(templatePath, data);
+    const logoUrl = `${BACKEND_URL}/assets/images/logo-text-white.png`;
+    return ejs.renderFile(templatePath, { ...data, logoUrl });
   }
 
   async send(payload: MailOptions) {
@@ -38,7 +39,7 @@ class MailService {
     }
   }
 
-  async sendLink(email: string, type = "reset") {
+  async sendLink(email: string, name: string = "", type = "reset") {
     const code = uuid()
     const expires_at = dayjs().add(10, "minutes").toISOString()
 
@@ -49,23 +50,28 @@ class MailService {
       await AuthCode.create({ code, email, type, expires_at })
     }
 
+    const template = type === "reset" ? "reset-password" : "email-verification"
+    const subject = type === "reset" ? "Reset Password Link" : "Email Verification Link"
     const path = type === "reset" ? "set-password" : "confirm-email"
-    const link = `${FRONTEND_URL}/${path}?token=${code}&email=${email}`
+    const url = `${FRONTEND_URL}/${path}?token=${code}&email=${email}`
 
-    await this.send({
-      to: email,
-      subject: "[Memento] Verification code",
-      text: link
-    })
+    const html = await this.renderTemplate(
+      template,
+      { name, url }
+    );
+
+    await this.send({ to: email, subject, html })
+
+    return {
+      code,
+      expires_at
+    }
   }
 
   async sendBeneficiaryInvite(email: string, name: string) {
-    const logoUrl = `${BACKEND_URL}/assets/images/logo-text-white.png`;
-
     const html = await this.renderTemplate("beneficiary-invite", {
       name,
-      url: `${FRONTEND_URL}/accept-invitation?email=${email}`,
-      logoUrl
+      url: `${FRONTEND_URL}/accept-invitation?email=${email}`
     });
 
     await this.send({
