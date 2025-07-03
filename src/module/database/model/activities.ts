@@ -1,16 +1,47 @@
-import { model, Schema } from "mongoose"
+import { model, Schema, PaginateModel } from "mongoose"
+import mongoosePaginate from "mongoose-paginate-v2"
 
 export interface IActivity {
   user: string
   title: string
+  description: string
   type: string
+  action: string
+  reference?: string
+  metadata?: Record<string, any>
   created_at: string
 }
 
 const activity = new Schema<IActivity>({
-  user: String,
-  title: String,
-  type: String
+  user: {
+    type: String,
+    ref: "user",
+    required: true,
+    index: true
+  },
+  title: {
+    type: String,
+    required: true
+  },
+  description: {
+    type: String,
+    required: true
+  },
+  type: {
+    type: String,
+    required: true,
+    enum: ["memory", "prompt", "beneficiary", "user"]
+  },
+  action: {
+    type: String,
+    required: true,
+    enum: ["created", "updated", "deleted", "viewed", "bookmarked", "unbookmarked", "responded", "shared"]
+  },
+  reference: String,
+  metadata: {
+    type: Schema.Types.Mixed,
+    default: {}
+  }
 }, {
   timestamps: {
     createdAt: 'created_at',
@@ -18,5 +49,7 @@ const activity = new Schema<IActivity>({
   }
 })
 
-const Activity = model("activity", activity)
+activity.plugin(mongoosePaginate)
+
+const Activity = model<IActivity, PaginateModel<IActivity>>("activity", activity)
 export default Activity

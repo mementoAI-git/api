@@ -7,6 +7,7 @@ import { NotFoundException } from "../../../utils/service-error";
 import { ICreateMemoryPayload } from "./interface";
 import { isEmpty, reconstructFileName } from "../../../utils/helpers";
 import Bookmark from "../../database/model/bookmarks";
+import { track } from "../activity/service";
 
 export async function memoryStats(user_id: string) {
   const memory_count = await Memory.countDocuments({
@@ -54,6 +55,15 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
     tags,
     attachments
   })
+
+  // Track activity
+  await track({
+    title: "Memory Created",
+    description: `Created memory: "${title}"`,
+    type: "memory",
+    action: "created",
+    reference: memory.id
+  }, user_id)
 
   return {
     message: "Memory created successfully",
@@ -112,7 +122,7 @@ export async function getMemory(_id: string, user_id: string = null) {
 }
 
 export async function updateMemory(_id: string, payload: Partial<IMemory>, user_id: string) {
-  const { status, attachments = [], body, tags, level } = payload
+  const { status, attachments = [], body, title, tags, level } = payload
   let memory = await Memory.findOne({ _id, user: user_id })
   if (!memory) {
     throw new NotFoundException("Memory not found")
@@ -121,6 +131,7 @@ export async function updateMemory(_id: string, payload: Partial<IMemory>, user_
   memory = await Memory.findByIdAndUpdate(
     _id,
     {
+      title: title || memory?.title,
       body: body || memory?.body,
       level: level || memory?.level,
       status,
@@ -129,6 +140,14 @@ export async function updateMemory(_id: string, payload: Partial<IMemory>, user_
     },
     { new: true }
   )
+
+  await track({
+    title: "Memory Updated",
+    description: `Updated memory: "${memory.title}"`,
+    type: "memory",
+    action: "updated",
+    reference: memory.id
+  }, user_id)
 
   return { data: memory, message: "Memory updated successfully" }
 }
@@ -140,6 +159,14 @@ export async function deleteMemory(_id: string, user_id: string) {
   }
 
   await memory.updateOne({ status: "deleted" })
+
+  await track({
+    title: "Memory Deleted",
+    description: `Deleted memory: "${memory.title}"`,
+    type: "memory",
+    action: "deleted",
+    reference: memory.id
+  }, user_id)
 
   return { data: memory, message: "Memory deleted successfully" }
 }
@@ -153,6 +180,14 @@ export async function bookmark(memory_id: string, user_id: string) {
   let bookmark = await Bookmark.findOne({ memory: memory_id, user: user_id })
   if (!bookmark) {
     bookmark = await Bookmark.create({ memory: memory_id, user: user_id })
+
+    await track({
+      title: "Memory Bookmarked",
+      description: `Bookmarked memory: "${memory.title}"`,
+      type: "memory",
+      action: "bookmarked",
+      reference: memory_id
+    }, user_id)
   }
 
   return {
@@ -166,6 +201,14 @@ export async function unbookmark(memory_id: string, user_id: string) {
   if (!bookmark) {
     throw new NotFoundException("Bookmark not found")
   }
+
+  await track({
+    title: "Memory Unbookmarked",
+    description: `Unbookmarked memory: "${memory_id}"`,
+    type: "memory",
+    action: "unbookmarked",
+    reference: memory_id
+  }, user_id)
 
   return { data: bookmark, message: "Memory unbookmarked successfully" }
 }

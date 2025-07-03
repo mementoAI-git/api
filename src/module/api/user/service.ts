@@ -8,6 +8,7 @@ import { UploadedFile } from "express-fileupload";
 import File from "../../database/model/file";
 import speakeasy from "speakeasy"
 import Qr from "qrcode"
+import { track } from "../activity/service";
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const { new_password, old_password } = payload
@@ -60,6 +61,17 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
   const data = await User
     .findByIdAndUpdate(user_id, updatePayload, { new: true })
     .select("-password -providers -public_key -private_key")
+
+  // Track activity if any fields were updated
+  if (Object.keys(updatePayload).length > 0) {
+    await track({
+      title: "Profile Updated",
+      description: `Updated profile: "${Object.keys(updatePayload).join(", ")}"`,
+      type: "user",
+      action: "updated",
+      reference: user_id
+    }, user_id)
+  }
 
   return { message: "User profile updated successfully", data }
 }
@@ -129,7 +141,7 @@ export async function setup2FA(user_id: string) {
   const qrcode = await Qr.toDataURL(secret.otpauth_url)
 
   return {
-    data: { url: secret.otpauth_url, qrcode },
+    data: { url: secret.otpauth_url, qrcode, secret: secret.base32 },
     message: "2FA setup successful. Scan the QR code with your Authenticator app."
   }
 }

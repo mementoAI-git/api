@@ -4,6 +4,7 @@ import Capsule, { ICapsule } from "../../database/model/capsule";
 import { isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
+import { track } from "../activity/service";
 
 export async function createCapsule(payload: ICapsule, user_id: string) {
   const users = await Beneficiary.find({ email: { $in: payload.recipients }, user: user_id })
@@ -16,6 +17,14 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
     recipients: users.map(u => u.id),
     delivery_date: dayjs(payload.delivery_date).toISOString()
   })
+
+  await track({
+    title: "Capsule Created",
+    description: `Created capsule: "${payload.title}"`,
+    type: "capsule",
+    action: "created",
+    reference: data.id
+  }, user_id)
 
   return { message: "Capsule created successfully", data }
 }
@@ -38,6 +47,14 @@ export async function updateCapsule(id: string, payload: Partial<ICapsule>, user
   }
   Object.assign(capsule, payload)
   await capsule.save()
+
+  await track({
+    title: "Capsule Updated",
+    description: `Updated capsule: "${capsule.title}"`,
+    type: "capsule",
+    action: "updated",
+    reference: capsule.id
+  }, user_id)
 
   return { message: "Capsule updated successfully", data: capsule }
 }
@@ -76,5 +93,13 @@ export async function deleteCapsule(id: string, user: string) {
   }
 
   await capsule.deleteOne()
+  await track({
+    title: "Capsule Deleted",
+    description: `Deleted capsule: "${capsule.title}"`,
+    type: "capsule",
+    action: "deleted",
+    reference: capsule.id
+  }, user)
+
   return { message: "Time capsule deleted successfully", data: capsule }
 }

@@ -1,6 +1,6 @@
-import { Response } from "express";
+
 import { UploadedFile } from "express-fileupload";
-import { isEmpty, reconstructFileName } from "../../../utils/helpers";
+import { reconstructFileName } from "../../../utils/helpers";
 import User from "../../database/model/user";
 import File from "../../database/model/file";
 import { NotFoundException, UnauthorizedException } from "../../../utils/service-error";

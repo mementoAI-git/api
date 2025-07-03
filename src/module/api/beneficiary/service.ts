@@ -3,6 +3,7 @@ import { filterGenerator } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
 import Beneficiary, { IBeneficiary } from "../../database/model/beneficiary";
+import { track } from "../activity/service";
 
 export async function create(payload: IBeneficiary, user: string) {
   const { email, level, name = "", relationship = "friend" } = payload
@@ -22,6 +23,13 @@ export async function create(payload: IBeneficiary, user: string) {
 
   if (data) {
     await mail.sendBeneficiaryInvite(email, name)
+    await track({
+      title: "Beneficiary Invited",
+      description: `Invited beneficiary: "${name}"`,
+      type: "beneficiary",
+      action: "created",
+      reference: data.id
+    }, user)
   }
 
   return { message: "Beneficiary added successfully", data }
@@ -45,6 +53,14 @@ export async function del(id: string, user_id: string) {
   }
   await beneficiary.deleteOne()
 
+  await track({
+    title: "Beneficiary Deleted",
+    description: `Deleted beneficiary: "${beneficiary.name}"`,
+    type: "beneficiary",
+    action: "deleted",
+    reference: beneficiary.id
+  }, user_id)
+
   return { message: "Beneficiary deleted successfully", data: beneficiary }
 }
 
@@ -58,6 +74,14 @@ export async function update(id: string, payload: Partial<IBeneficiary>, user_id
     email: payload?.email || beneficiary?.email,
     level: payload?.level || beneficiary?.level
   }, { new: true })
+
+  await track({
+    title: "Beneficiary Updated",
+    description: `Updated beneficiary: "${beneficiary.name}"`,
+    type: "beneficiary",
+    action: "updated",
+    reference: beneficiary.id
+  }, user_id)
 
   return { message: "Beneficiary updated successfully", data }
 }
