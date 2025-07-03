@@ -29,7 +29,7 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
   if (!user) {
     throw new NotFoundException("User not found")
   }
-
+  console.log(files)
   let attachments = payload?.attachments || []
   if (!isEmpty(files)) {
     const unsavedFiles = files.map(file => {

@@ -1,6 +1,6 @@
 import { NextFunction, Response } from "express";
 import { StatusCodes } from "http-status-codes"
-import { getPagination, responsHandler, validateRequest } from "../../../utils/helpers"
+import { getFiles, getPagination, responsHandler, validateRequest } from "../../../utils/helpers"
 import * as service from "./service"
 import { IRequest } from "../../../utils/interface";
 
@@ -25,7 +25,8 @@ export async function bookmark(req: IRequest, res: Response, next: NextFunction)
 export async function createMemory(req: IRequest, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
-    const { message, data } = await service.createMemory(req.body, req.auth.id)
+    const files = getFiles(req)
+    const { message, data } = await service.createMemory(req.body, req.auth.id, files)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

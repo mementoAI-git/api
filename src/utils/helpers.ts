@@ -96,6 +96,7 @@ export const getFiles = (req: Request, required = false) => {
   const allowedTypes = new Set([
     "image/png", "image/jpeg",
     "image/heic",
+    "video/mp4",
     "audio/webm", "video/webm",
     "application/pdf"
   ])

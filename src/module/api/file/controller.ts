@@ -26,28 +26,33 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', metadata.type);
     res.setHeader('Content-Disposition', `inline; filename="${metadata.name}"`);
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
-
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('ETag', metadata.etag);
-    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 hour cache
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('Last-Modified', dayjs(metadata.updated_at).toDate().toUTCString());
+    res.setHeader('Accept-Ranges', 'bytes');
 
-    const data = await service.getFileBuffer(name, parseInt(metadata.size, 10), range)
+    const data = await service.getFileBuffer(name, parseInt(metadata.size, 10), range);
+
     if (range) {
       const { start, end, buffer } = data;
-
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${metadata.size}`,
         'Content-Length': end - start + 1,
-        'Accept-Ranges': 'bytes'
+        'Content-Type': metadata.type,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+        'ETag': metadata.etag,
+        'Last-Modified': dayjs(metadata.updated_at).toDate().toUTCString(),
+        'Content-Disposition': `inline; filename=\"${metadata.name}\"`
       });
-
       const stream = service.createFileStream(buffer);
       await pipeline(stream, res);
     } else {
       res.setHeader('Content-Length', metadata.size);
-      res.status(200)
-
+      res.status(200);
       if (Number(metadata.size) < data.chunk_size) {
         res.send(data.buffer);
       } else {
