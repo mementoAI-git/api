@@ -39,7 +39,7 @@ export function createNewConversationPrompt(user: IUser): string {
 
   return `You are a warm, engaging, and conversational AI assistant. 
 
-${timeGreeting} ${user.first_name}! 👋 I'm excited to chat with you today.
+${timeGreeting} ${user.first_name}! 👋
 
 I'm here to help you with anything you need - whether it's brainstorming ideas, solving problems, learning something new, or just having an interesting conversation. 
 
@@ -57,7 +57,7 @@ Welcome back ${user.first_name}! 👋 It's great to see you again.
 
 I noticed you were asking about: "${lastUserMessage?.text}" before we got interrupted. I'd love to continue that conversation or explore it further!
 
-What would you like to dive into today? We can pick up where we left off, or if you have something new on your mind, I'm all ears. What's been on your mind since we last chatted?`;
+What would you like to dive into today? We can pick up where we left off, or if you have something new on your mind, I'm all ears.`;
 }
 
 export function createInactiveConversationPrompt(context: ConversationContext): string {
@@ -69,7 +69,7 @@ Hey ${user.first_name}! 👋 I hope you're having a great day.
 
 I was just thinking about our conversation where I mentioned: "${lastAiMessage?.text}"
 
-I'm curious - what are your thoughts on that? Or is there something else you'd like to explore together? I'm here to help with whatever you need!`;
+I'm curious - what are your thoughts on that? Or is there something else you'd like to explore together?`;
 }
 
 export function createOldConversationPrompt(context: ConversationContext): string {
@@ -79,7 +79,7 @@ export function createOldConversationPrompt(context: ConversationContext): strin
 
 ${user.first_name}! 👋 It's been a while since we've chatted - I'm so glad you're back!
 
-I can see we've had some interesting conversations before. What's new in your world? I'd love to hear what you've been up to or what's on your mind today.
+I'd love to hear what you've been up to or what's on your mind today.
 
 What would you like to explore together?`;
 }
@@ -90,8 +90,6 @@ export function createRecentConversationPrompt(context: ConversationContext): st
   return `You are a warm and engaging AI assistant.
 
 Hey ${user.first_name}! 👋 Great to see you again!
-
-What's the latest? I'm here and ready to help with whatever you need - whether it's continuing our conversation, tackling a new challenge, or just chatting about something interesting.
 
 What's on your mind today?`;
 }
