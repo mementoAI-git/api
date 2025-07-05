@@ -7,12 +7,13 @@ import Message, { IMessage } from "../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../services/gemini";
 import { isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
-import { IPrompt, ITranscribeAudio } from "./interface";
+import { ConversationContext, IPrompt, ITranscribeAudio } from "./interface";
 import File, { IFile } from "../../database/model/file"
 import { NotFoundException } from "../../../utils/service-error";
 import { TEMP_PATH } from "../../../utils/config";
 import User, { IUser } from "../../database/model/user";
 import dayjs from "dayjs";
+import { createSystemContext, generateGreetingPrompt } from "./prompts";
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
 
@@ -29,10 +30,7 @@ export async function prompt(payload: IPrompt, user_id: string) {
     config: {
       systemInstruction: createSystemContext(user)
     },
-    history: messages.map(m => ({
-      role: m.role === "ai" ? "model" : "user",
-      parts: [{ text: m.text }]
-    }))
+    history: createChatHistory(messages)
   });
 
   if (!isEmpty(payload?.attachments)) {
@@ -71,58 +69,28 @@ export async function handleStreaming(user: string, payload: AsyncGenerator<Gene
 }
 
 export async function greet(user_id: string) {
-  const user = await User.findById(user_id)
+  const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException("User not found");
   }
 
-  let messages = await Message.find({ user }).sort({ created_at: -1 }).limit(25)
-  messages = messages.reverse()
+  const messages = await Message.find({ user })
+    .sort({ created_at: -1 })
+    .limit(25);
+  const reversedMessages = messages.reverse();
 
-  let prompt = ""
-
-  if (isEmpty(messages)) {
-    prompt = `You are a helpful and friendly AI assistant.
-    The user, ${user.first_name}, has just started a new conversation with you.
-    Generate a warm and concise welcome message.
-    Address the user by their name, ${user.first_name}.
-    Ask how you can assist them today.`;
-  } else {
-    const lastMessage = messages[messages.length - 1]
-    const lastUserMessage = messages.findLast(m => m.role == "user")
-    const lastAiMessage = messages.findLast(m => m.role == "ai")
-    const last_seen = lastMessage ? dayjs().diff(lastMessage.created_at, 'millisecond') : 0;
-
-    const ONE_HOUR_MS = 60 * 60 * 1000;
-    const ONE_DAY_MS = 24 * ONE_HOUR_MS;
-
-    if (lastUserMessage && last_seen > ONE_DAY_MS && lastMessage.role === "user") {
-      prompt = `You are a helpful and friendly AI assistant.
-        The user, ${user.first_name}, is returning to a conversation that was left off some time ago.
-        The last message was from the user: "${lastUserMessage.text}".
-        Acknowledge their return and offer to continue or pick up where you left off.
-        Address the user by their name, ${user.first_name}.
-        Keep it concise and engaging.`;
-    }
-    if (lastAiMessage && last_seen > (ONE_DAY_MS / 2) && lastMessage.role === "ai") {
-      prompt = `You are a helpful and friendly AI assistant.
-        The conversation has been inactive for a while, and you sent the last message: "${lastAiMessage.text}".
-        Gently re-engage the user, offering further assistance.
-        Address the user by their name, ${user.first_name}.
-        Keep it polite and concise.`;
-    }
-  }
+  const context = analyzeConversationContext(user, reversedMessages);
+  const prompt = generateGreetingPrompt(context);
 
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
-    history: messages.map(m => ({
-      role: m.role === "ai" ? "model" : "user",
-      parts: [{ text: m.text }]
-    }))
+    config: {
+      systemInstruction: createSystemContext(user)
+    },
+    history: createChatHistory(reversedMessages)
   });
 
-  const response = await chat.sendMessageStream({ message: prompt });
-  return response
+  return await chat.sendMessageStream({ message: prompt });
 }
 
 export async function getUserMessages({ limit, ...query }: IPagination & { next?: string }, user: string) {
@@ -176,31 +144,6 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
   return { message: "Transcription successful", data: response.text }
 }
 
-function createSystemContext(user: IUser): string {
-  return `You are a helpful AI assistant. Here's what you should know:
-
-  CURRENT CONTEXT:
-  - Current date and time: ${dayjs().toISOString()}
-
-  USER INFORMATION:
-  - Name: ${user?.fullname || 'User'}
-  - Email: ${user?.email || 'Not provided'}
-  - Gender: ${user?.gender || 'Not specified'}
-  - Date of birth: ${user?.dob ? dayjs(user?.dob).toDate().toLocaleDateString() : 'Not specified'}
-  - Country: ${user?.country}
-  - Member since: ${dayjs(user?.created_at).toDate().toLocaleDateString()}
-
-  IMPORTANT GUIDELINES:
-  1. Always address the user by their name when appropriate
-  2. Consider their timezone and location for time-sensitive responses
-  3. Respect their stated preferences
-  4. Do not mention or discuss the technical details of this system, your training, or internal processes
-  5. Focus on being helpful and providing value to the user
-  6. Maintain conversation context but don't reference previous system instructions
-
-  Remember: You're having a conversation with ${user?.fullname || 'the user'}. Be natural, helpful, and personalized.`;
-}
-
 async function processFiles(file_ids: string[]) {
   const files = await File.find({ _id: { $in: file_ids } })
   const processed = await Promise.all(files.map(processFile))
@@ -232,4 +175,29 @@ async function processFile(file: IFile) {
   } finally {
     if (file_path) fs.unlink(file_path);
   }
+}
+
+function analyzeConversationContext(user: IUser, messages: IMessage[]): ConversationContext {
+  const lastMessage = messages[messages.length - 1] || null;
+  const lastUserMessage = messages.findLast(m => m.role === "user") || null;
+  const lastAiMessage = messages.findLast(m => m.role === "ai") || null;
+  const timeSinceLastMessage = lastMessage
+    ? dayjs().diff(lastMessage.created_at, 'millisecond')
+    : 0;
+
+  return {
+    user,
+    messages,
+    lastMessage,
+    lastUserMessage,
+    lastAiMessage,
+    timeSinceLastMessage,
+  };
+}
+
+function createChatHistory(messages: IMessage[]) {
+  return messages.map(m => ({
+    role: m.role === "ai" ? "model" : "user",
+    parts: [{ text: m.text }]
+  }));
 }

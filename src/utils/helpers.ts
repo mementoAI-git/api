@@ -180,3 +180,10 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
 
   return proccessed;
 };
+
+export const getTimeBasedGreeting = (): string => {
+  const hour = dayjs().hour();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
