@@ -2,13 +2,17 @@ import { model, PaginateModel, Schema } from "mongoose"
 import mongoosePaginate from 'mongoose-paginate-v2';
 
 export interface IBeneficiary {
+  id?: string
   name: string
   email: string
   relationship: string
   status: string // pending accepted rejected
   level: number
   user: string
+  benefactor: string
   accepted_at: string
+  due_at?: string
+  created_at: string
 }
 
 const beneficiary = new Schema<IBeneficiary>({
@@ -16,7 +20,13 @@ const beneficiary = new Schema<IBeneficiary>({
   email: String,
   user: {
     type: String,
-    ref: "user"
+    ref: "user",
+    index: true
+  },
+  benefactor: {
+    type: String,
+    ref: "user",
+    index: true
   },
   status: {
     type: String,
@@ -27,7 +37,8 @@ const beneficiary = new Schema<IBeneficiary>({
     type: Number,
     default: 1
   },
-  accepted_at: Date
+  accepted_at: Date,
+  due_at: Date
 }, {
   timestamps: {
     createdAt: 'created_at',

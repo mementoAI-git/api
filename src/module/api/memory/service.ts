@@ -24,12 +24,12 @@ export async function memoryStats(user_id: string) {
 }
 
 export async function createMemory(payload: ICreateMemoryPayload, user_id: string, files: UploadedFile[] | null = null) {
-  const { title, body, tags = [], level = 1 } = payload
+  const { title, body, status, tags = [], level = 1 } = payload
   const user = await User.findById(user_id)
   if (!user) {
     throw new NotFoundException("User not found")
   }
-  console.log(files)
+
   let attachments = payload?.attachments || []
   if (!isEmpty(files)) {
     const unsavedFiles = files.map(file => {
@@ -51,7 +51,7 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
     user: user_id,
     body,
     level,
-    status: "save",
+    status,
     tags,
     attachments
   })

@@ -51,3 +51,23 @@ export async function resendInvite(req: IRequest, res: Response, next: NextFunct
     next(error)
   }
 }
+
+export async function acceptInvite(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.acceptInvite(req.body)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function getInvite(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.getInvite(req.params.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

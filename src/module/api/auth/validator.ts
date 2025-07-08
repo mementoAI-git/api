@@ -9,6 +9,7 @@ const providerValidator = param("provider")
 export const emailValidator = body("email")
   .notEmpty().withMessage("Email address is required")
   .isEmail().withMessage("Invalid email address")
+  .toLowerCase()
 
 export default {
   generateOauthUrl: providerValidator,

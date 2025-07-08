@@ -6,6 +6,7 @@ import { v4 as uuid } from "uuid";
 import AuthCode from "../database/model/auth-code";
 import * as ejs from "ejs";
 import * as path from "path";
+import { IBeneficiary } from "../database/model/beneficiary";
 
 const transport = nodemailer.createTransport({
   //@ts-ignore
@@ -68,10 +69,11 @@ class MailService {
     }
   }
 
-  async sendBeneficiaryInvite(email: string, name: string) {
+  async sendBeneficiaryInvite(payload: IBeneficiary) {
+    const { email, name, id } = payload
     const html = await this.renderTemplate("beneficiary-invite", {
       name,
-      url: `${FRONTEND_URL}/accept-invitation?email=${email}`
+      url: `${FRONTEND_URL}/accept-invite/${id}`
     });
 
     await this.send({

@@ -7,7 +7,7 @@ import { NotFoundException } from "../../../utils/service-error";
 import { track } from "../activity/service";
 
 export async function createCapsule(payload: ICapsule, user_id: string) {
-  const users = await Beneficiary.find({ email: { $in: payload.recipients }, user: user_id })
+  const users = await Beneficiary.find({ email: { $in: payload.recipients }, benefactor: user_id })
   if (isEmpty(users)) {
     throw new NotFoundException("Users not found")
   }
@@ -35,7 +35,7 @@ export async function updateCapsule(id: string, payload: Partial<ICapsule>, user
   }
 
   if (payload.recipients && payload.recipients.length > 0) {
-    const users = await Beneficiary.find({ email: { $in: payload.recipients }, user: user_id })
+    const users = await Beneficiary.find({ email: { $in: payload.recipients }, benefactor: user_id })
     if (isEmpty(users)) {
       throw new NotFoundException("Recipients not found")
     }

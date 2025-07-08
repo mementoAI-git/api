@@ -9,7 +9,9 @@ router.post("/", gaurd, valid.createBeneficiary, ctrl.create)
 router.get("/", gaurd, ctrl.list)
 router.put("/:id", gaurd, valid.updateBeneficiary, ctrl.update)
 router.delete("/:id", gaurd, ctrl.del)
-router.post("/resend-invite", gaurd, valid.resendInvite, ctrl.resendInvite)
+router.post("/invite/resend", gaurd, valid.resendInvite, ctrl.resendInvite)
+router.post("/invite/accept", valid.acceptInvite, ctrl.acceptInvite)
+router.get("/invite/:id", valid.getInvite, ctrl.getInvite)
 
 export const name = "beneficiaries"
 export default router
