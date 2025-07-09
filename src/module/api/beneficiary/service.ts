@@ -185,6 +185,7 @@ export async function acceptInvite(payload: IAcceptInivite) {
 
   beneficiary.user = user.id
   beneficiary.status = "accepted"
+  beneficiary.accepted_at = dayjs().toISOString()
   await beneficiary.save()
 
   return { message: "Invite retrieved successfully", data: { token } }
