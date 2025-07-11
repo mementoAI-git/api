@@ -35,6 +35,7 @@ export async function createMemory(req: IRequest, res: Response, next: NextFunct
 
 export async function getMemories(req: IRequest, res: Response, next: NextFunction) {
   try {
+    // getPagination already spreads req.query, so search/tags will be included
     const { message, data } = await service.getMemories(getPagination(req), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {

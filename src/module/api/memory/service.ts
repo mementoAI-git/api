@@ -8,6 +8,7 @@ import { ICreateMemoryPayload } from "./interface";
 import { isEmpty, reconstructFileName } from "../../../utils/helpers";
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
+import { filterGenerator } from "../../../utils/helpers";
 
 export async function memoryStats(user_id: string) {
   const memory_count = await Memory.countDocuments({
@@ -72,13 +73,16 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
 }
 
 export async function getMemories(payload: IPagination, user_id: string) {
-  const { page, limit } = payload
+  const { page, limit, search = "" } = payload
+
+  const filters = filterGenerator({ search }, ["title", "body", "tags"])
+  filters.push({
+    user: user_id,
+    status: { $nin: ["draft", "deleted"] }
+  })
 
   const memories = await Memory.paginate(
-    {
-      user: user_id,
-      status: { $nin: ["draft", "deleted"] }
-    },
+    { $and: filters },
     {
       page,
       limit,

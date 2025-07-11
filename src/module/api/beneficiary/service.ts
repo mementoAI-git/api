@@ -108,7 +108,8 @@ export async function update(id: string, payload: Partial<IBeneficiary>, user_id
 
   const data = await Beneficiary.findByIdAndUpdate(id, {
     email: payload?.email || beneficiary?.email,
-    level: payload?.level || beneficiary?.level
+    level: payload?.level || beneficiary?.level,
+    relationship: payload?.relationship || beneficiary?.relationship
   }, { new: true })
 
   await track({
