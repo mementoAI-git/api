@@ -74,8 +74,8 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
 
 export async function getMemories(payload: IPagination, user_id: string) {
   const { page, limit, search = "" } = payload
-
   const filters = filterGenerator({ search }, ["title", "body", "tags"])
+
   filters.push({
     user: user_id,
     status: { $nin: ["draft", "deleted"] }
