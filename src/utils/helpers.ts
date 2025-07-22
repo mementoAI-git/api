@@ -187,3 +187,17 @@ export const getTimeBasedGreeting = (): string => {
   if (hour < 17) return "Good afternoon";
   return "Good evening";
 }
+
+export const emptyPaginatedList = ({ limit, page }) => {
+  return {
+    docs: [],
+    totalDocs: 0,
+    limit,
+    page,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPrevPage: false,
+    nextPage: null,
+    prevPage: null
+  }
+}

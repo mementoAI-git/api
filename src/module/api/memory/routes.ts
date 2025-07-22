@@ -8,6 +8,7 @@ const router = Router()
 
 router.get("/stats", gaurd, ctrl.memoryStats)
 router.post("/", gaurd, fileUploadMiddleWare, valid.createMemory, ctrl.createMemory)
+router.delete("/remove-file/:id", gaurd, valid.removeFileFromMemory, ctrl.removeFileFromMemory)
 router.get("/", gaurd, ctrl.getMemories)
 router.get("/:id", gaurd, ctrl.getMemory)
 router.put("/:id", gaurd, valid.updateMemory, ctrl.updateMemory)

@@ -6,6 +6,8 @@ export interface IPagination {
   paginate?: boolean
   search?: string // optional search string
   tags?: string | string[] // optional tags filter
+  bookmarked?: boolean // filter for bookmarked memories
+  deleted?: boolean // filter for deleted memories
 }
 
 export interface IRequest extends Request {

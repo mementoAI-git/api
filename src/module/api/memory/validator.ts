@@ -1,4 +1,4 @@
-import { body } from "express-validator";
+import { body, param } from "express-validator";
 
 export default {
   createMemory: [
@@ -65,5 +65,10 @@ export default {
     body("body")
       .optional()
       .isString().withMessage("Body must be a string"),
-  ]
+  ],
+  removeFileFromMemory: [
+    param("id")
+      .notEmpty().withMessage("file id is required")
+      .isMongoId().withMessage("invalid file id")
+  ],
 }

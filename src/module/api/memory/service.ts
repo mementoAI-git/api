@@ -5,7 +5,7 @@ import User from "../../database/model/user";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
 import { ICreateMemoryPayload } from "./interface";
-import { isEmpty, reconstructFileName } from "../../../utils/helpers";
+import { emptyPaginatedList, isEmpty, reconstructFileName } from "../../../utils/helpers";
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
 import { filterGenerator } from "../../../utils/helpers";
@@ -73,16 +73,41 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
 }
 
 export async function getMemories(payload: IPagination, user_id: string) {
-  const { page, limit, search = "" } = payload
+  const { page, limit, search = "", bookmarked = false, deleted = false } = payload
   const filters = filterGenerator({ search }, ["title", "body", "tags"])
 
-  filters.push({
-    user: user_id,
-    status: { $nin: ["draft", "deleted"] }
-  })
+  if (deleted) {
+    filters.push({
+      user: user_id,
+      status: "deleted"
+    })
+  } else {
+    filters.push({
+      user: user_id,
+      status: { $nin: ["draft", "deleted"] }
+    })
+  }
+
+  let memoryQuery = { $and: filters }
+
+  // If filtering by bookmarked, get only bookmarked memory IDs for the user
+  let bookmarkedIds: Set<string> = new Set()
+  if (bookmarked) {
+    const userBookmarks = await Bookmark.find({ user: user_id })
+    const memoryIds = userBookmarks.map(b => b.memory)
+    if (memoryIds.length === 0) {
+
+      return {
+        data: emptyPaginatedList({ limit, page }),
+        message: "User memories retrieved successfully"
+      }
+    }
+    memoryQuery = { $and: [...filters, { _id: { $in: memoryIds } }] }
+    bookmarkedIds = new Set(memoryIds)
+  }
 
   const memories = await Memory.paginate(
-    { $and: filters },
+    memoryQuery,
     {
       page,
       limit,
@@ -90,13 +115,15 @@ export async function getMemories(payload: IPagination, user_id: string) {
     }
   )
 
-  const memoryIds = memories.docs.map(memory => memory.id)
-  const userBookmarks = await Bookmark.find({
-    memory: { $in: memoryIds },
-    user: user_id
-  })
-
-  const bookmarkedIds = new Set(userBookmarks.map(bookmark => bookmark.memory))
+  // If not filtering by bookmarked, get bookmarks for the current page
+  if (!bookmarked) {
+    const memoryIds = memories.docs.map(memory => memory.id)
+    const userBookmarks = await Bookmark.find({
+      memory: { $in: memoryIds },
+      user: user_id
+    })
+    bookmarkedIds = new Set(userBookmarks.map(bookmark => bookmark.memory))
+  }
 
   const data = {
     ...memories,
@@ -215,4 +242,22 @@ export async function unbookmark(memory_id: string, user_id: string) {
   }, user_id)
 
   return { data: bookmark, message: "Memory unbookmarked successfully" }
+}
+
+export async function removeFileFromMemory(file_id: string, user_id: string) {
+  const file = await File.findOne({ _id: file_id, user: user_id })
+  if (!file) {
+    throw new NotFoundException("File not found")
+  }
+
+  const memory = await Memory.findOne({ user: user_id, attachments: file_id })
+  console.log(memory)
+  if (memory) {
+    await memory.updateOne({ $pull: { attachments: file_id } })
+  }
+
+  return {
+    data: memory,
+    message: "File removed and deleted from memory successfully"
+  }
 }
