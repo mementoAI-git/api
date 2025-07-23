@@ -6,11 +6,69 @@ import { NotFoundException } from "../../../utils/service-error"
 import { IReplyPrompt } from "./interface"
 import { isEmpty, reconstructFileName } from "../../../utils/helpers"
 import User from "../../database/model/user";
+import ActivePrompt from "../../database/model/active-prompt";
+import dayjs from "dayjs";
 
-export const getPrompts = async () => {
-  const data = await Prompt.find()
+export const getPrompts = async (user_id: string) => {
+  const MAX_PROMPT = 2
+  let result = []
+  const activePrompts = await ActivePrompt.find({ user: user_id }).populate("prompt")
 
-  return { data, message: "Prompts retrieved successfully" }
+  const memories = await Memory.find({
+    user: user_id,
+    prompt: { $exists: true }
+  })
+  const prompt_ids = memories.map(m => m.prompt)
+  if (isEmpty(activePrompts)) {
+    let prompts = await Prompt.find({ _id: { $nin: prompt_ids } }).limit(MAX_PROMPT);
+    if (isEmpty(prompts)) {
+      prompts = await Prompt.find().limit(MAX_PROMPT);
+    }
+
+    await ActivePrompt.insertMany(
+      prompts.map(p => ({
+        prompt: p._id,
+        user: user_id
+      }))
+    );
+    result = prompts
+  } else {
+    const expiredPrompts = [];
+
+    activePrompts.forEach(prompt => {
+      const has_exipred = dayjs().isAfter(dayjs(prompt.created_at).add(1, "day").startOf("day"))
+      const exists = memories.some(m => m.prompt === prompt.prompt);
+
+      if (has_exipred && exists) {
+        expiredPrompts.push(prompt.prompt)
+      } else {
+        result.push(prompt.prompt)
+      }
+    });
+
+    if (result.length < MAX_PROMPT) {
+      const slot_left = Math.min(Math.abs(MAX_PROMPT - result.length), MAX_PROMPT)
+      const newPrompts = await Prompt
+        .find({ _id: { $nin: prompt_ids } })
+        .limit(slot_left);
+
+      newPrompts.forEach(result.push)
+
+      if (!isEmpty(expiredPrompts) && result.length >= MAX_PROMPT) {
+        await ActivePrompt.deleteMany({
+          prompt: { $in: expiredPrompts.map(p => p._id) }
+        })
+      }
+    }
+
+    if (result.length < MAX_PROMPT) {
+      const slot_left = Math.min(Math.abs(MAX_PROMPT - result.length), MAX_PROMPT)
+      activePrompts
+        .slice(0, slot_left)
+        .forEach(p => result.push(p.prompt))
+    }
+  }
+  return { data: result, message: "Prompts retrieved successfully" }
 }
 
 export const getUserPromptResponse = async (id: string, user_id: string) => {

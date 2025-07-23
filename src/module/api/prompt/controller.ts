@@ -3,10 +3,20 @@ import { StatusCodes } from "http-status-codes"
 import { getFiles, responsHandler, validateRequest } from "../../../utils/helpers"
 import * as service from "./service"
 import { IRequest } from "../../../utils/interface";
+import redis from "../../../services/redis"
 
-export async function getPrompts(req: Request, res: Response, next: NextFunction) {
+export async function getPrompts(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.getPrompts()
+    const key = `activeprompt:${req.auth.id}`
+
+    // const cachedData = await redis.get(key)
+    // if (cachedData) {
+    //   const { message, data } = JSON.parse(String(cachedData))
+    //   return responsHandler(res, StatusCodes.OK, message, data)
+    // }
+    const { message, data } = await service.getPrompts(req.auth.id)
+    // await redis.set(key, JSON.stringify({ message, data }))
+
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

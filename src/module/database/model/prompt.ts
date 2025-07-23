@@ -1,6 +1,5 @@
 import { model, Schema } from "mongoose"
 
-
 export interface IPrompt {
   title: string
   type: string
