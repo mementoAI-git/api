@@ -8,6 +8,7 @@ import { isEmpty, reconstructFileName } from "../../../utils/helpers"
 import User from "../../database/model/user";
 import ActivePrompt from "../../database/model/active-prompt";
 import dayjs from "dayjs";
+import { IPrompt } from "../../database/model/prompt";
 
 export const getPrompts = async (user_id: string) => {
   const MAX_PROMPT = 2
@@ -33,11 +34,15 @@ export const getPrompts = async (user_id: string) => {
     );
     result = prompts
   } else {
+    console.log("There's active prompts")
     const expiredPrompts = [];
 
     activePrompts.forEach(prompt => {
       const has_exipred = dayjs().isAfter(dayjs(prompt.created_at).add(1, "day").startOf("day"))
-      const exists = memories.some(m => m.prompt === prompt.prompt);
+      const exists = memories.some(m => {
+        // @ts-ignore
+        return m.prompt === prompt.prompt._id.toString()
+      });
 
       if (has_exipred && exists) {
         expiredPrompts.push(prompt.prompt)
@@ -52,7 +57,7 @@ export const getPrompts = async (user_id: string) => {
         .find({ _id: { $nin: prompt_ids } })
         .limit(slot_left);
 
-      newPrompts.forEach(result.push)
+      newPrompts.forEach(p => result.push(p))
 
       if (!isEmpty(expiredPrompts) && result.length >= MAX_PROMPT) {
         await ActivePrompt.deleteMany({
