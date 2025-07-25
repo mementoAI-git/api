@@ -10,7 +10,8 @@
     "clean": "gts clean",
     "compile": "tsc",
     "fix": "gts fix",
-    "postinstall": "npm run compile"
+    "postinstall": "npm run compile",
+    "seed": "ts-node src/module/database/seed/$npm_config_file"
   },
   "author": "Frank",
   "license": "MIT",

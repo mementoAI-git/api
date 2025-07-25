@@ -1,0 +1,1918 @@
+[
+  {
+    "title": "Who in your life do you trust the most, and what makes them trustworthy?",
+    "type": "question",
+    "tags": [
+      "relationship",
+      "trust"
+    ]
+  },
+  {
+    "title": "What qualities do you most appreciate in your closest friends?",
+    "type": "question",
+    "tags": [
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Think of a recent happy memory with your family. What happened and why is it meaningful?",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "In what ways do your family or friends support you when you feel down?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship",
+      "support"
+    ]
+  },
+  {
+    "title": "How have your parents’ values or lessons shaped the person you are today?",
+    "type": "question",
+    "tags": [
+      "identity",
+      "parents",
+      "relationship",
+      "values"
+    ]
+  },
+  {
+    "title": "Describe a time when you felt misunderstood by a loved one.",
+    "type": "question",
+    "tags": [
+      "love",
+      "misunderstanding",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What are three words your best friend would use to describe you?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What family tradition do you cherish the most, and why is it important?",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "When do you feel most at peace among your friends or family?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you usually express love or appreciation to the people you care about?",
+    "type": "question",
+    "tags": [
+      "love",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What do you admire most in your parents or guardians, and why?",
+    "type": "question",
+    "tags": [
+      "parents",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Think of a challenge you overcame with the help of a friend or family member.",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What does friendship mean to you personally?",
+    "type": "question",
+    "tags": [
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "When was the last time you apologized to someone close to you?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "Describe someone in your life who inspires you.",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What boundaries are important for you in relationships?",
+    "type": "question",
+    "tags": [
+      "boundaries",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you and your friends or family most enjoy spending time together?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What aspects of family gatherings bring you joy?",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How have your friendships changed since you were a child?",
+    "type": "question",
+    "tags": [
+      "change",
+      "friends",
+      "growth",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What role do you feel you play in your family or friend group?",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you handle disagreements with loved ones?",
+    "type": "question",
+    "tags": [
+      "conflict",
+      "love",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What do you wish people close to you knew about you that they might not realize?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "Describe a time a friend surprised you in a positive way.",
+    "type": "question",
+    "tags": [
+      "relationship",
+      "surprise"
+    ]
+  },
+  {
+    "title": "In what ways do you try to support your friends or family members?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship",
+      "support"
+    ]
+  },
+  {
+    "title": "What is a mistake you made in a relationship that taught you something important?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What do you remember most about your childhood home or family environment?",
+    "type": "question",
+    "tags": [
+      "childhood",
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Who do you turn to in your life when you feel happy, sad, or uncertain?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What three qualities make someone a great friend, in your opinion?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "Think of someone you haven’t connected with in a while but used to be close to. What would you tell them if you reached out?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you celebrate achievements with your friends or family, and why do those celebrations matter?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "When you look at old photos with friends or family, what emotions come up?",
+    "type": "question",
+    "tags": [
+      "emotions",
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What role does forgiveness play in your close relationships?",
+    "type": "question",
+    "tags": [
+      "forgiveness",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What character trait do you value in a friend (e.g., kindness, honesty, humor)?",
+    "type": "question",
+    "tags": [
+      "kindness",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Describe a tradition or habit you share with a family member or close friend.",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What was the best advice you ever received from a loved one?",
+    "type": "question",
+    "tags": [
+      "love",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Think of someone who challenged you to grow personally. Who are they and what happened?",
+    "type": "question",
+    "tags": [
+      "growth",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What is something you’ve learned about yourself through your relationships?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What qualities do you look for in a partner or very close friend?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "If you could relive one particular day with your family or friends, which day would it be and why?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How does spending time alone versus with others affect you emotionally?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What does loyalty mean to you in a friendship or family?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you feel you contribute to your loved ones’ lives?",
+    "type": "question",
+    "tags": [
+      "love",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What do you think your friends admire about you?",
+    "type": "question",
+    "tags": [
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Who in your life makes you feel most comfortable being yourself around?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "Describe a moment when you felt truly heard and understood by someone.",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What small acts of kindness do you notice in your daily relationships?",
+    "type": "question",
+    "tags": [
+      "kindness",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Think about a time when you acted selflessly for someone else.",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What challenges has your family or friend group faced together, and how did you handle it?",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you keep in touch with friends or relatives who live far away?",
+    "type": "question",
+    "tags": [
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "In what ways do you see your own values reflected in the people you love?",
+    "type": "question",
+    "tags": [
+      "love",
+      "relationship",
+      "values"
+    ]
+  },
+  {
+    "title": "If you had to describe love in your life with a song or book, what would it be and why?",
+    "type": "question",
+    "tags": [
+      "love",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What habits do your friends or family have that you find endearing or funny?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you balance giving attention to different people in your life (family, friends, partner)?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What would you like future generations of your family to know about your life?",
+    "type": "question",
+    "tags": [
+      "family",
+      "future",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do differences in opinion or background affect your relationships?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What are you currently learning from someone close to you?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What type of legacy or memory do you hope to leave in your community or family?",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Who in your life always lifts your spirits?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "When did someone surprise you with a gesture of understanding or support?",
+    "type": "question",
+    "tags": [
+      "relationship",
+      "support",
+      "surprise"
+    ]
+  },
+  {
+    "title": "What role does humor play in your relationships?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "Describe a time a family member or friend taught you something new.",
+    "type": "question",
+    "tags": [
+      "family",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you show that you care about someone without saying it in words?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What question do you wish people would ask you more about yourself?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "Is there a story about your family you love telling or hearing the most?",
+    "type": "question",
+    "tags": [
+      "family",
+      "love",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you navigate giving advice or help to loved ones?",
+    "type": "question",
+    "tags": [
+      "love",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What place (a house, park, etc.) do you associate with happy times with family or friends?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What does \"home\" mean to you?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "If you could spend a day doing anything with someone from your past, what would it be and who would it be?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What kind of friend or family member do you aspire to be?",
+    "type": "question",
+    "tags": [
+      "family",
+      "kindness",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What’s something you wish you could tell your younger self about friendships or family?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What is one thing you would want to remember or teach your children/younger relatives about your life?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "How have your priorities in relationships changed as you’ve grown older?",
+    "type": "question",
+    "tags": [
+      "change",
+      "growth",
+      "relationship"
+    ]
+  },
+  {
+    "title": "Think of a time you forgave someone and it felt freeing.",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "What do the words \"family\" and \"friends\" evoke for you?",
+    "type": "question",
+    "tags": [
+      "family",
+      "friends",
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do acts of kindness in your circle of loved ones affect you?",
+    "type": "question",
+    "tags": [
+      "kindness",
+      "love",
+      "relationship"
+    ]
+  },
+  {
+    "title": "What surprises you most about the people closest to you?",
+    "type": "question",
+    "tags": [
+      "relationship",
+      "surprise"
+    ]
+  },
+  {
+    "title": "What do you think is the purpose of your relationships in your life?",
+    "type": "question",
+    "tags": [
+      "purpose",
+      "relationship"
+    ]
+  },
+  {
+    "title": "If you could ask any person you know one question to learn more about them, who would it be and what would you ask?",
+    "type": "question",
+    "tags": [
+      "relationship"
+    ]
+  },
+  {
+    "title": "How do you use your personal strengths and abilities at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "strengths",
+      "work"
+    ]
+  },
+  {
+    "title": "How do your co-workers and supervisors recognize your strengths?",
+    "type": "question",
+    "tags": [
+      "career",
+      "strengths",
+      "team",
+      "work"
+    ]
+  },
+  {
+    "title": "How does your work fulfill you? Does it leave you wanting more?",
+    "type": "question",
+    "tags": [
+      "career",
+      "purpose",
+      "work"
+    ]
+  },
+  {
+    "title": "What part of your workday do you most enjoy?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What about your work feels real, necessary, or important to you?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "Do you see yourself in the same job in 10 years?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What are your career ambitions?",
+    "type": "question",
+    "tags": [
+      "ambitions",
+      "career"
+    ]
+  },
+  {
+    "title": "What three things can help you begin working to accomplish those goals?",
+    "type": "question",
+    "tags": [
+      "ambitions",
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What can you do to improve your work performance?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What does your work teach you? Does it offer continued opportunities for learning and growth?",
+    "type": "question",
+    "tags": [
+      "career",
+      "growth",
+      "learning",
+      "work"
+    ]
+  },
+  {
+    "title": "Does your work ever drain or overwhelm you? Why? Is this something you can change?",
+    "type": "question",
+    "tags": [
+      "career",
+      "transitions",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you define success in your career?",
+    "type": "question",
+    "tags": [
+      "career",
+      "success"
+    ]
+  },
+  {
+    "title": "What do you value most about your current job or profession?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What strengths do you use outside of work that could benefit your career?",
+    "type": "question",
+    "tags": [
+      "career",
+      "strengths",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you respond to career setbacks or failures?",
+    "type": "question",
+    "tags": [
+      "career",
+      "failures"
+    ]
+  },
+  {
+    "title": "What kind of mentor or leader do you aspire to be or want to have?",
+    "type": "question",
+    "tags": [
+      "career",
+      "leadership"
+    ]
+  },
+  {
+    "title": "How important is work-life balance to you, and how do you achieve it?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What was a pivotal moment in your career so far?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you want your colleagues to remember you?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What tasks at work energize you, and which ones drain you?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What professional achievement are you most proud of, and why?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What do you wish to learn or try in your career that you haven't yet?",
+    "type": "question",
+    "tags": [
+      "career",
+      "learning"
+    ]
+  },
+  {
+    "title": "How do you negotiate conflict or manage difficult situations at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "In what ways do you feel your job aligns with your personal purpose?",
+    "type": "question",
+    "tags": [
+      "career",
+      "purpose",
+      "work"
+    ]
+  },
+  {
+    "title": "What career risks are you willing to take for greater reward?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do your personal values align or conflict with the culture of your workplace?",
+    "type": "question",
+    "tags": [
+      "career",
+      "values",
+      "work"
+    ]
+  },
+  {
+    "title": "What long-term career goal do you have that you haven’t started working on yet?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you seek feedback on your work, and how do you use it?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What does an ideal work environment look like for you?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you celebrate your professional successes?",
+    "type": "question",
+    "tags": [
+      "career",
+      "success"
+    ]
+  },
+  {
+    "title": "What part of your daily routine contributes to your professional growth?",
+    "type": "question",
+    "tags": [
+      "career",
+      "growth"
+    ]
+  },
+  {
+    "title": "Who are your professional mentors or role models, and what have you learned from them?",
+    "type": "question",
+    "tags": [
+      "career",
+      "learning"
+    ]
+  },
+  {
+    "title": "What kinds of problems or challenges energize you at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "challenges",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you stay motivated on days when work is monotonous or stressful?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What professional skills are you most eager to develop next?",
+    "type": "question",
+    "tags": [
+      "career",
+      "skills"
+    ]
+  },
+  {
+    "title": "How do you feel about competition at work or in your field?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What personal growth have you experienced because of your job?",
+    "type": "question",
+    "tags": [
+      "career",
+      "growth",
+      "work"
+    ]
+  },
+  {
+    "title": "What legacy do you want to leave in your profession or workplace?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you balance ambition and contentment in your career?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "If you could change one thing about your career path so far, what would it be?",
+    "type": "question",
+    "tags": [
+      "career",
+      "transitions"
+    ]
+  },
+  {
+    "title": "What do you do to maintain or improve your professional network?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you set priorities when you have multiple work responsibilities?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What is something you enjoy doing in your current role that you didn’t expect?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What opportunity are you waiting for, and what’s stopping you from pursuing it?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What role do colleagues and teamwork play in your job satisfaction?",
+    "type": "question",
+    "tags": [
+      "career",
+      "team",
+      "work"
+    ]
+  },
+  {
+    "title": "What aspect of your job makes you lose track of time, and why?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you stay organized and manage your responsibilities at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What professional relationships are most important to you, and why?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you incorporate feedback or performance reviews into your personal growth?",
+    "type": "question",
+    "tags": [
+      "career",
+      "growth"
+    ]
+  },
+  {
+    "title": "What’s the hardest lesson you’ve learned at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "learning",
+      "work"
+    ]
+  },
+  {
+    "title": "If you could redo your career differently, what would you do?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you handle feeling underqualified or experiencing imposter syndrome?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What recognition or reward would make you feel valued at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What do you think you’re here to do in your career or profession?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you adapt when you face creative blocks or a lack of ideas at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What have you learned about leadership from your experiences at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "leadership",
+      "learning",
+      "work"
+    ]
+  },
+  {
+    "title": "What is something you'd teach others about your job or industry?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you foster innovation or new ideas in your work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What work-related challenge are you currently facing, and how do you approach it?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What role does communication play in your professional success?",
+    "type": "question",
+    "tags": [
+      "career",
+      "success"
+    ]
+  },
+  {
+    "title": "What personal qualities make you a good fit for your career choice?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you separate your personal identity from your professional identity?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What professional title do you aspire to, and why?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you maintain integrity and ethics in your work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What professional achievement do you hope to accomplish next?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you stay current or continue learning in your field?",
+    "type": "question",
+    "tags": [
+      "career",
+      "learning"
+    ]
+  },
+  {
+    "title": "What do you do when you're not at work that supports your career?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What stereotype about your profession do you most agree or disagree with?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you celebrate small wins or progress in your career?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What would you do differently if you had started your career path today?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What is the best piece of career advice you've ever received?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you build resilience when facing career-related stress?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What qualities do you seek in a team for an ideal working environment?",
+    "type": "question",
+    "tags": [
+      "career",
+      "team",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you approach a new learning opportunity at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "learning",
+      "work"
+    ]
+  },
+  {
+    "title": "What factors contribute to you feeling competent and confident at work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you manage career-related anxiety or pressure?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "If you could outsource one part of your job, what would it be and why?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How important is mentorship for your career development?",
+    "type": "question",
+    "tags": [
+      "career",
+      "growth"
+    ]
+  },
+  {
+    "title": "What unique perspective or skill do you bring to your industry?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you align your career goals with your personal life goals?",
+    "type": "question",
+    "tags": [
+      "ambitions",
+      "career"
+    ]
+  },
+  {
+    "title": "What is a project you wish you had worked on, and why?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you contribute to training or guiding others in your role?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What does it mean for you to be an expert in your field?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you keep your work engaging day after day?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What is the hardest decision you’ve made in your career?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How has your career choice impacted your personal life?",
+    "type": "question",
+    "tags": [
+      "career",
+      "impact"
+    ]
+  },
+  {
+    "title": "What role does passion play in your professional life?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you feel when you take a break or vacation away from work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "work"
+    ]
+  },
+  {
+    "title": "What long hours or sacrifices have you made for your career, and do you feel they were worth it?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "How do you stay organized when projects get chaotic?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What would you want to innovate or change in your industry?",
+    "type": "question",
+    "tags": [
+      "career",
+      "transitions"
+    ]
+  },
+  {
+    "title": "How do you handle situations when you have too much to do and not enough time?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What is one quality you admire in colleagues, and how do you cultivate it in yourself?",
+    "type": "question",
+    "tags": [
+      "career"
+    ]
+  },
+  {
+    "title": "What success have you had with networking in your field?",
+    "type": "question",
+    "tags": [
+      "career",
+      "networking",
+      "success",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you manage career transitions or changes in direction?",
+    "type": "question",
+    "tags": [
+      "career",
+      "transitions"
+    ]
+  },
+  {
+    "title": "How do you know when it’s time to move on from a job or role?",
+    "type": "question",
+    "tags": [
+      "career",
+      "transitions",
+      "work"
+    ]
+  },
+  {
+    "title": "How do you advocate for yourself in your career (promotions, raises)?",
+    "type": "question",
+    "tags": [
+      "advocacy",
+      "career"
+    ]
+  },
+  {
+    "title": "What professional failures have taught you the most?",
+    "type": "question",
+    "tags": [
+      "career",
+      "failures"
+    ]
+  },
+  {
+    "title": "What financial or resource management strategies do you use for your career ambitions?",
+    "type": "question",
+    "tags": [
+      "ambitions",
+      "career",
+      "finance"
+    ]
+  },
+  {
+    "title": "What personal or professional habit have you changed that improved your work?",
+    "type": "question",
+    "tags": [
+      "career",
+      "habits",
+      "transitions",
+      "work"
+    ]
+  },
+  {
+    "title": "What are your guiding principles or values in life?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "values"
+    ]
+  },
+  {
+    "title": "What makes life meaningful for you?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "meaning"
+    ]
+  },
+  {
+    "title": "What do you stand for even when it’s uncomfortable or unpopular?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "When you reflect on your life, what patterns do you notice (like recurring events or relationships)?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "past"
+    ]
+  },
+  {
+    "title": "How would you describe your purpose in one sentence?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "purpose"
+    ]
+  },
+  {
+    "title": "If you could solve one problem in the world, what would it be and why?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What activities or hobbies make you feel most alive or fulfilled?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "fulfillment"
+    ]
+  },
+  {
+    "title": "What three goals would make you feel proud if you achieved them?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "When have you felt most like your authentic self, and what were you doing?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "self-discovery"
+    ]
+  },
+  {
+    "title": "What does success look like in your life?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "Who do you admire that seems to live with purpose, and why?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "purpose"
+    ]
+  },
+  {
+    "title": "What role do your passions play in your daily life?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "passion"
+    ]
+  },
+  {
+    "title": "If you had all the money and time, what project would you work on?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What do you think you will remember most about this period of your life?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "How do you handle uncertainty about the future?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "future"
+    ]
+  },
+  {
+    "title": "What do you feel most grateful for in your personal journey so far?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What is a dream you had as a child, and does it still influence you today?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "present"
+    ]
+  },
+  {
+    "title": "How do you incorporate your values into your work or daily tasks?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "values"
+    ]
+  },
+  {
+    "title": "What kind of impact do you hope to have on others around you?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "impact"
+    ]
+  },
+  {
+    "title": "What do you think your life’s theme or motto would be?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What would you attempt if you knew you could not fail?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What drives you to work hard towards your goals?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What question are you currently trying to answer in your life?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What roles do you feel you were born to fulfill, and which ones have you chosen?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "How do you prioritize what’s most important to you?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What would make you feel like you are truly living up to your potential?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What do you want to learn or explore next in your life?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "learning"
+    ]
+  },
+  {
+    "title": "Think of a time you felt your actions aligned perfectly with your beliefs. What were you doing?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "How do you respond when you feel your life lacks direction?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What is a principle you refuse to compromise on, and why?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What gives you a sense of adventure or excitement about life?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "How do you evaluate whether you’re on the right path in life?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What personal strengths do you rely on when pursuing your goals?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What kind of legacy do you hope to build through your work or relationships?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "legacy"
+    ]
+  },
+  {
+    "title": "What patterns in your thinking have you noticed that hold you back?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What are your biggest ambitions for the next decade?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "If you could answer one big question about your future, what would it be?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "future"
+    ]
+  },
+  {
+    "title": "How would you describe the story of your life so far?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What do you consider your “why” for what you do every day?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "How do you envision your ideal life a year from now?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "present"
+    ]
+  },
+  {
+    "title": "What role does learning and growth play in your sense of purpose?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "growth",
+      "learning",
+      "purpose"
+    ]
+  },
+  {
+    "title": "What do you need to let go of to move forward with your goals?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What are three things you want to learn this year, and why?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "learning"
+    ]
+  },
+  {
+    "title": "What does living a balanced life mean to you?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "When have you felt outside of your comfort zone in a rewarding way?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What does “making a difference” mean to you personally?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "impact"
+    ]
+  },
+  {
+    "title": "If you had all the time in the world, what would you do every day?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What does your intuition tell you about the path you should be on?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "If you achieved your biggest goal, what would you do next?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What’s a tradition or habit you have that helps you reflect on your purpose?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "past",
+      "purpose"
+    ]
+  },
+  {
+    "title": "When do you feel most at peace with where you are in life?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "How do you decide what to say “yes” or “no” to when opportunities arise?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What prevents you from starting on a project you want to do?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What’s an example of an experience that clarified what matters to you?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "How do success and happiness relate for you?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "happiness"
+    ]
+  },
+  {
+    "title": "What’s your biggest source of motivation on tough days?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "If your life were a book, what would the current chapter be titled?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What question do you hope others will ask you about your beliefs or purpose?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "purpose"
+    ]
+  },
+  {
+    "title": "What do you want to discover about yourself in the next year?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "self-discovery"
+    ]
+  },
+  {
+    "title": "How often do you allow yourself to daydream about the future?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "future",
+      "self-discovery"
+    ]
+  },
+  {
+    "title": "What does “living with intention” mean to you?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What’s an unconventional idea you have for your future, and what attracts you to it?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "future"
+    ]
+  },
+  {
+    "title": "If you could work on one passion project for a year, what would it be?",
+    "type": "question",
+    "tags": [
+      "finding purpose",
+      "passion"
+    ]
+  },
+  {
+    "title": "What scares you the most about achieving your goals?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "When have you felt like you were exactly where you should be?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  },
+  {
+    "title": "What milestone are you looking forward to, and why?",
+    "type": "question",
+    "tags": [
+      "finding purpose"
+    ]
+  }
+]
