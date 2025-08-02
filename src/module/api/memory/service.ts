@@ -111,6 +111,7 @@ export async function getMemories(payload: IPagination, user_id: string) {
     {
       page,
       limit,
+      sort: { created_at: -1 },
       populate: { path: "attachments", select: "-base64" }
     }
   )
