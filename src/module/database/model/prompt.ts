@@ -3,7 +3,7 @@ import { model, Schema } from "mongoose"
 export interface IPrompt {
   title: string
   type: string
-  tags: string
+  tags: string[]
 }
 
 const prompt = new Schema<IPrompt>({

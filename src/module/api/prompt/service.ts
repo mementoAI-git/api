@@ -8,72 +8,151 @@ import { isEmpty, reconstructFileName } from "../../../utils/helpers"
 import User from "../../database/model/user";
 import ActivePrompt from "../../database/model/active-prompt";
 import dayjs from "dayjs";
-import { IPrompt } from "../../database/model/prompt";
 
 export const getPrompts = async (user_id: string) => {
   const MAX_PROMPT = 2
-  let result = []
-  const activePrompts = await ActivePrompt.find({ user: user_id }).populate("prompt")
 
-  const memories = await Memory.find({
+  // Get user's active prompts with populated prompt data
+  const activePrompts = await ActivePrompt.find({ user: user_id })
+    .populate("prompt")
+
+  const answeredMemories = await Memory.find({
     user: user_id,
-    prompt: { $exists: true }
+    prompt: { $exists: true, $ne: null }
   })
-  const prompt_ids = memories.map(m => m.prompt)
-  if (isEmpty(activePrompts)) {
-    let prompts = await Prompt.find({ _id: { $nin: prompt_ids } }).limit(MAX_PROMPT);
-    if (isEmpty(prompts)) {
-      prompts = await Prompt.find().limit(MAX_PROMPT);
-    }
 
+  const answeredPromptIds = answeredMemories.map(m => m.prompt)
+
+  if (isEmpty(activePrompts)) {
+    await assignNewPromptsToUser(user_id, answeredPromptIds, MAX_PROMPT)
+    const newActivePrompts = await ActivePrompt.find({ user: user_id })
+      .populate("prompt")
+
+    return {
+      data: newActivePrompts,
+      message: "New prompts assigned successfully"
+    }
+  }
+
+  // Process existing active prompts
+  const promptsToKeep = []
+  const promptsToReplace = []
+
+  for (const activePrompt of activePrompts) {
+    const promptId = typeof activePrompt.prompt === 'string'
+      ? activePrompt.prompt
+      : (activePrompt.prompt as any)._id.toString()
+    const isAnswered = answeredMemories.some(m => m.prompt === promptId)
+    const isExpired = isAnswered && dayjs().isAfter(dayjs(activePrompt.created_at).add(1, "day").startOf("day"))
+
+    if (isExpired) {
+      promptsToReplace.push(activePrompt)
+    } else {
+      promptsToKeep.push(activePrompt)
+    }
+  }
+
+  // Replace expired prompts with new ones
+  if (promptsToReplace.length > 0) {
+    const newPrompts = await getAvailablePrompts(answeredPromptIds, promptsToReplace.length)
+
+    // Delete expired active prompts
+    await ActivePrompt.deleteMany({
+      _id: { $in: promptsToReplace.map(p => p._id) }
+    })
+
+    // Create new active prompts
+    if (newPrompts.length > 0) {
+      await ActivePrompt.insertMany(
+        newPrompts.map(p => ({
+          prompt: p._id,
+          user: user_id
+        }))
+      )
+
+      // Get the newly created active prompts with populated data
+      const newActivePrompts = await ActivePrompt.find({
+        user: user_id,
+        prompt: { $in: newPrompts.map(p => p._id) }
+      })
+        .populate("prompt")
+
+      promptsToKeep.push(...newActivePrompts)
+    }
+  }
+
+  // If we still don't have enough prompts, add more
+  if (promptsToKeep.length < MAX_PROMPT) {
+    const remainingSlots = MAX_PROMPT - promptsToKeep.length
+    const additionalPrompts = await getAvailablePrompts(answeredPromptIds, remainingSlots)
+
+    if (additionalPrompts.length > 0) {
+      await ActivePrompt.insertMany(
+        additionalPrompts.map(p => ({
+          prompt: p._id,
+          user: user_id
+        }))
+      )
+
+      // Get the newly created active prompts with populated data
+      const newActivePrompts = await ActivePrompt.find({
+        user: user_id,
+        prompt: { $in: additionalPrompts.map(p => p._id) }
+      })
+        .populate("prompt")
+
+      promptsToKeep.push(...newActivePrompts)
+    }
+  }
+
+  // If we still don't have enough prompts, reuse some from answered prompts
+  if (promptsToKeep.length < MAX_PROMPT) {
+    const remainingSlots = MAX_PROMPT - promptsToKeep.length
+    const reusablePrompts = await Prompt.find({
+      _id: { $in: answeredPromptIds }
+    }).limit(remainingSlots)
+
+    // Create active prompts for reusable prompts
     await ActivePrompt.insertMany(
-      prompts.map(p => ({
+      reusablePrompts.map(p => ({
         prompt: p._id,
         user: user_id
       }))
-    );
-    result = prompts
-  } else {
-    console.log("There's active prompts")
-    const expiredPrompts = [];
+    )
 
-    activePrompts.forEach(prompt => {
-      const has_exipred = dayjs().isAfter(dayjs(prompt.created_at).add(1, "day").startOf("day"))
-      const exists = memories.some(m => {
-        // @ts-ignore
-        return m.prompt === prompt.prompt._id.toString()
-      });
+    // Get the newly created active prompts with populated data
+    const newActivePrompts = await ActivePrompt.find({
+      user: user_id,
+      prompt: { $in: reusablePrompts.map(p => p._id) }
+    })
+      .populate("prompt")
 
-      if (has_exipred && exists) {
-        expiredPrompts.push(prompt.prompt)
-      } else {
-        result.push(prompt.prompt)
-      }
-    });
-
-    if (result.length < MAX_PROMPT) {
-      const slot_left = Math.min(Math.abs(MAX_PROMPT - result.length), MAX_PROMPT)
-      const newPrompts = await Prompt
-        .find({ _id: { $nin: prompt_ids } })
-        .limit(slot_left);
-
-      newPrompts.forEach(p => result.push(p))
-
-      if (!isEmpty(expiredPrompts) && result.length >= MAX_PROMPT) {
-        await ActivePrompt.deleteMany({
-          prompt: { $in: expiredPrompts.map(p => p._id) }
-        })
-      }
-    }
-
-    if (result.length < MAX_PROMPT) {
-      const slot_left = Math.min(Math.abs(MAX_PROMPT - result.length), MAX_PROMPT)
-      activePrompts
-        .slice(0, slot_left)
-        .forEach(p => result.push(p.prompt))
-    }
+    promptsToKeep.push(...newActivePrompts)
   }
-  return { data: result, message: "Prompts retrieved successfully" }
+
+  return {
+    data: promptsToKeep.slice(0, MAX_PROMPT),
+    message: "Prompts retrieved successfully"
+  }
+}
+
+const assignNewPromptsToUser = async (user_id: string, answeredPromptIds: string[], count: number) => {
+  const availablePrompts = await getAvailablePrompts(answeredPromptIds, count)
+
+  if (availablePrompts.length > 0) {
+    await ActivePrompt.insertMany(
+      availablePrompts.map(p => ({
+        prompt: p._id,
+        user: user_id
+      }))
+    )
+  }
+}
+
+const getAvailablePrompts = async (answeredPromptIds: string[], limit: number) => {
+  return await Prompt.find({
+    _id: { $nin: answeredPromptIds }
+  }).limit(limit)
 }
 
 export const getUserPromptResponse = async (id: string, user_id: string) => {
@@ -148,6 +227,13 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
       },
       { new: true }
     )
+  }
+
+  const activePrompt = await ActivePrompt.findOne({ user: user_id, prompt: prompt_id })
+  if (activePrompt) {
+    await ActivePrompt.findByIdAndUpdate(activePrompt.id, { memory: memory.id })
+  } else {
+    await ActivePrompt.create({ user: user_id, prompt: prompt_id, memory: memory.id })
   }
 
   return { data: memory, message: "Response saved successfully" }

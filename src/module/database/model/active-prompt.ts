@@ -3,6 +3,7 @@ import { IPrompt } from "./prompt"
 
 interface IActivePrompt {
   prompt: string | IPrompt
+  memory: string
   user: string
   created_at: string
   updated_at: string
@@ -14,6 +15,7 @@ const activePrompt = new Schema<IActivePrompt>({
     ref: "prompt",
     index: true
   },
+  memory: String,
   user: {
     type: String,
     ref: "user",
