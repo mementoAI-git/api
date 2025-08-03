@@ -32,6 +32,13 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     res.setHeader('Last-Modified', dayjs(metadata.updated_at).toDate().toUTCString());
     res.setHeader('Accept-Ranges', 'bytes');
 
+    if (metadata.type.startsWith('video/')) {
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Content-Type', metadata.type);
+      // Add Safari-specific headers
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
+
     const data = await service.getFileBuffer(name, parseInt(metadata.size, 10), range);
 
     if (range) {

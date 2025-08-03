@@ -5,15 +5,16 @@ import { FilterQuery } from "mongoose";
 import { createPartFromUri, createUserContent, GenerateContentResponse, PartListUnion } from "@google/genai";
 import Message, { IMessage } from "../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../services/gemini";
-import { isEmpty } from "../../../utils/helpers";
+import { extractJson, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { ConversationContext, IPrompt, ITranscribeAudio } from "./interface";
-import File, { IFile } from "../../database/model/file"
+import File, { IFile, ITranscriptionData } from "../../database/model/file"
 import { NotFoundException } from "../../../utils/service-error";
 import { TEMP_PATH } from "../../../utils/config";
 import User, { IUser } from "../../database/model/user";
 import dayjs from "dayjs";
 import { createSystemContext, generateGreetingPrompt } from "./prompts";
+import { createTranscriptionPrompt } from './prompts';
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
 
@@ -133,15 +134,22 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
     return { message: "Transcription successful", data: file.transcription }
   }
 
-  const prompt = "Generate a transcript of the speech."
+  const prompt = createTranscriptionPrompt()
   const processedFile = await processFile(file)
 
   let contents = createUserContent([prompt, processedFile])
 
   const response = await gemini.models.generateContent({ model: GEMINI_MODEL, contents });
-  await file.updateOne({ transcription: response.text })
+  const transcriptionData: ITranscriptionData = extractJson(response.text);
 
-  return { message: "Transcription successful", data: response.text }
+  if (!transcriptionData.full_text || !Array.isArray(transcriptionData.segments)) {
+    await file.updateOne({ transcription: { full_text: response.text } })
+
+    return { message: "Transcription successful", data: response.text }
+  }
+
+  await file.updateOne({ transcription: transcriptionData })
+  return { message: "Transcription successful", data: transcriptionData }
 }
 
 async function processFiles(file_ids: string[]) {

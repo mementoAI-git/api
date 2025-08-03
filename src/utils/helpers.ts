@@ -201,3 +201,22 @@ export const emptyPaginatedList = ({ limit, page }) => {
     prevPage: null
   }
 }
+
+export const extractJson = (text: string) => {
+  try {
+    let cleanedResponse = text.trim();
+    if (cleanedResponse.startsWith('```json')) {
+      cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (cleanedResponse.startsWith('```')) {
+      cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+
+    const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleanedResponse = jsonMatch[0];
+    }
+    return JSON.parse(cleanedResponse);
+  } catch (error) {
+    return null;
+  }
+}

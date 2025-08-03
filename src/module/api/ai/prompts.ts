@@ -124,3 +124,47 @@ export function generateGreetingPrompt(context: ConversationContext): string {
   // Recent conversation (default case)
   return createRecentConversationPrompt(context);
 }
+
+export function createTranscriptionPrompt(): string {
+  return `You are an expert audio transcription assistant. Your task is to transcribe the provided audio file and return the results in a specific JSON format.
+
+IMPORTANT INSTRUCTIONS:
+1. Listen carefully to the audio and transcribe all speech accurately
+2. Include punctuation, capitalization, and proper grammar
+3. For each segment, estimate the start and end times in seconds
+4. Break the audio into logical segments (typically 3-10 seconds each)
+5. Return ONLY a valid JSON object with this exact structure:
+
+{
+  "full_text": "Complete transcript of the entire audio",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 3.5,
+      "text": "First segment of speech"
+    },
+    {
+      "start": 3.5,
+      "end": 7.2,
+      "text": "Second segment of speech"
+    }
+  ]
+}
+
+CRITICAL REQUIREMENTS:
+- Return ONLY the JSON object, no markdown formatting
+- Do NOT wrap the response in \`\`\`json or \`\`\` blocks
+- Do NOT add any explanatory text before or after the JSON
+- The response must be valid JSON that can be parsed directly
+- Ensure the fullText is the complete concatenated transcript
+- Each segment should contain complete sentences or logical speech units
+
+GUIDELINES:
+- Start time should be 0.0 for the first segment
+- End time of one segment should match start time of the next
+- Include filler words, hesitations, and natural speech patterns
+- If there are multiple speakers, indicate speaker changes in the text
+- Do not include any text outside the JSON structure
+
+Return ONLY the JSON object, no additional formatting or text.`;
+}
