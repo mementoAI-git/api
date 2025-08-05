@@ -10,6 +10,11 @@ import { IPagination } from "./interface";
 import dayjs from "dayjs";
 import { UploadedFile } from "express-fileupload";
 import { FilterQuery } from "mongoose";
+import { writeFile, unlink } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { getAudioDurationInSeconds } from 'get-audio-duration';
+import { IFile } from "../module/database/model/file";
 
 export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
   if (type === "number") {
@@ -218,5 +223,50 @@ export const extractJson = (text: string) => {
     return JSON.parse(cleanedResponse);
   } catch (error) {
     return null;
+  }
+}
+
+export async function getMediaDuration(base64Data: string, mimetype: string): Promise<number | undefined> {
+  const is_media_file = mimetype.startsWith('audio/') || mimetype.startsWith('video/');
+  if (!is_media_file) return null;
+
+  let tempFilePath: string | null = null;
+
+  try {
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const tempFileName = `temp_media_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    tempFilePath = join(tmpdir(), tempFileName);
+
+    // Write buffer to temporary file
+    await writeFile(tempFilePath, buffer);
+
+    // Get duration using the file path
+    const duration = await getAudioDurationInSeconds(tempFilePath);
+    return duration; // Round to 2 decimal places
+  } catch (error) {
+    return null;
+  } finally {
+    if (tempFilePath) {
+      try {
+        await unlink(tempFilePath);
+      } catch (cleanupError) {
+        console.error('Error cleaning up temporary file:', cleanupError);
+      }
+    }
+  }
+}
+
+export async function processFile(file: UploadedFile, user: string): Promise<Partial<IFile>> {
+  const base64 = file.data.toString("base64");
+  const duration = await getMediaDuration(base64, file.mimetype);
+
+  return {
+    name: reconstructFileName(file.name),
+    base64,
+    user,
+    size: file.size,
+    type: file.mimetype,
+    duration
   }
 }

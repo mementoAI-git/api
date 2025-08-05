@@ -5,7 +5,7 @@ import User from "../../database/model/user";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
 import { ICreateMemoryPayload } from "./interface";
-import { emptyPaginatedList, isEmpty, reconstructFileName } from "../../../utils/helpers";
+import { emptyPaginatedList, isEmpty, processFile, reconstructFileName } from "../../../utils/helpers";
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
 import { filterGenerator } from "../../../utils/helpers";
@@ -33,15 +33,9 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
 
   let attachments = payload?.attachments || []
   if (!isEmpty(files)) {
-    const unsavedFiles = files.map(file => {
-      return {
-        name: reconstructFileName(file.name),
-        base64: file.data.toString("base64"),
-        size: file.size,
-        user: user_id,
-        type: file.mimetype
-      }
-    })
+    const unsavedFiles = await Promise.all(
+      files.map((file) => processFile(file, user_id))
+    )
 
     const savedFiles = await File.insertMany(unsavedFiles)
     attachments = [...attachments, ...savedFiles.map(f => f.id)]

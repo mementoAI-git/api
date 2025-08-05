@@ -4,7 +4,7 @@ import File from "../../database/model/file";
 import Prompt from "../../database/model/prompt"
 import { NotFoundException } from "../../../utils/service-error"
 import { IReplyPrompt } from "./interface"
-import { isEmpty, reconstructFileName } from "../../../utils/helpers"
+import { isEmpty, processFile, reconstructFileName } from "../../../utils/helpers"
 import User from "../../database/model/user";
 import ActivePrompt from "../../database/model/active-prompt";
 import dayjs from "dayjs";
@@ -191,15 +191,9 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
 
   let attachments = payload?.attachments || []
   if (!isEmpty(files)) {
-    const unsavedFiles = files.map(file => {
-      return {
-        name: reconstructFileName(file.name),
-        base64: file.data.toString("base64"),
-        size: file.size,
-        user: user_id,
-        type: file.mimetype
-      }
-    })
+    const unsavedFiles = await Promise.all(
+      files.map((file) => processFile(file, user_id))
+    )
 
     const savedFiles = await File.insertMany(unsavedFiles)
     attachments = [...attachments, ...savedFiles.map(f => f.id)]

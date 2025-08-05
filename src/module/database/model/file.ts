@@ -14,12 +14,13 @@ export interface ITranscriptionData {
 
 export interface IFile {
   type: string
-  size: string // bytes
+  size: number // bytes
   name: string
   url: string
   user: string
   base64: string
   transcription: ITranscriptionData // support both old string format and new structured format
+  duration?: number // duration in seconds for audio/video files
   created_at: string
   updated_at: string
 }
@@ -37,14 +38,15 @@ const transcriptionDataSchema = new Schema({
 
 const file = new Schema<IFile>({
   type: String,
-  size: String,
+  size: Number,
   name: {
     type: String,
     unique: true
   },
   user: String,
   base64: String,
-  transcription: transcriptionDataSchema
+  transcription: transcriptionDataSchema,
+  duration: Number
 }, {
   toJSON: { virtuals: true },
   toObject: { virtuals: true },

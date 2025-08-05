@@ -1,6 +1,6 @@
 
 import { UploadedFile } from "express-fileupload";
-import { reconstructFileName } from "../../../utils/helpers";
+import { processFile } from "../../../utils/helpers";
 import User from "../../database/model/user";
 import File from "../../database/model/file";
 import { NotFoundException, UnauthorizedException } from "../../../utils/service-error";
@@ -13,15 +13,10 @@ export async function uploadFile(payload: UploadedFile[], user_id: string) {
   if (!user) {
     throw new NotFoundException("User not found")
   }
-  const files = payload.map(file => {
-    return {
-      name: reconstructFileName(file.name),
-      base64: file.data.toString("base64"),
-      user: user_id,
-      size: file.size,
-      type: file.mimetype
-    }
-  })
+
+  const files = await Promise.all(
+    payload.map((file) => processFile(file, user_id))
+  )
 
   const data = await File.insertMany(files)
 
