@@ -18,3 +18,21 @@ export interface ConversationContext {
   lastAiMessage: IMessage | null;
   timeSinceLastMessage: number;
 }
+
+export interface IUserInsights {
+  communication_style?: 'formal' | 'casual' | 'friendly' | 'professional';
+  topics_of_interest?: string[];
+  conversation_tone?: 'upbeat' | 'calm' | 'analytical' | 'creative';
+  emoji_preference?: boolean;
+  response_length?: 'short' | 'medium' | 'long';
+  important_notes?: string[];
+  key_preferences?: string[];
+  emotional_state_trends?: string[];
+  goals_and_aspirations?: string[];
+}
+
+export interface IConversationAnalysis {
+  user_insights: IUserInsights;
+  conversation_summary: string;
+  learning_notes: string[];
+}

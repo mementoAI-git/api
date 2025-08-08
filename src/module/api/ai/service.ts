@@ -7,7 +7,7 @@ import Message, { IMessage } from "../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../services/gemini";
 import { extractJson, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
-import { ConversationContext, IPrompt, ITranscribeAudio } from "./interface";
+import { ConversationContext, IConversationAnalysis, IPrompt, ITranscribeAudio, IUserInsights } from "./interface";
 import File, { IFile, ITranscriptionData } from "../../database/model/file"
 import { NotFoundException } from "../../../utils/service-error";
 import { TEMP_PATH } from "../../../utils/config";
@@ -15,6 +15,7 @@ import User, { IUser } from "../../database/model/user";
 import dayjs from "dayjs";
 import { createSystemContext, generateGreetingPrompt } from "./prompts";
 import { createTranscriptionPrompt } from './prompts';
+import { extractAllUserInsights } from './user-learning';
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
 
@@ -52,7 +53,19 @@ export async function prompt(payload: IPrompt, user_id: string) {
 
 export async function handleStreaming(user: string, payload: AsyncGenerator<GenerateContentResponse, any, any>, res: Response) {
   let text = ""
+  let userMessage = "" // Store the user's message
+
   try {
+    // Get the user's last message for analysis
+    const lastUserMessage = await Message.findOne({
+      user,
+      role: 'user'
+    }).sort({ created_at: -1 });
+
+    if (lastUserMessage) {
+      userMessage = lastUserMessage.text;
+    }
+
     for await (const chunk of payload) {
       if (chunk.text) {
         text += chunk.text;
@@ -64,6 +77,13 @@ export async function handleStreaming(user: string, payload: AsyncGenerator<Gene
   } finally {
     if (!isEmpty(text)) {
       const aiMessage = await Message.create({ text, user, role: "ai" })
+
+      // Extract insights from this conversation asynchronously
+      if (userMessage) {
+        extractAllUserInsights(user, userMessage, text).catch(error => {
+          console.error('Error extracting user insights:', error);
+        });
+      }
     }
     res.end();
   }

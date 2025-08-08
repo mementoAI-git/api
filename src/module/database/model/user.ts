@@ -3,7 +3,22 @@ import { model, Schema } from 'mongoose';
 import { BACKEND_URL } from '../../../utils/config';
 import { isEmpty } from '../../../utils/helpers';
 
+// Add to User model
+interface IUserPreferences {
+  communication_style?: 'formal' | 'casual' | 'friendly' | 'professional'
+  topics_of_interest?: string[]
+  conversation_tone?: 'upbeat' | 'calm' | 'analytical' | 'creative'
+  response_length?: 'short' | 'medium' | 'long'
+}
+interface IUserContext {
+  important_notes?: string[]
+  key_preferences?: string[]
+  conversation_history_summary?: string
+  emotional_state_trends?: string[]
+  goals_and_aspirations?: string[]
+}
 export interface IUser {
+  _id?: string
   email: string
   first_name: string
   last_name: string
@@ -14,6 +29,8 @@ export interface IUser {
   password: string
   onbaorded: boolean
   providers: string[]
+  preferences: IUserPreferences
+  context: IUserContext
   verified: boolean
   private_key: string
   public_key: string
@@ -76,6 +93,31 @@ const user = new Schema<IUser>({
   streak: {
     type: Number,
     default: 1
+  },
+  preferences: {
+    communication_style: {
+      type: String,
+      enum: ['formal', 'casual', 'friendly', 'professional'],
+      default: 'friendly'
+    },
+    topics_of_interest: [String],
+    conversation_tone: {
+      type: String,
+      enum: ['upbeat', "warm", 'calm', 'analytical', 'creative'],
+      default: 'warm'
+    },
+    response_length: {
+      type: String,
+      enum: ['short', 'medium', 'long'],
+      default: 'medium'
+    }
+  },
+  context: {
+    important_notes: [String],
+    key_preferences: [String],
+    conversation_history_summary: String,
+    emotional_state_trends: [String],
+    goals_and_aspirations: [String]
   }
 }, {
   timestamps: {
