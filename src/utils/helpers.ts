@@ -1,5 +1,5 @@
 import { Response, Request } from "express";
-import { validationResult } from "express-validator";
+import { check, validationResult } from "express-validator";
 import bcrypt from "bcrypt"
 import * as jwt from 'jsonwebtoken';
 import { ec } from "elliptic"
@@ -270,6 +270,10 @@ export async function processFile(file: UploadedFile, user: string): Promise<Par
     duration
   }
 }
+
+export const idValidator = check("id")
+  .notEmpty().withMessage("Id is required")
+  .isMongoId().withMessage("Invalid id ")
 
 
 // export async function analyzeSingleConversation(userMessage: string, aiResponse: string): Promise<IUserInsights> {

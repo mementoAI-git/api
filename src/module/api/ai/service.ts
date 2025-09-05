@@ -19,7 +19,7 @@ import { extractAllUserInsights } from './user-learning';
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
 
-export async function prompt(payload: IPrompt, user_id: string) {
+export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
 
   let messages = await Message.find({ user: user_id }).sort({ created_at: -1 }).limit(25)
@@ -43,6 +43,7 @@ export async function prompt(payload: IPrompt, user_id: string) {
   const response = await chat.sendMessageStream({ message: content });
   await Message.create({
     user: user_id,
+    memory: payload.memory,
     role: 'user',
     attatchments: payload?.attachments || [],
     text: payload?.text
@@ -51,7 +52,7 @@ export async function prompt(payload: IPrompt, user_id: string) {
   return response
 }
 
-export async function handleStreaming(user: string, payload: AsyncGenerator<GenerateContentResponse, any, any>, res: Response) {
+export async function handleStreaming(user: string, memory: string, payload: AsyncGenerator<GenerateContentResponse, any, any>, res: Response) {
   let text = ""
   let userMessage = "" // Store the user's message
 
@@ -76,7 +77,12 @@ export async function handleStreaming(user: string, payload: AsyncGenerator<Gene
     res.write(`ERROR: ${error?.message}`);
   } finally {
     if (!isEmpty(text)) {
-      const aiMessage = await Message.create({ text, user, role: "ai" })
+      await Message.create({
+        text,
+        user,
+        memory,
+        role: "ai"
+      })
 
       // Extract insights from this conversation asynchronously
       if (userMessage) {
@@ -136,7 +142,34 @@ export async function getUserMessages({ limit, ...query }: IPagination & { next?
     next = messages[limit]?.id || null;
     messagesToSend = messages.slice(0, limit);
   }
-  console.log({ next })
+
+  const data = { messages: messagesToSend.reverse(), next }
+  return { message: "User messages retrieved successfully", data }
+}
+
+export async function getUserMessagesByConversation(id: string, { limit, ...query }: IPagination & { next?: string }, user: string) {
+  const filter: FilterQuery<IMessage> = { user, memory: id }
+  const fetch_limit = limit + 1;
+
+  if (!isEmpty(query?.next)) {
+    const message = await Message.findById(query?.next)
+    if (message) {
+      filter.created_at = { $lte: message.created_at };
+    }
+  }
+
+  const messages = await Message.find(filter)
+    .sort({ created_at: -1 })
+    .limit(fetch_limit)
+
+  let next = null;
+  let messagesToSend = messages;
+
+  if (messages.length === fetch_limit) {
+    next = messages[limit]?.id || null;
+    messagesToSend = messages.slice(0, limit);
+  }
+
   const data = { messages: messagesToSend.reverse(), next }
   return { message: "User messages retrieved successfully", data }
 }

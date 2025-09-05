@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { StatusCodes } from "http-status-codes"
-import { getFiles, responsHandler, validateRequest } from "../../../utils/helpers"
+import { getFiles, responsHandler, validateRequest, getPagination } from "../../../utils/helpers"
 import * as service from "./service"
 import { IRequest } from "../../../utils/interface";
 import redis from "../../../services/redis"
@@ -37,6 +37,16 @@ export async function replyPrompt(req: IRequest, res: Response, next: NextFuncti
     validateRequest(req)
     const files = getFiles(req)
     const { message, data } = await service.replyPrompt(req.body, req.auth.id, files)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function getSuggestions(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const pagination = getPagination(req)
+    const { message, data } = await service.getSuggestions(req.auth.id, pagination)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

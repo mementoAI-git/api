@@ -8,6 +8,7 @@ import { isEmpty, processFile } from "../../../utils/helpers"
 import User from "../../database/model/user";
 import ActivePrompt from "../../database/model/active-prompt";
 import dayjs from "dayjs";
+import { IPagination } from "../../../utils/interface"
 
 export const getPrompts = async (user_id: string) => {
   const MAX_PROMPT = 2
@@ -283,8 +284,6 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
   const activePrompt = await ActivePrompt.findOne({ user: user_id, prompt: prompt_id })
   if (activePrompt) {
     await ActivePrompt.findByIdAndUpdate(activePrompt.id, { memory: memory.id })
-  } else {
-    await ActivePrompt.create({ user: user_id, prompt: prompt_id, memory: memory.id })
   }
 
   return { data: memory, message: "Response saved successfully" }
@@ -314,5 +313,39 @@ const assignNewPromptsToUser = async (user_id: string, answeredPromptIds: string
         user: user_id
       }))
     )
+  }
+}
+
+export const getSuggestions = async (user_id: string, pagination: IPagination) => {
+  const { page, limit } = pagination
+
+  // Get all prompts that have been answered by this user
+  const answeredMemories = await Memory.find({
+    user: user_id,
+    prompt: { $exists: true, $ne: null }
+  })
+
+  const answeredPromptIds = answeredMemories.map(m => m.prompt)
+
+  // Get all active prompts for this user
+  const activePrompts = await ActivePrompt.find({ user: user_id })
+  const activePromptIds = activePrompts.map(ap =>
+    typeof ap.prompt === 'string' ? ap.prompt : (ap.prompt as any)._id.toString()
+  )
+
+  // Get prompts that haven't been answered and aren't active
+  const suggestions = await Prompt.paginate({
+    _id: {
+      $nin: [...answeredPromptIds, ...activePromptIds]
+    }
+  }, {
+    page,
+    limit,
+    sort: { created_at: -1 }
+  })
+
+  return {
+    data: suggestions,
+    message: "Suggestions retrieved successfully"
   }
 }

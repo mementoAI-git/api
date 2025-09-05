@@ -6,6 +6,7 @@ export interface IMessage {
   text: string
   role: string // user, ai
   attatchments: string[]
+  memory: string
   created_at: string
   updated_at: string
 }
@@ -14,6 +15,11 @@ const message = new Schema<IMessage>({
   user: String,
   text: String,
   role: String,
+  memory: {
+    type: String,
+    ref: "memory",
+    index: true
+  },
   attatchments: [{
     type: String,
     ref: "file"

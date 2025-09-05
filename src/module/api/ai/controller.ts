@@ -8,7 +8,12 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
     const response = await service.prompt(req.body, req.auth.id)
-    return await service.handleStreaming(req.auth.id, response, res)
+    return await service.handleStreaming(
+      req.auth.id,
+      req.body.memory,
+      response,
+      res
+    )
   } catch (error) {
     next(error)
   }
@@ -17,7 +22,12 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
 export async function greet(req: IRequest, res: Response, next: NextFunction) {
   try {
     const response = await service.greet(req.auth.id)
-    return await service.handleStreaming(req.auth.id, response, res)
+    return await service.handleStreaming(
+      req.auth.id,
+      req.body.memory,
+      response,
+      res
+    )
   } catch (error) {
     next(error)
   }
@@ -26,6 +36,22 @@ export async function greet(req: IRequest, res: Response, next: NextFunction) {
 export async function getUserMessages(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.getUserMessages(getPagination(req), req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function getUserMessagesByConversation(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+
+    const { message, data } = await service.getUserMessagesByConversation(
+      req.params.id,
+      getPagination(req),
+      req.auth.id
+    )
+
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

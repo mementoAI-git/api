@@ -3,6 +3,10 @@ import { body } from "express-validator";
 export default {
   prompt: [
     body("text").notEmpty().withMessage("Text is reqired"),
+    body("memory")
+      .notEmpty().withMessage("memory is reqired")
+      .isMongoId().withMessage("Invalid memory id")
+    ,
     body("attachments")
       .optional()
       .isArray().withMessage("Files must be an array"),
