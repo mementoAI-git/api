@@ -58,6 +58,15 @@ export async function getUserMessagesByConversation(req: IRequest, res: Response
   }
 }
 
+export async function startConversation(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.startConversation(req.body, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export async function transcribeAudio(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.transcribeAudio(req.body)

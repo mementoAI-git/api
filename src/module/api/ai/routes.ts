@@ -14,14 +14,20 @@ router.post("/prompt",
   gaurd,
   ctrl.prompt
 )
+
+//Depericated
 router.post("/prompt/greet", gaurd, ctrl.greet)
+//Depericated
 router.get("/prompt/messages", gaurd, ctrl.getUserMessages)
+
 router.get(
   "/prompt/messages/:id",
   gaurd,
   idValidator,
   ctrl.getUserMessagesByConversation
 )
+
+router.post("/prompt/memory/new", gaurd, valid.startConversation, ctrl.startConversation)
 router.post("/transcribe-audio", gaurd, ctrl.transcribeAudio)
 
 export default router

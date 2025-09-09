@@ -16,13 +16,20 @@ import dayjs from "dayjs";
 import { createSystemContext, generateGreetingPrompt } from "./prompts";
 import { createTranscriptionPrompt } from './prompts';
 import { extractAllUserInsights } from './user-learning';
+import Memory from "../../database/model/memory";
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
 
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
 
-  let messages = await Message.find({ user: user_id }).sort({ created_at: -1 }).limit(25)
+  let messages = await Message.find({
+    user: user_id,
+    memory: payload.memory
+  })
+    .sort({ created_at: -1 })
+    .limit(25)
+
   messages = messages.reverse()
 
   let content: PartListUnion = [payload.text]
@@ -203,6 +210,51 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
 
   await file.updateOne({ transcription: transcriptionData })
   return { message: "Transcription successful", data: transcriptionData }
+}
+
+export async function startConversation(payload, user_id: string) {
+  const user = await User.findById(user_id)
+
+  const chat = gemini.chats.create({
+    model: GEMINI_MODEL,
+    config: {
+      systemInstruction: createSystemContext(user)
+    }
+  });
+
+  let content: PartListUnion = [payload.text]
+
+  if (!isEmpty(payload?.attachments)) {
+    const result = await processFiles(payload.attachments)
+    content = [...content, ...result]
+  }
+
+  const memory = await Memory.create({ user: user_id, status: "save" })
+  const userMessage = {
+    user: user_id,
+    memory: memory?.id,
+    role: 'user',
+    attatchments: payload?.attachments || [],
+    text: payload?.text,
+    created_at: dayjs().toDate()
+  }
+
+  const response = await chat.sendMessage({ message: content });
+
+  const aiMessage = {
+    user: user_id,
+    memory: memory?.id,
+    role: 'ai',
+    text: response.text,
+    created_at: dayjs().add(1, "second").toDate()
+  }
+
+  await Message.insertMany([userMessage, aiMessage])
+
+  return {
+    data: { response: response.text, memory_id: memory?.id },
+    message: "Conversation initialized successfully"
+  }
 }
 
 async function processFiles(file_ids: string[]) {

@@ -4,6 +4,7 @@ export default {
   createMemory: [
     body("title")
       .notEmpty().withMessage("Title is required")
+      .optional()
       .bail()
       .isString().withMessage("Title must be a string"),
     body("level")

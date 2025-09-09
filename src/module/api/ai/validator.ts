@@ -13,5 +13,14 @@ export default {
     body("attachments.*")
       .optional()
       .isMongoId().withMessage("Invalid file id")
+  ],
+  startConversation: [
+    body("text").notEmpty().withMessage("Text is reqired"),
+    body("attachments")
+      .optional()
+      .isArray().withMessage("Files must be an array"),
+    body("attachments.*")
+      .optional()
+      .isMongoId().withMessage("Invalid file id")
   ]
 }
