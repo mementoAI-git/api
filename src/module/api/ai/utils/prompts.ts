@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
-import { IUser } from "../../database/model/user";
-import { ConversationContext } from "./interface";
-import { getTimeBasedGreeting, isEmpty } from "../../../utils/helpers";
+import { IUser } from "../../../database/model/user";
+import { ConversationContext } from "../interface";
+import { getTimeBasedGreeting, isEmpty } from "../../../../utils/helpers";
 
 const TIME_CONSTANTS = {
   ONE_HOUR_MS: 60 * 60 * 1000,
@@ -225,4 +225,27 @@ GUIDELINES:
 - Do not include any text outside the JSON structure
 
 Return ONLY the JSON object, no additional formatting or text.`;
+}
+
+export function createTitlePrompt(userMessage: string, aiResponse: string): string {
+  return `You are an expert at creating concise, meaningful conversation titles. Your task is to analyze the initial conversation exchange and generate a short, descriptive title.
+
+CONVERSATION CONTEXT:
+User Message: "${userMessage}"
+AI Response: "${aiResponse}"
+
+TITLE REQUIREMENTS:
+- Maximum 6-8 words
+- Capture the main topic or purpose of the conversation
+- Be specific enough to distinguish from other conversations
+- Avoid generic phrases like "Chat about" or "Discussion on"
+- Use natural, conversational language
+- Focus on the user's intent or main subject
+
+EXAMPLES:
+- Instead of "Chat about programming" → "Help with React component bug"
+- Instead of "Discussion on travel" → "Planning trip to Japan"
+- Instead of "Questions about cooking" → "Making homemade pasta recipe"
+
+Return ONLY the title text, no quotes, no extra formatting, no explanations.`;
 }

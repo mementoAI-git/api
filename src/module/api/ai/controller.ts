@@ -58,9 +58,9 @@ export async function getUserMessagesByConversation(req: IRequest, res: Response
   }
 }
 
-export async function startConversation(req: IRequest, res: Response, next: NextFunction) {
+export async function startMemory(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.startConversation(req.body, req.auth.id)
+    const { message, data } = await service.startMemory(req.body, req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

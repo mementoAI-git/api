@@ -1,24 +1,26 @@
 import { Response } from "express";
-import path from "path";
-import fs from "fs/promises";
 import { FilterQuery } from "mongoose";
-import { createPartFromUri, createUserContent, GenerateContentResponse, PartListUnion } from "@google/genai";
+import { createUserContent, GenerateContentResponse, PartListUnion } from "@google/genai";
 import Message, { IMessage } from "../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../services/gemini";
 import { extractJson, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
-import { ConversationContext, IConversationAnalysis, IPrompt, ITranscribeAudio, IUserInsights } from "./interface";
+import { IPrompt, ITranscribeAudio } from "./interface";
 import File, { IFile, ITranscriptionData } from "../../database/model/file"
 import { NotFoundException } from "../../../utils/service-error";
-import { TEMP_PATH } from "../../../utils/config";
-import User, { IUser } from "../../database/model/user";
+import User from "../../database/model/user";
 import dayjs from "dayjs";
-import { createSystemContext, generateGreetingPrompt } from "./prompts";
-import { createTranscriptionPrompt } from './prompts';
+import { createSystemContext, generateGreetingPrompt } from "./utils/prompts";
+import { createTranscriptionPrompt } from './utils/prompts';
 import { extractAllUserInsights } from './user-learning';
 import Memory from "../../database/model/memory";
-
-const SIZE_THRESHOLD = 18 * 1024 * 1024
+import {
+  analyzeConversationContext,
+  createChatHistory,
+  processFile,
+  processFiles,
+  updateMemoryTitle
+} from "./utils";
 
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
@@ -212,7 +214,7 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
   return { message: "Transcription successful", data: transcriptionData }
 }
 
-export async function startConversation(payload, user_id: string) {
+export async function startMemory(payload, user_id: string) {
   const user = await User.findById(user_id)
 
   const chat = gemini.chats.create({
@@ -250,67 +252,10 @@ export async function startConversation(payload, user_id: string) {
   }
 
   await Message.insertMany([userMessage, aiMessage])
+  updateMemoryTitle(memory.id, payload.text, response.text)
 
   return {
     data: { response: response.text, memory_id: memory?.id },
     message: "Conversation initialized successfully"
   }
-}
-
-async function processFiles(file_ids: string[]) {
-  const files = await File.find({ _id: { $in: file_ids } })
-  const processed = await Promise.all(files.map(processFile))
-  return processed.filter(Boolean);
-}
-
-async function processFile(file: IFile) {
-  let file_path = null
-  try {
-    if (Number(file.size) > SIZE_THRESHOLD) {
-      file_path = path.join(TEMP_PATH, file.name)
-      await fs.writeFile(file_path, Buffer.from(file.base64, 'base64'));
-
-      const uploadedFile = await gemini.files.upload({
-        file: file_path,
-        config: { mimeType: file.type },
-      });
-      return createPartFromUri(uploadedFile.uri, uploadedFile.mimeType);
-    } else {
-      return {
-        inlineData: {
-          mimeType: file.type,
-          data: file.base64,
-        }
-      }
-    }
-  } catch (error) {
-    return null
-  } finally {
-    if (file_path) fs.unlink(file_path);
-  }
-}
-
-function analyzeConversationContext(user: IUser, messages: IMessage[]): ConversationContext {
-  const lastMessage = messages[messages.length - 1] || null;
-  const lastUserMessage = messages.findLast(m => m.role === "user") || null;
-  const lastAiMessage = messages.findLast(m => m.role === "ai") || null;
-  const timeSinceLastMessage = lastMessage
-    ? dayjs().diff(lastMessage.created_at, 'millisecond')
-    : 0;
-
-  return {
-    user,
-    messages,
-    lastMessage,
-    lastUserMessage,
-    lastAiMessage,
-    timeSinceLastMessage,
-  };
-}
-
-function createChatHistory(messages: IMessage[]) {
-  return messages.map(m => ({
-    role: m.role === "ai" ? "model" : "user",
-    parts: [{ text: m.text }]
-  }));
 }

@@ -14,7 +14,7 @@ export default {
       .optional()
       .isMongoId().withMessage("Invalid file id")
   ],
-  startConversation: [
+  startMemory: [
     body("text").notEmpty().withMessage("Text is reqired"),
     body("attachments")
       .optional()
