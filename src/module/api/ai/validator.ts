@@ -16,6 +16,9 @@ export default {
   ],
   startMemory: [
     body("text").notEmpty().withMessage("Text is reqired"),
+    body("prompt_id")
+      .optional()
+      .isMongoId().withMessage("Invalid prompt id"),
     body("attachments")
       .optional()
       .isArray().withMessage("Files must be an array"),

@@ -5,12 +5,12 @@ import Message, { IMessage } from "../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../services/gemini";
 import { extractJson, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
-import { IPrompt, ITranscribeAudio } from "./interface";
+import { IPrompt, IStartMemory, ITranscribeAudio } from "./interface";
 import File, { IFile, ITranscriptionData } from "../../database/model/file"
 import { NotFoundException } from "../../../utils/service-error";
 import User from "../../database/model/user";
 import dayjs from "dayjs";
-import { createSystemContext, generateGreetingPrompt } from "./utils/prompts";
+import { createSystemContext, createSystemContextWithPrompt, generateGreetingPrompt } from "./utils/prompts";
 import { createTranscriptionPrompt } from './utils/prompts';
 import { extractAllUserInsights } from './user-learning';
 import Memory from "../../database/model/memory";
@@ -21,6 +21,7 @@ import {
   processFiles,
   updateMemoryTitle
 } from "./utils";
+import Prompt from "../../database/model/prompt";
 
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
@@ -142,6 +143,7 @@ export async function getUserMessages({ limit, ...query }: IPagination & { next?
 
   const messages = await Message.find(filter)
     .sort({ created_at: -1 })
+    .populate("attatchments", "-base64")
     .limit(fetch_limit)
 
   let next = null;
@@ -169,6 +171,7 @@ export async function getUserMessagesByConversation(id: string, { limit, ...quer
 
   const messages = await Message.find(filter)
     .sort({ created_at: -1 })
+    .populate("attatchments", "-base64")
     .limit(fetch_limit)
 
   let next = null;
@@ -214,13 +217,17 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
   return { message: "Transcription successful", data: transcriptionData }
 }
 
-export async function startMemory(payload, user_id: string) {
+export async function startMemory(payload: IStartMemory, user_id: string) {
+  let prompt = null
   const user = await User.findById(user_id)
 
+  if (!isEmpty(payload.prompt_id)) {
+    prompt = await Prompt.findById(payload.prompt_id)
+  }
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
     config: {
-      systemInstruction: createSystemContext(user)
+      systemInstruction: createSystemContextWithPrompt(user, prompt)
     }
   });
 
@@ -231,7 +238,14 @@ export async function startMemory(payload, user_id: string) {
     content = [...content, ...result]
   }
 
-  const memory = await Memory.create({ user: user_id, status: "save" })
+  const memory = await Memory.create({
+    title: prompt?.title || null,
+    user: user_id,
+    type: "conversation",
+    status: "save",
+    prompt: prompt?._id || null  // Link memory to prompt if available
+  })
+
   const userMessage = {
     user: user_id,
     memory: memory?.id,
@@ -252,7 +266,9 @@ export async function startMemory(payload, user_id: string) {
   }
 
   await Message.insertMany([userMessage, aiMessage])
-  updateMemoryTitle(memory.id, payload.text, response.text)
+  if (isEmpty(memory?.title)) {
+    updateMemoryTitle(memory.id, payload.text, response.text)
+  }
 
   return {
     data: { response: response.text, memory_id: memory?.id },

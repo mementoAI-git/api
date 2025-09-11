@@ -36,3 +36,9 @@ export interface IConversationAnalysis {
   conversation_summary: string;
   learning_notes: string[];
 }
+
+export interface IStartMemory {
+  text: string
+  prompt_id?: string
+  attachments?: string[]
+}

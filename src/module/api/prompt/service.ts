@@ -349,3 +349,14 @@ export const getSuggestions = async (user_id: string, pagination: IPagination) =
     message: "Suggestions retrieved successfully"
   }
 }
+export const getPromptDetails = async (id: string) => {
+  const prompt = await Prompt.findById(id)
+  if (!prompt) {
+    throw new NotFoundException("Prompt not found")
+  }
+
+  return {
+    data: prompt,
+    message: "Prompt details retrieved successfully"
+  }
+}

@@ -9,6 +9,7 @@ import { emptyPaginatedList, isEmpty, processFile, reconstructFileName } from ".
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
 import { filterGenerator } from "../../../utils/helpers";
+import Prompt from "../../database/model/prompt";
 
 export async function memoryStats(user_id: string) {
   const memory_count = await Memory.countDocuments({
@@ -145,6 +146,26 @@ export async function getMemory(_id: string, user_id: string = null) {
   const data = { ...memory.toObject(), bookmarked: !isEmpty(bookmark) }
 
   return { data, message: "User memory retrieved successfully" }
+}
+
+export async function getMemoryByPrompt(prompt_id: string, user_id: string = null) {
+  let memory = null
+  memory = await Memory
+    .findOne({ prompt: prompt_id, status: { $nin: ["draft", "deleted"] } });
+
+  if (!memory) {
+    const prompt = await Prompt.findById(prompt_id)
+    if (!prompt) {
+      throw new NotFoundException("Memory not found")
+    }
+
+    memory = { title: prompt.title }
+  }
+
+  return {
+    data: memory,
+    message: "User memory retrieved successfully"
+  }
 }
 
 export async function updateMemory(_id: string, payload: Partial<IMemory>, user_id: string) {

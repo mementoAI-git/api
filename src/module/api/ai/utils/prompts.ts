@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import { IUser } from "../../../database/model/user";
 import { ConversationContext } from "../interface";
 import { getTimeBasedGreeting, isEmpty } from "../../../../utils/helpers";
+import { IPrompt } from "../../../database/model/prompt";
 
 const TIME_CONSTANTS = {
   ONE_HOUR_MS: 60 * 60 * 1000,
@@ -248,4 +249,18 @@ EXAMPLES:
 - Instead of "Questions about cooking" → "Making homemade pasta recipe"
 
 Return ONLY the title text, no quotes, no extra formatting, no explanations.`;
+}
+
+export function createSystemContextWithPrompt(user: IUser, prompt: IPrompt = null) {
+  let context = createSystemContext(user);
+  if (isEmpty(prompt)) return context;
+
+  context += `\n\nCONVERSATION CONTEXT:
+  You are responding to a user who is engaging with a specific prompt: "${prompt.title}".
+  This prompt is categorized as: ${prompt.type || 'general'}.
+  ${prompt.tags && prompt.tags.length > 0 ? `Related topics: ${prompt.tags.join(', ')}.` : ''}
+  
+  Keep this context in mind as you respond. The user's message is related to this prompt, so tailor your response to be relevant to the prompt's theme while maintaining your warm, conversational style.`
+
+  return context
 }

@@ -52,6 +52,15 @@ export async function getMemory(req: IRequest, res: Response, next: NextFunction
   }
 }
 
+export async function getMemoryByPrompt(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getMemoryByPrompt(req.params.id, req.auth?.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export async function updateMemory(req: IRequest, res: Response, next: NextFunction) {
   try {
     validateRequest(req)

@@ -9,13 +9,13 @@ export async function getPrompts(req: IRequest, res: Response, next: NextFunctio
   try {
     const key = `activeprompt:${req.auth.id}`
 
-    // const cachedData = await redis.get(key)
-    // if (cachedData) {
-    //   const { message, data } = JSON.parse(String(cachedData))
-    //   return responsHandler(res, StatusCodes.OK, message, data)
-    // }
+    const cachedData = await redis.get(key)
+    if (cachedData) {
+      const { message, data } = JSON.parse(String(cachedData))
+      return responsHandler(res, StatusCodes.OK, message, data)
+    }
     const { message, data } = await service.getPrompts(req.auth.id)
-    // await redis.set(key, JSON.stringify({ message, data }))
+    await redis.set(key, JSON.stringify({ message, data }))
 
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
@@ -47,6 +47,14 @@ export async function getSuggestions(req: IRequest, res: Response, next: NextFun
   try {
     const pagination = getPagination(req)
     const { message, data } = await service.getSuggestions(req.auth.id, pagination)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+export async function getPromptDetails(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getPromptDetails(req.params.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
