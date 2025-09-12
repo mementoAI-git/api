@@ -316,6 +316,21 @@ const assignNewPromptsToUser = async (user_id: string, answeredPromptIds: string
   }
 }
 
+export const getPromptsByCategory = async (category: string, user_id: string, pagination: IPagination) => {
+  const { page, limit } = pagination
+  const prompts = await Prompt.paginate(
+    { category }, {
+    page,
+    limit,
+    sort: { created_at: -1 }
+  })
+
+  return {
+    data: prompts,
+    message: "Prompts retrieved successfully"
+  }
+}
+
 export const getSuggestions = async (user_id: string, pagination: IPagination) => {
   const { page, limit } = pagination
 
@@ -341,7 +356,7 @@ export const getSuggestions = async (user_id: string, pagination: IPagination) =
   }, {
     page,
     limit,
-    sort: { created_at: -1 }
+    sort: { title: 1 } // Sort by title for consistency
   })
 
   return {
@@ -349,6 +364,7 @@ export const getSuggestions = async (user_id: string, pagination: IPagination) =
     message: "Suggestions retrieved successfully"
   }
 }
+
 export const getPromptDetails = async (id: string) => {
   const prompt = await Prompt.findById(id)
   if (!prompt) {

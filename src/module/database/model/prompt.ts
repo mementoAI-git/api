@@ -5,6 +5,7 @@ export interface IPrompt {
   _id?: string
   title: string
   type: string
+  category: string
   tags: string[]
   created_at: string
   updated_at: string
@@ -13,6 +14,7 @@ export interface IPrompt {
 const prompt = new Schema<IPrompt>({
   title: String,
   type: String,
+  category: String,
   tags: [String]
 }, {
   timestamps: {
