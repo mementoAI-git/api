@@ -42,6 +42,7 @@ export interface IUser {
   picture_url?: string
   last_seen: string
   streak: number
+  bg_music?: string
   fullname?: string | null
   newsletter_subscriber: boolean
   created_at: string
@@ -61,6 +62,10 @@ const user = new Schema<IUser>({
   password: String,
   private_key: String,
   public_key: String,
+  bg_music: {
+    type: String,
+    default: null
+  },
   two_factor: {
     secret: {
       type: String,
