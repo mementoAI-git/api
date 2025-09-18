@@ -317,9 +317,27 @@ const assignNewPromptsToUser = async (user_id: string, answeredPromptIds: string
 }
 
 export const getPromptsByCategory = async (category: string, user_id: string, pagination: IPagination) => {
-  const { page, limit } = pagination
+  const { page, limit, ...query } = pagination
+
+  let queryFilter: any = { category }
+
+  if ("answered" in query) {
+    const answeredMemories = await Memory.find({
+      user: user_id,
+      prompt: { $exists: true, $ne: null }
+    })
+
+    const answeredPromptIds = answeredMemories.map(m => m.prompt)
+
+    if (query?.answered === "true") {
+      queryFilter._id = { $in: answeredPromptIds }
+    } else {
+      queryFilter._id = { $nin: answeredPromptIds }
+    }
+  }
+
   const prompts = await Prompt.paginate(
-    { category }, {
+    queryFilter, {
     page,
     limit,
     sort: { created_at: -1 }
