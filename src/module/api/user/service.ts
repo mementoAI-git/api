@@ -64,15 +64,15 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     .select("-password -providers -public_key -private_key")
 
   // Track activity if any fields were updated
-  if (Object.keys(updatePayload).length > 0) {
-    await track({
-      title: "Profile Updated",
-      description: `Updated profile: "${Object.keys(updatePayload).join(", ")}"`,
-      type: "user",
-      action: "updated",
-      reference: user_id
-    }, user_id)
-  }
+  // if (Object.keys(updatePayload).length > 0) {
+  //   await track({
+  //     title: "Profile Updated",
+  //     description: `Updated profile: "${Object.keys(updatePayload).join(", ")}"`,
+  //     type: "user",
+  //     action: "updated",
+  //     reference: user_id
+  //   }, user_id)
+  // }
 
   return { message: "User profile updated successfully", data }
 }
