@@ -5,11 +5,12 @@ import User from "../../database/model/user";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
 import { ICreateMemoryPayload } from "./interface";
-import { emptyPaginatedList, isEmpty, processFile, reconstructFileName } from "../../../utils/helpers";
+import { emptyPaginatedList, isEmpty, processFile } from "../../../utils/helpers";
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
 import { filterGenerator } from "../../../utils/helpers";
 import Prompt from "../../database/model/prompt";
+import { updateStreak } from "../user/service";
 
 export async function memoryStats(user_id: string) {
   const memory_count = await Memory.countDocuments({
@@ -60,6 +61,8 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
     action: "created",
     reference: memory.id
   }, user_id)
+
+  updateStreak(user_id)
 
   return {
     message: "Memory created successfully",

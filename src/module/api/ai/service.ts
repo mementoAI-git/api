@@ -22,6 +22,7 @@ import {
   updateMemoryTitle
 } from "./utils";
 import Prompt from "../../database/model/prompt";
+import { updateStreak } from "../user/service";
 
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
@@ -269,6 +270,8 @@ export async function startMemory(payload: IStartMemory, user_id: string) {
   if (isEmpty(memory?.title)) {
     updateMemoryTitle(memory.id, payload.text, response.text)
   }
+
+  updateStreak(user_id)
 
   return {
     data: { response: response.text, memory_id: memory?.id },
