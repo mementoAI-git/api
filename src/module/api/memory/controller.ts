@@ -99,3 +99,13 @@ export async function removeFileFromMemory(req: IRequest, res: Response, next: N
     next(error)
   }
 }
+
+export async function addMessageToMemory(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.addMessageToMemory(req.body, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

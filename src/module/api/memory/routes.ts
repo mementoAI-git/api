@@ -16,6 +16,7 @@ router.put("/:id", gaurd, valid.updateMemory, ctrl.updateMemory)
 router.delete("/:id", gaurd, ctrl.deleteMemory)
 router.post("/:id/bookmark", gaurd, ctrl.bookmark)
 router.delete("/:id/bookmark", gaurd, ctrl.unbookmark)
+router.post("/add-message", gaurd, valid.addMessageToMemory, ctrl.addMessageToMemory)
 
 export const name = "memories"
 export default router 

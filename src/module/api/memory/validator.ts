@@ -72,4 +72,11 @@ export default {
       .notEmpty().withMessage("file id is required")
       .isMongoId().withMessage("invalid file id")
   ],
+  addMessageToMemory: [
+    body("messages").notEmpty().withMessage("Messages are reqired"),
+    body("messages.*.text").notEmpty().withMessage("Text is reqired"),
+    body("messages.*.role").notEmpty().withMessage("Role is reqired"),
+    body("messages.*.is_voice").optional().isBoolean().withMessage("Is voice must be a boolean"),
+    body("memory_id").notEmpty().withMessage("Memory id is reqired").isMongoId().withMessage("Invalid memory id")
+  ]
 }

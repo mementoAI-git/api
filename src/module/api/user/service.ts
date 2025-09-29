@@ -8,7 +8,6 @@ import { UploadedFile } from "express-fileupload";
 import File from "../../database/model/file";
 import speakeasy from "speakeasy"
 import Qr from "qrcode"
-import { track } from "../activity/service";
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const { new_password, old_password } = payload

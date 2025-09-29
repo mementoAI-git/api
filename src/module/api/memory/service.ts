@@ -1,16 +1,19 @@
 import { UploadedFile } from "express-fileupload";
+import dayjs from "dayjs";
 import Memory, { IMemory } from "../../database/model/memory";
 import File from "../../database/model/file";
 import User from "../../database/model/user";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
-import { ICreateMemoryPayload } from "./interface";
+import { IAddMessageToMemory, ICreateMemoryPayload } from "./interface";
 import { emptyPaginatedList, isEmpty, processFile } from "../../../utils/helpers";
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
 import { filterGenerator } from "../../../utils/helpers";
 import Prompt from "../../database/model/prompt";
 import { updateStreak } from "../user/service";
+import Message from "../../database/model/message";
+import { updateMemoryTitle } from "../ai/utils";
 
 export async function memoryStats(user_id: string) {
   const memory_count = await Memory.countDocuments({
@@ -278,5 +281,48 @@ export async function removeFileFromMemory(file_id: string, user_id: string) {
   return {
     data: memory,
     message: "File removed and deleted from memory successfully"
+  }
+}
+
+export async function addMessageToMemory(payload: IAddMessageToMemory, user_id: string) {
+  let memory = await Memory.findById(payload.memory_id)
+  if (!memory) {
+    memory = await Memory.create({
+      user: user_id,
+      title: null,
+      type: "conversation",
+      status: "save",
+    })
+  }
+
+  const messages = []
+  const baseTime = dayjs()
+
+  for (let i = 0; i < payload.messages.length; i++) {
+    const message = payload.messages[i]
+    const createdMessage = await Message.create({
+      user: user_id,
+      memory: memory?.id,
+      role: message.role,
+      text: message.text,
+      is_voice: message.is_voice || false,
+      created_at: baseTime.add(i, 'second').toDate()
+    })
+    messages.push(createdMessage)
+  }
+
+  if (isEmpty(memory?.title)) {
+    const userMessage = messages.find(message => message.role === "user")
+    const aiMessage = messages.find(message => message.role === "ai")
+    if (userMessage && aiMessage) {
+      updateMemoryTitle(memory.id, userMessage.text, aiMessage.text)
+    } else {
+      memory.updateOne({ title: "Conversation Starts" })
+    }
+  }
+
+  return {
+    data: messages,
+    message: "Message added to memory successfully"
   }
 }
