@@ -306,6 +306,7 @@ export async function addMessageToMemory(payload: IAddMessageToMemory, user_id: 
       role: message.role,
       text: message.text,
       is_voice: message.is_voice || false,
+      duration: message.duration || 0,
       created_at: baseTime.add(i, 'second').toDate()
     })
     messages.push(createdMessage)

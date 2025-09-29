@@ -8,6 +8,7 @@ export interface IMessage {
   attatchments: string[]
   memory: string
   is_voice: boolean
+  duration: number
   created_at: string
   updated_at: string
 }
@@ -24,6 +25,10 @@ const message = new Schema<IMessage>({
   is_voice: {
     type: Boolean,
     default: false
+  },
+  duration: {
+    type: Number,
+    default: 0
   },
   attatchments: [{
     type: String,
