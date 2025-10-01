@@ -43,6 +43,7 @@ export interface IUser {
   last_seen: string
   streak: number
   bg_music?: string
+  chat_voice?: string
   fullname?: string | null
   newsletter_subscriber: boolean
   created_at: string
@@ -63,6 +64,10 @@ const user = new Schema<IUser>({
   private_key: String,
   public_key: String,
   bg_music: {
+    type: String,
+    default: null
+  },
+  chat_voice: {
     type: String,
     default: null
   },

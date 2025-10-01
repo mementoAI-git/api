@@ -48,7 +48,8 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     "gender",
     "dob",
     "country",
-    "bg_music"
+    "bg_music",
+    "chat_voice"
   ])
 
   const updatePayload = Object.entries(payload).reduce((acc, p) => {
