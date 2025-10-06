@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt"
 
-import { ILogin, IOAuthAuthorization, ISendLink, ISetPassword, IVerifyEmail } from "./interface";
+import { ILogin, IOAuthAuthorization, IRegister, ISendLink, ISetPassword, IVerifyEmail } from "./interface";
 import { OAUTH_PROVIDERS } from "../../../utils/constant";
 import { compareStrings, createAccessToken, generateKeys, hashPassword, isEmpty } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException, UnauthorizedException } from "../../../utils/service-error";
@@ -86,8 +86,8 @@ export async function login(payload: ILogin) {
   return { data, message: "User login is successful" }
 }
 
-export async function register(payload: ILogin) {
-  const { email } = payload
+export async function register(payload: IRegister) {
+  const { email, first_name, last_name } = payload
   const user = await User.findOne({ email })
   if (user) {
     throw new NotFoundException("User with this emaill address aleady exist")
@@ -96,7 +96,7 @@ export async function register(payload: ILogin) {
   const password = await hashPassword(payload.password)
   const keys = generateKeys()
 
-  await User.create({ password, email, ...keys })
+  await User.create({ last_name, first_name, password, email, ...keys })
   await mail.sendLink(email, "", "verify")
 
   const data = { requires_verification: true, email }

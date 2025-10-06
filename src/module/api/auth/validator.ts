@@ -28,6 +28,10 @@ export default {
   ],
   register: [
     emailValidator,
+    body("first_name")
+      .notEmpty().withMessage("First name is required"),
+    body("last_name")
+      .notEmpty().withMessage("Last name is required"),
     body("password")
       .notEmpty().withMessage("Password is required")
       .isStrongPassword().withMessage("Password must be strong"),

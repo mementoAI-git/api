@@ -4,6 +4,11 @@ export interface ILogin {
   remember_for_30_days?: boolean
 }
 
+export interface IRegister extends Omit<ILogin, "remember_for_30_days"> {
+  first_name: string
+  last_name: string
+}
+
 export interface IVerifyEmail {
   email: string
   token: string
