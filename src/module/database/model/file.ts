@@ -18,7 +18,6 @@ export interface IFile {
   name: string
   url: string
   user: string
-  base64: string
   transcription: ITranscriptionData // support both old string format and new structured format
   duration?: number // duration in seconds for audio/video files
   created_at: string
@@ -44,7 +43,6 @@ const file = new Schema<IFile>({
     unique: true
   },
   user: String,
-  base64: String,
   transcription: transcriptionDataSchema,
   duration: Number
 }, {

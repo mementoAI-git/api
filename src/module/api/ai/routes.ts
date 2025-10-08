@@ -27,7 +27,7 @@ router.get(
   ctrl.getUserMessagesByConversation
 )
 
-router.post("/prompt/memory/new", gaurd, valid.startMemory, ctrl.startMemory)
+router.post("/conversation/new", gaurd, valid.startConversation, ctrl.startConversation)
 router.post("/transcribe-audio", gaurd, ctrl.transcribeAudio)
 
 export default router

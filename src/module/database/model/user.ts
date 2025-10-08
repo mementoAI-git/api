@@ -139,7 +139,7 @@ const user = new Schema<IUser>({
 })
 
 user.virtual('picture_url').get(function () {
-  return `${BACKEND_URL}/files/${this.picture}`;
+  return this.picture ? `${BACKEND_URL}/files/${this.picture}` : null;
 });
 user.virtual('fullname').get(function () {
   return (isEmpty(this.first_name) && isEmpty(this.last_name)) ? null : `${this.first_name || ""} ${this.last_name || ""}`;

@@ -43,6 +43,24 @@ export async function getMemories(req: IRequest, res: Response, next: NextFuncti
   }
 }
 
+export async function getConversationMemories(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getConversationMemories(getPagination(req), req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function getStoryMemories(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getStoryMemories(getPagination(req), req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export async function getMemory(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.getMemory(req.params.id, req.auth?.id)
@@ -75,6 +93,15 @@ export async function deleteMemory(req: IRequest, res: Response, next: NextFunct
   try {
     console.log("Delete memories")
     const { message, data } = await service.deleteMemory(req.params.id, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function restoreMemory(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.restoreMemory(req.params.id, req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

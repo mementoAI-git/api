@@ -14,7 +14,7 @@ export default {
       .optional()
       .isMongoId().withMessage("Invalid file id")
   ],
-  startMemory: [
+  startConversation: [
     body("text").notEmpty().withMessage("Text is reqired"),
     body("prompt_id")
       .optional()

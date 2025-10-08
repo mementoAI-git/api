@@ -15,6 +15,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { getAudioDurationInSeconds } from 'get-audio-duration';
 import { IFile } from "../module/database/model/file";
+import { uploadToS3 } from "../module/media";
 
 export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
   if (type === "number") {
@@ -258,12 +259,26 @@ export async function getMediaDuration(base64Data: string, mimetype: string): Pr
 }
 
 export async function processFile(file: UploadedFile, user: string): Promise<Partial<IFile>> {
+  const fileName = reconstructFileName(file.name);
+
+  // Upload file to S3 using the filename as the key
+  const uploadResult = await uploadToS3(
+    fileName,
+    file.data,
+    file.mimetype,
+    {
+      originalName: file.name,
+      userId: user,
+      uploadedAt: new Date().toISOString()
+    }
+  );
+
+  // Get duration for media files
   const base64 = file.data.toString("base64");
   const duration = await getMediaDuration(base64, file.mimetype);
 
   return {
-    name: reconstructFileName(file.name),
-    base64,
+    name: uploadResult?.key,
     user,
     size: file.size,
     type: file.mimetype,

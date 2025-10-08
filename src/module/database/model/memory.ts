@@ -4,7 +4,7 @@ import mongoosePaginate from 'mongoose-paginate-v2';
 export interface IMemory {
   title: string
   body: string
-  type: string
+  type: string // story conversation
   user: string
   attachments: string[]
   tags: string[]
@@ -20,7 +20,10 @@ const memory = new Schema<IMemory>({
   title: String,
   body: String,
   user: String,
-  type: String,
+  type: {
+    type: String,
+    default: "story"
+  },
   status: {
     type: String,
     default: "draft"

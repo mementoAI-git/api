@@ -218,7 +218,7 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
   return { message: "Transcription successful", data: transcriptionData }
 }
 
-export async function startMemory(payload: IStartMemory, user_id: string) {
+export async function startConversation(payload: IStartMemory, user_id: string) {
   let prompt = null
   const user = await User.findById(user_id)
 

@@ -12,6 +12,13 @@ const errorHandler = (
   next: NextFunction
 ) => {
   console.log(err)
+
+  // If headers have already been sent, we can't send an error response
+  if (res.headersSent) {
+    console.error('Error occurred after headers were sent:', err);
+    return;
+  }
+
   const { method, url } = req;
 
   const timestamp = dayjs().format('DD/MM/YY HH:mm:ss');

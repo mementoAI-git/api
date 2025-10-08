@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt"
 import dayjs from "dayjs";
 import User, { IUser } from "../../database/model/user";
-import { hashPassword, isEmpty, reconstructFileName } from "../../../utils/helpers";
+import { hashPassword, isEmpty, processFile, reconstructFileName } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
 import { ISetPassword, IVerifyTOTP } from "./interface";
 import { UploadedFile } from "express-fileupload";
@@ -109,14 +109,15 @@ export async function uploadPicture(payload: UploadedFile[], user_id: string) {
     throw new NotFoundException("User not found")
   }
 
-  const { name, mimetype, data, size } = payload[0]
+  const { name, type, size } = await processFile(payload[0], user_id)
+  // const { name, mimetype, data, size } = processedFile
 
   const file = await File.create({
-    name: reconstructFileName(name),
-    base64: data.toString("base64"),
+    name,
+    // base64: data.toString("base64"),
     size,
     user: user_id,
-    type: mimetype
+    type
   })
 
   if (user.picture) {
