@@ -11,7 +11,6 @@ const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  console.log(err)
 
   // If headers have already been sent, we can't send an error response
   if (res.headersSent) {

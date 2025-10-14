@@ -15,5 +15,6 @@ export interface IAddMessageToMemory {
     duration?: number
     is_voice?: boolean
   }[]
-  memory_id: string
+  memory_id?: string
+  session_id?: string
 }

@@ -78,6 +78,10 @@ export default {
     body("messages.*.role").notEmpty().withMessage("Role is reqired"),
     body("messages.*.is_voice").optional().isBoolean().withMessage("Is voice must be a boolean"),
     body("messages.*.duration").optional().isInt({ min: 0 }).withMessage("Duration must be a positive integer"),
-    // body("memory_id").notEmpty().withMessage("Memory id is reqired").isMongoId().withMessage("Invalid memory id")
+    body("memory_id").optional().isMongoId().withMessage("Invalid memory id"),
+    body("session_id")
+      .if(body("memory_id").not().exists())
+      .notEmpty().withMessage("Session id is required.")
+      .isString().withMessage("Session id must be a string"),
   ]
 }

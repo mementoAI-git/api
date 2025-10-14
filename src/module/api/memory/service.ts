@@ -16,12 +16,21 @@ import Message from "../../database/model/message";
 import { updateMemoryTitle } from "../ai/utils";
 
 export async function memoryStats(user_id: string) {
-  const memory_count = await Memory.countDocuments({
+  const memories = await Memory.find({
     user: user_id,
     status: { $nin: ["draft", "deleted"] }
   })
   const bookmark_count = await Bookmark.countDocuments({ user: user_id })
-  const data = { memory_count, bookmark_count }
+  const stories = memories.filter(memory => memory.type === "story")
+  const conversations = memories.filter(memory => memory.type === "conversation")
+  const memory_count = memories.length
+
+  const data = {
+    memory_count,
+    bookmark_count,
+    stories_count: stories.length,
+    conversations_count: conversations.length
+  }
 
   return {
     data,
@@ -428,11 +437,19 @@ export async function removeFileFromMemory(file_id: string, user_id: string) {
 export async function addMessageToMemory(payload: IAddMessageToMemory, user_id: string) {
   let memory = await Memory.findById(payload.memory_id)
   if (!memory) {
+    memory = await Memory.findOne({
+      session_id: payload.session_id,
+      user: user_id
+    })
+  }
+
+  if (!memory) {
     memory = await Memory.create({
       user: user_id,
       title: null,
       type: "conversation",
       status: "save",
+      session_id: payload.session_id || null
     })
   }
 

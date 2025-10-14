@@ -12,6 +12,7 @@ export interface IMemory {
   refrence: string
   status: string | "draft" | "save" | "queued" | "on_chain";
   prompt?: string
+  session_id?: string
   last_opened: string
   created_at: string
 }
@@ -39,6 +40,7 @@ const memory = new Schema<IMemory>({
   },
   refrence: String,
   prompt: String,
+  session_id: String,
   last_opened: Date,
 }, {
   timestamps: {
