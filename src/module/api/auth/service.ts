@@ -81,7 +81,12 @@ export async function login(payload: ILogin) {
     )
   }
   const expires_in = remember_for_30_days ? 30 : 7
-  const data = createAccessToken(user.id, expires_in * 24 * 60 * 60 * 1000)
+  const token = createAccessToken(user.id, expires_in * 24 * 60 * 60 * 1000)
+
+  const data = {
+    ...token,
+    onboarded: user?.onbaorded || false
+  }
 
   return { data, message: "User login is successful" }
 }

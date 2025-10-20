@@ -3,7 +3,7 @@ import dayjs from "dayjs";
 import User, { IUser } from "../../database/model/user";
 import { hashPassword, isEmpty, processFile, reconstructFileName } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
-import { ISetPassword, IVerifyTOTP } from "./interface";
+import { ICompleteOnboardingPayload, ISetPassword, IUpdateContext, IVerifyTOTP } from "./interface";
 import { UploadedFile } from "express-fileupload";
 import File from "../../database/model/file";
 import speakeasy from "speakeasy"
@@ -47,6 +47,7 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     "phone_number",
     "gender",
     "dob",
+    "nickname",
     "country",
     "bg_music",
     "chat_voice"
@@ -59,20 +60,20 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     return acc
   }, {})
 
+  // Handle onboarding fields nested under context only
+  const selfDescription = (payload as any)?.context?.self_description
+  const currentPriority = (payload as any)?.context?.current_priority
+  if (!isEmpty(selfDescription)) {
+    (updatePayload as any)["context.self_description"] = selfDescription
+  }
+  if (!isEmpty(currentPriority)) {
+    (updatePayload as any)["context.current_priority"] = currentPriority
+  }
+
   const data = await User
     .findByIdAndUpdate(user_id, updatePayload, { new: true })
     .select("-password -providers -public_key -private_key")
 
-  // Track activity if any fields were updated
-  // if (Object.keys(updatePayload).length > 0) {
-  //   await track({
-  //     title: "Profile Updated",
-  //     description: `Updated profile: "${Object.keys(updatePayload).join(", ")}"`,
-  //     type: "user",
-  //     action: "updated",
-  //     reference: user_id
-  //   }, user_id)
-  // }
 
   return { message: "User profile updated successfully", data }
 }
@@ -189,4 +190,67 @@ export async function disable2FA(user_id: string) {
   })
 
   return { data: null, message: "2FA disabled successfully" }
+}
+
+export async function completeOnboarding(user_id: string, payload?: ICompleteOnboardingPayload) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+
+  const updateDoc: any = { onbaorded: true }
+  if (payload) {
+    if (!isEmpty(payload?.self_description)) {
+      updateDoc["context.self_description"] = payload.self_description
+    }
+    if (!isEmpty(payload?.current_priority)) {
+      updateDoc["context.current_priority"] = payload.current_priority
+    }
+    if (!isEmpty(payload?.dob)) {
+      updateDoc["dob"] = payload.dob
+    }
+    if (Array.isArray(payload?.join_reasons) && payload.join_reasons.length > 0) {
+      updateDoc["context.join_reasons"] = payload.join_reasons
+    }
+  }
+
+  await user.updateOne(updateDoc)
+
+  return { data: null, message: "Onboarding completed successfully" }
+}
+
+export async function updateContext(payload: IUpdateContext, user_id: string) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+
+  const allowed: Array<keyof IUpdateContext> = [
+    "important_notes",
+    "key_preferences",
+    "conversation_history_summary",
+    "emotional_state_trends",
+    "goals_and_aspirations",
+    "self_description",
+    "current_priority",
+    "join_reasons"
+  ]
+
+  const updateDoc: Record<string, unknown> = {}
+  for (const key of allowed) {
+    const value = (payload as any)[key]
+    if (!isEmpty(value)) {
+      updateDoc[`context.${key}`] = value
+    }
+  }
+
+  if (Object.keys(updateDoc).length === 0) {
+    return { message: "Nothing to update", data: await User.findById(user_id).select("-password -providers -two_factor.secret") }
+  }
+
+  const data = await User
+    .findByIdAndUpdate(user_id, updateDoc, { new: true })
+    .select("-password -providers -public_key -private_key")
+
+  return { message: "User context updated successfully", data }
 }

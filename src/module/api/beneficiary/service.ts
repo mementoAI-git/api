@@ -23,7 +23,7 @@ export async function create(payload: IBeneficiary, user_id: string) {
 
   const beneficiary = await Beneficiary.findOne({ benefactor: user_id, email })
   if (beneficiary) {
-    throw new BadRequestException("Beneficiary already exist")
+    throw new BadRequestException("Beneficiary has already been invited")
   }
 
   const user = await User.findOne({ email })

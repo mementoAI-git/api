@@ -82,3 +82,21 @@ export async function disable2FA(req: IRequest, res: Response, next: NextFunctio
     next(error)
   }
 }
+
+export async function completeOnboarding(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.completeOnboarding(req.auth.id, req.body)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function updateContext(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.updateContext(req.body, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

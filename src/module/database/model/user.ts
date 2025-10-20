@@ -16,12 +16,16 @@ interface IUserContext {
   conversation_history_summary?: string
   emotional_state_trends?: string[]
   goals_and_aspirations?: string[]
+  self_description?: string
+  current_priority?: string
+  join_reasons?: string[]
 }
 export interface IUser {
   _id?: string
   email: string
   first_name: string
   last_name: string
+  nickname: string
   gender: string
   phone_number: string
   dob: string
@@ -57,6 +61,7 @@ const user = new Schema<IUser>({
   },
   first_name: String,
   last_name: String,
+  nickname: String,
   gender: String,
   dob: Date,
   country: String,
@@ -127,7 +132,10 @@ const user = new Schema<IUser>({
     key_preferences: [String],
     conversation_history_summary: String,
     emotional_state_trends: [String],
-    goals_and_aspirations: [String]
+    goals_and_aspirations: [String],
+    self_description: String,
+    current_priority: String,
+    join_reasons: [String]
   }
 }, {
   timestamps: {
