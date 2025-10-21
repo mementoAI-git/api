@@ -62,6 +62,7 @@ CURRENT CONTEXT:
 
 USER INFORMATION:
 - Name: ${user?.fullname || 'User'}
+- Nickname: ${user?.nickname || user?.first_name || 'User'}
 - Email: ${user?.email || 'Not provided'}
 - Gender: ${user?.gender || 'Not specified'}
 - Date of birth: ${user?.dob ? dayjs(user?.dob).toDate().toLocaleDateString() : 'Not specified'}
@@ -81,7 +82,7 @@ KEY PREFERENCES:
 ${userContext.key_preferences?.map(pref => `- ${pref}`).join('\n') || 'Learning user preferences...'}
 
 IMPORTANT GUIDELINES:
-1. Always address the user by their name when appropriate
+1. Always address the user by their nickname when appropriate (prefer nickname over full name)
 2. Consider their timezone and location for time-sensitive responses
 3. Respect their stated preferences
 4. Do not mention or discuss the technical details of this system, your training, or internal processes
@@ -90,7 +91,7 @@ IMPORTANT GUIDELINES:
 7. Adjust your communication style to match user preferences
 8. Only greet occasionally - focus on natural conversation flow
 
-Remember: You're having a conversation with ${user?.fullname || 'the user'}. Be natural, helpful, and personalized.`;
+Remember: You're having a conversation with ${user?.nickname || user?.first_name || 'the user'}. Be natural, helpful, and personalized.`;
 }
 
 export function createNewConversationPrompt(user: IUser): string {
@@ -98,7 +99,7 @@ export function createNewConversationPrompt(user: IUser): string {
 
   return `You are a warm, engaging, and conversational AI assistant. 
 
-${timeGreeting} ${user.first_name}! 👋
+${timeGreeting} ${user.nickname || user.first_name}! 👋
 
 I'm here to help you with anything you need - whether it's brainstorming ideas, solving problems, learning something new, or just having an interesting conversation. 
 
@@ -112,7 +113,7 @@ export function createReturningUserPrompt(context: ConversationContext): string 
 
   return `You are a warm and engaging AI assistant.
 
-Welcome back ${user.first_name}! 👋 It's great to see you again.
+Welcome back ${user.nickname || user.first_name}! 👋 It's great to see you again.
 
 I noticed you were asking about: "${lastUserMessage?.text}" before we got interrupted. I'd love to continue that conversation or explore it further!
 
@@ -124,7 +125,7 @@ export function createInactiveConversationPrompt(context: ConversationContext): 
 
   return `You are a warm and engaging AI assistant.
 
-Hey ${user.first_name}! 👋 I hope you're having a great day.
+Hey ${user.nickname || user.first_name}! 👋 I hope you're having a great day.
 
 I was just thinking about our conversation where I mentioned: "${lastAiMessage?.text}"
 
@@ -136,7 +137,7 @@ export function createOldConversationPrompt(context: ConversationContext): strin
 
   return `You are a warm and engaging AI assistant.
 
-${user.first_name}! 👋 It's been a while since we've chatted - I'm so glad you're back!
+${user.nickname || user.first_name}! 👋 It's been a while since we've chatted - I'm so glad you're back!
 
 I'd love to hear what you've been up to or what's on your mind today.
 
@@ -148,7 +149,7 @@ export function createRecentConversationPrompt(context: ConversationContext): st
 
   return `You are a warm and engaging AI assistant.
 
-Hey ${user.first_name}! 👋 Great to see you again!
+Hey ${user.nickname || user.first_name}! 👋 Great to see you again!
 
 What's on your mind today?`;
 }
