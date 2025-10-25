@@ -1,8 +1,8 @@
 import bcrypt from "bcrypt"
 
-import { ILogin, IOAuthAuthorization, IRegister, ISendLink, ISetPassword, IVerifyEmail } from "./interface";
+import { ILogin, IOAuthAuthorization, IRegister, ISendLink, ISetPassword, IVerifyEmail, IRefreshToken } from "./interface";
 import { OAUTH_PROVIDERS } from "../../../utils/constant";
-import { compareStrings, createAccessToken, generateKeys, hashPassword, isEmpty } from "../../../utils/helpers";
+import { compareStrings, createAccessToken, createTokenPair, generateKeys, hashPassword, isEmpty, verifyRefreshToken } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException, UnauthorizedException } from "../../../utils/service-error";
 import axios from "axios";
 import dayjs from "dayjs";
@@ -12,8 +12,8 @@ import AuthCode from "../../database/model/auth-code";
 
 export function generateOauthUrl(provider: string) {
   const { authoriation_url, redirect_uri } = OAUTH_PROVIDERS[provider || "google"]
-
   const params = new URLSearchParams({ response_type: "code", redirect_uri }).toString();
+
   const url = `${authoriation_url}&${params}`;
 
   return { data: { url }, message: "OAuth url generated successfully" }
@@ -54,9 +54,12 @@ export async function oauthAuthorization({ code }: IOAuthAuthorization, provider
     await user.updateOne({ $addToSet: { providers: userinfo.provider } })
   }
 
-  const data = createAccessToken(user.id)
+  const tokens = createTokenPair(user.id)
 
-  return { data, message: "User signin is successful" }
+  // Store refresh token in database
+  await user.updateOne({ refresh_token: tokens.refresh_token })
+
+  return { data: tokens, message: "User signin is successful" }
 }
 
 export async function login(payload: ILogin) {
@@ -81,10 +84,15 @@ export async function login(payload: ILogin) {
     )
   }
   const expires_in = remember_for_30_days ? 30 : 7
-  const token = createAccessToken(user.id, expires_in * 24 * 60 * 60 * 1000)
+  const access_token_expires_in = expires_in * 24 * 60 * 60 * 1000
+  const refresh_token_expires_in = 30 * 24 * 60 * 60 * 1000
+  const tokens = createTokenPair(user.id, access_token_expires_in, refresh_token_expires_in)
+
+  // Store refresh token in database
+  await user.updateOne({ refresh_token: tokens.refresh_token })
 
   const data = {
-    ...token,
+    ...tokens,
     onboarded: user?.onbaorded || false
   }
 
@@ -138,8 +146,12 @@ export async function verifyEmail(payload: IVerifyEmail) {
   }
   await user.updateOne({ verified: true })
 
-  const { access_token, expires_at } = createAccessToken(user.id, 1 * 60 * 60 * 1000)
-  const data = { access_token, expires_at, email: user.email }
+  const tokens = createTokenPair(user.id, 1 * 60 * 60 * 1000, 30 * 24 * 60 * 60 * 1000)
+
+  // Store refresh token in database
+  await user.updateOne({ refresh_token: tokens.refresh_token })
+
+  const data = { ...tokens, email: user.email }
 
   await AuthCode.deleteMany({ email: user.email })
 
@@ -195,4 +207,42 @@ async function getOauthUser(userinfo_url: string, token: string, provider: strin
     // TODO: Test for apple oauth jwt.decode(token)
   }
   return null
+}
+
+export async function refreshToken(payload: IRefreshToken) {
+  const { refresh_token } = payload;
+
+  // Verify the refresh token
+  const decoded = verifyRefreshToken(refresh_token);
+
+  // Find the user and check if the refresh token matches
+  const user = await User.findById(decoded.id);
+  if (!user) {
+    throw new NotFoundException("User not found");
+  }
+
+  if (user.refresh_token !== refresh_token) {
+    throw new UnauthorizedException("Invalid refresh token");
+  }
+
+  // Generate new token pair
+  const tokens = createTokenPair(user.id);
+
+  // Update the user's refresh token
+  await user.updateOne({ refresh_token: tokens.refresh_token });
+
+  return {
+    data: tokens,
+    message: "Tokens refreshed successfully"
+  };
+}
+
+export async function logout(userId: string) {
+  // Clear the refresh token from the database
+  await User.findByIdAndUpdate(userId, { refresh_token: null });
+
+  return {
+    data: null,
+    message: "Logout successful"
+  };
 }

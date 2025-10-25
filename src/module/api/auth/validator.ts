@@ -56,4 +56,8 @@ export default {
       .notEmpty().withMessage("Password is required")
       .isStrongPassword().withMessage("Password must be strong"),
   ],
+  refreshToken: [
+    body("refresh_token")
+      .notEmpty().withMessage("Refresh token is required")
+  ],
 }

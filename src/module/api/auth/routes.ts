@@ -12,5 +12,7 @@ router.post("/register", valid.login, ctrl.register)
 router.post("/send-link", valid.sendLink, ctrl.sendLink)
 router.post("/verify-email", valid.verifyEmail, ctrl.verifyEmail)
 router.post("/set-password", valid.setPassword, ctrl.setPassword)
+router.post("/refresh-token", valid.refreshToken, ctrl.refreshToken)
+router.delete("/logout", ctrl.logout)
 
 export default router

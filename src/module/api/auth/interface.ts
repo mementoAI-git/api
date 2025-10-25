@@ -27,3 +27,7 @@ export interface ISendLink {
 export interface IOAuthAuthorization {
   code: string
 }
+
+export interface IRefreshToken {
+  refresh_token: string
+}

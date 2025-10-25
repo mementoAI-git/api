@@ -13,8 +13,8 @@ export const OAUTH_PROVIDERS = {
     fields: ['email', "given_name", "family_name"]
   },
   facebook: {
-    authoriation_url: `https://www.facebook.com/v12.0/dialog/oauth?client_id=${META_ID}&scope=email,public_profile`,
-    token_url: "https://graph.facebook.com/v12.0/oauth/access_token",
+    authoriation_url: `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_ID}&scope=email,public_profile`,
+    token_url: "https://graph.facebook.com/v19.0/oauth/access_token",
     userinfo_url: "https://graph.facebook.com/me?fields=id,name,email,picture",
     client_id: META_ID,
     client_secret: META_SECRET,

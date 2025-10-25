@@ -148,6 +148,29 @@ export const createAccessToken = (id: string, expires_in = 24 * 60 * 60 * 1000) 
   return { access_token, expires_at }
 };
 
+export const createRefreshToken = (id: string, expires_in = 30 * 24 * 60 * 60 * 1000) => {
+  const refresh_token = jwt.sign({ id, type: 'refresh' }, String(JWT_SECRET), {
+    audience: 'API',
+    issuer: 'Memento',
+    expiresIn: expires_in
+  });
+
+  const expires_at = dayjs().add(expires_in, "millisecond").toISOString()
+  return { refresh_token, expires_at }
+};
+
+export const createTokenPair = (id: string, accessExpiresIn = 24 * 60 * 60 * 1000, refreshExpiresIn = 30 * 24 * 60 * 60 * 1000) => {
+  const accessToken = createAccessToken(id, accessExpiresIn);
+  const refreshToken = createRefreshToken(id, refreshExpiresIn);
+
+  return {
+    access_token: accessToken.access_token,
+    refresh_token: refreshToken.refresh_token,
+    expires_at: accessToken.expires_at,
+    refresh_expires_at: refreshToken.expires_at
+  };
+};
+
 export const reconstructFileName = (name: string) => {
   const file_name = name.toLowerCase().replace(/\s+/g, "_");
   const extension = name.split('.').pop();
@@ -163,6 +186,21 @@ export const verifyAccessToken = (token: string): any => {
         throw new SessionTimeout();
       }
       throw new UnauthorizedException()
+    }
+    return decoded;
+  });
+};
+
+export const verifyRefreshToken = (token: string): any => {
+  return jwt.verify(token, String(JWT_SECRET), (err, decoded: any) => {
+    if (err) {
+      if (err.name === "TokenExpiredError") {
+        throw new SessionTimeout();
+      }
+      throw new UnauthorizedException()
+    }
+    if (decoded.type !== 'refresh') {
+      throw new UnauthorizedException('Invalid token type')
     }
     return decoded;
   });
