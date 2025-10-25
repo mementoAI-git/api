@@ -100,3 +100,12 @@ export async function updateContext(req: IRequest, res: Response, next: NextFunc
     next(error)
   }
 }
+
+export async function deleteUser(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.deleteUser(req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as ctrl from "./controller";
 import valid from "./validator"
 import rateLimiter from "../../../middleware/rate-limiter";
+import guard from "../../../middleware/gaurd";
 
 const router = Router()
 
@@ -13,6 +14,6 @@ router.post("/send-link", valid.sendLink, ctrl.sendLink)
 router.post("/verify-email", valid.verifyEmail, ctrl.verifyEmail)
 router.post("/set-password", valid.setPassword, ctrl.setPassword)
 router.post("/refresh-token", valid.refreshToken, ctrl.refreshToken)
-router.delete("/logout", ctrl.logout)
+router.delete("/logout", guard, ctrl.logout)
 
 export default router

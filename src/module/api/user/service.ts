@@ -254,3 +254,21 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
 
   return { message: "User context updated successfully", data }
 }
+
+export async function deleteUser(user_id: string) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+
+  // Mark user as deleted (soft delete) and clear refresh token
+  await User.findByIdAndUpdate(user_id, {
+    deleted: true,
+    refresh_token: null
+  });
+
+  return {
+    data: null,
+    message: "User account deleted successfully"
+  };
+}

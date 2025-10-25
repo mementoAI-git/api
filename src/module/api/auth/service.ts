@@ -50,6 +50,11 @@ export async function oauthAuthorization({ code }: IOAuthAuthorization, provider
     })
   }
 
+  // Check if user is deleted
+  if (user.deleted) {
+    throw new BadRequestException("Account has been deleted")
+  }
+
   if (!user.providers.includes(userinfo.provider)) {
     await user.updateOne({ $addToSet: { providers: userinfo.provider } })
   }
@@ -67,6 +72,9 @@ export async function login(payload: ILogin) {
   const user = await User.findOne({ email })
   if (!user) {
     throw new NotFoundException("User not found")
+  }
+  if (user.deleted) {
+    throw new BadRequestException("Account has been deleted")
   }
   if (isEmpty(user.password)) {
     throw new NotFoundException("Please set your password")
@@ -219,6 +227,9 @@ export async function refreshToken(payload: IRefreshToken) {
   const user = await User.findById(decoded.id);
   if (!user) {
     throw new NotFoundException("User not found");
+  }
+  if (user.deleted) {
+    throw new BadRequestException("Account has been deleted");
   }
 
   if (user.refresh_token !== refresh_token) {

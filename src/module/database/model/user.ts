@@ -36,6 +36,7 @@ export interface IUser {
   preferences: IUserPreferences
   context: IUserContext
   verified: boolean
+  deleted: boolean
   private_key: string
   public_key: string
   refresh_token?: string
@@ -95,6 +96,10 @@ const user = new Schema<IUser>({
     default: false,
   },
   verified: {
+    type: Boolean,
+    default: false
+  },
+  deleted: {
     type: Boolean,
     default: false
   },
