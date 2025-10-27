@@ -10,7 +10,7 @@ export interface IMemory {
   tags: string[]
   level: number
   refrence: string
-  status: string | "draft" | "save" | "queued" | "on_chain";
+  status: string | "draft" | "save" | "queued" | "on_chain" | "deleted";
   prompt?: string
   session_id?: string
   last_opened: string

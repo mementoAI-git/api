@@ -18,3 +18,8 @@ export interface IAddMessageToMemory {
   memory_id?: string
   session_id?: string
 }
+
+export interface IDeleteMemoryPayload {
+  memory_id: string
+  delete_permanently: boolean
+}

@@ -1,5 +1,10 @@
 import { body, param } from "express-validator";
 
+export const deleteMemoryValidator = [
+  param("id").notEmpty().withMessage("Memory ID is required").isMongoId().withMessage("Invalid memory ID"),
+  body("delete_permanently").optional().isBoolean().withMessage("delete_permanently must be a boolean").toBoolean(),
+];
+
 export default {
   createMemory: [
     body("title")
@@ -83,5 +88,9 @@ export default {
       .if(body("memory_id").not().exists())
       .notEmpty().withMessage("Session id is required.")
       .isString().withMessage("Session id must be a string"),
+  ],
+  deleteMemory: [
+    param("id").notEmpty().withMessage("Memory ID is required").isMongoId().withMessage("Invalid memory ID"),
+    body("delete_permanently").optional().isBoolean().withMessage("delete_permanently must be a boolean").toBoolean(),
   ]
 }

@@ -28,8 +28,6 @@ export const getPrompts = async (user_id: string) => {
     const newActivePrompts = await ActivePrompt.find({ user: user_id })
       .populate("prompt")
 
-    console.log(`[DEBUG] User ${user_id}: Assigned ${newActivePrompts.length} new prompts`)
-
     return {
       data: newActivePrompts,
       message: "New prompts assigned successfully"
@@ -42,7 +40,8 @@ export const getPrompts = async (user_id: string) => {
   for (const activePrompt of activePrompts) {
     const promptId = getPromptId(activePrompt)
     const isAnswered = answeredMemories.some(m => m.prompt === promptId)
-    const isExpired = isAnswered && dayjs().isAfter(dayjs(activePrompt.created_at).add(1, "day").startOf("day"))
+    // Check if prompt has been active for more than 24 hours
+    const isExpired = dayjs().isAfter(dayjs(activePrompt.created_at).add(24, 'hour'))
 
     if (isExpired) {
       promptsToReplace.push(activePrompt)

@@ -91,8 +91,13 @@ export async function updateMemory(req: IRequest, res: Response, next: NextFunct
 
 export async function deleteMemory(req: IRequest, res: Response, next: NextFunction) {
   try {
-    console.log("Delete memories")
-    const { message, data } = await service.deleteMemory(req.params.id, req.auth.id)
+    validateRequest(req)
+
+    const payload = {
+      memory_id: req.params.id,
+      delete_permanently: req.body?.delete_permanently || false
+    }
+    const { message, data } = await service.deleteMemory(payload, req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

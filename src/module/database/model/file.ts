@@ -20,6 +20,7 @@ export interface IFile {
   user: string
   transcription: ITranscriptionData // support both old string format and new structured format
   duration?: number // duration in seconds for audio/video files
+  deleted?: boolean // marks file as deleted so it can be cleaned up
   created_at: string
   updated_at: string
 }
@@ -44,7 +45,11 @@ const file = new Schema<IFile>({
   },
   user: String,
   transcription: transcriptionDataSchema,
-  duration: Number
+  duration: Number,
+  deleted: {
+    type: Boolean,
+    default: false
+  }
 }, {
   toJSON: { virtuals: true },
   toObject: { virtuals: true },

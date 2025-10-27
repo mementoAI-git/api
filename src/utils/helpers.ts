@@ -213,7 +213,7 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
 
   for (let i = 0; i < queries.length; i++) {
     if (!allowed.includes(queries[i][0])) continue;
-    if (queries[i][0] === "search") {
+    if (queries[i][0] === "search" && !isEmpty(queries[i][1])) {
       const search_filters: any[] = fields.map(key => ({
         [key]: { $regex: new RegExp(`${queries[i][1]}`), $options: 'i' },
       }));

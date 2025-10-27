@@ -17,6 +17,7 @@ router.post("/2fa/verify", valid.verifyTOTP, gaurd, ctrl.verifyTOTP)
 router.delete("/2fa/disable", gaurd, ctrl.disable2FA)
 router.post("/complete-onboarding", valid.completeOnboarding, gaurd, ctrl.completeOnboarding)
 router.delete("/account", gaurd, ctrl.deleteUser)
+router.get("/stats", gaurd, ctrl.getUserStats)
 
 export const name = "users"
 export default router

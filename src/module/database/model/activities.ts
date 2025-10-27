@@ -6,7 +6,7 @@ export interface IActivity {
   title: string
   description: string
   type: string
-  action: string
+  action: "created" | "updated" | "deleted" | "viewed" | "bookmarked" | "unbookmarked" | "responded" | "shared" | "restored"
   reference?: string
   metadata?: Record<string, any>
   created_at: string
@@ -35,7 +35,6 @@ const activity = new Schema<IActivity>({
   action: {
     type: String,
     required: true,
-    enum: ["created", "updated", "deleted", "viewed", "bookmarked", "unbookmarked", "responded", "shared"]
   },
   reference: String,
   metadata: {

@@ -5,7 +5,7 @@ import File from "../../database/model/file";
 import User from "../../database/model/user";
 import { IPagination } from "../../../utils/interface";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
-import { IAddMessageToMemory, ICreateMemoryPayload } from "./interface";
+import { IAddMessageToMemory, ICreateMemoryPayload, IDeleteMemoryPayload } from "./interface";
 import { emptyPaginatedList, isEmpty, processFile } from "../../../utils/helpers";
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
@@ -14,10 +14,12 @@ import Prompt from "../../database/model/prompt";
 import { updateStreak } from "../user/service";
 import Message from "../../database/model/message";
 import { updateMemoryTitle } from "../ai/utils";
+import ActivePrompt from "../../database/model/active-prompt";
 
 export async function memoryStats(user_id: string) {
   const memories = await Memory.find({
     user: user_id,
+
     status: { $nin: ["draft", "deleted"] }
   })
   const bookmark_count = await Bookmark.countDocuments({ user: user_id })
@@ -148,7 +150,7 @@ export async function getMemories(payload: IPagination, user_id: string) {
 }
 
 export async function getConversationMemories(payload: IPagination, user_id: string) {
-  const { page, limit, search = "", bookmarked = false, deleted = false } = payload
+  const { page, limit, search, bookmarked = false, deleted = false } = payload
   const filters = filterGenerator({ search }, ["title", "body", "tags"])
 
   filters.push({
@@ -206,7 +208,7 @@ export async function getConversationMemories(payload: IPagination, user_id: str
 }
 
 export async function getStoryMemories(payload: IPagination, user_id: string) {
-  const { page, limit, search = "", bookmarked = false, deleted = false } = payload
+  const { page, limit, search, bookmarked = false, deleted = false } = payload
   const filters = filterGenerator({ search }, ["title", "body", "tags"])
 
   filters.push({
@@ -330,21 +332,46 @@ export async function updateMemory(_id: string, payload: Partial<IMemory>, user_
   return { data: memory, message: "Memory updated successfully" }
 }
 
-export async function deleteMemory(_id: string, user_id: string) {
-  let memory = await Memory.findOne({ _id, user: user_id })
+export async function deleteMemory(payload: IDeleteMemoryPayload, user_id: string) {
+  const { memory_id, delete_permanently = false } = payload
+  let memory = await Memory.findOne({ _id: memory_id, user: user_id })
+
   if (!memory) {
     throw new NotFoundException("Memory not found")
   }
 
-  await memory.updateOne({ status: "deleted" })
+  if (delete_permanently) {
+    // Delete all associated messages
+    await Message.deleteMany({ memory: memory.id })
 
-  await track({
-    title: "Memory Deleted",
-    description: `Deleted memory: "${memory.title}"`,
-    type: "memory",
-    action: "deleted",
-    reference: memory.id
-  }, user_id)
+    // Delete all associated bookmarks
+    await Bookmark.deleteMany({ memory: memory.id })
+
+    // Mark all associated files as deleted
+    if (memory.attachments && memory.attachments.length > 0) {
+      await File.updateMany(
+        { _id: { $in: memory.attachments } },
+        { deleted: true }
+      )
+    }
+
+    // Delete active prompt if it references this memory
+    await ActivePrompt.deleteMany({ memory: memory.id })
+
+    // Permanently delete the memory
+    await Memory.findByIdAndDelete(memory.id)
+  } else {
+    // Soft delete - just mark as deleted
+    await memory.updateOne({ status: "deleted" })
+
+    await track({
+      title: "Memory Deleted",
+      description: `Deleted memory: "${memory.title}"`,
+      type: "memory",
+      action: "deleted",
+      reference: memory.id
+    }, user_id)
+  }
 
   return { data: memory, message: "Memory deleted successfully" }
 }

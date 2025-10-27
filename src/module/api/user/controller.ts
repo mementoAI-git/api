@@ -109,3 +109,12 @@ export async function deleteUser(req: IRequest, res: Response, next: NextFunctio
     next(error)
   }
 }
+
+export async function getUserStats(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getUserStats(req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

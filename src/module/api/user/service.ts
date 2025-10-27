@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt"
 import dayjs from "dayjs";
 import User, { IUser } from "../../database/model/user";
+import Memory from "../../database/model/memory";
 import { hashPassword, isEmpty, processFile, reconstructFileName } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
 import { ICompleteOnboardingPayload, ISetPassword, IUpdateContext, IVerifyTOTP } from "./interface";
@@ -270,5 +271,39 @@ export async function deleteUser(user_id: string) {
   return {
     data: null,
     message: "User account deleted successfully"
+  };
+}
+
+export async function getUserStats(user_id: string) {
+  const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
+
+  // Get streak count from user
+  const streak_count = user.streak || 0
+
+  // Count answered prompts (memories that have a prompt field)
+  const reflections_count = await Memory.countDocuments({
+    user: user_id,
+    prompt: { $exists: true, $ne: null }
+  })
+
+  // Count uploaded stories (memories with type "story" and status "save" or higher)
+  const stories_count = await Memory.countDocuments({
+    user: user_id,
+    type: "story",
+    status: { $in: ["save", "queued", "on_chain"] }
+  })
+
+  const stats = {
+    streak_count,
+    reflections_count,
+    stories_count
+  }
+
+  return {
+    data: stats,
+    message: "User statistics retrieved successfully"
   };
 }
