@@ -1,0 +1,43 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+
+      - name: Deploy to Development Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_SSH_HOST }}
+          username: ${{ secrets.DEV_SSH_USER }}
+          password: ${{ secrets.DEV_SSH_PASSWORD }}
+          port: ${{ secrets.DEV_SSH_PORT || 22 }}
+          script: |
+            cd ${{ secrets.DEV_DEPLOY_DIRECTORY }}
+            
+            echo "Pulling latest code from dev branch..."
+            git fetch origin
+            git checkout dev
+            git pull origin dev
+            
+            echo "Installing dependencies..."
+            yarn install
+            
+            echo "Compiling TypeScript..."
+            npm run compile
+            
+            echo "Restarting PM2 instances..."
+            pm2 restart all
+            
+            echo "Deployment completed successfully!"
+

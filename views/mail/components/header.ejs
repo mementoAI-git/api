@@ -4,16 +4,202 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
+    rel="stylesheet">
   <title>Memento</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+    * {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    p {
+      margin: 15px 0px;
+    }
+
+    span {
+      display: block;
+    }
+
+    .logo {
+      font-family: "EB Garamond", Georgia, 'Times New Roman', serif;
+      font-optical-sizing: auto;
+      font-weight: 500;
+      font-style: normal;
+      color: #52A1DD;
+      font-size: 40px;
+      line-height: 48px;
+    }
+
+    .body,
+    .footer {
+      padding: 40px;
+    }
+
+    .body {
+      background-color: white;
+      box-shadow: 0px 20px 25px -5px #0000001A;
+      box-shadow: 0px 10px 10px -5px #0000000A;
+      border: 1px solid #0000000D;
+      border-radius: 8px;
+    }
+
+    .body p {
+      font-weight: 400;
+      font-size: 16px;
+      leading-trim: NONE;
+      line-height: 24px;
+      letter-spacing: 0%;
+      color: #000626E5;
+
+
+    }
+
+    .subject {
+      font-family: "EB Garamond", Georgia, 'Times New Roman', serif;
+      font-weight: 500;
+      font-style: Medium;
+      font-size: 40px;
+      leading-trim: NONE;
+      line-height: 48px;
+      letter-spacing: 0px;
+
+    }
+
+    .code-container {
+      background: #F1F6FD;
+      border-radius: 8px;
+      padding: 24px;
+    }
+
+    .mail-image {
+      width: 100%;
+      max-height: 314px;
+      height: auto;
+      object-fit: cover;
+      margin-bottom: 24px;
+    }
+
+    .code-text {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+      font-weight: 700;
+      font-size: 36px;
+      leading-trim: NONE;
+      line-height: 100%;
+      letter-spacing: 5px;
+      color: #1570EF;
+    }
+
+    .btn {
+      background: #52A1DD;
+      width: 207;
+      height: 48;
+      border-radius: 999px;
+      border-width: 1px;
+      padding-top: 14px;
+      padding-right: 32px;
+      padding-bottom: 14px;
+      padding-left: 32px;
+      margin-bottom: 24px;
+    }
+
+    .btn span,
+    .btn td,
+    .btn a {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      line-height: 20px;
+      letter-spacing: 0%;
+      color: white;
+      text-decoration: none;
+    }
+
+    .btn-link {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+      font-weight: 400;
+      font-size: 16px;
+      line-height: 26px;
+      letter-spacing: 0%;
+      color: #4C64D9;
+      ;
+    }
+
+    .footer-link {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      leading-trim: NONE;
+      line-height: 18px;
+      letter-spacing: 0%;
+      color: #1E1E1EB2;
+
+    }
+
+    .footer p {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+      font-weight: 400;
+      font-size: 12px;
+      leading-trim: NONE;
+      line-height: 18px;
+      letter-spacing: 0%;
+      color: #000933A6;
+    }
+
+    .closing-text span a {
+      font-weight: 700;
+      font-size: 16px;
+      color: #1570EF;
+      text-decoration: underline;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+    }
+
+    @media (max-width: 600px) {
+
+      .body,
+      .footer {
+        padding: 16px;
+      }
+
+      .subject {
+        font-size: 30px;
+        line-height: 34px;
+
+      }
+    }
+  </style>
 </head>
 
-<body
-  style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; line-height: 1.6; color: #333333; background-color: #ffffff;">
-  <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-    <!-- Header Section -->
-    <div style="background-color: #000000; padding: 40px 0; text-align: center;">
-      <img src="<%= logoUrl %>" alt="Memento Logo"
-        style="width: auto; height: 50px; display: inline-block; vertical-align: middle;">
-    </div>
+<body style="margin: 0; padding: 0;">
+  <center style="width: 100%; background-color: #F9FAFB;">
 
-    <!-- Content Section -->
+    <table role="presentation" width="648" cellspacing="0" cellpadding="0" border="0" align="center"
+      style="width: 100%; max-width: 648px;">
+
+      <tr>
+        <td style="padding: 20px;">
+          <center style="width: 90%; max-width: 568px; margin: 0px auto;">
+            <table role="presentation" width="568" cellspacing="0" cellpadding="0" border="0" align="center"
+              style="width: 100%; max-width: 568px;">
+              <tr>
+                <td>
+
+                  <table width="100%" style="margin-bottom: 24px" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td align="center">
+                        <span class="logo">Memento.</span>
+
+                      </td>
+                    </tr>
+                  </table>
+                  <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                    <tr>
+                      <td class="body">
+                        <!--  Body Starts -->
+                        <!-- Content Section -->

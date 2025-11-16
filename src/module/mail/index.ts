@@ -7,6 +7,7 @@ import AuthCode from "../database/model/auth-code";
 import * as ejs from "ejs";
 import * as path from "path";
 import { IBeneficiary } from "../database/model/beneficiary";
+import juice from "juice";
 
 const transport = nodemailer.createTransport({
   //@ts-ignore
@@ -24,8 +25,8 @@ class MailService {
 
   private async renderTemplate(templateName: string, data: any): Promise<string> {
     const templatePath = path.join(this.templatePath, `${templateName}.ejs`);
-    const logoUrl = `${BACKEND_URL}/assets/images/logo-text-white.png`;
-    return ejs.renderFile(templatePath, { ...data, logoUrl });
+    const html = await ejs.renderFile(templatePath, { ...data });
+    return juice(html as string);
   }
 
   async send(payload: MailOptions) {
@@ -73,7 +74,8 @@ class MailService {
     const { email, name, id } = payload
     const html = await this.renderTemplate("beneficiary-invite", {
       name,
-      url: `${FRONTEND_URL}/accept-invite/${id}`
+      url: `${FRONTEND_URL}/accept-invite/${id}`,
+      imageUrl: `${BACKEND_URL}/assets/images/beneficiary-invite.png`
     });
 
     await this.send({

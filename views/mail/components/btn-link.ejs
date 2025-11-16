@@ -1,0 +1,23 @@
+<% if (url) { %>
+  <table class="btn" cellspacing="0" cellpadding="0" border="0">
+    <tr>
+      <td>
+        <a href="<%= url %>">
+          <%= title %>
+        </a>
+      </td>
+    </tr>
+  </table>
+  <table cellspacing="0" cellpadding="0" border="0">
+    <tr>
+      <td>
+        <span>
+          <strong>Or copy and paste the following URL into your browser:</strong>
+        </span>
+        <a href="<%= url %>" class="btn-link">
+          <%= url %>
+        </a>
+      </td>
+    </tr>
+  </table>
+  <% } %>
