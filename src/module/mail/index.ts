@@ -59,7 +59,7 @@ class MailService {
 
     const html = await this.renderTemplate(
       template,
-      { name, url }
+      { name, url, email }
     );
 
     await this.send({ to: email, subject, html })
@@ -74,6 +74,7 @@ class MailService {
     const { email, name, id } = payload
     const html = await this.renderTemplate("beneficiary-invite", {
       name,
+      email,
       url: `${FRONTEND_URL}/accept-invite/${id}`,
       imageUrl: `${BACKEND_URL}/assets/images/beneficiary-invite.png`
     });

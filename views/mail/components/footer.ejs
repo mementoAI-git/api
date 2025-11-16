@@ -53,8 +53,9 @@
       <table width="100%" cellspacing="0" cellpadding="0" border="0">
         <tr>
           <td>
-            <p>This message was sent to name@domain.com. If you don't want to receive these emails
-              from Laracept in the future, you can <strong>unsubscribe</strong> from this service.
+            <p>This message was sent to <%= typeof email !=='undefined' ? email : name %>. If you don't
+                want to receive these emails
+                from Memento in the future, you can <strong>unsubscribe</strong> from this service.
             </p>
 
           </td>
