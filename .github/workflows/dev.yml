@@ -6,41 +6,35 @@ on:
 
 jobs:
   build:
-    name: Deploy to Development Server
+    name: Build
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Deploy to Development Server
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy and restart application
+        uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.DEV_SSH_HOST }}
           username: ${{ secrets.DEV_SSH_USERNAME }}
           password: ${{ secrets.DEV_SSH_PASSWORD }}
-          port: ${{ secrets.DEV_SSH_PORT || 22 }}
+          port: 22
           script: |
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-            cd ${{ secrets.DEV_DEPLOY_DIRECTORY }}
             
-            echo "Pulling latest code from main branch..."
-            git fetch origin
-            git checkout main
+            # Set the project directory
+            project_path=${{ secrets.DEV_DEPLOY_DIRECTORY }}
+            
+            # Navigate to project directory
+            cd $project_path
+            
+            # Stash any local changes and pull latest code
+            git stash
             git pull origin main
             
-            echo "Installing dependencies..."
-            yarn install
+            # Install dependencies and compile
+            yarn install --frozen-lockfile
+            yarn compile
             
-            echo "Compiling TypeScript..."
-            npm run compile
-            
-            echo "Restarting PM2 instances..."
+            # Restart PM2 instances
             pm2 restart all
-            
-            echo "Deployment completed successfully!"
 
