@@ -7,6 +7,7 @@ export interface ILogin {
 export interface IRegister extends Omit<ILogin, "remember_for_30_days"> {
   first_name: string
   last_name: string
+  invite_code: string
 }
 
 export interface IVerifyEmail {

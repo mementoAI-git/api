@@ -97,3 +97,13 @@ export async function logout(req: IRequest, res: Response, next: NextFunction) {
     next(error)
   }
 }
+
+export async function sendInviteCode(req: Request, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.sendInviteCode(req.body)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

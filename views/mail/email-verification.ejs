@@ -1,11 +1,13 @@
 <%- include('components/header') %>
-  <img class="mail-image" />
   <h1 class="subject">Email Verification</h1>
   <%- include('components/greetings', { name }) %>
     <p>
-      Please verify your email address to complete your registration with Memento. Click the button below to
-      verify your email address.
+      Congratulations on taking your first step towards creating your digital legacy on Memento 🥳. If this was you,
+      please click on the link below to confirm your email address for registration:
     </p>
     <%- include('components/btn-link', { title: 'Verify Email' , url }) %>
+      <p>
+        This link will expire in 24 hours. If you didn’t request this, please ignore this email, your account is safe.
+      </p>
       <%- include('components/closing-text') %>
         <%- include('components/footer') %>

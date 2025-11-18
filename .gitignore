@@ -4,3 +4,4 @@ tmp
 build
 error.log
 *.DS_Store*
+SWAGGER_DOCS_SETUP_PROMPT.md

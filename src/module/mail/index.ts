@@ -75,8 +75,7 @@ class MailService {
     const html = await this.renderTemplate("beneficiary-invite", {
       name,
       email,
-      url: `${FRONTEND_URL}/accept-invite/${id}`,
-      imageUrl: `${BACKEND_URL}/assets/images/beneficiary-invite.png`
+      url: `${FRONTEND_URL}/accept-invite/${id}`
     });
 
     await this.send({
@@ -85,6 +84,54 @@ class MailService {
       html
     })
   }
+
+  async sendInviteCode(payload: { email: string, code: string }) {
+    const { email, code } = payload
+    const html = await this.renderTemplate("invite-code", {
+      email,
+      code,
+      name: "",
+      imageUrl: `${BACKEND_URL}/assets/images/beneficiary-invite.png`
+    });
+
+    await this.send({
+      to: email,
+      subject: "Beta invite: Memento",
+      html
+    })
+  }
+
+  async sendWelcome(payload: { email: string, name: string }) {
+    const { email, name } = payload
+    const html = await this.renderTemplate("welcome", {
+      name,
+      email,
+      imageUrl: `${BACKEND_URL}/assets/images/welcome.png`
+    });
+
+    await this.send({
+      to: email,
+      subject: "You’re in. Welcome to Memento",
+      html
+    })
+  }
+
+  async sendDeleteAccount(payload: { email: string, name: string }) {
+    const { email, name } = payload
+    const html = await this.renderTemplate("delete-account", {
+      name,
+      email,
+      imageUrl: `${BACKEND_URL}/assets/images/delete-account.png`
+    });
+
+    await this.send({
+      to: email,
+      subject: "Your Memento account has been deleted",
+      html
+    })
+  }
+
+  // async sendDeleteAccount(payload: { email: string, name: string }) { }
 }
 
 export default new MailService()

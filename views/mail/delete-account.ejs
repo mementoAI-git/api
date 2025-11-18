@@ -1,0 +1,12 @@
+<%- include('components/header') %>
+  <img class="mail-image" src="<%= imageUrl %>" alt="Your Memento account has been deleted" />
+  <h1 class="subject">Your Memento account has been deleted</h1>
+  <%- include('components/greetings', { name }) %>
+    <p>
+      This is to confirm that your Memento account and all associated data have been permanently deleted. We’re grateful
+      you spent time reflecting with us — and hope Memento helped you preserve a few meaningful moments along the way.
+      If you ever wish to return, you’ll always be welcome.
+    </p>
+
+    <%- include('components/closing-text') %>
+      <%- include('components/footer') %>

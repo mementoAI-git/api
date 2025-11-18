@@ -1,0 +1,22 @@
+<%- include('components/header') %>
+  <img class="mail-image" src="<%= imageUrl %>" alt="Beneficiary Invite" />
+  <h1 class="subject">Beta invite: Memento</h1>
+  <%- include('components/greetings', { name }) %>
+    <p>
+      We’re excited to invite you to the private beta of Memento — a quiet, personal space to reflect, to remember, to
+      preserve your story, and to create a personal legacy.
+    </p>
+    <p>Your invite code:</p>
+    <%- include('components/code', { code, note: "Please note this code is only valid for 5 days." }) %>
+      <p>Use this invite code to create your account at mymemento.io/beta.</p>
+      <p>Here’s what you can explore:</p>
+      <ul>
+        <li>📝 Write and save personal stories</li>
+        <li>💬 Chat with your AI twin</li>
+        <li>🌅 Reflect daily with guided prompts</li>
+        <li>🔥 Build streaks that celebrate consistency</li>
+      </ul>
+      <p>We’re starting small so we can grow thoughtfully, and your feedback will help shape Memento’s future.</p>
+      <p>Welcome to the beginning of something deeply human.</p>
+      <%- include('components/closing-text') %>
+        <%- include('components/footer') %>

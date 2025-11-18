@@ -15,5 +15,6 @@ router.post("/verify-email", valid.verifyEmail, ctrl.verifyEmail)
 router.post("/set-password", valid.setPassword, ctrl.setPassword)
 router.post("/refresh-token", valid.refreshToken, ctrl.refreshToken)
 router.delete("/logout", guard, ctrl.logout)
+router.post("/send-invite-code", valid.sendInviteCode, ctrl.sendInviteCode)
 
 export default router

@@ -2,7 +2,7 @@ import bcrypt from "bcrypt"
 
 import { ILogin, IOAuthAuthorization, IRegister, ISendLink, ISetPassword, IVerifyEmail, IRefreshToken } from "./interface";
 import { OAUTH_PROVIDERS } from "../../../utils/constant";
-import { compareStrings, createAccessToken, createTokenPair, generateKeys, hashPassword, isEmpty, verifyRefreshToken } from "../../../utils/helpers";
+import { compareStrings, createTokenPair, generateKeys, hashPassword, isEmpty, random, verifyRefreshToken } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException, UnauthorizedException } from "../../../utils/service-error";
 import axios from "axios";
 import dayjs from "dayjs";
@@ -108,17 +108,26 @@ export async function login(payload: ILogin) {
 }
 
 export async function register(payload: IRegister) {
-  const { email, first_name, last_name } = payload
+  const { email, first_name, last_name, invite_code } = payload
   const user = await User.findOne({ email })
   if (user) {
     throw new NotFoundException("User with this emaill address aleady exist")
+  }
+  const authCode = await AuthCode.findOne({ code: invite_code, type: "invite" })
+  if (!authCode) {
+    throw new BadRequestException("Invalid invite code")
+  }
+  if (dayjs().isAfter(authCode.expires_at)) {
+    throw new BadRequestException("Invite code has exipred")
   }
 
   const password = await hashPassword(payload.password)
   const keys = generateKeys()
 
   await User.create({ last_name, first_name, password, email, ...keys })
-  await mail.sendLink(email, "", "verify")
+  await mail.sendLink(email, first_name || last_name || "", "verify")
+
+  await authCode.deleteOne()
 
   const data = { requires_verification: true, email }
 
@@ -256,4 +265,20 @@ export async function logout(userId: string) {
     data: null,
     message: "Logout successful"
   };
+}
+
+export async function sendInviteCode(payload: { email: string }) {
+  const { email } = payload
+  const code = random(6, "number")
+
+  const user = await User.findOne({ email })
+  if (user) {
+    throw new BadRequestException("User already exists")
+  }
+
+  const expires_at = dayjs().add(5, "days").toISOString()
+  await AuthCode.create({ email, code, type: "invite", expires_at })
+
+  await mail.sendInviteCode({ email, code })
+  return { message: "Invite code sent successfully", data: { email } }
 }

@@ -1,0 +1,22 @@
+<%- include('components/header') %>
+  <img class="mail-image" src="<%= imageUrl %>" alt="Welcome to Memento" />
+  <h1 class="subject">You’re in. Welcome to Memento</h1>
+  <%- include('components/greetings', { name }) %>
+    <p>
+      We’re thrilled to have you join the Memento private beta! 🥳 You now have full access to explore, create, and
+      reflect freely.
+    </p>
+    <p>Here’s a few things you can do today:</p>
+    <ul>
+      <li>🌿 Start your first story</li>
+      <li>💬 Have a conversation with your AI twin</li>
+      <li>🌅 Try a daily reflection prompt</li>
+    </ul>
+
+    <p>
+      Your journey with Memento begins here - a place built to help you preserve what truly matters. Welcome to the
+      beginning of something deeply human.
+    </p>
+
+    <%- include('components/closing-text') %>
+      <%- include('components/footer') %>

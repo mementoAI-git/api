@@ -9,6 +9,7 @@ import { UploadedFile } from "express-fileupload";
 import File from "../../database/model/file";
 import speakeasy from "speakeasy"
 import Qr from "qrcode"
+import mail from "../../mail";
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const { new_password, old_password } = payload
@@ -216,6 +217,11 @@ export async function completeOnboarding(user_id: string, payload?: ICompleteOnb
   }
 
   await user.updateOne(updateDoc)
+
+  mail.sendWelcome({
+    email: user.email,
+    name: user?.nickname || user?.first_name || user?.last_name || ""
+  })
 
   return { data: null, message: "Onboarding completed successfully" }
 }

@@ -7,6 +7,7 @@ import { connectMongodb } from './module/database/connection';
 import requestLogger from './middleware/request-logger';
 import redis from "./services/redis"
 import path from 'path';
+import setupSwagger from './docs';
 
 redis.connect();
 connectMongodb();
@@ -40,6 +41,7 @@ app.use(compression({
 }))
 
 // app.use(rateLimiter(1, 100))
+setupSwagger(app);
 router(app);
 
 app.disable('x-powered-by')
