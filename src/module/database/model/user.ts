@@ -47,6 +47,7 @@ export interface IUser {
   picture: string
   picture_url?: string
   last_seen: string
+  last_task_date?: string
   streak: number
   bg_music?: string
   chat_voice?: string
@@ -111,6 +112,10 @@ const user = new Schema<IUser>({
   last_seen: {
     type: String,
     default: () => dayjs().format("YYYY-MM-DD")
+  },
+  last_task_date: {
+    type: String,
+    default: null
   },
   streak: {
     type: Number,

@@ -8,9 +8,11 @@ import requestLogger from './middleware/request-logger';
 import redis from "./services/redis"
 import path from 'path';
 import setupSwagger from './docs';
+import { initializeScheduler } from './services/scheduler';
 
 redis.connect();
 connectMongodb();
+initializeScheduler();
 
 const app = express();
 

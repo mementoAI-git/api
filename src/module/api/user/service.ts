@@ -87,20 +87,26 @@ export async function updateStreak(user_id: string) {
   }
 
   const today = dayjs().format("YYYY-MM-DD")
+  const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
 
-  if (user.last_seen !== today) {
-    const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
-
-    if (user.last_seen === yesterday) {
+  // Only update if last_task_date is not today (prevent multiple updates on same day)
+  if (user.last_task_date !== today) {
+    if (!user.last_task_date || user.last_task_date < yesterday) {
+      // Reset streak if last_task_date is missing or more than 1 day ago
+      user.streak = 1
+    } else if (user.last_task_date === yesterday) {
+      // Increment streak if last task was yesterday (consecutive day)
       user.streak += 1
-    } else user.streak = 1;
+    }
+    // If last_task_date === today, streak remains unchanged (already counted)
 
-    user.last_seen = today
+    // Update last_task_date to today
+    user.last_task_date = today
     await user.save()
   }
 
   const data = {
-    last_seen: user.last_seen,
+    last_task_date: user.last_task_date,
     streak: user.streak
   }
   return { message: "Streak updated successfully", data }
@@ -312,4 +318,31 @@ export async function getUserStats(user_id: string) {
     data: stats,
     message: "User statistics retrieved successfully"
   };
+}
+
+export async function resetStreaksForInactiveUsers() {
+  const yesterday = dayjs().subtract(1, "day").format("YYYY-MM-DD")
+
+  // Find all users where last_task_date is more than 1 day ago or is null
+  // Reset their streak to 0
+  const result = await User.updateMany(
+    {
+      $or: [
+        { last_task_date: { $lt: yesterday } },
+        { last_task_date: null },
+        { last_task_date: { $exists: false } }
+      ]
+    },
+    {
+      $set: { streak: 0 }
+    }
+  )
+
+  return {
+    message: "Streaks reset for inactive users",
+    data: {
+      usersUpdated: result.modifiedCount,
+      totalMatched: result.matchedCount
+    }
+  }
 }
