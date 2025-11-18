@@ -3,27 +3,33 @@ name: Deploy to Development
 on:
   push:
     branches:
-      - [main]
+      - main
 
 jobs:
   deploy:
     name: Deploy to Development Server
     runs-on: ubuntu-latest
+    
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
       - name: Deploy to Development Server
-        uses: appleboy/ssh-action@v0.1.7
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEV_SSH_HOST }}
           username: ${{ secrets.DEV_SSH_USERNAME }}
           password: ${{ secrets.DEV_SSH_PASSWORD }}
-          port: 22
+          port: ${{ secrets.DEV_SSH_PORT || 22 }}
           script: |
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
             cd ${{ secrets.DEV_DEPLOY_DIRECTORY }}
             
-            echo "Pulling latest code from dev branch..."
+            echo "Pulling latest code from main branch..."
             git fetch origin
             git checkout main
             git pull origin main
