@@ -14,5 +14,6 @@ router.get("/suggestions", gaurd, ctrl.getSuggestions)
 router.get("/categories/:id", gaurd, ctrl.getPromptsByCategory)
 router.get("/:id", gaurd, idValidator, ctrl.getPromptDetails)
 
+
 export const name = "prompts"
 export default router
