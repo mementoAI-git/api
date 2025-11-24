@@ -11,6 +11,7 @@ router.get("/", gaurd, ctrl.getPrompts)
 router.post("/reply", gaurd, fileUploadMiddleWare, valid.replyPrompt, ctrl.replyPrompt)
 router.get("/reply/:id", gaurd, idValidator, ctrl.getUserPrompt)
 router.get("/suggestions", gaurd, ctrl.getSuggestions)
+router.get("/suggestions/overview", gaurd, ctrl.getOverviewPrompts)
 router.get("/categories/:id", gaurd, ctrl.getPromptsByCategory)
 router.get("/:id", gaurd, idValidator, ctrl.getPromptDetails)
 

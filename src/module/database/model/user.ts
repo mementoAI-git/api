@@ -45,6 +45,7 @@ export interface IUser {
     enabled: boolean
   }
   picture: string
+  location?: string
   picture_url?: string
   last_seen: string
   last_task_date?: string
@@ -121,6 +122,7 @@ const user = new Schema<IUser>({
     type: Number,
     default: 1
   },
+  location: String,
   preferences: {
     communication_style: {
       type: String,

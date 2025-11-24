@@ -46,7 +46,7 @@ export async function replyPrompt(req: IRequest, res: Response, next: NextFuncti
 export async function getSuggestions(req: IRequest, res: Response, next: NextFunction) {
   try {
     const pagination = getPagination(req)
-    const { message, data } = await service.getSuggestions(req.auth.id, pagination)
+    const { message, data } = await service.getSuggestions(pagination)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -69,6 +69,16 @@ export async function getPromptsByCategory(req: IRequest, res: Response, next: N
       req.auth.id,
       getPagination(req)
     )
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function getOverviewPrompts(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const pagination = getPagination(req)
+    const { message, data } = await service.getOverviewPrompts(req.auth.id, pagination)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

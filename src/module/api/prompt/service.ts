@@ -203,37 +203,69 @@ export const getPromptsByCategory = async (category: string, user_id: string, pa
   }
 }
 
-export const getSuggestions = async (user_id: string, pagination: IPagination) => {
+export const getSuggestions = async (pagination: IPagination) => {
   const { page, limit } = pagination
 
-  // Get all prompts that have been answered by this user
+  const data = await Prompt.paginate(
+    {},
+    {
+      page,
+      limit,
+      sort: { created_at: -1 }
+    }
+  )
+
+  return {
+    data,
+    message: "Suggestions retrieved successfully"
+  }
+}
+
+export const getOverviewPrompts = async (user_id: string, pagination: IPagination) => {
+  const { limit = 10 } = pagination
+
   const answeredMemories = await Memory.find({
     user: user_id,
     prompt: { $exists: true, $ne: null }
   })
 
-  const answeredPromptIds = answeredMemories.map(m => m.prompt)
+  const answeredPromptIds = answeredMemories
+    .map(m => m.prompt?.toString())
+    .filter(Boolean) as string[]
 
-  // Get all active prompts for this user
   const activePrompts = await ActivePrompt.find({ user: user_id })
   const activePromptIds = activePrompts.map(ap =>
     typeof ap.prompt === 'string' ? ap.prompt : (ap.prompt as any)._id.toString()
   )
 
-  // Get prompts that haven't been answered and aren't active
-  const suggestions = await Prompt.paginate({
+  // Get all available prompts (excluding answered and active ones)
+  const availablePrompts = await Prompt.find({
     _id: {
       $nin: [...answeredPromptIds, ...activePromptIds]
+    },
+    category: { $exists: true, $ne: null } // Ensure category exists
+  }).sort({ title: 1 })
+
+  // Group prompts by category and select one from each
+  const categoryMap = new Map<string, any>()
+
+  for (const prompt of availablePrompts) {
+    const category = prompt.category
+    if (category && !categoryMap.has(category)) {
+      categoryMap.set(category, prompt)
+
+      // Stop when we have enough distinct categories
+      if (categoryMap.size >= limit) {
+        break
+      }
     }
-  }, {
-    page,
-    limit,
-    sort: { title: 1 } // Sort by title for consistency
-  })
+  }
+
+  const distinctCategoryPrompts = Array.from(categoryMap.values())
 
   return {
-    data: suggestions,
-    message: "Suggestions retrieved successfully"
+    data: distinctCategoryPrompts,
+    message: "Overview prompts retrieved successfully"
   }
 }
 

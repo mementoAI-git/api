@@ -19,7 +19,5 @@ export function initializeScheduler() {
     scheduled: true,
     timezone: "UTC"
   })
-
-  console.log("Scheduler initialized: Daily streak reset job scheduled for midnight UTC")
 }
 
