@@ -75,3 +75,12 @@ export async function transcribeAudio(req: IRequest, res: Response, next: NextFu
     next(error)
   }
 }
+
+export async function getEphemeralToken(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.createEphemeralToken()
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

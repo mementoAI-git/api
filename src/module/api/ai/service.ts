@@ -1,8 +1,9 @@
 import { Response } from "express";
 import { FilterQuery } from "mongoose";
-import { createUserContent, GenerateContentResponse, PartListUnion } from "@google/genai";
+import { createUserContent, GenerateContentResponse, Modality, PartListUnion } from "@google/genai";
 import Message, { IMessage } from "../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../services/gemini";
+import { geminiAuthClient, GEMINI_LIVE_MODEL } from "../../../services/gemini";
 import { extractJson, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { IPrompt, IStartMemory, ITranscribeAudio } from "./interface";
@@ -277,4 +278,35 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     data: { response: response.text, memory_id: memory?.id },
     message: "Conversation initialized successfully"
   }
+}
+
+export async function createEphemeralToken() {
+  const expireTime = dayjs().add(30, "minute").toDate(); // 30 minutes from now
+  const newSessionExpireTime = dayjs().add(2, "minutes").toDate(); // 2 minute from now
+
+  const token = await geminiAuthClient.authTokens.create({
+    config: {
+      uses: 1,
+      expireTime: expireTime.toISOString(),
+      newSessionExpireTime: newSessionExpireTime.toISOString(),
+      liveConnectConstraints: {
+        model: GEMINI_LIVE_MODEL,
+        config: {
+          sessionResumption: {},
+          responseModalities: [Modality.AUDIO]
+        }
+      },
+      httpOptions: {
+        apiVersion: 'v1alpha'
+      }
+    }
+  });
+
+  return {
+    message: "Ephemeral token created successfully",
+    data: {
+      token: token.name,
+      expiresAt: expireTime.toISOString()
+    }
+  };
 }

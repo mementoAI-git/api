@@ -26,5 +26,6 @@ router.get(
 
 router.post("/conversation/new", gaurd, valid.startConversation, ctrl.startConversation)
 router.post("/transcribe-audio", gaurd, ctrl.transcribeAudio)
+router.get("/ephemeral-token", gaurd, ctrl.getEphemeralToken)
 
 export default router
