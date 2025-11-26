@@ -87,11 +87,13 @@ class MailService {
 
   async sendInviteCode(payload: { email: string, code: string }) {
     const { email, code } = payload
+    const inviteLink = `${FRONTEND_URL}/register?code=${code}`
     const html = await this.renderTemplate("invite-code", {
       email,
       code,
       name: "",
-      imageUrl: `${BACKEND_URL}/assets/images/beneficiary-invite.png`
+      imageUrl: `${BACKEND_URL}/assets/images/beneficiary-invite.png`,
+      inviteLink
     });
 
     await this.send({
