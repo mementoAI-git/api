@@ -16,6 +16,7 @@ import { tmpdir } from 'os';
 import { getAudioDurationInSeconds } from 'get-audio-duration';
 import { IFile } from "../module/database/model/file";
 import { uploadToS3 } from "../module/media";
+import { SUPPORTED_FILE_TYPES } from "./constant";
 
 export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
   if (type === "number") {
@@ -99,15 +100,9 @@ export const getFiles = (req: Request, required = false) => {
   if (!Array.isArray(req?.files?.file)) files.push(req.files.file);
   else files = req.files.file;
 
-  const allowedTypes = new Set([
-    "image/png", "image/jpeg",
-    "image/heic",
-    "video/mp4",
-    "audio/webm", "video/webm",
-    "application/pdf"
-  ])
+  const allowedTypes = new Set<string>(SUPPORTED_FILE_TYPES);
   if (files.some(f => !allowedTypes.has(f.mimetype))) {
-    throw new UnprocessableContent("Invalid file type. Only PNG, JPEG, and PDF allowed.")
+    throw new UnprocessableContent("Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, and AVI videos.")
   }
 
   return files

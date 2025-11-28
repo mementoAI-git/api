@@ -2,6 +2,20 @@ import { APPLE_ID, APPLE_SECRET, FRONTEND_URL, GOOGLE_ID, GOOGLE_SECRET, META_ID
 
 const OAUTH_REDIRECT_URL = `${FRONTEND_URL}/oauth/callback`
 
+// Supported file types for uploads
+export const SUPPORTED_FILE_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/heic",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "video/x-msvideo",
+  "audio/webm",
+  "application/pdf"
+] as const;
+
 export const OAUTH_PROVIDERS = {
   google: {
     authoriation_url: `https://accounts.google.com/o/oauth2/auth?client_id=${GOOGLE_ID}&scope=email profile openid`,
