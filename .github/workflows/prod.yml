@@ -1,0 +1,40 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Deploy and restart application
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_SSH_HOST }}
+          username: ${{ secrets.PROD_SSH_USERNAME }}
+          password: ${{ secrets.PROD_SSH_PASSWORD }}
+          port: 22
+          script: |
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            
+            # Set the project directory
+            project_path=${{ secrets.PROD_DEPLOY_DIRECTORY }}
+            
+            # Navigate to project directory
+            cd $project_path
+            
+            # Stash any local changes and pull latest code
+            git stash
+            git pull origin main
+            
+            # Install dependencies and compile
+            yarn install --frozen-lockfile
+            yarn compile
+            
+            # Restart PM2 instances
+            pm2 restart all
+
