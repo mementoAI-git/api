@@ -1,7 +1,7 @@
 import { UploadedFile } from "express-fileupload"
 import Memory from "../../database/model/memory"
 import File from "../../database/model/file";
-import Prompt from "../../database/model/prompt"
+import Prompt, { IPrompt } from "../../database/model/prompt"
 import { NotFoundException } from "../../../utils/service-error"
 import { IReplyPrompt } from "./interface"
 import { isEmpty, processFile } from "../../../utils/helpers"
@@ -13,17 +13,13 @@ import { updateStreak } from "../user/service"
 
 export const getPrompts = async (user_id: string) => {
   const MAX_PROMPT = 2
-  const today = dayjs().format("YYYY-MM-DD")
 
   // Get all active prompts for this user
-  const activePrompts = await ActivePrompt.find({ user: user_id })
-    .populate("prompt")
-
-  // Check if user has active prompts from today
-  const todayPrompts = activePrompts.filter(ap => {
-    const promptDate = dayjs(ap.created_at).format("YYYY-MM-DD")
-    return promptDate === today
+  const todayPrompts = await ActivePrompt.find({
+    user: user_id,
+    created_at: { $gte: dayjs().subtract(1, "day").startOf('day').toDate() }
   })
+    .populate("prompt")
 
   // If user has prompts from today, return them
   if (todayPrompts.length > 0) {
@@ -35,12 +31,68 @@ export const getPrompts = async (user_id: string) => {
 
   // No prompts from today, assign new daily prompts
   const answeredPromptIds = await getAnsweredPromptIds(user_id)
-  const newPrompts = await assignDailyPrompts(user_id, answeredPromptIds)
+  const newPrompts = await assignDailyPrompts(
+    user_id,
+    answeredPromptIds,
+    todayPrompts.map(p => (p.prompt as IPrompt)?._id?.toString() || "")
+  )
 
   return {
     data: newPrompts,
     message: "New daily prompts assigned successfully"
   }
+}
+
+const getAnsweredPromptIds = async (user_id: string): Promise<string[]> => {
+  const answeredMemories = await Memory.find({
+    user: user_id,
+    prompt: { $exists: true, $ne: null }
+  })
+
+  return answeredMemories.map(m => m.prompt?.toString()).filter(Boolean) as string[]
+}
+
+/**
+ * Assign 2 new daily prompts to a user
+ * Deletes all active prompts for the user and creates new ones for today
+ */
+const assignDailyPrompts = async (user_id: string, answeredPromptIds: string[], todayPrompts: string[]): Promise<any[]> => {
+  const MAX_PROMPT = 2
+
+  await ActivePrompt.deleteMany({ user: user_id })
+
+  // Get 2 new prompts excluding answered ones
+  const availablePrompts = await Prompt.aggregate([
+    {
+      $match: {
+        _id: { $nin: [...answeredPromptIds, ...todayPrompts] }
+      }
+    },
+    { $sample: { size: MAX_PROMPT } }
+  ])
+
+  if (availablePrompts.length === 0) {
+    return []
+  }
+
+  // Create new ActivePrompt records
+  await ActivePrompt.insertMany(
+    availablePrompts.map(p => ({
+      prompt: p._id,
+      user: user_id
+    }))
+  )
+
+  // Return populated active prompts
+  const newActivePrompts = await ActivePrompt.find({
+    user: user_id,
+    prompt: { $in: availablePrompts.map(p => p._id) }
+  })
+    .populate("prompt")
+    .sort({ created_at: -1 })
+    .limit(MAX_PROMPT)
+
+  return newActivePrompts
 }
 
 export const getUserPromptResponse = async (id: string, user_id: string) => {
@@ -122,54 +174,6 @@ export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files:
   return { data: memory, message: "Response saved successfully" }
 }
 
-const getAnsweredPromptIds = async (user_id: string): Promise<string[]> => {
-  const answeredMemories = await Memory.find({
-    user: user_id,
-    prompt: { $exists: true, $ne: null }
-  })
-
-  return answeredMemories.map(m => m.prompt?.toString()).filter(Boolean) as string[]
-}
-
-/**
- * Assign 2 new daily prompts to a user
- * Deletes all active prompts for the user and creates new ones for today
- */
-const assignDailyPrompts = async (user_id: string, answeredPromptIds: string[]): Promise<any[]> => {
-  const MAX_PROMPT = 2
-
-  // Delete all active prompts for this user (we'll create new ones for today)
-  await ActivePrompt.deleteMany({ user: user_id })
-
-  // Get 2 new prompts excluding answered ones
-  const availablePrompts = await Prompt.find({
-    _id: { $nin: answeredPromptIds }
-  }).limit(MAX_PROMPT)
-
-  if (availablePrompts.length === 0) {
-    return []
-  }
-
-  // Create new ActivePrompt records
-  await ActivePrompt.insertMany(
-    availablePrompts.map(p => ({
-      prompt: p._id,
-      user: user_id
-    }))
-  )
-
-  // Return populated active prompts
-  const newActivePrompts = await ActivePrompt.find({
-    user: user_id,
-    prompt: { $in: availablePrompts.map(p => p._id) }
-  })
-    .populate("prompt")
-    .sort({ created_at: -1 })
-    .limit(MAX_PROMPT)
-
-  return newActivePrompts
-}
-
 export const getPromptsByCategory = async (category: string, user_id: string, pagination: IPagination) => {
   const { page, limit, ...query } = pagination
 
@@ -221,8 +225,8 @@ export const getSuggestions = async (pagination: IPagination) => {
   }
 }
 
-export const getOverviewPrompts = async (user_id: string, pagination: IPagination) => {
-  const { limit = 10 } = pagination
+export const getOverviewPrompts = async (user_id: string) => {
+  const limit = 10
 
   const answeredMemories = await Memory.find({
     user: user_id,
@@ -238,33 +242,39 @@ export const getOverviewPrompts = async (user_id: string, pagination: IPaginatio
     typeof ap.prompt === 'string' ? ap.prompt : (ap.prompt as any)._id.toString()
   )
 
-  // Get all available prompts (excluding answered and active ones)
-  const availablePrompts = await Prompt.find({
-    _id: {
-      $nin: [...answeredPromptIds, ...activePromptIds]
+  const availablePrompts = await Prompt.aggregate([
+    {
+      $match: {
+        _id: { $nin: [...answeredPromptIds, ...activePromptIds] }
+      }
     },
-    category: { $exists: true, $ne: null } // Ensure category exists
-  }).sort({ title: 1 })
+    { $sample: { size: limit * 3 } }
+  ]).sort({ title: 1 })
 
   // Group prompts by category and select one from each
   const categoryMap = new Map<string, any>()
 
   for (const prompt of availablePrompts) {
     const category = prompt.category
-    if (category && !categoryMap.has(category)) {
-      categoryMap.set(category, prompt)
+    if (category) {
+      if (!categoryMap.has(category)) {
+        categoryMap.set(category, [])
+      }
 
-      // Stop when we have enough distinct categories
-      if (categoryMap.size >= limit) {
-        break
+      const categoryPrompts = categoryMap.get(category)!
+      if (categoryPrompts.length < 2) {
+        categoryPrompts.push(prompt)
       }
     }
   }
 
-  const distinctCategoryPrompts = Array.from(categoryMap.values())
+  const distinctCategoryPrompts = Array
+    .from(categoryMap.values())
+    .flat()
+    .sort(() => Math.random() - 0.5)
 
   return {
-    data: distinctCategoryPrompts,
+    data: distinctCategoryPrompts.flat(),
     message: "Overview prompts retrieved successfully"
   }
 }
