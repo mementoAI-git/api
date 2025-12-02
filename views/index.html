@@ -21,6 +21,16 @@
       padding: 0;
       leading-trim: NONE;
       text-decoration: none;
+      box-sizing: border-box;
+    }
+
+    body>center {
+      padding: 0px 20px;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
     }
 
 
@@ -87,10 +97,12 @@
 
     .mail-image {
       width: 100%;
+      max-width: 100%;
       max-height: 314px;
       height: auto;
       object-fit: cover;
       margin-bottom: 24px;
+      display: block;
     }
 
     .code-text {
@@ -104,8 +116,9 @@
 
     .btn {
       background: #52A1DD;
-      width: 207;
-      height: 48;
+      width: auto;
+      min-width: 207px;
+      height: 48px;
       border-radius: 999px;
       border-width: 1px;
       padding-top: 14px;
@@ -130,9 +143,12 @@
     .btn-link {
       font-family: Inter;
       font-weight: 400;
-      font-size: 16px;
-
-      line-height: 26px;
+      font-size: 14px;
+      width: 90%;
+      max-width: 400px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      line-height: 18px;
       letter-spacing: 0%;
       color: #4C64D9;
       ;
@@ -158,183 +174,267 @@
     }
 
     @media (max-width: 600px) {
+      body {
+        width: 100% !important;
+        min-width: 100% !important;
+      }
+
+      center {
+        width: 100% !important;
+        min-width: 100% !important;
+        padding: 10px 0 !important;
+      }
+
+      table[role="presentation"] {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
 
       .body,
       .footer {
-        padding: 16px;
+        padding: 16px !important;
+      }
+
+      .body p {
+        font-size: 14px !important;
+        line-height: 20px !important;
+        margin: 12px 0px !important;
       }
 
       .subject {
-        font-size: 30px;
-        line-height: 34px;
+        font-size: 28px !important;
+        line-height: 32px !important;
+        margin-bottom: 16px !important;
+      }
 
+      .logo {
+        font-size: 32px !important;
+        line-height: 40px !important;
+      }
+
+      .code-container {
+        padding: 16px !important;
+        margin-bottom: 16px !important;
+      }
+
+      .code-text {
+        font-size: 24px !important;
+        letter-spacing: 3px !important;
+        word-break: break-all;
+        word-wrap: break-word;
+      }
+
+      .btn {
+        width: 100% !important;
+        min-width: 100% !important;
+        padding-left: 16px !important;
+        padding-right: 16px !important;
+        margin-bottom: 16px !important;
+      }
+
+      .btn a {
+        display: block !important;
+        text-align: center !important;
+        width: 100% !important;
+      }
+
+      .btn-link {
+        font-size: 14px !important;
+        line-height: 20px !important;
+        display: inline-block;
+        white-space: normal;
+        word-break: break-all;
+        word-wrap: break-word;
+        max-width: 90%;
+      }
+
+      .mail-image {
+        margin-bottom: 16px !important;
+      }
+
+      .footer-link {
+        font-size: 11px !important;
+        display: block !important;
+        padding-bottom: 8px !important;
+      }
+
+      .footer-link:last-child {
+        padding-bottom: 0 !important;
+      }
+
+      .footer p {
+        font-size: 11px !important;
+        line-height: 16px !important;
+      }
+
+      ul {
+        padding-left: 20px !important;
+      }
+
+      ul li {
+        font-size: 14px !important;
+        line-height: 20px !important;
+        margin-bottom: 8px !important;
+      }
+
+      .social-links,
+      .footer-links {
+        max-width: 100% !important;
+        width: 100% !important;
+        display: block !important;
+      }
+
+      .social-links tr,
+      .footer-links tr {
+        display: block !important;
+        width: 100% !important;
+      }
+
+      .social-links td,
+      .footer-links td {
+        display: block !important;
+        padding-right: 0 !important;
+        padding-bottom: 8px !important;
+        width: 100% !important;
+        text-align: left !important;
+      }
+
+      .social-links td:last-child,
+      .footer-links td:last-child {
+        padding-bottom: 0 !important;
+      }
+
+      table[style*="max-width"] {
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      body>center {
+        padding: 0px 5px;
+      }
+
+      center {
+        padding: 10px 0 !important;
+      }
+
+      .body,
+      .footer {
+        padding: 12px !important;
+      }
+
+      .subject {
+        font-size: 24px !important;
+        line-height: 28px !important;
+      }
+
+      .code-text {
+        font-size: 20px !important;
+        letter-spacing: 2px !important;
       }
     }
   </style>
 </head>
 
-<body style="margin: 0; padding: 0;">
-  <center style="width: 100%; background-color: #F9FAFB;">
-
+<body style="overflow-x:hidden">
+  <center style="width: 100%; min-height: 100vh; background-color: #F9FAFB;">
     <table role="presentation" width="648" cellspacing="0" cellpadding="0" border="0" align="center"
-      style="width: 100%; max-width: 648px;">
-
+      style="width: 100%; height: 100vh; max-width: 648px;">
       <tr>
-        <td style="padding: 20px;">
-          <center style="width: 90%; max-width: 568px; margin: 0px auto;">
-            <table role="presentation" width="568" cellspacing="0" cellpadding="0" border="0" align="center"
-              style="width: 100%; max-width: 568px;">
+        <td align="center">
+          <center style="width: 100%; max-width: 648px;height:100%">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
               <tr>
-                <td>
+                <td align="center">
+                  <center style="width: 100%; max-width: 640px;">
+                    <table width="100%" style="margin-bottom: 24px" cellspacing="0" cellpadding="0" border="0"
+                      align="center">
+                      <tr>
+                        <td align="center">
+                          <span class="logo">Memento.</span>
+                        </td>
+                      </tr>
+                    </table>
 
-                  <table width="100%" style="margin-bottom: 24px" cellspacing="0" cellpadding="0" border="0">
-                    <tr>
-                      <td align="center">
-                        <span class="logo">Memento.</span>
+                    <table cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td>
+                          <div style="max-width: 632px;" class="body">
+                            <img class="mail-image" />
+                            <h1 class="subject">Beta invite: Memento</h1>
+                            <p>Hi [User’s Name],</p>
+                            <p>
+                              We’re excited to invite you to the private beta of Memento — a quiet, personal space to
+                              reflect, to remember, to preserve your story, and to create a personal legacy.</p>
+                            <p>Your
+                              invite code:</p>
+                            <table width="100%" class="code-container" cellspacing="0" cellpadding="0" border="0">
+                              <tr>
+                                <td class="code-text" align="center">
+                                  3 2 1 2 8 8
+                                </td>
+                              </tr>
+                            </table>
 
-                      </td>
-                    </tr>
-                  </table>
-                  <table width="100%" cellspacing="0" cellpadding="0" border="0">
-                    <tr>
-                      <td class="body">
-                        <!-- body-->
-                        <img class="mail-image" />
-                        <h1 class="subject">Beta invite: Memento</h1>
-                        <p>Hi [User’s Name],</p>
-                        <p>
-                          We’re excited to invite you to the private beta of Memento — a quiet, personal space to
-                          reflect, to remember, to preserve your story, and to create a personal legacy.</p <p>Your
-                        invite code:</p>
-                        <table width="100%" class="code-container" cellspacing="0" cellpadding="0" border="0">
-                          <tr>
-                            <td class="code-text" align="center">
-                              3 2 1 2 8 8
-                            </td>
-                          </tr>
-                        </table>
+                            <table class="btn" cellspacing="0" cellpadding="0" border="0">
+                              <tr>
+                                <td>
+                                  <a>
+                                    Activate My Account
+                                  </a>
+                                </td>
+                              </tr>
+                            </table>
 
-                        <table class="btn" cellspacing="0" cellpadding="0" border="0">
-                          <tr>
-                            <td>
-                              <a>
-                                Reset your password
-                              </a>
-                            </td>
-                          </tr>
-                        </table>
+                            <table cellspacing="0" cellpadding="0" border="0">
+                              <tr>
+                                <td>
+                                  <span>
+                                    <strong>Or copy and paste the following URL into your browser:</strong>
+                                  </span>
+                                  <a class="btn-link">
+                                    https://mymemento.io/confrim_email?token=LoOooongTokenKeyXwweWqerziadiskdn88mcvik22ewqeqaweweeree
+                                  </a>
+                                </td>
+                              </tr>
+                            </table>
 
-                        <table cellspacing="0" cellpadding="0" border="0">
-                          <tr>
-                            <td>
-                              <span>
-                                <strong>Or copy and paste the following URL into your browser:</strong>
-                              </span>
-                              <a class="btn-link">
-                                https://mymemento.io/confrim_email?token=LoOooongTokenKeyXwweWqerziadiskdn88mcvik22ewqeqaweweeree
-                              </a>
-                            </td>
-                          </tr>
-                        </table>
+                            <p>
+                            <p>
+                              Here’s a few things you can do today:
+                            </p>
+                            <ul style="list-style-position: inside;">
+                              <li>🌿 Start your first story</li>
+                              <li>💬 Have a conversation with your AI twin</li>
+                              <li>🌅 Try a daily reflection prompt</li>
+                            </ul>
 
-                        <p>
-                        <p>
-                          Here’s a few things you can do today:
-                        </p>
-                        <span>
-                          🌿 Start your first story 
-                        </span>
-                        <span>💬 Have a conversation with your AI twin
-                        </span>
-                        <span>🌅 Try a daily reflection prompt
-                        </span>
-                        <p>
-                          Your journey with Memento begins here - a place built to help you preserve what truly matters.
-                          Welcome to the beginning of something deeply human.
-                        </p>
-                        <p>
-                          <span>With gratitude,</span>
-                          <span>The Memento Team</span>
-                          <span>mymemento.io</span>
-                        </p>
+                            <p>
+                              Your journey with Memento begins here - a place built to help you preserve what truly
+                              matters.
+                              Welcome to the beginning of something deeply human.
+                            </p>
+                            <p>
+                              <span>With gratitude,</span>
+                              <span>The Memento Team</span>
+                              <span>mymemento.io</span>
+                            </p>
 
-                        </p>
+                            </p>
 
-                      </td>
-                    </tr>
-                  </table>
-                  <table width="100%" cellspacing="0" cellpadding="0" border="0">
-                    <tr>
-                      <td class="footer">
-                        <!--footer-->
-
-                        <table style="margin-bottom: 16px;" width="100%" cellspacing="0" cellpadding="0" border="0">
-                          <tr>
-                            <td class="logo" style="font-size: 20px; text-align: left; line-height: 24px;">Memento.
-
-                            </td>
-                          </tr>
-                        </table>
-                        <table width="100%" style="max-width: 118px; margin-bottom: 16px;" cellspacing="0"
-                          cellpadding="0" border="0">
-                          <tr>
-                            <td class="footer-link">
-                              Twitter
-
-                            </td>
-                            <td class="footer-link">LinkedIn
-
-                            </td>
-                          </tr>
-                        </table>
-                        <table style="margin-bottom: 16px; border-top: 1px solid #EAECF0" width="100%" cellspacing="0"
-                          cellpadding="0" border="0">
-                          <tr>
-                            <td>
-                              <p>If you have questions or need help, don't hesitate to contact our team!</p>
-                              <p>Memento AI USA nc, 4 World Trade Center, 150 Greenwich Street, 62nd Floor, New York, NY
-                                10007, US.</p>
-
-                            </td>
-                          </tr>
-                        </table>
-                        <table width="100%" style="max-width: 311px;margin-bottom: 16px;" cellspacing="0"
-                          cellpadding="0" border="0">
-                          <tr>
-                            <td class="footer-link">Terms & conditions
-
-                            </td>
-                            <td class="footer-link">Privacy policy
-
-                            </td>
-                            <td class="footer-link">Contact us
-
-                            </td>
-                          </tr>
-                        </table>
-                        <table width="100%" cellspacing="0" cellpadding="0" border="0">
-                          <tr>
-                            <td>
-                              <p>This message was sent to name@domain.com. If you don't want to receive these emails
-                                from Laracept in the future, you can <strong>unsubscribe</strong> from this service.
-                              </p>
-
-                            </td>
-                          </tr>
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
+                          </div>
+                        </td>
+                      </tr>
+                    </table>
+                  </center>
                 </td>
               </tr>
             </table>
           </center>
-
         </td>
       </tr>
-
     </table>
-
   </center>
 </body>
 
