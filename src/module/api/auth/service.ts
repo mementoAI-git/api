@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import mail from "../../mail";
 import User from "../../database/model/user";
 import AuthCode from "../../database/model/auth-code";
+import { FRONTEND_URL } from "../../../utils/config";
 
 export function generateOauthUrl(provider: string) {
   const { authoriation_url, redirect_uri } = OAUTH_PROVIDERS[provider || "google"]
@@ -278,8 +279,6 @@ export async function sendInviteCode(payload: { email?: string }) {
     }
   }
 
-
-
   const expires_at = dayjs().add(5, "days").toISOString()
   await AuthCode.create({
     email,
@@ -288,9 +287,15 @@ export async function sendInviteCode(payload: { email?: string }) {
     expires_at
   })
 
+  const invite_code = `${FRONTEND_URL}/register?code=${code}`
+
   if (!isEmpty(email)) {
-    await mail.sendInviteCode({ email, code })
+    await mail.sendInviteCode({
+      email,
+      code,
+      invite_code
+    })
   }
 
-  return { message: "Invite code sent successfully", data: { email } }
+  return { message: "Invite code sent successfully", data: { email, invite_code } }
 }
