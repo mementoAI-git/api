@@ -8,9 +8,18 @@ export interface IAuthCode {
 }
 
 const authCode = new Schema<IAuthCode>({
-  email: String,
-  code: String,
-  type: String,
+  email: {
+    type: String,
+    default: null
+  },
+  code: {
+    type: String,
+    index: true
+  },
+  type: {
+    type: String,
+    index: true
+  },
   expires_at: Date
 }, {
   timestamps: {

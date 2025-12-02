@@ -7,8 +7,11 @@
       preserve your story, and to create a personal legacy.
     </p>
     <p>Your invite code:</p>
-    <%- include('components/code', { code, note: "Please note this code is only valid for 5 days." , inviteLink }) %>
-      <p>Use this invite code to create your account at mymemento.io/beta.</p>
+    <%- include('components/code', { code, note: "Please note this code is only valid for 5 days." }) %>
+      <p>Use this invite code to create your account at <a href="<%= inviteLink %>"
+          style="color: #1570EF; text-decoration: underline;">
+          <%= inviteLink %>
+        </a>.</p>
       <p>Here’s what you can explore:</p>
       <ul style="list-style-position: inside;">
         <li>📝 Write and save personal stories</li>

@@ -267,18 +267,30 @@ export async function logout(userId: string) {
   };
 }
 
-export async function sendInviteCode(payload: { email: string }) {
-  const { email } = payload
+export async function sendInviteCode(payload: { email?: string }) {
+  const { email = null } = payload
   const code = random(6, "number")
 
-  const user = await User.findOne({ email })
-  if (user) {
-    throw new BadRequestException("User already exists")
+  if (!isEmpty(email)) {
+    const user = await User.findOne({ email })
+    if (user) {
+      throw new BadRequestException("User already exists")
+    }
   }
 
-  const expires_at = dayjs().add(5, "days").toISOString()
-  await AuthCode.create({ email, code, type: "invite", expires_at })
 
-  await mail.sendInviteCode({ email, code })
+
+  const expires_at = dayjs().add(5, "days").toISOString()
+  await AuthCode.create({
+    email,
+    code,
+    type: "invite",
+    expires_at
+  })
+
+  if (!isEmpty(email)) {
+    await mail.sendInviteCode({ email, code })
+  }
+
   return { message: "Invite code sent successfully", data: { email } }
 }
