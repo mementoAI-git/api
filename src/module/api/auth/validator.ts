@@ -64,5 +64,9 @@ export default {
     body("refresh_token")
       .notEmpty().withMessage("Refresh token is required")
   ],
-  sendInviteCode: emailValidator,
+  sendInviteCode: body("email")
+    .optional({ nullable: true })
+    .default(null)
+    .isEmail().withMessage("Invalid email address")
+    .toLowerCase(),
 }
