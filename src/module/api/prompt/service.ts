@@ -1,4 +1,3 @@
-import { UploadedFile } from "express-fileupload"
 import Memory from "../../database/model/memory"
 import File from "../../database/model/file";
 import Prompt, { IPrompt } from "../../database/model/prompt"
@@ -116,7 +115,7 @@ export const getUserPromptResponse = async (id: string, user_id: string) => {
   return { data: memory, message: "User prompt response retrieved successfully" }
 }
 
-export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files: UploadedFile[] | null = null) => {
+export const replyPrompt = async (payload: IReplyPrompt, user_id: string, files: Express.Multer.File[] | null = null) => {
   const { prompt_id, body, tags = [], level = 1 } = payload;
 
   const user = await User.findById(user_id)

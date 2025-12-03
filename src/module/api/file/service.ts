@@ -1,5 +1,3 @@
-
-import { UploadedFile } from "express-fileupload";
 import { processFile } from "../../../utils/helpers";
 import User from "../../database/model/user";
 import File from "../../database/model/file";
@@ -13,7 +11,7 @@ import {
   deleteFileFromS3
 } from "../../media";
 
-export async function uploadFile(payload: UploadedFile[], user_id: string) {
+export async function uploadFile(payload: Express.Multer.File[], user_id: string) {
   const user = await User.findById(user_id)
   if (!user) {
     throw new NotFoundException("User not found")

@@ -1,4 +1,3 @@
-import { UploadedFile } from "express-fileupload";
 import dayjs from "dayjs";
 import Memory, { IMemory } from "../../database/model/memory";
 import File from "../../database/model/file";
@@ -40,7 +39,7 @@ export async function memoryStats(user_id: string) {
   }
 }
 
-export async function createMemory(payload: ICreateMemoryPayload, user_id: string, files: UploadedFile[] | null = null) {
+export async function createMemory(payload: ICreateMemoryPayload, user_id: string, files: Express.Multer.File[] | null = null) {
   const { title, body, status, tags = [], level = 1 } = payload
   const user = await User.findById(user_id)
   if (!user) {

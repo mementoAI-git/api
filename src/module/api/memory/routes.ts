@@ -7,7 +7,7 @@ import fileUploadMiddleWare from "../../../middleware/file-upload";
 const router = Router()
 
 router.get("/stats", gaurd, ctrl.memoryStats)
-router.post("/", gaurd, fileUploadMiddleWare, valid.createMemory, ctrl.createMemory)
+router.post("/", gaurd, fileUploadMiddleWare.array('file', 5), valid.createMemory, ctrl.createMemory)
 router.delete("/remove-file/:id", gaurd, valid.removeFileFromMemory, ctrl.removeFileFromMemory)
 router.get("/conversations", gaurd, ctrl.getConversationMemories)
 router.get("/stories", gaurd, ctrl.getStoryMemories)

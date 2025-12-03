@@ -5,7 +5,7 @@ import fileUploadMiddleWare from "../../../middleware/file-upload";
 
 const router = Router()
 
-router.post("/upload", fileUploadMiddleWare, gaurd, ctrl.uploadFile)
+router.post("/upload", gaurd, fileUploadMiddleWare.array('file', 5), ctrl.uploadFile)
 router.get("/:name", ctrl.getFile)
 router.delete("/:name", gaurd, ctrl.removeFile)
 

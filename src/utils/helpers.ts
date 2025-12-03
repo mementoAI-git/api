@@ -8,7 +8,6 @@ import { SessionTimeout, UnauthorizedException, UnprocessableContent } from "./s
 import { JWT_SECRET } from "./config";
 import { IPagination } from "./interface";
 import dayjs from "dayjs";
-import { UploadedFile } from "express-fileupload";
 import { FilterQuery } from "mongoose";
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
@@ -89,23 +88,31 @@ export const validateRequest = (req: Request) => {
   }
 };
 
-export const getFiles = (req: Request, required = false) => {
-  let files: UploadedFile[] = [];
+export const getFiles = (req: Request, required = false): Express.Multer.File[] => {
+  let files: Express.Multer.File[] = [];
 
-  if (required && isEmpty(req?.files)) {
-    throw new UnprocessableContent("Upload a file")
+  const multerFiles = req.files as Express.Multer.File[] | undefined;
+  const multerFile = req.file as Express.Multer.File | undefined;
+  console.log("multerFiles", multerFiles)
+  console.log("multerFile", multerFile)
+  if (required && !multerFiles && !multerFile) {
+    throw new UnprocessableContent("Upload a file");
   }
-  if (isEmpty(req?.files)) return [];
 
-  if (!Array.isArray(req?.files?.file)) files.push(req.files.file);
-  else files = req.files.file;
+  if (!multerFiles && !multerFile) return [];
+
+  if (multerFile) {
+    files.push(multerFile);
+  } else if (multerFiles) {
+    files = multerFiles;
+  }
 
   const allowedTypes = new Set<string>(SUPPORTED_FILE_TYPES);
   if (files.some(f => !allowedTypes.has(f.mimetype))) {
-    throw new UnprocessableContent("Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, and AVI videos.")
+    throw new UnprocessableContent("Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, and AVI videos.");
   }
 
-  return files
+  return files;
 }
 
 export const getPagination = (req: Request): IPagination => {
@@ -291,23 +298,23 @@ export async function getMediaDuration(base64Data: string, mimetype: string): Pr
   }
 }
 
-export async function processFile(file: UploadedFile, user: string): Promise<Partial<IFile>> {
-  const fileName = reconstructFileName(file.name);
+export async function processFile(file: Express.Multer.File, user: string): Promise<Partial<IFile>> {
+  const fileName = reconstructFileName(file.originalname);
 
   // Upload file to S3 using the filename as the key
   const uploadResult = await uploadToS3(
     fileName,
-    file.data,
+    file.buffer,
     file.mimetype,
     {
-      originalName: file.name,
+      originalName: file.originalname,
       userId: user,
       uploadedAt: new Date().toISOString()
     }
   );
 
   // Get duration for media files
-  const base64 = file.data.toString("base64");
+  const base64 = file.buffer.toString("base64");
   const duration = await getMediaDuration(base64, file.mimetype);
 
   return {

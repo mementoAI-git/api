@@ -5,7 +5,6 @@ import Memory from "../../database/model/memory";
 import { hashPassword, isEmpty, processFile, reconstructFileName } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
 import { ICompleteOnboardingPayload, ISetPassword, IUpdateContext, IVerifyTOTP } from "./interface";
-import { UploadedFile } from "express-fileupload";
 import File from "../../database/model/file";
 import speakeasy from "speakeasy"
 import Qr from "qrcode"
@@ -113,7 +112,7 @@ export async function updateStreak(user_id: string) {
   return { message: "Streak updated successfully", data }
 }
 
-export async function uploadPicture(payload: UploadedFile[], user_id: string) {
+export async function uploadPicture(payload: Express.Multer.File[], user_id: string) {
   const user = await User.findById(user_id)
   if (!user) {
     throw new NotFoundException("User not found")
