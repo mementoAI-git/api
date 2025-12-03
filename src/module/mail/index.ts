@@ -26,7 +26,8 @@ class MailService {
   private async renderTemplate(templateName: string, data: any): Promise<string> {
     const templatePath = path.join(this.templatePath, `${templateName}.ejs`);
     const html = await ejs.renderFile(templatePath, { ...data });
-    return juice(html as string);
+    // return juice(html as string);
+    return html as string;
   }
 
   async send(payload: MailOptions) {
