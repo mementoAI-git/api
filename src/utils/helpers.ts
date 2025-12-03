@@ -89,23 +89,13 @@ export const validateRequest = (req: Request) => {
 };
 
 export const getFiles = (req: Request, required = false): Express.Multer.File[] => {
-  let files: Express.Multer.File[] = [];
+  const files = req.files as Express.Multer.File[] | undefined;
 
-  const multerFiles = req.files as Express.Multer.File[] | undefined;
-  const multerFile = req.file as Express.Multer.File | undefined;
-  console.log("multerFiles", multerFiles)
-  console.log("multerFile", multerFile)
-  if (required && !multerFiles && !multerFile) {
+  if (required && !files) {
     throw new UnprocessableContent("Upload a file");
   }
 
-  if (!multerFiles && !multerFile) return [];
-
-  if (multerFile) {
-    files.push(multerFile);
-  } else if (multerFiles) {
-    files = multerFiles;
-  }
+  if (!files) return [];
 
   const allowedTypes = new Set<string>(SUPPORTED_FILE_TYPES);
   if (files.some(f => !allowedTypes.has(f.mimetype))) {
