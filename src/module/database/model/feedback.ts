@@ -15,7 +15,7 @@ export interface IFeedback {
   type: FeedbackType;
   message: string;
   email?: string;
-  screenshotUrl?: string;
+  screenshot?: string;
   user?: Types.ObjectId;
   created_at: Date;
 }
@@ -40,7 +40,7 @@ const feedback = new Schema<IFeedback>(
       trim: true,
       required: true,
     },
-    screenshotUrl: String,
+    screenshot: String,
     user: {
       type: Schema.Types.ObjectId,
       ref: 'user',

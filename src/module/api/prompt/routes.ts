@@ -1,20 +1,25 @@
-import { Router } from "express";
-import * as ctrl from "./controller"
-import valid from "./validator"
-import gaurd from "../../../middleware/gaurd";
-import fileUploadMiddleWare from "../../../middleware/file-upload";
-import { idValidator } from "../../../utils/helpers";
+import {RequestHandler, Router} from 'express';
+import * as ctrl from './controller';
+import valid from './validator';
+import gaurd from '../../../middleware/gaurd';
+import fileUploadMiddleWare from '../../../middleware/file-upload';
+import {idValidator} from '../../../utils/helpers';
 
-const router = Router()
+const router = Router();
 
-router.get("/", gaurd, ctrl.getPrompts)
-router.post("/reply", gaurd, fileUploadMiddleWare.array('file', 10), valid.replyPrompt, ctrl.replyPrompt)
-router.get("/reply/:id", gaurd, idValidator, ctrl.getUserPrompt)
-router.get("/suggestions", gaurd, ctrl.getSuggestions)
-router.get("/suggestions/overview", gaurd, ctrl.getOverviewPrompts)
-router.get("/categories/:id", gaurd, ctrl.getPromptsByCategory)
-router.get("/:id", gaurd, idValidator, ctrl.getPromptDetails)
+router.get('/', gaurd, ctrl.getPrompts);
+router.post(
+  '/reply',
+  gaurd,
+  fileUploadMiddleWare.array('file', 5) as RequestHandler,
+  valid.replyPrompt,
+  ctrl.replyPrompt,
+);
+router.get('/reply/:id', gaurd, idValidator, ctrl.getUserPrompt);
+router.get('/suggestions', gaurd, ctrl.getSuggestions);
+router.get('/suggestions/overview', gaurd, ctrl.getOverviewPrompts);
+router.get('/categories/:id', gaurd, ctrl.getPromptsByCategory);
+router.get('/:id', gaurd, idValidator, ctrl.getPromptDetails);
 
-
-export const name = "prompts"
-export default router
+export const name = 'prompts';
+export default router;

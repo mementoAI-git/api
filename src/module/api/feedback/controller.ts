@@ -11,11 +11,9 @@ export async function createFeedback(
 ) {
   try {
     validateRequest(req);
-    console.log(req.auth, 'USER');
     const {message, data} = await service.createFeedback(req.body, req.auth.id);
     return responsHandler(res, StatusCodes.CREATED, message, data);
   } catch (error) {
-    console.log(error, 'error');
     next(error);
   }
 }
