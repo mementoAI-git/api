@@ -87,7 +87,7 @@ AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 AWS_S3_BUCKET_NAME=your-bucket-name
 
 # URLs
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=http://localhost:5173
 BACKEND_URL=http://localhost:5000
 
 # AI Services
@@ -322,5 +322,3 @@ MIT
 ## Support
 
 For issues and questions, please contact the development team or open an issue in the repository.
-
-

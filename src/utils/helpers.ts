@@ -1,35 +1,44 @@
-import { Response, Request } from "express";
-import { check, validationResult } from "express-validator";
-import bcrypt from "bcrypt"
+import {Response, Request} from 'express';
+import {check, validationResult} from 'express-validator';
+import bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
-import { ec } from "elliptic"
+import {ec} from 'elliptic';
 
-import { SessionTimeout, UnauthorizedException, UnprocessableContent } from "./service-error";
-import { JWT_SECRET } from "./config";
-import { IPagination } from "./interface";
-import dayjs from "dayjs";
-import { FilterQuery } from "mongoose";
-import { writeFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { getAudioDurationInSeconds } from 'get-audio-duration';
-import { IFile } from "../module/database/model/file";
-import { uploadToS3 } from "../module/media";
-import { SUPPORTED_FILE_TYPES } from "./constant";
+import {
+  SessionTimeout,
+  UnauthorizedException,
+  UnprocessableContent,
+} from './service-error';
+import {JWT_SECRET} from './config';
+import {IPagination} from './interface';
+import dayjs from 'dayjs';
+import {FilterQuery} from 'mongoose';
+import {writeFile, unlink} from 'fs/promises';
+import {join} from 'path';
+import {tmpdir} from 'os';
+import {getAudioDurationInSeconds} from 'get-audio-duration';
+import {IFile} from '../module/database/model/file';
+import {uploadToS3} from '../module/media';
+import {SUPPORTED_FILE_TYPES} from './constant';
 
-export const random = (len: number = 6, type: 'number' | 'alphanumeric' = "number") => {
-  if (type === "number") {
-    return Math.floor(Math.random() * (10 ** len - 1) + 10 ** (len - 1))?.toString();
+export const random = (
+  len: number = 6,
+  type: 'number' | 'alphanumeric' = 'number',
+) => {
+  if (type === 'number') {
+    return Math.floor(
+      Math.random() * (10 ** len - 1) + 10 ** (len - 1),
+    )?.toString();
   }
 
   const characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let code = '';
   for (let i = 0; i < len; i++) {
-    const index = Math.floor(Math.random() * characters.length)
+    const index = Math.floor(Math.random() * characters.length);
     code += characters[index];
   }
   return code;
-}
+};
 
 export const isEmpty = (mixedVar: any) => {
   let undef;
@@ -55,13 +64,13 @@ export const isEmpty = (mixedVar: any) => {
   return false;
 };
 
-export const getStringSize = (str: string, format: string = "base64") => {
-  if (format === "base64") {
+export const getStringSize = (str: string, format: string = 'base64') => {
+  if (format === 'base64') {
     const padding = str.endsWith('==') ? 2 : str.endsWith('=') ? 1 : 0;
-    return (str.length * (3 / 4)) - padding;
+    return str.length * (3 / 4) - padding;
   }
   return Buffer.byteLength(str, 'utf8');
-}
+};
 
 export const compareStrings = (str1: string, str2: string) => {
   return str1?.toLowerCase().trim() === str2?.toLowerCase().trim();
@@ -88,30 +97,35 @@ export const validateRequest = (req: Request) => {
   }
 };
 
-export const getFiles = (req: Request, required = false): Express.Multer.File[] => {
-  const files = req.files as Express.Multer.File[] | undefined;
+export const getFiles = (
+  req: Request,
+  required = false,
+): Express.Multer.File[] => {
+  const files = req.files as unknown as Express.Multer.File[] | undefined;
 
   if (required && !files) {
-    throw new UnprocessableContent("Upload a file");
+    throw new UnprocessableContent('Upload a file');
   }
 
   if (!files) return [];
 
   const allowedTypes = new Set<string>(SUPPORTED_FILE_TYPES);
   if (files.some(f => !allowedTypes.has(f.mimetype))) {
-    throw new UnprocessableContent("Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, and AVI videos.");
+    throw new UnprocessableContent(
+      'Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, and AVI videos.',
+    );
   }
 
   return files;
-}
+};
 
 export const getPagination = (req: Request): IPagination => {
-  let { limit = 25, page = 1 } = req.query;
+  let {limit = 25, page = 1} = req.query;
 
   limit = Math.max(Number(limit), 1);
-  page = Math.max(Number(page), 1)
+  page = Math.max(Number(page), 1);
 
-  return { ...req.query, limit, page };
+  return {...req.query, limit, page};
 };
 
 export const hashPassword = async (password: string) => {
@@ -120,38 +134,48 @@ export const hashPassword = async (password: string) => {
 };
 
 export const generateKeys = () => {
-  const EC = new ec("secp256k1")
+  const EC = new ec('secp256k1');
   const key = EC.genKeyPair();
 
-  const private_key = key.getPrivate("hex")
-  const public_key = key.getPublic("hex")
+  const private_key = key.getPrivate('hex');
+  const public_key = key.getPublic('hex');
 
-  return { private_key, public_key }
-}
-
-export const createAccessToken = (id: string, expires_in = 24 * 60 * 60 * 1000) => {
-  const access_token = jwt.sign({ id }, String(JWT_SECRET), {
-    audience: 'API',
-    issuer: 'Memento',
-    expiresIn: expires_in
-  });
-
-  const expires_at = dayjs().add(expires_in, "millisecond").toISOString()
-  return { access_token, expires_at }
+  return {private_key, public_key};
 };
 
-export const createRefreshToken = (id: string, expires_in = 30 * 24 * 60 * 60 * 1000) => {
-  const refresh_token = jwt.sign({ id, type: 'refresh' }, String(JWT_SECRET), {
+export const createAccessToken = (
+  id: string,
+  expires_in = 24 * 60 * 60 * 1000,
+) => {
+  const access_token = jwt.sign({id}, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
-    expiresIn: expires_in
+    expiresIn: expires_in,
   });
 
-  const expires_at = dayjs().add(expires_in, "millisecond").toISOString()
-  return { refresh_token, expires_at }
+  const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
+  return {access_token, expires_at};
 };
 
-export const createTokenPair = (id: string, accessExpiresIn = 24 * 60 * 60 * 1000, refreshExpiresIn = 30 * 24 * 60 * 60 * 1000) => {
+export const createRefreshToken = (
+  id: string,
+  expires_in = 30 * 24 * 60 * 60 * 1000,
+) => {
+  const refresh_token = jwt.sign({id, type: 'refresh'}, String(JWT_SECRET), {
+    audience: 'API',
+    issuer: 'Memento',
+    expiresIn: expires_in,
+  });
+
+  const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
+  return {refresh_token, expires_at};
+};
+
+export const createTokenPair = (
+  id: string,
+  accessExpiresIn = 24 * 60 * 60 * 1000,
+  refreshExpiresIn = 30 * 24 * 60 * 60 * 1000,
+) => {
   const accessToken = createAccessToken(id, accessExpiresIn);
   const refreshToken = createRefreshToken(id, refreshExpiresIn);
 
@@ -159,25 +183,25 @@ export const createTokenPair = (id: string, accessExpiresIn = 24 * 60 * 60 * 100
     access_token: accessToken.access_token,
     refresh_token: refreshToken.refresh_token,
     expires_at: accessToken.expires_at,
-    refresh_expires_at: refreshToken.expires_at
+    refresh_expires_at: refreshToken.expires_at,
   };
 };
 
 export const reconstructFileName = (name: string) => {
-  const file_name = name.toLowerCase().replace(/\s+/g, "_");
+  const file_name = name.toLowerCase().replace(/\s+/g, '_');
   const extension = name.split('.').pop();
-  const timestamp = dayjs().format("YYMMDDHHmmss");
+  const timestamp = dayjs().format('YYMMDDHHmmss');
 
   return `${file_name.replace(/\.[^/.]+$/, '')}_${timestamp}.${extension}`;
-}
+};
 
 export const verifyAccessToken = (token: string): any => {
   return jwt.verify(token, String(JWT_SECRET), (err, decoded) => {
     if (err) {
-      if (err.name === "TokenExpiredError") {
+      if (err.name === 'TokenExpiredError') {
         throw new SessionTimeout();
       }
-      throw new UnauthorizedException()
+      throw new UnauthorizedException();
     }
     return decoded;
   });
@@ -186,13 +210,13 @@ export const verifyAccessToken = (token: string): any => {
 export const verifyRefreshToken = (token: string): any => {
   return jwt.verify(token, String(JWT_SECRET), (err, decoded: any) => {
     if (err) {
-      if (err.name === "TokenExpiredError") {
+      if (err.name === 'TokenExpiredError') {
         throw new SessionTimeout();
       }
-      throw new UnauthorizedException()
+      throw new UnauthorizedException();
     }
     if (decoded.type !== 'refresh') {
-      throw new UnauthorizedException('Invalid token type')
+      throw new UnauthorizedException('Invalid token type');
     }
     return decoded;
   });
@@ -201,17 +225,16 @@ export const verifyRefreshToken = (token: string): any => {
 export const filterGenerator = (payload: object, fields: string[] = []) => {
   const proccessed: FilterQuery<any>[] = [];
   const queries = Object.entries(payload);
-  const allowed = fields.concat(["search"]);
+  const allowed = fields.concat(['search']);
 
   for (let i = 0; i < queries.length; i++) {
     if (!allowed.includes(queries[i][0])) continue;
-    if (queries[i][0] === "search" && !isEmpty(queries[i][1])) {
+    if (queries[i][0] === 'search' && !isEmpty(queries[i][1])) {
       const search_filters: any[] = fields.map(key => ({
-        [key]: { $regex: new RegExp(`${queries[i][1]}`), $options: 'i' },
+        [key]: {$regex: new RegExp(`${queries[i][1]}`), $options: 'i'},
       }));
-      proccessed.push({ $or: search_filters });
-    }
-    else proccessed.push({ [queries[i][0]]: queries[i][1] });
+      proccessed.push({$or: search_filters});
+    } else proccessed.push({[queries[i][0]]: queries[i][1]});
   }
 
   return proccessed;
@@ -219,12 +242,12 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
 
 export const getTimeBasedGreeting = (): string => {
   const hour = dayjs().hour();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+};
 
-export const emptyPaginatedList = ({ limit, page }) => {
+export const emptyPaginatedList = ({limit, page}) => {
   return {
     docs: [],
     totalDocs: 0,
@@ -234,17 +257,21 @@ export const emptyPaginatedList = ({ limit, page }) => {
     hasNextPage: false,
     hasPrevPage: false,
     nextPage: null,
-    prevPage: null
-  }
-}
+    prevPage: null,
+  };
+};
 
 export const extractJson = (text: string) => {
   try {
     let cleanedResponse = text.trim();
     if (cleanedResponse.startsWith('```json')) {
-      cleanedResponse = cleanedResponse.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      cleanedResponse = cleanedResponse
+        .replace(/^```json\s*/, '')
+        .replace(/\s*```$/, '');
     } else if (cleanedResponse.startsWith('```')) {
-      cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+      cleanedResponse = cleanedResponse
+        .replace(/^```\s*/, '')
+        .replace(/\s*```$/, '');
     }
 
     const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
@@ -255,10 +282,14 @@ export const extractJson = (text: string) => {
   } catch (error) {
     return null;
   }
-}
+};
 
-export async function getMediaDuration(base64Data: string, mimetype: string): Promise<number | undefined> {
-  const is_media_file = mimetype.startsWith('audio/') || mimetype.startsWith('video/');
+export async function getMediaDuration(
+  base64Data: string,
+  mimetype: string,
+): Promise<number | undefined> {
+  const is_media_file =
+    mimetype.startsWith('audio/') || mimetype.startsWith('video/');
   if (!is_media_file) return null;
 
   let tempFilePath: string | null = null;
@@ -288,23 +319,21 @@ export async function getMediaDuration(base64Data: string, mimetype: string): Pr
   }
 }
 
-export async function processFile(file: Express.Multer.File, user: string): Promise<Partial<IFile>> {
+export async function processFile(
+  file: Express.Multer.File,
+  user: string,
+): Promise<Partial<IFile>> {
   const fileName = reconstructFileName(file.originalname);
 
   // Upload file to S3 using the filename as the key
-  const uploadResult = await uploadToS3(
-    fileName,
-    file.buffer,
-    file.mimetype,
-    {
-      originalName: file.originalname,
-      userId: user,
-      uploadedAt: new Date().toISOString()
-    }
-  );
+  const uploadResult = await uploadToS3(fileName, file.buffer, file.mimetype, {
+    originalName: file.originalname,
+    userId: user,
+    uploadedAt: new Date().toISOString(),
+  });
 
   // Get duration for media files
-  const base64 = file.buffer.toString("base64");
+  const base64 = file.buffer.toString('base64');
   const duration = await getMediaDuration(base64, file.mimetype);
 
   return {
@@ -312,14 +341,15 @@ export async function processFile(file: Express.Multer.File, user: string): Prom
     user,
     size: file.size,
     type: file.mimetype,
-    duration
-  }
+    duration,
+  };
 }
 
-export const idValidator = check("id")
-  .notEmpty().withMessage("Id is required")
-  .isMongoId().withMessage("Invalid id ")
-
+export const idValidator = check('id')
+  .notEmpty()
+  .withMessage('Id is required')
+  .isMongoId()
+  .withMessage('Invalid id ');
 
 // export async function analyzeSingleConversation(userMessage: string, aiResponse: string): Promise<IUserInsights> {
 //   const analysisPrompt = `Analyze this single conversation exchange and extract user preferences. Return ONLY a valid JSON object:
