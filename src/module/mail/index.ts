@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import {MailOptions} from 'nodemailer/lib/sendmail-transport';
+import { MailOptions } from 'nodemailer/lib/sendmail-transport';
 import {
   DEV_MAILS,
   FRONTEND_URL,
@@ -8,14 +8,15 @@ import {
   MAIL_PASSWORD,
   MAIL_PORT,
   MAIL_USER,
+  SUPPORT_MAILS,
 } from '../../utils/config';
 import dayjs from 'dayjs';
-import {v4 as uuid} from 'uuid';
+import { v4 as uuid } from 'uuid';
 import AuthCode from '../database/model/auth-code';
 import * as ejs from 'ejs';
 import * as path from 'path';
-import {IBeneficiary} from '../database/model/beneficiary';
-// import juice from 'juice';
+import { IBeneficiary } from '../database/model/beneficiary';
+import { INotifyTeamFeedback } from './interface';
 
 const transport = nodemailer.createTransport({
   //@ts-ignore
@@ -36,7 +37,7 @@ class MailService {
     data: any,
   ): Promise<string> {
     const templatePath = path.join(this.templatePath, `${templateName}.ejs`);
-    const html = await ejs.renderFile(templatePath, {...data});
+    const html = await ejs.renderFile(templatePath, { ...data });
     // return juice(html as string);
     return html as string;
   }
@@ -57,11 +58,11 @@ class MailService {
     const code = uuid();
     const expires_at = dayjs().add(10, 'minutes').toISOString();
 
-    const authCode = await AuthCode.findOne({email});
+    const authCode = await AuthCode.findOne({ email });
     if (authCode) {
-      await authCode.updateOne({code, expires_at, type});
+      await authCode.updateOne({ code, expires_at, type });
     } else {
-      await AuthCode.create({code, email, type, expires_at});
+      await AuthCode.create({ code, email, type, expires_at });
     }
 
     const template = type === 'reset' ? 'reset-password' : 'email-verification';
@@ -70,9 +71,9 @@ class MailService {
     const path = type === 'reset' ? 'set-password' : 'confirm-email';
     const url = `${FRONTEND_URL}/${path}?token=${code}&email=${email}`;
 
-    const html = await this.renderTemplate(template, {name, url, email});
+    const html = await this.renderTemplate(template, { name, url, email });
 
-    await this.send({to: email, subject, html});
+    await this.send({ to: email, subject, html });
 
     return {
       code,
@@ -81,7 +82,7 @@ class MailService {
   }
 
   async sendBeneficiaryInvite(payload: IBeneficiary) {
-    const {email, name, id} = payload;
+    const { email, name, id } = payload;
     const html = await this.renderTemplate('beneficiary-invite', {
       name,
       email,
@@ -100,7 +101,7 @@ class MailService {
     code: string;
     invite_code: string;
   }) {
-    const {email, code, invite_code} = payload;
+    const { email, code, invite_code } = payload;
     const html = await this.renderTemplate('invite-code', {
       email,
       code,
@@ -116,8 +117,8 @@ class MailService {
     });
   }
 
-  async sendWelcome(payload: {email: string; name: string}) {
-    const {email, name} = payload;
+  async sendWelcome(payload: { email: string; name: string }) {
+    const { email, name } = payload;
     const html = await this.renderTemplate('welcome', {
       name,
       email,
@@ -131,8 +132,8 @@ class MailService {
     });
   }
 
-  async sendDeleteAccount(payload: {email: string; name: string}) {
-    const {email, name} = payload;
+  async sendDeleteAccount(payload: { email: string; name: string }) {
+    const { email, name } = payload;
     const html = await this.renderTemplate('delete-account', {
       name,
       email,
@@ -157,7 +158,7 @@ class MailService {
     type: string;
     message: string;
   }) {
-    const {email, name, type, message} = payload;
+    const { email, name, type, message } = payload;
     const html = await this.renderTemplate('feedback-confirmation', {
       name,
       email,
@@ -175,32 +176,22 @@ class MailService {
   /**
    * Notify team about new feedback
    */
-  async notifyTeamFeedback(payload: {
-    type: string;
-    message: string;
-    email: string;
-    userName?: string;
-    screenshotId?: string;
-    feedbackId: string;
-  }) {
-    const {type, message, email, userName, screenshotId, feedbackId} = payload;
-
-    const screenshotUrl = screenshotId
-      ? `${BACKEND_URL}/files/${screenshotId}`
-      : null;
+  async notifyTeamFeedback(payload: INotifyTeamFeedback) {
+    const { type, message, name = 'Anonymous', screenshot, feedbackId } = payload;
 
     const html = await this.renderTemplate('team-feedback-notification', {
       type,
       message,
-      email,
-      userName: userName || 'Anonymous',
-      screenshotUrl,
+      email: SUPPORT_MAILS,
+      name,
+      screenshotUrl: screenshot,
+      feedbackId,
       feedbackUrl: `${BACKEND_URL}/admin/feedback/${feedbackId}`,
       submittedAt: dayjs().format('MMMM D, YYYY h:mm A'),
     });
 
     await this.send({
-      to: email,
+      to: SUPPORT_MAILS,
       subject: "We've got Feedback",
       html,
     });

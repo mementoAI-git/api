@@ -1,4 +1,4 @@
-import {model, PaginateModel, Schema, Types} from 'mongoose';
+import { model, PaginateModel, Schema, Types } from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
 const FEEDBACK_TYPES = [
@@ -9,7 +9,7 @@ const FEEDBACK_TYPES = [
   'Other',
 ] as const;
 
-type FeedbackType = (typeof FEEDBACK_TYPES)[number];
+export type FeedbackType = (typeof FEEDBACK_TYPES)[number];
 
 export interface IFeedback {
   type: FeedbackType;

@@ -1,12 +1,12 @@
-import {BadRequestException} from '../../../utils/service-error';
-import Feedback, {IFeedback} from '../../database/model/feedback';
+import { BadRequestException } from '../../../utils/service-error';
+import Feedback, { IFeedback } from '../../database/model/feedback';
 import mail from '../../mail';
-import {track} from '../activity/service';
-import {getProfile} from '../user/service';
+import { getProfile } from '../user/service';
+import File from '../../database/model/file';
 
 export async function createFeedback(payload: IFeedback, user_id: string) {
-  const {type, email, message, screenshot: screenshotId} = payload;
-  const {data: user} = await getProfile(user_id);
+  const { type, email, message, screenshot: screenshotId } = payload;
+  const { data: user } = await getProfile(user_id);
 
   const feedback = await Feedback.create({
     type,
@@ -20,32 +20,25 @@ export async function createFeedback(payload: IFeedback, user_id: string) {
     throw new BadRequestException('Unable to save feedback');
   }
 
-  await mail.sendFeedbackConfirmation({
-    email: email,
-    name: `${user?.first_name} ${user?.last_name}`,
+  const mailPayload = {
+    name: user?.fullname ?? undefined,
     type,
     message,
-  });
+    screenshot: "",
+    feedbackId: "",
+  };
 
-  // await mail.notifyTeamFeedback({
-  //   type,
-  //   message,
-  //   email: email,
-  //   userName: user?.name,
-  //   screenshotId: screenshotUrl,
-  //   feedbackId: feedback._id.toString(),
-  // });
+  mail.sendFeedbackConfirmation({ ...mailPayload, email });
 
-  await track(
-    {
-      title: 'Feedback Created',
-      description: `Created Feedback: "${payload.type}"`,
-      type: 'feedback',
-      action: 'created',
-      reference: feedback.id,
-    },
-    user_id,
-  );
+  if (screenshotId) {
+    const file = await File.findById(screenshotId);
+    if (file) {
+      mailPayload.screenshot = file.url;
+    }
+  }
+
+  mailPayload.feedbackId = feedback.id;
+  mail.notifyTeamFeedback(mailPayload);
 
   return {
     message: 'Feedback Sent Successfully',

@@ -32,6 +32,7 @@ export const BACKEND_URL = process.env.BACKEND_URL;
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 export const DEV_MAILS = process.env.DEV_MAILS?.split(',') || [];
+export const SUPPORT_MAILS = process.env.SUPPORT_MAILS?.split(',') || [];
 
 export const TEMP_PATH = process.env.TEMP_PATH ?? os.tmpdir()
 

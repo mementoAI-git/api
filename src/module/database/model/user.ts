@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import { model, Schema } from 'mongoose';
 import { BACKEND_URL } from '../../../utils/config';
-import { isEmpty } from '../../../utils/helpers';
+import { concatStrings, isEmpty } from '../../../utils/helpers';
 
 // Add to User model
 interface IUserPreferences {
@@ -164,7 +164,7 @@ user.virtual('picture_url').get(function () {
   return this.picture ? `${BACKEND_URL}/files/${this.picture}` : null;
 });
 user.virtual('fullname').get(function () {
-  return (isEmpty(this.first_name) && isEmpty(this.last_name)) ? null : `${this.first_name || ""} ${this.last_name || ""}`;
+  return concatStrings(this.first_name, this.last_name, ' ').trim();
 });
 
 const User = model<IUser>('user', user);
