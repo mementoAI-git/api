@@ -1,13 +1,18 @@
-import { Router } from "express";
-import gaurd from "../../../middleware/gaurd";
-import * as ctrl from "./controller"
-import fileUploadMiddleWare from "../../../middleware/file-upload";
+import {RequestHandler, Router} from 'express';
+import gaurd from '../../../middleware/gaurd';
+import * as ctrl from './controller';
+import fileUploadMiddleWare from '../../../middleware/file-upload';
 
-const router = Router()
+const router = Router();
 
-router.post("/upload", gaurd, fileUploadMiddleWare.array('file', 5), ctrl.uploadFile)
-router.get("/:name", ctrl.getFile)
-router.delete("/:name", gaurd, ctrl.removeFile)
+router.post(
+  '/upload',
+  gaurd,
+  fileUploadMiddleWare.array('file', 5) as RequestHandler,
+  ctrl.uploadFile,
+);
+router.get('/:name', ctrl.getFile);
+router.delete('/:name', gaurd, ctrl.removeFile);
 
-export const name = "files"
-export default router
+export const name = 'files';
+export default router;

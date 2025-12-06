@@ -1,0 +1,36 @@
+<%- include('components/header') %>
+
+<h1 class="subject">
+  🔔 New Feedback Received
+  <span class="badge badge-<%= type.toLowerCase().replace(/\s+/g, '-') %>">
+    <%= type %>
+  </span>
+</h1>
+
+<div class="meta">
+  <p><strong>From:</strong> <%= userName %> (<%= email %>)</p>
+  <p><strong>Type:</strong> <%= type %></p>
+  <p><strong>Submitted:</strong> <%= submittedAt %></p>
+  <p><strong>Feedback ID:</strong> <code><%= feedbackId %></code></p>
+</div>
+
+<h3>Message:</h3>
+<blockquote class="message-box"><%= message %></blockquote>
+
+<% if (screenshotUrl) { %>
+  <h3>Screenshot:</h3>
+  <p class="screenshot">
+    <img src="<%= screenshotUrl %>" alt="User Screenshot"><br>
+    <small><a href="<%= screenshotUrl %>">View full size</a></small>
+  </p>
+<% } %>
+
+<%- include('components/btn-link', { title: 'View in Dashboard', url: feedbackUrl }) %>
+
+<p class="footer-note">
+  <strong>Quick Actions:</strong><br>
+  Reply to <%= email %> directly or manage this feedback in the admin dashboard.
+</p>
+
+<%- include('components/closing-text') %>
+<%- include('components/footer') %>
