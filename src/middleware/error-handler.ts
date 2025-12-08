@@ -1,9 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import dayjs from 'dayjs';
-import { responsHandler } from '../utils/helpers';
+import { compareStrings, responsHandler } from '../utils/helpers';
 import { ServiceError } from '../utils/service-error';
 import mail from '../module/mail';
+import { NODE_ENV } from '../utils/config';
 
 const errorHandler = (
   err: any,
@@ -32,11 +33,13 @@ const errorHandler = (
   if (err instanceof ServiceError) {
     return responsHandler(res, err.statusCode, err?.message, err?.data);
   }
-  console.log(error_payload)
-  mail.send({
-    subject: 'Memento error',
-    text: JSON.stringify(error_payload, null, 2),
-  });
+
+  if (compareStrings(NODE_ENV, 'production')) {
+    mail.send({
+      subject: 'Memento error',
+      text: JSON.stringify(error_payload, null, 2),
+    });
+  }
   return responsHandler(
     res,
     StatusCodes.INTERNAL_SERVER_ERROR,
