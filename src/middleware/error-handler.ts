@@ -40,6 +40,7 @@ const errorHandler = (
       text: JSON.stringify(error_payload, null, 2),
     });
   }
+
   return responsHandler(
     res,
     StatusCodes.INTERNAL_SERVER_ERROR,
