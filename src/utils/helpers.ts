@@ -1,25 +1,24 @@
-import { Response, Request } from 'express';
-import { check, validationResult } from 'express-validator';
+import {Response, Request} from 'express';
+import {check, validationResult} from 'express-validator';
 import bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
-import { ec } from 'elliptic';
-
+import {ec} from 'elliptic';
 import {
   SessionTimeout,
   UnauthorizedException,
   UnprocessableContent,
 } from './service-error';
-import { JWT_SECRET } from './config';
-import { IPagination } from './interface';
+import {JWT_SECRET} from './config';
+import {IPagination} from './interface';
 import dayjs from 'dayjs';
-import { FilterQuery } from 'mongoose';
-import { writeFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { getAudioDurationInSeconds } from 'get-audio-duration';
-import { IFile } from '../module/database/model/file';
-import { uploadToS3 } from '../module/media';
-import { SUPPORTED_FILE_TYPES } from './constant';
+import {FilterQuery} from 'mongoose';
+import {writeFile, unlink} from 'fs/promises';
+import {join} from 'path';
+import {tmpdir} from 'os';
+import {getAudioDurationInSeconds} from 'get-audio-duration';
+import {IFile} from '../module/database/model/file';
+import {uploadToS3} from '../module/media';
+import {SUPPORTED_FILE_TYPES} from './constant';
 
 export const random = (
   len: number = 6,
@@ -112,7 +111,7 @@ export const getFiles = (
   const allowedTypes = new Set<string>(SUPPORTED_FILE_TYPES);
   if (files.some(f => !allowedTypes.has(f.mimetype))) {
     throw new UnprocessableContent(
-      'Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, and AVI videos.',
+      'Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, AVI videos, and audio files (MP3, WAV, OGG, AAC, FLAC, WebM).',
     );
   }
 
@@ -120,12 +119,12 @@ export const getFiles = (
 };
 
 export const getPagination = (req: Request): IPagination => {
-  let { limit = 25, page = 1 } = req.query;
+  let {limit = 25, page = 1} = req.query;
 
   limit = Math.max(Number(limit), 1);
   page = Math.max(Number(page), 1);
 
-  return { ...req.query, limit, page };
+  return {...req.query, limit, page};
 };
 
 export const hashPassword = async (password: string) => {
@@ -140,35 +139,35 @@ export const generateKeys = () => {
   const private_key = key.getPrivate('hex');
   const public_key = key.getPublic('hex');
 
-  return { private_key, public_key };
+  return {private_key, public_key};
 };
 
 export const createAccessToken = (
   id: string,
   expires_in = 24 * 60 * 60 * 1000,
 ) => {
-  const access_token = jwt.sign({ id }, String(JWT_SECRET), {
+  const access_token = jwt.sign({id}, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
     expiresIn: expires_in,
   });
 
   const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
-  return { access_token, expires_at };
+  return {access_token, expires_at};
 };
 
 export const createRefreshToken = (
   id: string,
   expires_in = 30 * 24 * 60 * 60 * 1000,
 ) => {
-  const refresh_token = jwt.sign({ id, type: 'refresh' }, String(JWT_SECRET), {
+  const refresh_token = jwt.sign({id, type: 'refresh'}, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
     expiresIn: expires_in,
   });
 
   const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
-  return { refresh_token, expires_at };
+  return {refresh_token, expires_at};
 };
 
 export const createTokenPair = (
@@ -231,10 +230,10 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
     if (!allowed.includes(queries[i][0])) continue;
     if (queries[i][0] === 'search' && !isEmpty(queries[i][1])) {
       const search_filters: any[] = fields.map(key => ({
-        [key]: { $regex: new RegExp(`${queries[i][1]}`), $options: 'i' },
+        [key]: {$regex: new RegExp(`${queries[i][1]}`), $options: 'i'},
       }));
-      proccessed.push({ $or: search_filters });
-    } else proccessed.push({ [queries[i][0]]: queries[i][1] });
+      proccessed.push({$or: search_filters});
+    } else proccessed.push({[queries[i][0]]: queries[i][1]});
   }
 
   return proccessed;
@@ -247,7 +246,7 @@ export const getTimeBasedGreeting = (): string => {
   return 'Good evening';
 };
 
-export const emptyPaginatedList = ({ limit, page }) => {
+export const emptyPaginatedList = ({limit, page}) => {
   return {
     docs: [],
     totalDocs: 0,
