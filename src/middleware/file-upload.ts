@@ -1,6 +1,6 @@
 import multer from 'multer';
-import {Request} from 'express';
-import {SUPPORTED_FILE_TYPES as allowedTypes} from '../utils/constant';
+import { Request } from 'express';
+import { SUPPORTED_FILE_TYPES as allowedTypes } from '../utils/constant';
 
 // Configure multer to use memory storage (similar to express-fileupload default behavior)
 const storage = multer.memoryStorage();
@@ -11,7 +11,7 @@ const fileFilter = (
   file: Express.Multer.File,
   cb: multer.FileFilterCallback,
 ) => {
-  if (allowedTypes.includes(file.mimetype)) {
+  if (allowedTypes.includes(file.mimetype as typeof allowedTypes[number])) {
     cb(null, true);
   } else {
     cb(
