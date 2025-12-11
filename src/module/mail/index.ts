@@ -11,12 +11,11 @@ import {
   SUPPORT_MAILS,
 } from '../../utils/config';
 import dayjs from 'dayjs';
-import { v4 as uuid } from 'uuid';
-import AuthCode from '../database/model/auth-code';
 import * as ejs from 'ejs';
 import * as path from 'path';
 import { IBeneficiary } from '../database/model/beneficiary';
 import { INotifyTeamFeedback } from './interface';
+import otp, { OtpType } from '../../services/otp';
 
 const transport = nodemailer.createTransport({
   //@ts-ignore
@@ -54,22 +53,19 @@ class MailService {
     }
   }
 
-  async sendLink(email: string, name: string = '', type = 'reset') {
-    const code = uuid();
-    const expires_at = dayjs().add(10, 'minutes').toISOString();
+  async sendLink(email: string, name: string = '', type: 'reset' | 'verify' = 'reset') {
+    const otpType: OtpType = type === 'verify' ? 'verify' : 'reset';
 
-    const authCode = await AuthCode.findOne({ email });
-    if (authCode) {
-      await authCode.updateOne({ code, expires_at, type });
-    } else {
-      await AuthCode.create({ code, email, type, expires_at });
-    }
+    // Create OTP using the centralized service
+    const code = await otp.create(email, otpType);
+    const ttlSeconds = otp.getTtl(otpType);
+    const expires_at = dayjs().add(ttlSeconds, 'seconds').toISOString();
 
     const template = type === 'reset' ? 'reset-password' : 'email-verification';
     const subject =
       type === 'reset' ? 'Reset Password Link' : 'Email Verification Link';
-    const path = type === 'reset' ? 'set-password' : 'confirm-email';
-    const url = `${FRONTEND_URL}/${path}?token=${code}&email=${email}`;
+    const urlPath = type === 'reset' ? 'set-password' : 'confirm-email';
+    const url = `${FRONTEND_URL}/${urlPath}?token=${code}&email=${email}`;
 
     const html = await this.renderTemplate(template, { name, url, email });
 

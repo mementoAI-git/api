@@ -22,7 +22,7 @@ export interface ISetPassword {
 
 export interface ISendLink {
   email: string
-  type: string
+  type: 'reset' | 'verify'
 }
 
 export interface IOAuthAuthorization {

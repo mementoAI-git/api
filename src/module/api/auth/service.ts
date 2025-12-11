@@ -2,13 +2,12 @@ import bcrypt from "bcrypt"
 
 import { ILogin, IOAuthAuthorization, IRegister, ISendLink, ISetPassword, IVerifyEmail, IRefreshToken } from "./interface";
 import { OAUTH_PROVIDERS } from "../../../utils/constant";
-import { compareStrings, createTokenPair, generateKeys, hashPassword, isEmpty, random, verifyRefreshToken } from "../../../utils/helpers";
+import { compareStrings, createTokenPair, generateKeys, hashPassword, isEmpty, verifyRefreshToken } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException, UnauthorizedException } from "../../../utils/service-error";
 import axios from "axios";
-import dayjs from "dayjs";
 import mail from "../../mail";
 import User from "../../database/model/user";
-import AuthCode from "../../database/model/auth-code";
+import otp from "../../../services/otp";
 import { FRONTEND_URL } from "../../../utils/config";
 
 export function generateOauthUrl(provider: string) {
@@ -112,14 +111,15 @@ export async function register(payload: IRegister) {
   const { email, first_name, last_name, invite_code } = payload
   const user = await User.findOne({ email })
   if (user) {
-    throw new NotFoundException("User with this emaill address aleady exist")
+    throw new NotFoundException("User with this email address already exists")
   }
-  const authCode = await AuthCode.findOne({ code: invite_code, type: "invite" })
-  if (!authCode) {
-    throw new BadRequestException("Invalid invite code")
+
+  const inviteResult = await otp.verify(invite_code, 'invite')
+  if (!inviteResult.valid) {
+    throw new BadRequestException("Invalid or expired invite code")
   }
-  if (dayjs().isAfter(authCode.expires_at)) {
-    throw new BadRequestException("Invite code has exipred")
+  if (inviteResult.alreadyUsed) {
+    throw new BadRequestException("Invite code has already been used")
   }
 
   const password = await hashPassword(payload.password)
@@ -128,7 +128,7 @@ export async function register(payload: IRegister) {
   await User.create({ last_name, first_name, password, email, ...keys })
   await mail.sendLink(email, first_name || last_name || "", "verify")
 
-  await authCode.deleteOne()
+  await otp.delete(invite_code, 'invite')
 
   const data = { requires_verification: true, email }
 
@@ -150,47 +150,49 @@ export async function sendLink(payload: ISendLink) {
 export async function verifyEmail(payload: IVerifyEmail) {
   const { token } = payload
 
-  const authCode = await AuthCode.findOne({ code: token })
-  if (!authCode) {
-    throw new BadRequestException("Invalid link")
-  }
-  if (dayjs().isAfter(authCode.expires_at)) {
-    throw new BadRequestException("Verification Link has exipred")
+  const result = await otp.verify(token, 'verify')
+  if (!result.valid) {
+    throw new BadRequestException("Invalid or expired link")
   }
 
-  const user = await User.findOne({ email: authCode.email })
+  const user = await User.findOne({ email: result.email })
   if (!user) {
     throw new NotFoundException("User not found")
   }
-  await user.updateOne({ verified: true })
 
+  if (result.alreadyUsed) {
+    if (user.verified) {
+      return {
+        data: { email: user.email },
+        message: "Email already verified. Please login."
+      }
+    }
+    throw new BadRequestException("Invalid or already used link")
+  }
+
+  await otp.markUsed(token, 'verify')
+
+  // Update user and create tokens
   const tokens = createTokenPair(user.id, 1 * 60 * 60 * 1000, 30 * 24 * 60 * 60 * 1000)
+  await user.updateOne({ verified: true, refresh_token: tokens.refresh_token })
 
-  // Store refresh token in database
-  await user.updateOne({ refresh_token: tokens.refresh_token })
-
-  const data = { ...tokens, email: user.email }
-
-  await AuthCode.deleteMany({ email: user.email })
-
-  return { data, message: "Verification successful" }
+  return { data: { ...tokens, email: user.email }, message: "Verification successful" }
 }
 
 export async function setPassword(payload: ISetPassword) {
   const { token } = payload
 
-  const authCode = await AuthCode.findOne({ code: token })
-  if (!authCode) {
-    throw new BadRequestException("Invalid link")
+  // Verify the OTP using the centralized service
+  const result = await otp.verify(token, 'reset')
+  if (!result.valid) {
+    throw new BadRequestException("Invalid or expired link")
   }
-  if (dayjs().isAfter(authCode.expires_at)) {
-    throw new BadRequestException("Reset link has exipred")
-  }
+
+  await otp.delete(token, 'reset')
 
   const password = await hashPassword(payload.password)
 
-  await User.updateOne({ email: authCode.email }, { password })
-  await AuthCode.deleteMany({ email: authCode.email })
+  await User.updateOne({ email: result.email }, { password })
 
   return { data: null, message: "Password reset successful" }
 }
@@ -270,7 +272,6 @@ export async function logout(userId: string) {
 
 export async function sendInviteCode(payload: { email?: string }) {
   const { email = null } = payload
-  const code = random(6, "number")
 
   if (!isEmpty(email)) {
     const user = await User.findOne({ email })
@@ -279,19 +280,12 @@ export async function sendInviteCode(payload: { email?: string }) {
     }
   }
 
-  const expires_at = dayjs().add(5, "days").toISOString()
-  await AuthCode.create({
-    email,
-    code,
-    type: "invite",
-    expires_at
-  })
-
+  const code = await otp.create(email || '', 'invite')
   const invite_code = `${FRONTEND_URL}/register?code=${code}`
 
   if (!isEmpty(email)) {
     await mail.sendInviteCode({
-      email,
+      email: email!,
       code,
       invite_code
     })

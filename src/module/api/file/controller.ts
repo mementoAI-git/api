@@ -1,18 +1,22 @@
-import { NextFunction, Response, Request } from "express"
-import { IRequest } from "../../../utils/interface"
-import * as service from "./service"
-import { getFiles, responsHandler } from "../../../utils/helpers"
-import { StatusCodes } from "http-status-codes"
-import dayjs from "dayjs"
-import { pipeline } from 'stream/promises';
+import {NextFunction, Response, Request} from 'express';
+import {IRequest} from '../../../utils/interface';
+import * as service from './service';
+import {getFiles, responsHandler} from '../../../utils/helpers';
+import {StatusCodes} from 'http-status-codes';
+import dayjs from 'dayjs';
+import {pipeline} from 'stream/promises';
 
-export async function uploadFile(req: IRequest, res: Response, next: NextFunction) {
+export async function uploadFile(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const files = getFiles(req, true)
-    const { message, data } = await service.uploadFile(files, req.auth.id)
-    return responsHandler(res, StatusCodes.OK, message, data)
+    const files = getFiles(req, true);
+    const {message, data} = await service.uploadFile(files, req.auth.id);
+    return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
-    next(error)
+    next(error);
   }
 }
 
@@ -23,8 +27,11 @@ const isClientDisconnectError = (error: any): boolean => {
 };
 
 // Helper function to safely stream data to response
-const safeStreamToResponse = async (stream: NodeJS.ReadableStream, res: Response): Promise<void> => {
-  stream.on('error', (streamError) => {
+const safeStreamToResponse = async (
+  stream: NodeJS.ReadableStream,
+  res: Response,
+): Promise<void> => {
+  stream.on('error', streamError => {
     console.error('Stream error:', streamError);
     if (!res.headersSent) {
       res.destroy();
@@ -49,7 +56,7 @@ const setFileHeaders = (res: Response, metadata: any): void => {
     'Content-Type': metadata.type,
     'Content-Disposition': `inline; filename="${metadata.name}"`,
     'Cross-Origin-Resource-Policy': 'cross-origin',
-    'ETag': metadata.etag,
+    ETag: metadata.etag,
     'Cache-Control': 'public, max-age=3600',
     'Last-Modified': dayjs(metadata.updated_at).toDate().toUTCString(),
     'Accept-Ranges': 'bytes',
@@ -67,17 +74,21 @@ const setFileHeaders = (res: Response, metadata: any): void => {
 
 export async function getFile(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name } = req.params;
+    const {name} = req.params;
     const range = req.headers?.range;
 
     const metadata = await service.getFileMetadata(name);
     setFileHeaders(res, metadata);
 
-    const data = await service.getFileBuffer(name, parseInt(metadata.size, 10), range);
+    const data = await service.getFileBuffer(
+      name,
+      parseInt(metadata.size, 10),
+      range,
+    );
 
     // Handle range requests (partial content)
     if (range) {
-      const { start, end, buffer } = data;
+      const {start, end, buffer} = data;
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${metadata.size}`,
         'Content-Length': end - start + 1,
@@ -85,8 +96,10 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'public, max-age=3600',
         'Access-Control-Allow-Origin': '*',
+        'Access-Control-Expose-Headers':
+          'Content-Range, Content-Length, Accept-Ranges',
         'Cross-Origin-Resource-Policy': 'cross-origin',
-        'ETag': metadata.etag,
+        ETag: metadata.etag,
         'Last-Modified': dayjs(metadata.updated_at).toDate().toUTCString(),
         'Content-Disposition': `inline; filename="${metadata.name}"`,
       });
@@ -98,6 +111,7 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
 
     // Handle full file requests
     res.setHeader('Content-Length', metadata.size);
+    res.setHeader('Accept-Ranges', 'bytes');
     res.status(200);
 
     // Send small files directly, stream larger files
@@ -117,11 +131,18 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function removeFile(req: IRequest, res: Response, next: NextFunction) {
+export async function removeFile(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
   try {
-    const { message, data } = await service.removeFile(req.params.name, req.auth.id)
-    return responsHandler(res, StatusCodes.OK, message, data)
+    const {message, data} = await service.removeFile(
+      req.params.name,
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
-    next(error)
+    next(error);
   }
 }
