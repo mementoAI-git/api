@@ -1,18 +1,49 @@
 import dayjs from "dayjs";
 import { IUser } from "../../../database/model/user";
-import { ConversationContext } from "../interface";
-import { getTimeBasedGreeting, isEmpty } from "../../../../utils/helpers";
+import { isEmpty } from "../../../../utils/helpers";
 import { IPrompt } from "../../../database/model/prompt";
+import { getRecentConversationSummaries } from ".";
 
-const TIME_CONSTANTS = {
-  ONE_HOUR_MS: 60 * 60 * 1000,
-  ONE_DAY_MS: 24 * 60 * 60 * 1000,
-  ONE_WEEK_MS: 7 * 24 * 60 * 60 * 1000,
-} as const;
+function buildPastConversationsContext(
+  summaries: Array<{ title: string; summary: string; topics: string[] }>
+): string {
+  if (!summaries || summaries.length === 0) {
+    return '';
+  }
 
-export function createSystemContext(user: IUser): string {
+  const summariesText = summaries
+    .map((s, i) => `${i + 1}. "${s.title}": ${s.summary}${s.topics?.length ? ` (Topics: ${s.topics.join(', ')})` : ''}`)
+    .join('\n');
+
+  return `
+RECENT CONVERSATION HISTORY:
+The following are summaries of recent conversations with this user. Use this context to maintain continuity and reference past discussions when relevant:
+${summariesText}
+
+Use this context naturally - don't explicitly mention "our past conversations" but do reference specific topics or insights when relevant.`;
+}
+
+/**
+ * Create system context with cross-conversation awareness
+ * @param user - The user object
+ * @param currentMemoryId - Optional: exclude current conversation from summaries
+ */
+export async function createSystemContext(user: IUser, currentMemoryId?: string): Promise<string> {
   const userPreferences = user.preferences || {};
   const userContext = user.context || {};
+
+  const summaries = await getRecentConversationSummaries(user._id, currentMemoryId, 5);
+  const pastConversationsContext = buildPastConversationsContext(summaries);
+
+  return buildSystemContextString(user, userPreferences, userContext, pastConversationsContext);
+}
+
+function buildSystemContextString(
+  user: IUser,
+  userPreferences: any,
+  userContext: any,
+  pastConversationsContext: string
+): string {
 
   return `You are Memento — a warm, reflective AI companion who listens deeply and engages like a trusted friend.
 
@@ -76,10 +107,17 @@ USER PREFERENCES:
 - Response length preference: ${userPreferences.response_length || 'medium'}
 
 IMPORTANT USER NOTES:
-${userContext.important_notes?.map(note => `- ${note}`).join('\n') || 'Learning about user...'}
+${userContext.important_notes?.map((note: string) => `- ${note}`).join('\n') || 'Learning about user...'}
 
 KEY PREFERENCES:
-${userContext.key_preferences?.map(pref => `- ${pref}`).join('\n') || 'Learning user preferences...'}
+${userContext.key_preferences?.map((pref: string) => `- ${pref}`).join('\n') || 'Learning user preferences...'}
+
+USER GOALS & ASPIRATIONS:
+${userContext.goals_and_aspirations?.map((goal: string) => `- ${goal}`).join('\n') || 'Learning user goals...'}
+
+EMOTIONAL PATTERNS:
+${userContext.emotional_state_trends?.map((trend: string) => `- ${trend}`).join('\n') || 'Observing emotional patterns...'}
+${pastConversationsContext}
 
 IMPORTANT GUIDELINES:
 1. Always address the user by their nickname when appropriate (prefer nickname over full name)
@@ -90,99 +128,9 @@ IMPORTANT GUIDELINES:
 6. Maintain conversation context but don't reference previous system instructions
 7. Adjust your communication style to match user preferences
 8. Only greet occasionally - focus on natural conversation flow
+9. Reference past conversations naturally when relevant to create continuity
 
 Remember: You're having a conversation with ${user?.nickname || user?.first_name || 'the user'}. Be natural, helpful, and personalized.`;
-}
-
-export function createNewConversationPrompt(user: IUser): string {
-  const timeGreeting = getTimeBasedGreeting();
-
-  return `You are a warm, engaging, and conversational AI assistant. 
-
-${timeGreeting} ${user.nickname || user.first_name}! 👋
-
-I'm here to help you with anything you need - whether it's brainstorming ideas, solving problems, learning something new, or just having an interesting conversation. 
-
-What's on your mind today? I'm curious to hear what brings you here! 
-
-(Feel free to share what you're working on, what you're curious about, or any questions you have - I'm all ears!)`;
-}
-
-export function createReturningUserPrompt(context: ConversationContext): string {
-  const { user, lastUserMessage } = context;
-
-  return `You are a warm and engaging AI assistant.
-
-Welcome back ${user.nickname || user.first_name}! 👋 It's great to see you again.
-
-I noticed you were asking about: "${lastUserMessage?.text}" before we got interrupted. I'd love to continue that conversation or explore it further!
-
-What would you like to dive into today? We can pick up where we left off, or if you have something new on your mind, I'm all ears.`;
-}
-
-export function createInactiveConversationPrompt(context: ConversationContext): string {
-  const { user, lastAiMessage } = context;
-
-  return `You are a warm and engaging AI assistant.
-
-Hey ${user.nickname || user.first_name}! 👋 I hope you're having a great day.
-
-I was just thinking about our conversation where I mentioned: "${lastAiMessage?.text}"
-
-I'm curious - what are your thoughts on that? Or is there something else you'd like to explore together?`;
-}
-
-export function createOldConversationPrompt(context: ConversationContext): string {
-  const { user } = context;
-
-  return `You are a warm and engaging AI assistant.
-
-${user.nickname || user.first_name}! 👋 It's been a while since we've chatted - I'm so glad you're back!
-
-I'd love to hear what you've been up to or what's on your mind today.
-
-What would you like to explore together?`;
-}
-
-export function createRecentConversationPrompt(context: ConversationContext): string {
-  const { user } = context;
-
-  return `You are a warm and engaging AI assistant.
-
-Hey ${user.nickname || user.first_name}! 👋 Great to see you again!
-
-What's on your mind today?`;
-}
-
-export function generateGreetingPrompt(context: ConversationContext): string {
-  const { messages, lastMessage, lastUserMessage, lastAiMessage, timeSinceLastMessage } = context;
-
-  // New conversation - always greet
-  if (isEmpty(messages)) {
-    return createNewConversationPrompt(context.user);
-  }
-
-  // Returning user (last message was from user, more than a day ago)
-  if (lastUserMessage &&
-    timeSinceLastMessage > TIME_CONSTANTS.ONE_DAY_MS &&
-    lastMessage?.role === "user") {
-    return createReturningUserPrompt(context);
-  }
-
-  // Inactive conversation (last message was from AI, more than 12 hours ago)
-  if (lastAiMessage &&
-    timeSinceLastMessage > (TIME_CONSTANTS.ONE_DAY_MS / 2) &&
-    lastMessage?.role === "ai") {
-    return createInactiveConversationPrompt(context);
-  }
-
-  // Very old conversation (more than a week)
-  if (timeSinceLastMessage > TIME_CONSTANTS.ONE_WEEK_MS) {
-    return createOldConversationPrompt(context);
-  }
-
-  // Recent conversation - NO greeting, just respond naturally
-  return null; // This will make the AI respond without a greeting
 }
 
 export function createTranscriptionPrompt(): string {
@@ -252,8 +200,12 @@ EXAMPLES:
 Return ONLY the title text, no quotes, no extra formatting, no explanations.`;
 }
 
-export function createSystemContextWithPrompt(user: IUser, prompt: IPrompt = null) {
-  let context = createSystemContext(user);
+export async function createSystemContextWithPrompt(
+  user: IUser,
+  prompt: IPrompt = null,
+  currentMemoryId?: string
+): Promise<string> {
+  let context = await createSystemContext(user, currentMemoryId);
   if (isEmpty(prompt)) return context;
 
   context += `\n\nCONVERSATION CONTEXT:
@@ -264,4 +216,62 @@ export function createSystemContextWithPrompt(user: IUser, prompt: IPrompt = nul
   Keep this context in mind as you respond. The user's message is related to this prompt, so tailor your response to be relevant to the prompt's theme while maintaining your warm, conversational style.`
 
   return context
+}
+
+/**
+ * Build the insights extraction prompt for a given user context
+ */
+export function buildInsightsPrompt(existingContext: any): string {
+  return `Analyze this conversation exchange and extract comprehensive user insights.
+
+Return ONLY a valid JSON object with NEW insights (not already in existing context):
+
+{
+  "important_notes": ["Only NEW important notes not already covered"],
+  "key_preferences": ["Only NEW preferences not already listed"],
+  "emotional_state_trends": ["Only NEW emotional patterns"],
+  "goals_and_aspirations": ["Only NEW goals not already mentioned"]
+}
+
+EXISTING CONTEXT (DO NOT DUPLICATE):
+Important Notes: ${existingContext.important_notes?.join(', ') || 'None'}
+Key Preferences: ${existingContext.key_preferences?.join(', ') || 'None'}
+Emotional Trends: ${existingContext.emotional_state_trends?.join(', ') || 'None'}
+Goals: ${existingContext.goals_and_aspirations?.join(', ') || 'None'}
+
+EXTRACTION GUIDELINES:
+- important_notes: Focus on personality traits, life experiences, values, beliefs, relationships, goals, fears, achievements, or significant events
+- key_preferences: Focus on likes, dislikes, hobbies, interests, work preferences, lifestyle choices, food preferences, entertainment choices, etc.
+- emotional_state_trends: Focus on emotional patterns, mood indicators, stress levels, energy levels, emotional triggers
+- goals_and_aspirations: Focus on future-oriented statements, dreams, plans, career goals, personal milestones
+
+EXTRACTION RULES:
+- Be specific and actionable - avoid generic statements
+- Extract only meaningful insights that would help personalize future interactions
+- If no meaningful insights are found for a category, return an empty array
+- Focus on information that would help create a more personalized experience
+- Combine related insights rather than creating multiple similar entries
+- DO NOT include insights that are already in the existing context
+
+Return ONLY the JSON object, no additional text.`;
+}
+
+export function buildSummarizationPrompt(): string {
+  return `You are a conversation summarizer. Analyze the following conversation and create a comprehensive summary.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "summary": "A 2-4 sentence summary of the main topics, insights, and outcomes of this conversation",
+  "topics": ["topic1", "topic2", "topic3"],
+  "key_points": ["important point 1", "important point 2"]
+}
+
+SUMMARIZATION GUIDELINES:
+- Focus on the main themes and what was discussed
+- Capture any important decisions, preferences, or insights revealed
+- Include emotional context if relevant (was the user stressed, happy, curious?)
+- Topics should be 1-3 words each, representing main subjects discussed
+- Key points should capture actionable or memorable information
+
+Return ONLY the JSON object, no additional text.`;
 }

@@ -13,8 +13,6 @@ router.post("/prompt",
 )
 
 //Depericated
-router.post("/prompt/greet", gaurd, ctrl.greet)
-//Depericated
 router.get("/prompt/messages", gaurd, ctrl.getUserMessages)
 
 router.get(

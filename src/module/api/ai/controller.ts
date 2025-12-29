@@ -15,20 +15,7 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
       res
     )
   } catch (error) {
-    next(error)
-  }
-}
-
-export async function greet(req: IRequest, res: Response, next: NextFunction) {
-  try {
-    const response = await service.greet(req.auth.id)
-    return await service.handleStreaming(
-      req.auth.id,
-      req.body.memory,
-      response,
-      res
-    )
-  } catch (error) {
+    console.log(error)
     next(error)
   }
 }

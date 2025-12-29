@@ -1,5 +1,6 @@
 import { PORT } from "./utils/config";
 import app from "./app"
+import { stopScheduler } from "./services/scheduler";
 
 process.on('uncaughtException', (error) => {
     console.error("Uncaught Exception:", error);
@@ -12,6 +13,7 @@ process.on('unhandledRejection', (reason) => {
 
 process.on('SIGINT', () => {
     console.log('Application shutting down...');
+    stopScheduler();
     process.exit(0);
 });
 

@@ -7,23 +7,27 @@ import { geminiAuthClient, GEMINI_LIVE_MODEL } from "../../../services/gemini";
 import { extractJson, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { IPrompt, IStartMemory, ITranscribeAudio } from "./interface";
-import File, { IFile, ITranscriptionData } from "../../database/model/file"
+import File, { ITranscriptionData } from "../../database/model/file"
 import { NotFoundException } from "../../../utils/service-error";
 import User from "../../database/model/user";
 import dayjs from "dayjs";
-import { createSystemContext, createSystemContextWithPrompt, generateGreetingPrompt } from "./utils/prompts";
+import {
+  createSystemContext,
+  createSystemContextWithPrompt,
+} from "./utils/prompts";
 import { createTranscriptionPrompt } from './utils/prompts';
-import { extractAllUserInsights } from './user-learning';
 import Memory from "../../database/model/memory";
 import {
-  analyzeConversationContext,
+  triggerSummarization,
   createChatHistory,
+  isSignificantMessage,
   processFile,
   processFiles,
   updateMemoryTitle
 } from "./utils";
 import Prompt from "../../database/model/prompt";
 import { updateStreak } from "../user/service";
+import { addToInsightsBuffer } from "../../../services/queues/insights";
 
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
@@ -39,10 +43,12 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
 
   let content: PartListUnion = [payload.text]
 
+  const systemInstruction = await createSystemContext(user, payload.memory);
+
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
     config: {
-      systemInstruction: createSystemContext(user)
+      systemInstruction
     },
     history: createChatHistory(messages)
   });
@@ -53,6 +59,7 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
   }
 
   const response = await chat.sendMessageStream({ message: content });
+
   await Message.create({
     user: user_id,
     memory: payload.memory,
@@ -72,6 +79,7 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
     // Get the user's last message for analysis
     const lastUserMessage = await Message.findOne({
       user,
+      memory,
       role: 'user'
     }).sort({ created_at: -1 });
 
@@ -94,42 +102,24 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
         user,
         memory,
         role: "ai"
-      })
+      });
 
-      // Extract insights from this conversation asynchronously
-      if (userMessage) {
-        extractAllUserInsights(user, userMessage, text).catch(error => {
-          console.error('Error extracting user insights:', error);
+      // Update message count and last_active for summarization tracking
+      await Memory.findByIdAndUpdate(memory, {
+        $inc: { message_count: 2 },
+        $set: { last_active: dayjs().toDate() }
+      });
+
+      if (userMessage && isSignificantMessage(userMessage)) {
+        addToInsightsBuffer(user, memory, userMessage, text).catch(error => {
+          console.error('Error queueing insights extraction:', error);
         });
       }
+
+      triggerSummarization(memory)
     }
     res.end();
   }
-}
-
-export async function greet(user_id: string) {
-  const user = await User.findById(user_id);
-  if (!user) {
-    throw new NotFoundException("User not found");
-  }
-
-  const messages = await Message.find({ user })
-    .sort({ created_at: -1 })
-    .limit(25);
-  const reversedMessages = messages.reverse();
-
-  const context = analyzeConversationContext(user, reversedMessages);
-  const prompt = generateGreetingPrompt(context);
-
-  const chat = gemini.chats.create({
-    model: GEMINI_MODEL,
-    config: {
-      systemInstruction: createSystemContext(user)
-    },
-    history: createChatHistory(reversedMessages)
-  });
-
-  return await chat.sendMessageStream({ message: prompt });
 }
 
 export async function getUserMessages({ limit, ...query }: IPagination & { next?: string }, user: string) {
@@ -226,10 +216,14 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
   if (!isEmpty(payload.prompt_id)) {
     prompt = await Prompt.findById(payload.prompt_id)
   }
+
+  // Use async system context for cross-conversation awareness
+  const systemInstruction = await createSystemContextWithPrompt(user, prompt);
+
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
     config: {
-      systemInstruction: createSystemContextWithPrompt(user, prompt)
+      systemInstruction
     }
   });
 
@@ -245,7 +239,9 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     user: user_id,
     type: "conversation",
     status: "save",
-    prompt: prompt?._id || null  // Link memory to prompt if available
+    prompt: prompt?._id || null,
+    message_count: 2,
+    last_active: dayjs().toDate()
   })
 
   const userMessage = {
@@ -270,6 +266,13 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
   await Message.insertMany([userMessage, aiMessage])
   if (isEmpty(memory?.title)) {
     updateMemoryTitle(memory.id, payload.text, response.text)
+  }
+
+  // Queue insights extraction for significant first messages
+  if (isSignificantMessage(payload.text)) {
+    addToInsightsBuffer(user_id, memory.id, payload.text, response.text).catch(error => {
+      console.error('Error queueing insights extraction:', error);
+    });
   }
 
   updateStreak(user_id)

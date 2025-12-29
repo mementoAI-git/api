@@ -1,24 +1,24 @@
-import {Response, Request} from 'express';
-import {check, validationResult} from 'express-validator';
+import { Response, Request } from 'express';
+import { check, validationResult } from 'express-validator';
 import bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
-import {ec} from 'elliptic';
+import { ec } from 'elliptic';
 import {
   SessionTimeout,
   UnauthorizedException,
   UnprocessableContent,
 } from './service-error';
-import {JWT_SECRET} from './config';
-import {IPagination} from './interface';
+import { JWT_SECRET } from './config';
+import { IPagination } from './interface';
 import dayjs from 'dayjs';
-import {FilterQuery} from 'mongoose';
-import {writeFile, unlink} from 'fs/promises';
-import {join} from 'path';
-import {tmpdir} from 'os';
-import {getAudioDurationInSeconds} from 'get-audio-duration';
-import {IFile} from '../module/database/model/file';
-import {uploadToS3} from '../module/media';
-import {SUPPORTED_FILE_TYPES} from './constant';
+import { FilterQuery } from 'mongoose';
+import { writeFile, unlink } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { getAudioDurationInSeconds } from 'get-audio-duration';
+import { IFile } from '../module/database/model/file';
+import { uploadToS3 } from '../module/media';
+import { SUPPORTED_FILE_TYPES } from './constant';
 
 export const random = (
   len: number = 6,
@@ -119,12 +119,12 @@ export const getFiles = (
 };
 
 export const getPagination = (req: Request): IPagination => {
-  let {limit = 25, page = 1} = req.query;
+  let { limit = 25, page = 1 } = req.query;
 
   limit = Math.max(Number(limit), 1);
   page = Math.max(Number(page), 1);
 
-  return {...req.query, limit, page};
+  return { ...req.query, limit, page };
 };
 
 export const hashPassword = async (password: string) => {
@@ -139,35 +139,35 @@ export const generateKeys = () => {
   const private_key = key.getPrivate('hex');
   const public_key = key.getPublic('hex');
 
-  return {private_key, public_key};
+  return { private_key, public_key };
 };
 
 export const createAccessToken = (
   id: string,
   expires_in = 24 * 60 * 60 * 1000,
 ) => {
-  const access_token = jwt.sign({id}, String(JWT_SECRET), {
+  const access_token = jwt.sign({ id }, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
     expiresIn: expires_in,
   });
 
   const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
-  return {access_token, expires_at};
+  return { access_token, expires_at };
 };
 
 export const createRefreshToken = (
   id: string,
   expires_in = 30 * 24 * 60 * 60 * 1000,
 ) => {
-  const refresh_token = jwt.sign({id, type: 'refresh'}, String(JWT_SECRET), {
+  const refresh_token = jwt.sign({ id, type: 'refresh' }, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
     expiresIn: expires_in,
   });
 
   const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
-  return {refresh_token, expires_at};
+  return { refresh_token, expires_at };
 };
 
 export const createTokenPair = (
@@ -230,10 +230,10 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
     if (!allowed.includes(queries[i][0])) continue;
     if (queries[i][0] === 'search' && !isEmpty(queries[i][1])) {
       const search_filters: any[] = fields.map(key => ({
-        [key]: {$regex: new RegExp(`${queries[i][1]}`), $options: 'i'},
+        [key]: { $regex: new RegExp(`${queries[i][1]}`), $options: 'i' },
       }));
-      proccessed.push({$or: search_filters});
-    } else proccessed.push({[queries[i][0]]: queries[i][1]});
+      proccessed.push({ $or: search_filters });
+    } else proccessed.push({ [queries[i][0]]: queries[i][1] });
   }
 
   return proccessed;
@@ -246,7 +246,7 @@ export const getTimeBasedGreeting = (): string => {
   return 'Good evening';
 };
 
-export const emptyPaginatedList = ({limit, page}) => {
+export const emptyPaginatedList = ({ limit, page }) => {
   return {
     docs: [],
     totalDocs: 0,
@@ -361,185 +361,10 @@ export const idValidator = check('id')
   .isMongoId()
   .withMessage('Invalid id ');
 
-// export async function analyzeSingleConversation(userMessage: string, aiResponse: string): Promise<IUserInsights> {
-//   const analysisPrompt = `Analyze this single conversation exchange and extract user preferences. Return ONLY a valid JSON object:
-
-// {
-//   "topics_of_interest": ["topic1"],
-//   "conversation_tone": "upbeat|calm|analytical|creative",
-//   "response_length": "short|medium|long"
-// }
-
-// Focus on immediate patterns in this exchange.`;
-
-//   try {
-//     const conversationText = `User: ${userMessage}\n\nAI: ${aiResponse}`;
-
-//     const contents = createUserContent([
-//       analysisPrompt,
-//       { text: conversationText }
-//     ]);
-
-//     const response = await gemini.models.generateContent({
-//       model: GEMINI_MODEL,
-//       contents
-//     });
-
-//     const insights: IUserInsights = extractJson(response.text);
-//     return insights;
-//   } catch (error) {
-//     console.error('Error analyzing single conversation:', error);
-//     return {};
-//   }
-// }
-
-// async function analyzeUserConversations(user_id: string): Promise<IConversationAnalysis> {
-//   // Get recent messages (last 50 messages for analysis)
-//   const messages = await Message.find({ user: user_id })
-//     .sort({ created_at: -1 })
-//     .limit(50);
-
-//   if (messages.length === 0) {
-//     return {
-//       user_insights: {},
-//       conversation_summary: "No conversation history yet",
-//       learning_notes: []
-//     };
-//   }
-
-//   // Create conversation text for analysis
-//   const conversationText = messages
-//     .reverse()
-//     .map(msg => `${msg.role}: ${msg.text}`)
-//     .join('\n\n');
-
-//   const analysisPrompt = `Analyze this conversation and extract user insights. Return ONLY a valid JSON object with this structure:
-
-// {
-//   "user_insights": {
-//     "communication_style": "formal|casual|friendly|professional",
-//     "topics_of_interest": ["topic1", "topic2"],
-//     "conversation_tone": "upbeat|calm|analytical|creative",
-//     "emoji_preference": true/false,
-//     "response_length": "short|medium|long"
-//   },
-//   "conversation_summary": "Brief summary of conversation themes",
-//   "learning_notes": [
-//     "Important note about user preference 1",
-//     "Important note about user preference 2"
-//   ]
-// }
-
-// ANALYSIS GUIDELINES:
-// - communication_style: Based on language formality, vocabulary, sentence structure
-// - topics_of_interest: Recurring subjects, hobbies, work, passions mentioned
-// - conversation_tone: Overall emotional tone and energy level
-// - response_length: Whether user prefers short, medium, or detailed responses
-// - learning_notes: Key insights about personality, preferences, goals, or important life details
-
-// Focus on patterns, preferences, and meaningful insights that would help personalize future interactions.`;
-
-//   try {
-//     const contents = createUserContent([
-//       analysisPrompt,
-//       { text: conversationText }
-//     ]);
-
-//     const response = await gemini.models.generateContent({
-//       model: GEMINI_MODEL,
-//       contents
-//     });
-
-//     const analysis: IConversationAnalysis = extractJson(response.text);
-//     return analysis;
-//   } catch (error) {
-//     return {
-//       user_insights: {},
-//       conversation_summary: "Analysis failed",
-//       learning_notes: []
-//     };
-//   }
-// }
-
-// export async function updateUserFromConversations(user_id: string): Promise<void> {
-//   try {
-//     const analysis = await analyzeUserConversations(user_id);
-
-//     if (!analysis.user_insights || Object.keys(analysis.user_insights).length === 0) {
-//       return;
-//     }
-
-//     const updateData: any = {};
-
-//     // Update preferences if we have insights
-//     if (analysis.user_insights) {
-//       updateData['preferences'] = {};
-
-//       if (analysis.user_insights.communication_style) {
-//         updateData['preferences.communication_style'] = analysis.user_insights.communication_style;
-//       }
-//       if (analysis.user_insights.conversation_tone) {
-//         updateData['preferences.conversation_tone'] = analysis.user_insights.conversation_tone;
-//       }
-//       if (analysis.user_insights.response_length) {
-//         updateData['preferences.response_length'] = analysis.user_insights.response_length;
-//       }
-//       if (analysis.user_insights.topics_of_interest && analysis.user_insights.topics_of_interest.length > 0) {
-//         updateData['preferences.topics_of_interest'] = analysis.user_insights.topics_of_interest;
-//       }
-//     }
-
-//     // Update context
-//     if (analysis.learning_notes && analysis.learning_notes.length > 0) {
-//       updateData['context.important_notes'] = analysis.learning_notes;
-//     }
-//     if (analysis.conversation_summary) {
-//       updateData['context.conversation_history_summary'] = analysis.conversation_summary;
-//     }
-
-//     if (Object.keys(updateData).length > 0) {
-//       await User.findByIdAndUpdate(user_id, updateData);
-//       console.log(`Updated user ${user_id} preferences from conversation analysis`);
-//     }
-
-//   } catch (error) {
-//     console.error('Error updating user from conversations:', error);
-//   }
-// }
-
-// export async function updateUserAfterConversation(user_id: string, userMessage: string, aiResponse: string): Promise<void> {
-//   try {
-//     const insights = await analyzeSingleConversation(userMessage, aiResponse);
-//     console.log(insights)
-//     if (isEmpty(insights)) {
-//       return;
-//     }
-
-//     const updateData: any = {};
-
-//     // Update specific preferences based on this conversation
-//     // if (insights.communication_style) {
-//     //   updateData['preferences.communication_style'] = insights.communication_style;
-//     // }
-//     if (insights.conversation_tone) {
-//       updateData['preferences.conversation_tone'] = insights.conversation_tone;
-//     }
-//     if (insights.response_length) {
-//       updateData['preferences.response_length'] = insights.response_length;
-//     }
-//     if (insights.topics_of_interest && insights.topics_of_interest.length > 0) {
-//       // Add to existing topics of interest
-//       updateData['$addToSet'] = {
-//         'preferences.topics_of_interest': { $each: insights.topics_of_interest }
-//       };
-//     }
-
-//     if (Object.keys(updateData).length > 0) {
-//       await User.findByIdAndUpdate(user_id, updateData);
-//       console.log(`Updated user ${user_id} preferences from single conversation`);
-//     }
-
-//   } catch (error) {
-//     console.error('Error updating user after conversation:', error);
-//   }
-// }
+export const parseJson = (text: string) => {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return null;
+  }
+}

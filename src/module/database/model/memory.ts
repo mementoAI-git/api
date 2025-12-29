@@ -15,6 +15,13 @@ export interface IMemory {
   session_id?: string
   last_opened: string
   created_at: string
+  updated_at?: string
+  // AI context optimization fields
+  summary?: string              // AI-generated conversation summary
+  topics?: string[]             // Key topics discussed in this conversation
+  last_summarized_at?: Date     // Track when the conversation was last summarized
+  message_count?: number        // Track message count for summarization triggers
+  last_active?: Date            // Track last activity for inactivity-based summarization
 }
 
 const memory = new Schema<IMemory>({
@@ -42,6 +49,23 @@ const memory = new Schema<IMemory>({
   prompt: String,
   session_id: String,
   last_opened: Date,
+  summary: {
+    type: String,
+    default: null
+  },
+  topics: [String],
+  last_summarized_at: {
+    type: Date,
+    default: null
+  },
+  message_count: {
+    type: Number,
+    default: 0
+  },
+  last_active: {
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: {
     createdAt: 'created_at',

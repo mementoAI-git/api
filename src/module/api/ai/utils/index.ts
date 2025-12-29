@@ -3,17 +3,18 @@ import fs from "fs/promises";
 import { createPartFromUri, createUserContent } from "@google/genai";
 import { IMessage } from "../../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../../services/gemini";
-import { ConversationContext } from "../interface";
 import File, { IFile } from "../../../database/model/file"
 import { TEMP_PATH } from "../../../../utils/config";
-import { IUser } from "../../../database/model/user";
 import dayjs from "dayjs";
 import { createTitlePrompt } from "./prompts";
 import Memory from "../../../database/model/memory";
 import { getFileFromS3 } from "../../../media";
 import { Readable } from "stream";
+import { queueSummarization } from "../../../../services/queues";
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
+const INACTIVITY_MINUTES = 10; // Summarize after 10 minutes of inactivity
+const MIN_MESSAGES_FOR_SUMMARY = 10; // At least 5 exchange (user + AI)
 
 export async function processFiles(file_ids: string[]) {
   const files = await File.find({ _id: { $in: file_ids } })
@@ -67,24 +68,6 @@ export async function processFile(file: IFile) {
   }
 }
 
-export function analyzeConversationContext(user: IUser, messages: IMessage[]): ConversationContext {
-  const lastMessage = messages[messages.length - 1] || null;
-  const lastUserMessage = messages.findLast(m => m.role === "user") || null;
-  const lastAiMessage = messages.findLast(m => m.role === "ai") || null;
-  const timeSinceLastMessage = lastMessage
-    ? dayjs().diff(lastMessage.created_at, 'millisecond')
-    : 0;
-
-  return {
-    user,
-    messages,
-    lastMessage,
-    lastUserMessage,
-    lastAiMessage,
-    timeSinceLastMessage,
-  };
-}
-
 export function createChatHistory(messages: IMessage[]) {
   return messages.map(m => ({
     role: m.role === "ai" ? "model" : "user",
@@ -125,5 +108,79 @@ export async function updateMemoryTitle(memoryId: string, userMessage: string, a
     await Memory.findByIdAndUpdate(memoryId, { title });
   } catch (error) {
     console.error('Error updating memory title:', error);
+  }
+}
+
+/**
+ * Check if a message is significant enough to extract insights from.
+ * Filters out trivial messages like "ok", "thanks", etc.
+ */
+export function isSignificantMessage(message: string): boolean {
+  if (!message || message.length < 20) return false;
+
+  const trivialPatterns = /^(ok|okay|sure|thanks|thank you|got it|cool|nice|great|yes|no|yep|nope|alright|fine|good|right|hmm|hm|ah|oh|wow|lol|haha|k|yea|yeah|nah)\.?!?$/i;
+  return !trivialPatterns.test(message.trim());
+}
+
+export function shouldSummarize(memory: any): boolean {
+  if (!memory) return false;
+
+  const messageCount = memory.message_count || 0;
+  if (messageCount < MIN_MESSAGES_FOR_SUMMARY) return false; // Not enough messages
+
+  const lastActive = memory.last_active || memory.updated_at;
+  if (!lastActive) return false;
+
+  const minutesSinceActive = dayjs().diff(dayjs(lastActive), 'minute');
+  return minutesSinceActive >= INACTIVITY_MINUTES;
+}
+
+export async function triggerSummarization(memoryId: string): Promise<boolean> {
+  try {
+    const memory = await Memory.findById(memoryId);
+    if (!memory || memory.type !== 'conversation') {
+      return false;
+    }
+
+    if (shouldSummarize(memory)) {
+      await queueSummarization(memoryId);
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    return false;
+  }
+}
+
+export async function getRecentConversationSummaries(
+  userId: string,
+  excludeMemoryId?: string,
+  limit: number = 5
+): Promise<Array<{ title: string; summary: string; topics: string[] }>> {
+  try {
+    const query: any = {
+      user: userId,
+      type: 'conversation',
+      summary: { $exists: true, $ne: null }
+    };
+
+    if (excludeMemoryId) {
+      query._id = { $ne: excludeMemoryId };
+    }
+
+    const memories = await Memory.find(query)
+      .sort({ updated_at: -1 })
+      .limit(limit)
+      .select('title summary topics');
+
+    return memories.map(m => ({
+      title: m.title || 'Untitled conversation',
+      summary: m.summary || '',
+      topics: m.topics || []
+    }));
+  } catch (error) {
+    console.error('Error fetching conversation summaries:', error);
+    return [];
   }
 }
