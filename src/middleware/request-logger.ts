@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import { Request, Response, NextFunction } from 'express';
+import logger from '../utils/logger';
 
 const requestLogger = (
   req: Request,
@@ -13,7 +14,7 @@ const requestLogger = (
   res.on('finish', () => {
     const [seconds, nanoseconds] = process.hrtime(start);
     const elapsedTime = (seconds * 1e3 + nanoseconds / 1e6).toFixed(3);
-    console.log(
+    logger.info(
       `[${timestamp}] ${method.toUpperCase()} • ${url} • (${elapsedTime})ms`,
     );
   });

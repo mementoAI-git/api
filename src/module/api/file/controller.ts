@@ -5,6 +5,7 @@ import { getFiles, responsHandler } from "../../../utils/helpers"
 import { StatusCodes } from "http-status-codes"
 import dayjs from "dayjs"
 import { pipeline } from 'stream/promises';
+import logger from "../../../utils/logger"
 
 export async function uploadFile(req: IRequest, res: Response, next: NextFunction) {
   try {
@@ -35,7 +36,7 @@ const safeStreamToResponse = async (stream: NodeJS.ReadableStream, res: Response
     await pipeline(stream, res);
   } catch (error) {
     if (isClientDisconnectError(error)) {
-      console.log('Client disconnected during file streaming');
+      logger.info('Client disconnected during file streaming');
     } else {
       throw error;
     }
