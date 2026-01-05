@@ -5,6 +5,7 @@ import { compareStrings, responsHandler } from '../utils/helpers';
 import { ServiceError } from '../utils/service-error';
 import mail from '../module/mail';
 import { NODE_ENV } from '../utils/config';
+import logger from '../utils/logger';
 
 const errorHandler = (
   err: any,
@@ -15,7 +16,7 @@ const errorHandler = (
 
   // If headers have already been sent, we can't send an error response
   if (res.headersSent) {
-    console.error('Error occurred after headers were sent:', err);
+    logger.error(err, 'Error occurred after headers were sent');
     return;
   }
 
@@ -30,6 +31,8 @@ const errorHandler = (
 
   const error_payload = { request, message, path, stackLines };
 
+  logger.error(error_payload, 'Error occurred')
+
   if (err instanceof ServiceError) {
     return responsHandler(res, err.statusCode, err?.message, err?.data);
   }
@@ -41,6 +44,11 @@ const errorHandler = (
     });
   }
 
+  logger.fatal(error_payload, 'Error occurred')
+  mail.send({
+    subject: 'Memento error',
+    text: JSON.stringify(error_payload, null, 2),
+  });
   return responsHandler(
     res,
     StatusCodes.INTERNAL_SERVER_ERROR,

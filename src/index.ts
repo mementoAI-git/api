@@ -1,20 +1,21 @@
 import { PORT } from "./utils/config";
 import app from "./app"
+import logger from "./utils/logger";
 
 process.on('uncaughtException', (error) => {
-    console.error("Uncaught Exception:", error);
+    logger.error(error, "Uncaught Exception");
     process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
-    console.log("Unhandled rejection: ", reason)
+    logger.error(reason, "Unhandled rejection");
 });
 
 process.on('SIGINT', () => {
-    console.log('Application shutting down...');
+    logger.info('Application shutting down...');
     process.exit(0);
 });
 
 app.listen(PORT, () => {
-    console.log(`Application runing on port ${PORT}...`)
+    logger.info(`Application runing on port ${PORT}...`)
 })

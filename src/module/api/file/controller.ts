@@ -1,10 +1,11 @@
-import {NextFunction, Response, Request} from 'express';
-import {IRequest} from '../../../utils/interface';
-import * as service from './service';
-import {getFiles, responsHandler} from '../../../utils/helpers';
-import {StatusCodes} from 'http-status-codes';
-import dayjs from 'dayjs';
-import {pipeline} from 'stream/promises';
+import { NextFunction, Response, Request } from "express"
+import { IRequest } from "../../../utils/interface"
+import * as service from "./service"
+import { getFiles, responsHandler } from "../../../utils/helpers"
+import { StatusCodes } from "http-status-codes"
+import dayjs from "dayjs"
+import { pipeline } from 'stream/promises';
+import logger from "../../../utils/logger"
 
 export async function uploadFile(
   req: IRequest,
@@ -13,7 +14,7 @@ export async function uploadFile(
 ) {
   try {
     const files = getFiles(req, true);
-    const {message, data} = await service.uploadFile(files, req.auth.id);
+    const { message, data } = await service.uploadFile(files, req.auth.id);
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -42,7 +43,7 @@ const safeStreamToResponse = async (
     await pipeline(stream, res);
   } catch (error) {
     if (isClientDisconnectError(error)) {
-      console.log('Client disconnected during file streaming');
+      logger.info('Client disconnected during file streaming');
     } else {
       throw error;
     }
@@ -74,7 +75,7 @@ const setFileHeaders = (res: Response, metadata: any): void => {
 
 export async function getFile(req: Request, res: Response, next: NextFunction) {
   try {
-    const {name} = req.params;
+    const { name } = req.params;
     const range = req.headers?.range;
 
     const metadata = await service.getFileMetadata(name);
@@ -88,7 +89,7 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
 
     // Handle range requests (partial content)
     if (range) {
-      const {start, end, buffer} = data;
+      const { start, end, buffer } = data;
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${metadata.size}`,
         'Content-Length': end - start + 1,
@@ -137,7 +138,7 @@ export async function removeFile(
   next: NextFunction,
 ) {
   try {
-    const {message, data} = await service.removeFile(
+    const { message, data } = await service.removeFile(
       req.params.name,
       req.auth.id,
     );

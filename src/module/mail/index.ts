@@ -16,6 +16,7 @@ import * as path from 'path';
 import { IBeneficiary } from '../database/model/beneficiary';
 import { INotifyTeamFeedback } from './interface';
 import otp, { OtpType } from '../../services/otp';
+import logger from '../../utils/logger';
 
 const transport = nodemailer.createTransport({
   //@ts-ignore
@@ -49,7 +50,7 @@ class MailService {
         ...payload,
       });
     } catch (error) {
-      console.log(error);
+      logger.error(error, 'Error sending email');
     }
   }
 
