@@ -70,3 +70,13 @@ export const OAUTH_PROVIDERS = {
     redirect_uri: `${OAUTH_REDIRECT_URL}/apple`,
   },
 };
+
+export const queueNames = {
+  summarization: {
+    id: 'summarization',
+    jobs: {
+      conversation: 'conversation',
+      persona: 'persona',
+    }
+  }
+}

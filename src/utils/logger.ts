@@ -1,8 +1,7 @@
 import pino from "pino";
 import { NODE_ENV } from "./config";
-import { compareStrings } from "./helpers";
 
-const isProduction = compareStrings(NODE_ENV, 'production');
+const isProduction = NODE_ENV === 'production';
 
 const loggerConfig: pino.LoggerOptions = {
   level: isProduction ? 'info' : 'debug',
@@ -20,5 +19,4 @@ const loggerConfig: pino.LoggerOptions = {
 };
 
 const logger = pino(loggerConfig);
-
 export default logger;

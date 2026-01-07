@@ -11,6 +11,8 @@ export interface IPersona {
   self_description?: string
   current_priority?: string
   join_reasons?: string[]
+  last_array_update?: Date
+  last_summarized_at?: Date
   created_at: string
   updated_at: string
 }
@@ -29,7 +31,9 @@ const persona = new Schema<IPersona>({
   goals_and_aspirations: [String],
   self_description: String,
   current_priority: String,
-  join_reasons: [String]
+  join_reasons: [String],
+  last_array_update: Date,
+  last_summarized_at: Date
 }, {
   timestamps: {
     createdAt: 'created_at',

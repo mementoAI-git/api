@@ -1,10 +1,9 @@
 import { createUserContent } from "@google/genai";
-import { buildInsightsPrompt, buildSummarizationPrompt } from "../../module/api/ai/utils/prompts";
+import { prompts } from "../../utils";
 import User from "../../module/database/model/user";
 import gemini, { GEMINI_MODEL } from "../../services/gemini";
 import { extractJson } from "../../utils/helpers";
-import Memory from "../../module/database/model/memory";
-import Message from "../../module/database/model/message";
+import Persona, { IPersona } from "../../module/database/model/persona";
 
 async function updateUserWithInsights(userId: string, insights: any): Promise<void> {
   const updateData: any = {};
@@ -42,11 +41,8 @@ export async function extractBatchInsights(
   if (!exchanges || exchanges.length === 0) return;
 
   try {
-    const user = await User.findById(user_id);
-    if (!user) return;
-
-    const existingContext = user.context || {};
-    const prompt = buildInsightsPrompt(existingContext);
+    const persona = await Persona.findOne({ user: user_id });
+    const prompt = prompts.buildInsightsPrompt(persona || {} as IPersona);
 
     // Format all exchanges into a single conversation text
     const conversationText = exchanges
@@ -69,53 +65,5 @@ export async function extractBatchInsights(
     console.log(`Extracted insights from ${exchanges.length} exchanges for user ${user_id}`);
   } catch (error) {
     console.error('Error extracting batch insights:', error);
-  }
-}
-
-export async function generateConversationSummary(memoryId: string): Promise<void> {
-  try {
-    const memory = await Memory.findById(memoryId);
-    if (!memory) {
-      console.error(`Memory ${memoryId} not found for summarization`);
-      return;
-    }
-
-    // Get all messages for this conversation
-    const messages = await Message.find({ memory: memoryId })
-      .sort({ created_at: 1 })
-      .select('role text created_at');
-
-    if (messages.length < 10) {
-      return;
-    }
-
-    // Format messages into conversation text
-    const conversationText = messages
-      .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.text}`)
-      .join('\n\n');
-
-    const prompt = buildSummarizationPrompt();
-    const contents = createUserContent([
-      prompt,
-      { text: conversationText }
-    ]);
-
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents
-    });
-
-    const result = extractJson(response.text);
-
-    // Update memory with summary
-    await Memory.findByIdAndUpdate(memoryId, {
-      summary: result.summary || '',
-      topics: result.topics || [],
-      last_summarized_at: new Date()
-    });
-
-    console.log(`Generated summary for memory ${memoryId}`);
-  } catch (error) {
-    console.error('Error generating conversation summary:', error);
   }
 }

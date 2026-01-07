@@ -10,6 +10,19 @@ interface IUserPreferences {
   conversation_tone?: 'upbeat' | 'calm' | 'analytical' | 'creative'
   response_length?: 'short' | 'medium' | 'long'
 }
+
+// TODO: to be remove after thorough test and confirmation 
+interface IUserContext {
+  important_notes?: string[]
+  key_preferences?: string[]
+  conversation_history_summary?: string
+  emotional_state_trends?: string[]
+  goals_and_aspirations?: string[]
+  self_description?: string
+  current_priority?: string
+  join_reasons?: string[]
+}
+
 export interface IUser {
   _id?: string
   email: string
@@ -24,6 +37,7 @@ export interface IUser {
   onbaorded: boolean
   providers: string[]
   preferences: IUserPreferences
+  context: IUserContext
   verified: boolean
   deleted: boolean
   private_key: string

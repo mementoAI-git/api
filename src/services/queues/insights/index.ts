@@ -27,7 +27,6 @@ export const queue = connection
 // Redis keys
 const BUFFER_PREFIX = 'insights:buffer:';
 const BATCH_SIZE = 5;
-const BATCH_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Get buffer key for Redis
@@ -71,29 +70,6 @@ async function flushInsightsBuffer(buffer: ExchangeBuffer): Promise<void> {
     await redisClient.del(getBufferKey(buffer.user_id, buffer.memory_id));
   } catch (error) {
     console.error('Error flushing insights buffer:', error);
-  }
-}
-
-async function flushStaleBuffers(): Promise<void> {
-  try {
-    if (!redisClient.isOpen) {
-      await redisClient.connect();
-    }
-
-    const keys = await redisClient.keys(`${BUFFER_PREFIX}*`);
-    const now = Date.now();
-
-    for (const key of keys) {
-      const existing = await redisClient.get(key);
-      if (!existing) continue;
-
-      const buffer: ExchangeBuffer = parseJson(existing as string);
-      if (buffer.exchanges.length > 0 && (now - buffer.lastUpdated) > BATCH_TIMEOUT_MS) {
-        await flushInsightsBuffer(buffer);
-      }
-    }
-  } catch (error) {
-    console.error('Error flushing stale buffers:', error);
   }
 }
 

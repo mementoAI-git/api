@@ -1,9 +1,9 @@
 import dayjs from "dayjs";
-import { IUser } from "../../../database/model/user";
-import { isEmpty } from "../../../../utils/helpers";
-import Persona, { IPersona } from "../../../database/model/persona";
-import { IPrompt } from "../../../database/model/prompt";
-import { getRecentConversationSummaries } from ".";
+import { IUser } from "../module/database/model/user";
+import { isEmpty } from "./helpers";
+import Persona, { IPersona } from "../module/database/model/persona";
+import { IPrompt } from "../module/database/model/prompt";
+import { getRecentConversationSummaries } from "../module/api/ai/utils";
 
 function buildPastConversationsContext(
   summaries: Array<{ title: string; summary: string; topics: string[] }>
@@ -24,7 +24,7 @@ ${summariesText}
 Use this context naturally - don't explicitly mention "our past conversations" but do reference specific topics or insights when relevant.`;
 }
 
-export async function createSystemContext(user: IUser, currentMemoryId?: string, persona: IPersona = null): Promise<string> {
+async function createSystemContext(user: IUser, currentMemoryId?: string, persona: IPersona = null): Promise<string> {
   let userContext = persona || {} as IPersona;
   if (!persona) {
     userContext = await Persona.findOne({ user: user._id });
@@ -133,7 +133,7 @@ IMPORTANT GUIDELINES:
 Remember: You're having a conversation with ${user?.nickname || user?.first_name || 'the user'}. Be natural, helpful, and personalized.`;
 }
 
-export function createTranscriptionPrompt(): string {
+function createTranscriptionPrompt(): string {
   return `You are an expert audio transcription assistant. Your task is to transcribe the provided audio file and return the results in a specific JSON format.
 
 IMPORTANT INSTRUCTIONS:
@@ -177,7 +177,7 @@ GUIDELINES:
 Return ONLY the JSON object, no additional formatting or text.`;
 }
 
-export function createTitlePrompt(userMessage: string, aiResponse: string): string {
+function createTitlePrompt(userMessage: string, aiResponse: string): string {
   return `You are an expert at creating concise, meaningful conversation titles. Your task is to analyze the initial conversation exchange and generate a short, descriptive title.
 
 CONVERSATION CONTEXT:
@@ -221,7 +221,7 @@ export async function createSystemContextWithPrompt(
 /**
  * Build the insights extraction prompt for a given user context
  */
-export function buildInsightsPrompt(existingContext: any): string {
+function buildInsightsPrompt(existingContext: IPersona): string {
   return `Analyze this conversation exchange and extract comprehensive user insights.
 
 Return ONLY a valid JSON object with NEW insights (not already in existing context):
@@ -256,7 +256,7 @@ EXTRACTION RULES:
 Return ONLY the JSON object, no additional text.`;
 }
 
-export function buildSummarizationPrompt(): string {
+function buildSummarizationPrompt(): string {
   return `You are a conversation summarizer. Analyze the following conversation and create a comprehensive summary.
 
 Return ONLY a valid JSON object with this structure:
@@ -275,3 +275,54 @@ SUMMARIZATION GUIDELINES:
 
 Return ONLY the JSON object, no additional text.`;
 }
+
+function buildTopicSummarizationPrompt(
+  items: string[],
+  fieldType: 'important_notes' | 'key_preferences'
+): string {
+  const fieldDescription = fieldType === 'important_notes'
+    ? 'important notes about the user (personality traits, life experiences, values, beliefs, relationships, goals, fears, achievements, or significant events)'
+    : 'key preferences (likes, dislikes, hobbies, interests, work preferences, lifestyle choices, food preferences, entertainment choices, etc.)';
+
+  return `You are an expert at consolidating and summarizing user information. Your task is to analyze the following ${fieldDescription} and create consolidated summaries by grouping related items together.
+
+CURRENT ITEMS:
+${items.map((item, i) => `${i + 1}. ${item}`).join('\n')}
+
+TASK:
+Analyze all items and identify related topics/themes. Group related items together and create consolidated string summaries that naturally combine related information.
+
+REQUIREMENTS:
+1. Group related items by topic/theme (e.g., all food-related items together, all relationship info together, all work-related items together)
+2. For each topic group, create a SINGLE consolidated string that naturally combines the related information
+3. Maintain the original meaning while reducing redundancy
+4. Use natural language to merge related information (e.g., "i love rice" + "i like my rice with salad" → "i love rice preferrably with salad")
+5. Return FEWER items than input (consolidation, not expansion)
+6. If items are completely unrelated, keep them separate but still consolidate where possible
+
+Return ONLY a valid JSON object with this structure:
+{
+  "summarized_items": ["consolidated summary 1", "consolidated summary 2", ...]
+}
+
+CRITICAL:
+- Return ONLY the JSON object, no markdown formatting
+- Do NOT wrap the response in \`\`\`json or \`\`\` blocks
+- Do NOT add any explanatory text before or after the JSON
+- The response must be valid JSON that can be parsed directly
+- Each string in summarized_items should be a natural, consolidated summary combining related information
+- The number of output items should be LESS than or equal to the number of input items`;
+}
+
+const prompts = {
+  createSystemContext,
+  buildInsightsPrompt,
+  buildSummarizationPrompt,
+  buildTopicSummarizationPrompt,
+  createTranscriptionPrompt,
+  createTitlePrompt,
+  createSystemContextWithPrompt
+}
+
+export default prompts;
+

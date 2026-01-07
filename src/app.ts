@@ -9,6 +9,7 @@ import path from 'path';
 import setupSwagger from './docs';
 import { initializeScheduler } from './services/scheduler';
 import { httpLogger } from './middleware/http-logger';
+import { setupBullBoard } from './services/queues';
 
 redis.connect();
 connectMongodb();
@@ -30,6 +31,7 @@ app.use(express.json({ limit: "100mb" }));
 app.use('/assets', express.static(path.join(process.cwd(), 'public')));
 
 app.use(httpLogger);
+setupBullBoard(app)
 
 app.use(compression({
   level: 6,

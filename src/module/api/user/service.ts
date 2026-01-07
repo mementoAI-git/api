@@ -277,11 +277,22 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
   ];
 
   const updateDoc: Record<string, unknown> = {};
+  let isModifyingArrays = false;
+
   for (const key of allowed) {
     const value = (payload as any)[key];
     if (!isEmpty(value)) {
       updateDoc[key] = value;
+      // Check if we're modifying important_notes or key_preferences
+      if (key === 'important_notes' || key === 'key_preferences') {
+        isModifyingArrays = true;
+      }
     }
+  }
+
+  // Set last_array_update when arrays are modified
+  if (isModifyingArrays) {
+    updateDoc.last_array_update = new Date();
   }
 
   const persona = await Persona.findOneAndUpdate(

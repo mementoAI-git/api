@@ -1,6 +1,7 @@
 import cron, { ScheduledTask } from "node-cron"
 import resetStreak from "./reset-streak"
 import summarizeInactiveConversations from "./summarize-inactive-conversation"
+import { initializePersonaSummarization } from "../queues/summarization"
 
 const tasks: ScheduledTask[] = []
 
@@ -18,6 +19,7 @@ export function initializeScheduler() {
     createTask("0 0 * * *", resetStreak),
     createTask("*/5 * * * *", summarizeInactiveConversations)
   )
+  initializePersonaSummarization();
 
   tasks.forEach(task => task.start())
 }

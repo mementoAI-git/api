@@ -4,13 +4,15 @@ import pinoHttpLogger from 'pino-http';
 import pino from 'pino';
 import { isEmpty, sanitizeData } from '../utils/helpers';
 
-const ignorePaths = ['/health', '/favicon.ico', '/metrics', "/docs*"];
+const ignorePaths = ['/health', '/favicon.ico', '/metrics'];
 
 export const httpLogger = pinoHttpLogger({
   logger,
   autoLogging: {
     ignore: (req) => {
       return req.url.startsWith("/docs") ||
+        req.url.startsWith("/queues") ||
+        req.url.startsWith("/assets") ||
         ignorePaths.includes(req.url || '');
     },
   },
@@ -26,7 +28,6 @@ export const httpLogger = pinoHttpLogger({
       const requestData: Record<string, any> = {
         method: req.method,
         url: req.url,
-        path: req.path,
         ip,
       };
 

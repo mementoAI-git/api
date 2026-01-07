@@ -3,12 +3,12 @@ import { Worker } from 'bullmq';
 import mongoose from 'mongoose';
 import { connectMongodb } from '../module/database/connection';
 import { getRedisConnection } from '../services/redis';
-import { extractBatchInsights, generateConversationSummary } from './insight';
+import { extractBatchInsights, } from './insight';
+import { queueNames, compareStrings } from '../utils';
+import { summarizeAllPersonas, generateConversationSummary } from './summarizarion';
 
 async function startWorkers() {
-  // Connect to database first
   await connectMongodb();
-
   const connection = getRedisConnection();
 
   // Insights extraction worker
@@ -28,13 +28,19 @@ async function startWorkers() {
 
   // Summarization worker
   const summarizationWorker = new Worker(
-    'conversation-summarization',
+    queueNames.summarization.id,
     async (job) => {
-      await generateConversationSummary(job.data?.memory_id);
+      if (compareStrings(job.name, queueNames.summarization.jobs.persona)) {
+        const { cursor, batchSize, batchNumber } = job.data || {};
+        await summarizeAllPersonas(cursor, batchSize, batchNumber);
+      }
+      if (compareStrings(job.name, queueNames.summarization.jobs.conversation)) {
+        await generateConversationSummary(job.data?.memory_id);
+      }
     },
     {
       connection,
-      concurrency: 1, // Process 1 at a time (summarization is heavier)
+      concurrency: 1,
       limiter: {
         max: 5,
         duration: 60000
@@ -44,7 +50,6 @@ async function startWorkers() {
 
   // Handle graceful shutdown
   const shutdown = async () => {
-
     await insightsWorker.close();
     await summarizationWorker.close();
     await mongoose.disconnect();

@@ -11,11 +11,7 @@ import File, { ITranscriptionData } from "../../database/model/file"
 import { NotFoundException } from "../../../utils/service-error";
 import User from "../../database/model/user";
 import dayjs from "dayjs";
-import {
-  createSystemContext,
-  createSystemContextWithPrompt,
-} from "./utils/prompts";
-import { createTranscriptionPrompt } from './utils/prompts';
+import { prompts } from "../../../utils";
 import Memory from "../../database/model/memory";
 import {
   triggerSummarization,
@@ -46,7 +42,7 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
 
   let content: PartListUnion = [payload.text]
 
-  const systemInstruction = await createSystemContext(user, payload.memory);
+  const systemInstruction = await prompts.createSystemContext(user, payload.memory);
 
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
@@ -192,7 +188,7 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
     return { message: "Transcription successful", data: file.transcription }
   }
 
-  const prompt = createTranscriptionPrompt()
+  const prompt = prompts.createTranscriptionPrompt()
   const processedFile = await processFile(file)
 
   let contents = createUserContent([prompt, processedFile])
@@ -218,7 +214,7 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     prompt = await Prompt.findById(payload.prompt_id)
   }
 
-  const systemInstruction = await createSystemContextWithPrompt(user, prompt);
+  const systemInstruction = await prompts.createSystemContextWithPrompt(user, prompt);
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
     config: {
