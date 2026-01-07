@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import { IUser } from "../../../database/model/user";
+import Persona, { IPersona } from "../../../database/model/persona";
 import { ConversationContext } from "../interface";
 import { getTimeBasedGreeting, isEmpty } from "../../../../utils/helpers";
 import { IPrompt } from "../../../database/model/prompt";
@@ -10,9 +11,13 @@ const TIME_CONSTANTS = {
   ONE_WEEK_MS: 7 * 24 * 60 * 60 * 1000,
 } as const;
 
-export function createSystemContext(user: IUser): string {
+export async function createSystemContext(user: IUser, persona: IPersona = null): Promise<string> {
+  let userContext = persona || {} as IPersona;
+  if (!persona) {
+    userContext = await Persona.findOne({ user: user._id });
+  }
+
   const userPreferences = user.preferences || {};
-  const userContext = user.context || {};
 
   return `You are Memento — a warm, reflective AI companion who listens deeply and engages like a trusted friend.
 
@@ -252,8 +257,8 @@ EXAMPLES:
 Return ONLY the title text, no quotes, no extra formatting, no explanations.`;
 }
 
-export function createSystemContextWithPrompt(user: IUser, prompt: IPrompt = null) {
-  let context = createSystemContext(user);
+export async function createSystemContextWithPrompt(user: IUser, prompt: IPrompt = null): Promise<string> {
+  let context = await createSystemContext(user);
   if (isEmpty(prompt)) return context;
 
   context += `\n\nCONVERSATION CONTEXT:

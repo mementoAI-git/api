@@ -4,11 +4,11 @@ import cors from 'cors';
 import compression from "compression"
 import router from './module/api';
 import { connectMongodb } from './module/database/connection';
-import requestLogger from './middleware/request-logger';
 import redis from "./services/redis"
 import path from 'path';
 import setupSwagger from './docs';
 import { initializeScheduler } from './services/scheduler';
+import { httpLogger } from './middleware/http-logger';
 
 redis.connect();
 connectMongodb();
@@ -29,7 +29,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: "100mb" }));
 app.use('/assets', express.static(path.join(process.cwd(), 'public')));
 
-app.use(requestLogger);
+app.use(httpLogger);
 
 app.use(compression({
   level: 6,

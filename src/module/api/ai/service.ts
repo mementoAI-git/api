@@ -7,16 +7,15 @@ import { geminiAuthClient, GEMINI_LIVE_MODEL } from "../../../services/gemini";
 import { extractJson, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { IPrompt, IStartMemory, ITranscribeAudio } from "./interface";
-import File, { IFile, ITranscriptionData } from "../../database/model/file"
+import File, { ITranscriptionData } from "../../database/model/file"
 import { NotFoundException } from "../../../utils/service-error";
 import User from "../../database/model/user";
 import dayjs from "dayjs";
-import { createSystemContext, createSystemContextWithPrompt, generateGreetingPrompt } from "./utils/prompts";
+import { createSystemContext, createSystemContextWithPrompt } from "./utils/prompts";
 import { createTranscriptionPrompt } from './utils/prompts';
 import { extractAllUserInsights } from './user-learning';
 import Memory from "../../database/model/memory";
 import {
-  analyzeConversationContext,
   createChatHistory,
   processFile,
   processFiles,
@@ -27,6 +26,9 @@ import { updateStreak } from "../user/service";
 
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
 
   let messages = await Message.find({
     user: user_id,
@@ -42,7 +44,7 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
     config: {
-      systemInstruction: createSystemContext(user)
+      systemInstruction: await createSystemContext(user)
     },
     history: createChatHistory(messages)
   });
@@ -105,31 +107,6 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
     }
     res.end();
   }
-}
-
-export async function greet(user_id: string) {
-  const user = await User.findById(user_id);
-  if (!user) {
-    throw new NotFoundException("User not found");
-  }
-
-  const messages = await Message.find({ user })
-    .sort({ created_at: -1 })
-    .limit(25);
-  const reversedMessages = messages.reverse();
-
-  const context = analyzeConversationContext(user, reversedMessages);
-  const prompt = generateGreetingPrompt(context);
-
-  const chat = gemini.chats.create({
-    model: GEMINI_MODEL,
-    config: {
-      systemInstruction: createSystemContext(user)
-    },
-    history: createChatHistory(reversedMessages)
-  });
-
-  return await chat.sendMessageStream({ message: prompt });
 }
 
 export async function getUserMessages({ limit, ...query }: IPagination & { next?: string }, user: string) {
@@ -226,11 +203,11 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
   if (!isEmpty(payload.prompt_id)) {
     prompt = await Prompt.findById(payload.prompt_id)
   }
+
+  const systemInstruction = await createSystemContextWithPrompt(user, prompt)
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
-    config: {
-      systemInstruction: createSystemContextWithPrompt(user, prompt)
-    }
+    config: { systemInstruction }
   });
 
   let content: PartListUnion = [payload.text]
