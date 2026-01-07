@@ -31,6 +31,9 @@ import { addToInsightsBuffer } from "../../../services/queues/insights";
 
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
 
   let messages = await Message.find({
     user: user_id,
@@ -47,9 +50,7 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
 
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
-    config: {
-      systemInstruction
-    },
+    config: { systemInstruction },
     history: createChatHistory(messages)
   });
 
@@ -217,9 +218,7 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     prompt = await Prompt.findById(payload.prompt_id)
   }
 
-  // Use async system context for cross-conversation awareness
   const systemInstruction = await createSystemContextWithPrompt(user, prompt);
-
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
     config: {

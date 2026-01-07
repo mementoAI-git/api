@@ -449,7 +449,6 @@ export async function removeFileFromMemory(file_id: string, user_id: string) {
   }
 
   const memory = await Memory.findOne({ user: user_id, attachments: file_id })
-  console.log(memory)
   if (memory) {
     await memory.updateOne({ $pull: { attachments: file_id } })
   }

@@ -33,6 +33,16 @@ export const SUPPORTED_FILE_TYPES = [
   'audio/x-mpeg-3',
 ] as const;
 
+export const SENSITIVE_FIELDS = [
+  'password',
+  'old_password',
+  'new_password',
+  'authorization',
+  'access_token',
+  "token",
+  'refresh_token',
+];
+
 export const OAUTH_PROVIDERS = {
   google: {
     authoriation_url: `https://accounts.google.com/o/oauth2/auth?client_id=${GOOGLE_ID}&scope=email profile openid`,

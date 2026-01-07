@@ -1,12 +1,13 @@
 import bcrypt from 'bcrypt';
 import dayjs from 'dayjs';
 import User, { IUser } from '../../database/model/user';
+import Persona, { IPersona } from '../../database/model/persona';
 import Memory from '../../database/model/memory';
 import {
   hashPassword,
   isEmpty,
   processFile,
-  reconstructFileName,
+  withTransaction
 } from '../../../utils/helpers';
 import {
   BadRequestException,
@@ -42,9 +43,8 @@ export async function setPassword(payload: ISetPassword, user_id: string) {
 }
 
 export async function getProfile(user_id: string) {
-  const user = await User.findById(user_id).select(
-    '-password -providers -two_factor.secret',
-  );
+  const user = await User.findById(user_id)
+    .select('-password -providers -two_factor.secret')
   if (!user) {
     throw new NotFoundException('User not found', null);
   }
@@ -77,19 +77,12 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     return acc;
   }, {});
 
-  // Handle onboarding fields nested under context only
-  const selfDescription = (payload as any)?.context?.self_description;
-  const currentPriority = (payload as any)?.context?.current_priority;
-  if (!isEmpty(selfDescription)) {
-    (updatePayload as any)['context.self_description'] = selfDescription;
-  }
-  if (!isEmpty(currentPriority)) {
-    (updatePayload as any)['context.current_priority'] = currentPriority;
-  }
-
-  const data = await User.findByIdAndUpdate(user_id, updatePayload, {
-    new: true,
-  }).select('-password -providers -public_key -private_key');
+  const data = await User.findByIdAndUpdate(
+    user_id,
+    updatePayload,
+    { new: true }
+  )
+    .select('-password -providers -public_key -private_key')
 
   return { message: 'User profile updated successfully', data };
 }
@@ -136,7 +129,6 @@ export async function uploadPicture(
   }
 
   const { name, type, size } = await processFile(payload[0], user_id);
-  // const { name, mimetype, data, size } = processedFile
 
   const file = await File.create({
     name,
@@ -229,26 +221,40 @@ export async function completeOnboarding(
     throw new NotFoundException('User not found');
   }
 
-  const updateDoc: any = { onbaorded: true };
+  // Create or update persona
   if (payload) {
+    const personaData: any = {};
     if (!isEmpty(payload?.self_description)) {
-      updateDoc['context.self_description'] = payload.self_description;
+      personaData.self_description = payload.self_description;
     }
     if (!isEmpty(payload?.current_priority)) {
-      updateDoc['context.current_priority'] = payload.current_priority;
-    }
-    if (!isEmpty(payload?.dob)) {
-      updateDoc['dob'] = payload.dob;
+      personaData.current_priority = payload.current_priority;
     }
     if (
       Array.isArray(payload?.join_reasons) &&
       payload.join_reasons.length > 0
     ) {
-      updateDoc['context.join_reasons'] = payload.join_reasons;
+      personaData.join_reasons = payload.join_reasons;
     }
-  }
 
-  await user.updateOne(updateDoc);
+    await withTransaction(async (session) => {
+      if (Object.keys(personaData).length > 0) {
+        await Persona.findOneAndUpdate(
+          { user: user_id },
+          personaData,
+          { upsert: true, session }
+        );
+      }
+
+      if (!isEmpty(payload?.dob)) {
+        user.dob = payload.dob;
+      }
+
+      user.onbaorded = true;
+      await user.save({ session });
+
+    });
+  }
 
   mail.sendWelcome({
     email: user.email,
@@ -259,11 +265,6 @@ export async function completeOnboarding(
 }
 
 export async function updateContext(payload: IUpdateContext, user_id: string) {
-  const user = await User.findById(user_id);
-  if (!user) {
-    throw new NotFoundException('User not found');
-  }
-
   const allowed: Array<keyof IUpdateContext> = [
     'important_notes',
     'key_preferences',
@@ -279,24 +280,20 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
   for (const key of allowed) {
     const value = (payload as any)[key];
     if (!isEmpty(value)) {
-      updateDoc[`context.${key}`] = value;
+      updateDoc[key] = value;
     }
   }
 
-  if (Object.keys(updateDoc).length === 0) {
-    return {
-      message: 'Nothing to update',
-      data: await User.findById(user_id).select(
-        '-password -providers -two_factor.secret',
-      ),
-    };
+  const persona = await Persona.findOneAndUpdate(
+    { user: user_id },
+    updateDoc,
+    { upsert: true, new: true }
+  );
+  if (!persona) {
+    throw new NotFoundException('Persona not found');
   }
 
-  const data = await User.findByIdAndUpdate(user_id, updateDoc, {
-    new: true,
-  }).select('-password -providers -public_key -private_key');
-
-  return { message: 'User context updated successfully', data };
+  return { message: 'User context updated successfully', data: null };
 }
 
 export async function deleteUser(user_id: string) {
@@ -374,6 +371,80 @@ export async function resetStreaksForInactiveUsers() {
     data: {
       usersUpdated: result.modifiedCount,
       totalMatched: result.matchedCount,
+    },
+  };
+}
+
+export async function migrateUserContextToPersona() {
+
+  // Find all users that have a context field (using raw MongoDB query)
+  const usersWithContext = await User.find({
+    context: { $exists: true, $ne: null }
+  } as any).lean();
+
+  let migrated = 0;
+  let skipped = 0;
+  let errors = 0;
+  const errorDetails: Array<{ user_id: string; error: string }> = [];
+
+  for (const user of usersWithContext) {
+    try {
+      const context = (user as any).context as Omit<IPersona, "user">;
+
+      // Check if context has any meaningful data
+      const hasData =
+        (context.important_notes && context.important_notes.length > 0) ||
+        (context.key_preferences && context.key_preferences.length > 0) ||
+        context.conversation_history_summary ||
+        (context.emotional_state_trends && context.emotional_state_trends.length > 0) ||
+        (context.goals_and_aspirations && context.goals_and_aspirations.length > 0) ||
+        context.self_description ||
+        context.current_priority ||
+        (context.join_reasons && context.join_reasons.length > 0);
+
+      if (!hasData) {
+        skipped++;
+        continue;
+      }
+
+      // Check if persona already exists for this user
+      const existingPersona = await Persona.findOne({ user: user._id });
+      if (existingPersona) {
+        skipped++;
+        continue;
+      }
+
+      // Create persona with context data
+      await Persona.create({
+        user: user._id,
+        important_notes: context.important_notes || [],
+        key_preferences: context.key_preferences || [],
+        conversation_history_summary: context.conversation_history_summary || undefined,
+        emotional_state_trends: context.emotional_state_trends || [],
+        goals_and_aspirations: context.goals_and_aspirations || [],
+        self_description: context.self_description || undefined,
+        current_priority: context.current_priority || undefined,
+        join_reasons: context.join_reasons || [],
+      });
+
+      migrated++;
+    } catch (error) {
+      errors++;
+      errorDetails.push({
+        user_id: (user._id as any).toString(),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  return {
+    message: 'Migration completed',
+    data: {
+      totalUsersWithContext: usersWithContext.length,
+      migrated,
+      skipped,
+      errors,
+      errorDetails: errors > 0 ? errorDetails : undefined,
     },
   };
 }

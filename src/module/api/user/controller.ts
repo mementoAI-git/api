@@ -109,3 +109,13 @@ export async function getUserStats(req: IRequest, res: Response, next: NextFunct
     next(error)
   }
 }
+
+// TODO: Remove this endpoint after migration is complete
+export async function migrateContextToPersona(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.migrateUserContextToPersona()
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

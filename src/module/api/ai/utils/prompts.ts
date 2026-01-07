@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import { IUser } from "../../../database/model/user";
 import { isEmpty } from "../../../../utils/helpers";
+import Persona, { IPersona } from "../../../database/model/persona";
 import { IPrompt } from "../../../database/model/prompt";
 import { getRecentConversationSummaries } from ".";
 
@@ -23,22 +24,21 @@ ${summariesText}
 Use this context naturally - don't explicitly mention "our past conversations" but do reference specific topics or insights when relevant.`;
 }
 
-/**
- * Create system context with cross-conversation awareness
- * @param user - The user object
- * @param currentMemoryId - Optional: exclude current conversation from summaries
- */
-export async function createSystemContext(user: IUser, currentMemoryId?: string): Promise<string> {
+export async function createSystemContext(user: IUser, currentMemoryId?: string, persona: IPersona = null): Promise<string> {
+  let userContext = persona || {} as IPersona;
+  if (!persona) {
+    userContext = await Persona.findOne({ user: user._id });
+  }
+
   const userPreferences = user.preferences || {};
-  const userContext = user.context || {};
 
   const summaries = await getRecentConversationSummaries(user._id, currentMemoryId, 5);
   const pastConversationsContext = buildPastConversationsContext(summaries);
 
-  return buildSystemContextString(user, userPreferences, userContext, pastConversationsContext);
+  return buildSystemContext(user, userPreferences, userContext, pastConversationsContext);
 }
 
-function buildSystemContextString(
+function buildSystemContext(
   user: IUser,
   userPreferences: any,
   userContext: any,

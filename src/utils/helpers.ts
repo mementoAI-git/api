@@ -18,7 +18,9 @@ import { tmpdir } from 'os';
 import { getAudioDurationInSeconds } from 'get-audio-duration';
 import { IFile } from '../module/database/model/file';
 import { uploadToS3 } from '../module/media';
-import { SUPPORTED_FILE_TYPES } from './constant';
+import mongoose from '../module/database/connection';
+import { SENSITIVE_FIELDS, SUPPORTED_FILE_TYPES } from './constant';
+import { ClientSession } from 'mongoose';
 
 export const random = (
   len: number = 6,
@@ -366,5 +368,48 @@ export const parseJson = (text: string) => {
     return JSON.parse(text);
   } catch (error) {
     return null;
+  }
+}
+
+export const sanitizeData = (data: any): any => {
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeData(item));
+  }
+
+  const sanitized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const lowerKey = key.toLowerCase();
+
+    // Check if this field should be censored (case-insensitive)
+    if (SENSITIVE_FIELDS.some(field => lowerKey.includes(field.toLowerCase()))) {
+      sanitized[key] = 'XXX';
+    } else if (typeof value === 'object' && value !== null) {
+      // Recursively sanitize nested objects
+      sanitized[key] = sanitizeData(value);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+};
+
+export async function withTransaction<T>(callback: (session: ClientSession) => Promise<T>): Promise<T> {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
+  try {
+    const result = await callback(session)
+    await session.commitTransaction()
+    return result
+  } catch (error) {
+    await session.abortTransaction()
+    throw error
+  } finally {
+    await session.endSession()
   }
 }

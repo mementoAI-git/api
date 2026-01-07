@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { connectMongodb } from '../connection';
 import Prompt from '../model/prompt';
+import logger from '../../../utils/logger';
 
 async function seedPrompts() {
   await connectMongodb();
@@ -16,11 +17,11 @@ async function seedPrompts() {
   // Insert new prompts
   await Prompt.insertMany(prompts);
 
-  console.log('Prompts seeded successfully!');
+  logger.info('Prompts seeded successfully!');
   process.exit(0);
 }
 
 seedPrompts().catch((err) => {
-  console.error('Error seeding prompts:', err);
+  logger.error(err, 'Error seeding prompts');
   process.exit(1);
 }); 

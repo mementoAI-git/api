@@ -67,19 +67,6 @@ const usersDocs = {
                           },
                         },
                       },
-                      context: {
-                        type: 'object',
-                        properties: {
-                          important_notes: { type: 'array', items: { type: 'string' } },
-                          key_preferences: { type: 'array', items: { type: 'string' } },
-                          conversation_history_summary: { type: 'string' },
-                          emotional_state_trends: { type: 'array', items: { type: 'string' } },
-                          goals_and_aspirations: { type: 'array', items: { type: 'string' } },
-                          self_description: { type: 'string' },
-                          current_priority: { type: 'string' },
-                          join_reasons: { type: 'array', items: { type: 'string' } },
-                        },
-                      },
                       created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                     },
                   },
@@ -725,6 +712,58 @@ const usersDocs = {
                       total_conversations: { type: 'number', example: 30 },
                       total_capsules: { type: 'number', example: 10 },
                       streak: { type: 'number', example: 5 },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {
+          description: 'Unauthorized',
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Error' },
+            },
+          },
+        },
+      },
+    },
+  },
+  // TODO: Remove this endpoint after migration is complete
+  '/users/migrate-context-to-persona': {
+    post: {
+      tags: ['Users'],
+      summary: 'Migrate User Context to Persona',
+      description: 'Migrate existing user context data from User model to Persona model. This is a one-time migration endpoint that should be removed after migration is complete.',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: 'Migration completed successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', example: 'success' },
+                  message: { type: 'string', example: 'Migration completed' },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      totalUsersWithContext: { type: 'number', example: 100 },
+                      migrated: { type: 'number', example: 95 },
+                      skipped: { type: 'number', example: 5 },
+                      errors: { type: 'number', example: 0 },
+                      errorDetails: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            user_id: { type: 'string' },
+                            error: { type: 'string' },
+                          },
+                        },
+                      },
                     },
                   },
                 },

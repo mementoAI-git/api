@@ -15,7 +15,6 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
       res
     )
   } catch (error) {
-    console.log(error)
     next(error)
   }
 }
