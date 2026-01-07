@@ -20,7 +20,7 @@ interface ExchangeBuffer {
 const connection = getRedisConnection();
 
 // Insights extraction queue
-export const queue = connection
+export const insightQueue = connection
   ? new Queue('insights-extraction', { connection })
   : null;
 
@@ -39,12 +39,12 @@ function getBufferKey(userId: string, memoryId: string): string {
  * Queue insights extraction job
  */
 async function queueInsightsExtraction(data: InsightsJobData): Promise<void> {
-  if (!queue) {
+  if (!insightQueue) {
     console.warn('Insights queue not available, skipping...');
     return;
   }
 
-  await queue.add('extract-insights', data, {
+  await insightQueue.add('extract-insights', data, {
     attempts: 3,
     backoff: { type: 'exponential', delay: 1000 },
     removeOnComplete: 100,
