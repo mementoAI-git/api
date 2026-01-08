@@ -38,22 +38,42 @@ export async function queueSummarization(memoryId: string): Promise<void> {
 
 export async function initializePersonaSummarization(): Promise<void> {
   if (!summarizationQueue) {
-    logger.debug('Summarization queue not available, cannot initialize recurring job');
+    logger.error('Summarization queue not available, cannot initialize recurring job');
     return;
   }
 
-  summarizationQueue.upsertJobScheduler(
+  await summarizationQueue.upsertJobScheduler(
     queueNames.summarization.jobs.persona,
-    { pattern: "0 0 * * *" }, // Cron pattern: midnight UTC
+    { pattern: "0 0 * * *" }, // Cron pattern: every 5 minutes to be changed to  0 0 * * *
     {
       opts: {
-        removeOnComplete: true,
-        removeOnFail: 3
+        removeOnComplete: 1,
+        removeOnFail: 2
       }
     }
   )
 
   logger.debug('Initialized persona summarization recurring job (runs daily at midnight UTC)');
+}
+
+export async function initializeConversationSummary(): Promise<void> {
+  if (!summarizationQueue) {
+    logger.error('Summarization queue not available, cannot initialize recurring job');
+    return;
+  }
+
+  await summarizationQueue.upsertJobScheduler(
+    queueNames.summarization.jobs.conversation,
+    { pattern: "0 * * * *" }, // // Every hour at minute 0
+    {
+      opts: {
+        removeOnComplete: 1,
+        removeOnFail: 2
+      }
+    }
+  )
+
+  logger.debug('Initialized conversation summary recurring job (runs every 5 minutes)');
 }
 
 export async function queuePersonaBatchSummarization(

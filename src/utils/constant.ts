@@ -78,5 +78,11 @@ export const queueNames = {
       conversation: 'conversation',
       persona: 'persona',
     }
+  },
+  system: {
+    id: 'system',
+    jobs: {
+      resetStreak: 'reset-streak',
+    }
   }
 }

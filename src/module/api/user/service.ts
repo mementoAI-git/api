@@ -359,33 +359,6 @@ export async function getUserStats(user_id: string) {
   };
 }
 
-export async function resetStreaksForInactiveUsers() {
-  const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
-
-  // Find all users where last_task_date is more than 1 day ago or is null
-  // Reset their streak to 0
-  const result = await User.updateMany(
-    {
-      $or: [
-        { last_task_date: { $lt: yesterday } },
-        { last_task_date: null },
-        { last_task_date: { $exists: false } },
-      ],
-    },
-    {
-      $set: { streak: 0 },
-    },
-  );
-
-  return {
-    message: 'Streaks reset for inactive users',
-    data: {
-      usersUpdated: result.modifiedCount,
-      totalMatched: result.matchedCount,
-    },
-  };
-}
-
 export async function migrateUserContextToPersona() {
 
   // Find all users that have a context field (using raw MongoDB query)

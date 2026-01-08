@@ -1,21 +1,38 @@
-import { PORT } from "./utils/config";
-import app from "./app"
+import { createServer, startServer } from "./app"
 import logger from "./utils/logger";
+import { connectMongodb } from "./module/database/connection";
+import redis from "./services/redis"
+import { initializeScheduler } from "./services/queues";
 
-process.on('uncaughtException', (error) => {
-    logger.error(error, "Uncaught Exception");
+async function bootstrap(): Promise<void> {
+  try {
+
+    // Connect to database
+    await connectMongodb();
+    await redis.connect();
+    await initializeScheduler();
+
+    process.on('uncaughtException', (error) => {
+      logger.error(error, "Uncaught Exception");
+      process.exit(1);
+    });
+
+    process.on('unhandledRejection', (reason) => {
+      logger.error(reason, "Unhandled rejection");
+    });
+
+    process.on('SIGINT', () => {
+      logger.info('Application shutting down...');
+      process.exit(0);
+    });
+
+    // Create and start server
+    const app = createServer();
+    startServer(app);
+  } catch (error) {
+    logger.fatal(error, 'Failed to start server');
     process.exit(1);
-});
+  }
+}
 
-process.on('unhandledRejection', (reason) => {
-    logger.error(reason, "Unhandled rejection");
-});
-
-process.on('SIGINT', () => {
-    logger.info('Application shutting down...');
-    process.exit(0);
-});
-
-app.listen(PORT, () => {
-    logger.info(`Application runing on port ${PORT}...`)
-})
+bootstrap()

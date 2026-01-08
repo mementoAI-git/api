@@ -2,6 +2,7 @@ import { model, PaginateModel, Schema } from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
 export interface IMemory {
+  _id?: string
   title: string
   body: string
   type: string // story conversation

@@ -1,9 +1,11 @@
 import { Application } from 'express';
-import { summarizationQueue } from './summarization';
+import { initializeConversationSummary, initializePersonaSummarization, summarizationQueue } from './summarization';
 import { ExpressAdapter } from "@bull-board/express";
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
 import { insightQueue } from './insights';
+import { initializeResetStreak, systemQueue } from './system';
+import logger from '../../utils/logger';
 
 export function setupBullBoard(app: Application) {
   const serverAdapter = new ExpressAdapter();
@@ -14,7 +16,8 @@ export function setupBullBoard(app: Application) {
 
   const queues = [
     summarizationQueue,
-    insightQueue
+    insightQueue,
+    systemQueue
   ].map((queue) => new BullMQAdapter(queue))
 
   createBullBoard({
@@ -23,6 +26,13 @@ export function setupBullBoard(app: Application) {
   });
 
   app.use(path, serverAdapter.getRouter());
+}
+
+export async function initializeScheduler() {
+  logger.info('Initializing scheduler...');
+  await initializeResetStreak();
+  await initializePersonaSummarization();
+  await initializeConversationSummary();
 }
 
 export * from './insights';

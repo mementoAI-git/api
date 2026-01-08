@@ -1,9 +1,11 @@
 import { createUserContent } from "@google/genai";
-import { prompts } from "../../utils";
+import { logger, prompts } from "../../utils";
 import User from "../../module/database/model/user";
 import gemini, { GEMINI_MODEL } from "../../services/gemini";
 import { extractJson } from "../../utils/helpers";
 import Persona, { IPersona } from "../../module/database/model/persona";
+import { RedisConnection } from "../../services/redis";
+import { Worker } from "bullmq";
 
 async function updateUserWithInsights(userId: string, insights: any): Promise<void> {
   const updateData: any = {};
@@ -34,7 +36,7 @@ async function updateUserWithInsights(userId: string, insights: any): Promise<vo
   }
 }
 
-export async function extractBatchInsights(
+async function extractBatchInsights(
   user_id: string,
   exchanges: Array<{ user: string; ai: string }>
 ): Promise<void> {
@@ -62,8 +64,24 @@ export async function extractBatchInsights(
     const insights = extractJson(response.text);
     await updateUserWithInsights(user_id, insights);
 
-    console.log(`Extracted insights from ${exchanges.length} exchanges for user ${user_id}`);
+    logger.debug(`Extracted insights from ${exchanges.length} exchanges for user ${user_id}`);
   } catch (error) {
-    console.error('Error extracting batch insights:', error);
+    logger.error(error, 'Error extracting batch insights');
   }
+}
+
+export default function startInsightsExtractionWorker(connection: RedisConnection) {
+  return new Worker(
+    'insights-extraction',
+    async (job) => {
+      const { user_id, exchanges } = job.data;
+
+      return await extractBatchInsights(user_id, exchanges);
+    },
+    {
+      connection,
+      concurrency: 2,
+      limiter: { max: 10, duration: 60000 }
+    }
+  );
 }

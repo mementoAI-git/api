@@ -11,11 +11,16 @@ export interface BatchProgress {
   status: string | null;
 }
 
+interface Constructor {
+  redisKey: string;
+  ttl: number;
+}
+
 export class BatchProgressTracker {
   private redisKey: string;
   private ttl: number;
 
-  constructor(redisKey: string, ttl: number = 86400) {
+  constructor({ redisKey, ttl }: Constructor) {
     this.redisKey = redisKey;
     this.ttl = ttl; // Default 24 hours
   }
