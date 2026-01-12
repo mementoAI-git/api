@@ -95,7 +95,10 @@ export async function summarizePersona(
   }
 }
 
-const tracker = new BatchProgressTracker('persona:summarization:', 86400);
+const tracker = new BatchProgressTracker({
+  redisKey: 'persona:summarization:',
+  ttl: 86400
+});
 
 export async function summarizeAllPersonas(
   cursor?: string,
