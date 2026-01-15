@@ -278,11 +278,16 @@ Return ONLY the JSON object, no additional text.`;
 
 function buildTopicSummarizationPrompt(
   items: string[],
-  fieldType: 'important_notes' | 'key_preferences'
+  fieldType: 'important_notes' | 'key_preferences' | 'goals_and_aspirations'
 ): string {
-  const fieldDescription = fieldType === 'important_notes'
-    ? 'important notes about the user (personality traits, life experiences, values, beliefs, relationships, goals, fears, achievements, or significant events)'
-    : 'key preferences (likes, dislikes, hobbies, interests, work preferences, lifestyle choices, food preferences, entertainment choices, etc.)';
+  let fieldDescription: string;
+  if (fieldType === 'important_notes') {
+    fieldDescription = 'important notes about the user (personality traits, life experiences, values, beliefs, relationships, goals, fears, achievements, or significant events)';
+  } else if (fieldType === 'key_preferences') {
+    fieldDescription = 'key preferences (likes, dislikes, hobbies, interests, work preferences, lifestyle choices, food preferences, entertainment choices, etc.)';
+  } else {
+    fieldDescription = 'goals and aspirations (future-oriented statements, dreams, plans, career goals, personal milestones, aspirations, and long-term objectives)';
+  }
 
   return `You are an expert at consolidating and summarizing user information. Your task is to analyze the following ${fieldDescription} and create consolidated summaries by grouping related items together.
 

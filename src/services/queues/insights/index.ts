@@ -7,7 +7,7 @@ import { parseJson } from '../../../utils/helpers';
 export interface InsightsJobData {
   user_id: string;
   memory_id: string;
-  exchanges: Array<{ user: string; ai: string }>;
+  exchanges?: Array<{ user: string; ai: string }>;
 }
 
 interface ExchangeBuffer {
@@ -115,5 +115,21 @@ export async function addToInsightsBuffer(
     }
   } catch (error) {
     console.error('Error adding to insights buffer:', error);
+  }
+}
+
+export async function queueStoryInsights(userId: string, memoryId: string): Promise<void> {
+  if (!insightQueue) {
+    console.warn('Insights queue not available, skipping story insights extraction...');
+    return;
+  }
+
+  try {
+    await queueInsightsExtraction({
+      user_id: userId,
+      memory_id: memoryId
+    });
+  } catch (error) {
+    console.error('Error queueing story insights extraction:', error);
   }
 }

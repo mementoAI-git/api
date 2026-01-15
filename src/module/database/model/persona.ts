@@ -13,6 +13,8 @@ export interface IPersona {
   join_reasons?: string[]
   last_array_update?: Date
   last_summarized_at?: Date
+  last_update?: Record<string, Date> // Per-field update timestamps
+  last_summarized?: Record<string, Date> // Per-field summarization timestamps
   created_at: string
   updated_at: string
 }
@@ -33,7 +35,17 @@ const persona = new Schema<IPersona>({
   current_priority: String,
   join_reasons: [String],
   last_array_update: Date,
-  last_summarized_at: Date
+  last_summarized_at: Date,
+  last_update: {
+    type: Map,
+    of: Date,
+    default: {}
+  },
+  last_summarized: {
+    type: Map,
+    of: Date,
+    default: {}
+  }
 }, {
   timestamps: {
     createdAt: 'created_at',

@@ -6,7 +6,9 @@ import { queuePersonaBatchSummarization } from "../../services/queues/summarizat
 import { Types } from "mongoose";
 import { BatchProgressTracker, logger, extractJson } from "../../utils";
 
-async function processSection(section: 'important_notes' | 'key_preferences', items: string[]): Promise<string[]> {
+type SummarizableField = 'important_notes' | 'key_preferences' | 'goals_and_aspirations';
+
+async function processSection(section: SummarizableField, items: string[]): Promise<string[]> {
   try {
     const prompt = prompts.buildTopicSummarizationPrompt(
       items,
@@ -31,63 +33,63 @@ async function processSection(section: 'important_notes' | 'key_preferences', it
   }
 }
 
+function shouldSummarizeField(field: SummarizableField, persona: IPersona): boolean {
+  const fieldArray = persona[field];
+  if (!fieldArray || fieldArray.length === 0) {
+    return false;
+  }
+
+  const lastUpdate = persona.last_update?.[field];
+  const lastSummarized = persona.last_summarized?.[field];
+
+  // If never updated, don't summarize
+  if (!lastUpdate) {
+    return false;
+  }
+
+  // If never summarized, or last update is after last summarization, needs summarization
+  return !lastSummarized || lastUpdate > lastSummarized;
+}
+
 export async function summarizePersona(
   persona: IPersona,
 ): Promise<void> {
   try {
-    // Check if summarization is needed
-    const needsSummarization =
-      (persona.last_array_update &&
-        (!persona.last_summarized_at ||
-          persona.last_array_update > persona.last_summarized_at)) ||
-      (!persona.last_summarized_at &&
-        ((persona.important_notes && persona.important_notes.length > 0) ||
-          (persona.key_preferences && persona.key_preferences.length > 0)));
-
-    if (!needsSummarization) {
-      return;
-    }
-
     const updateData: Partial<IPersona> = {};
+    const now = new Date();
+    const fieldsToProcess: SummarizableField[] = [
+      'important_notes',
+      'key_preferences',
+      'goals_and_aspirations'
+    ];
+    let hasUpdates = false;
 
-    // Process important_notes
-    if (persona.important_notes && persona.important_notes.length > 0) {
-      const summarizedItems = await processSection(
-        'important_notes',
-        persona.important_notes.slice(-100) // Take last 100 items
-      );
+    // Process each field only if it needs summarization
+    for (const field of fieldsToProcess) {
+      if (shouldSummarizeField(field, persona)) {
+        const fieldArray = persona[field];
+        if (fieldArray && fieldArray.length > 0) {
+          const summarizedItems = await processSection(
+            field,
+            fieldArray.slice(-100) // Take last 100 items
+          );
 
-      if (summarizedItems && Array.isArray(summarizedItems)) {
-        updateData.important_notes = summarizedItems;
+          if (summarizedItems && Array.isArray(summarizedItems)) {
+            updateData[field] = summarizedItems;
+            updateData.last_summarized[field] = now;
+            hasUpdates = true;
+          }
+        }
       }
     }
 
-    if (persona.key_preferences && persona.key_preferences.length > 0) {
-      const summarizedItems = await processSection(
-        'key_preferences',
-        persona.key_preferences.slice(-100) // Take last 100 items
-      );
-
-      if (summarizedItems && Array.isArray(summarizedItems)) {
-        updateData.key_preferences = summarizedItems;
-      }
-    }
-
-    // Update persona with summarized data and timestamp
-    if (Object.keys(updateData).length > 0) {
-      updateData.last_summarized_at = new Date();
+    // Update persona with summarized data and per-field timestamps
+    if (hasUpdates) {
+      updateData.last_summarized_at = now; // Keep for backward compatibility
 
       await Persona.findByIdAndUpdate(persona._id, updateData);
 
       logger.info(`Successfully summarized persona ${persona._id}`);
-    } else {
-      // Even if no updates, mark as summarized if arrays exist
-      if ((persona.important_notes && persona.important_notes.length > 0) ||
-        (persona.key_preferences && persona.key_preferences.length > 0)) {
-        await Persona.findByIdAndUpdate(persona._id, {
-          last_summarized_at: new Date()
-        });
-      }
     }
   } catch (error) {
     logger.error(error, `Error summarizing persona topics for persona ${persona._id}`);
@@ -113,20 +115,42 @@ export async function summarizeAllPersonas(
 
     const query: any = {
       $or: [
-        // Personas with arrays modified since last summarization
+        // Personas with fields that have updates but no summarization timestamp
         {
-          last_array_update: { $exists: true, $ne: null },
           $or: [
-            { last_summarized_at: null },
-            { $expr: { $gt: ['$last_array_update', '$last_summarized_at'] } }
+            {
+              'last_update.important_notes': { $exists: true, $ne: null },
+              $or: [
+                { 'last_summarized.important_notes': { $exists: false } },
+                { 'last_summarized.important_notes': null },
+                { $expr: { $gt: ['$last_update.important_notes', '$last_summarized.important_notes'] } }
+              ]
+            },
+            {
+              'last_update.key_preferences': { $exists: true, $ne: null },
+              $or: [
+                { 'last_summarized.key_preferences': { $exists: false } },
+                { 'last_summarized.key_preferences': null },
+                { $expr: { $gt: ['$last_update.key_preferences', '$last_summarized.key_preferences'] } }
+              ]
+            },
+            {
+              'last_update.goals_and_aspirations': { $exists: true, $ne: null },
+              $or: [
+                { 'last_summarized.goals_and_aspirations': { $exists: false } },
+                { 'last_summarized.goals_and_aspirations': null },
+                { $expr: { $gt: ['$last_update.goals_and_aspirations', '$last_summarized.goals_and_aspirations'] } }
+              ]
+            }
           ]
         },
-        // Personas with data but never summarized
+        // Fallback: Personas with data but never summarized (backward compatibility)
         {
           last_summarized_at: null,
           $or: [
             { important_notes: { $exists: true, $ne: [], $not: { $size: 0 } } },
-            { key_preferences: { $exists: true, $ne: [], $not: { $size: 0 } } }
+            { key_preferences: { $exists: true, $ne: [], $not: { $size: 0 } } },
+            { goals_and_aspirations: { $exists: true, $ne: [], $not: { $size: 0 } } }
           ]
         }
       ]

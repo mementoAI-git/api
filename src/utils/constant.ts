@@ -86,3 +86,18 @@ export const queueNames = {
     }
   }
 }
+
+export const MEMORY_STATUS = {
+  DRAFT: "draft",
+  SAVE: "save",
+  QUEUED: "queued",
+  ON_CHAIN: "on_chain",
+  DELETED: "deleted",
+}
+
+export const PERSONA_INSIGHT_FIELDS = [
+  'important_notes',
+  'key_preferences',
+  'emotional_state_trends',
+  'goals_and_aspirations'
+] as const;

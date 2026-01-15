@@ -5,15 +5,21 @@ import User from "../../database/model/user";
 import { IPagination } from "../../../utils/interface";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
 import { IAddMessageToMemory, ICreateMemoryPayload, IDeleteMemoryPayload } from "./interface";
-import { emptyPaginatedList, isEmpty, processFile } from "../../../utils/helpers";
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
-import { filterGenerator } from "../../../utils/helpers";
+import {
+  filterGenerator,
+  MEMORY_STATUS,
+  emptyPaginatedList,
+  isEmpty,
+  processFile
+} from "../../../utils";
 import Prompt from "../../database/model/prompt";
 import { updateStreak } from "../user/service";
 import Message from "../../database/model/message";
 import { updateMemoryTitle } from "../ai/utils";
 import ActivePrompt from "../../database/model/active-prompt";
+import { queueStoryInsights } from "../../../services/queues/insights";
 
 export async function memoryStats(user_id: string) {
   const memories = await Memory.find({
@@ -74,6 +80,12 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
     action: "created",
     reference: memory.id
   }, user_id)
+
+  // Queue story insights extraction if it's a story with body content and status is "save"
+  const isStory = !memory.type || memory.type === "story";
+  if (isStory && status === "save" && body && body.trim().length > 0) {
+    queueStoryInsights(user_id, memory.id);
+  }
 
   updateStreak(user_id)
 
@@ -307,7 +319,7 @@ export async function updateMemory(_id: string, payload: Partial<IMemory>, user_
     throw new NotFoundException("Memory not found")
   }
 
-  memory = await Memory.findByIdAndUpdate(
+  const updatedMemory = await Memory.findByIdAndUpdate(
     _id,
     {
       title: title || memory?.title,
@@ -319,6 +331,14 @@ export async function updateMemory(_id: string, payload: Partial<IMemory>, user_
     },
     { new: true }
   )
+
+  const hasChanges = (updatedMemory?.title && updatedMemory?.title !== memory?.title) ||
+    (updatedMemory?.body && updatedMemory?.body !== memory?.body) ||
+    (updatedMemory?.status && updatedMemory?.status !== memory?.status);
+
+  if (hasChanges && updatedMemory?.status === MEMORY_STATUS.SAVE) {
+    queueStoryInsights(user_id, updatedMemory.id);
+  }
 
   await track({
     title: "Memory Updated",

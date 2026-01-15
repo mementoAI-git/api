@@ -6,7 +6,7 @@ import gemini, { GEMINI_MODEL } from "../../../../services/gemini";
 import File, { IFile } from "../../../database/model/file"
 import { TEMP_PATH } from "../../../../utils/config";
 import dayjs from "dayjs";
-import { extractJson, prompts } from "../../../../utils";
+import { extractJson, logger, prompts, PERSONA_INSIGHT_FIELDS } from "../../../../utils";
 import Memory from "../../../database/model/memory";
 import { getFileFromS3 } from "../../../media";
 import { Readable } from "stream";
@@ -189,37 +189,8 @@ export async function getRecentConversationSummaries(
 export async function extractAllUserInsights(user_id: string, userMessage: string, aiResponse: string): Promise<void> {
   const persona = await Persona.findOne({ user: user_id });
   const existingContext = persona || {} as IPersona;
-  const comprehensivePrompt = `Analyze this conversation exchange and extract comprehensive user insights. Return ONLY a valid JSON object:
 
-Return ONLY a valid JSON object with NEW insights:
-
-{
-  "important_notes": ["Only NEW important notes not already covered"],
-  "key_preferences": ["Only NEW preferences not already listed"],
-  "emotional_state_trends": ["Only NEW emotional patterns"],
-  "goals_and_aspirations": ["Only NEW goals not already mentioned"]
-}
-
-EXISTING CONTEXT:
-Important Notes: ${existingContext?.important_notes?.join(', ') || 'None'}
-Key Preferences: ${existingContext?.key_preferences?.join(', ') || 'None'}
-Emotional Trends: ${existingContext?.emotional_state_trends?.join(', ') || 'None'}
-Goals: ${existingContext?.goals_and_aspirations?.join(', ') || 'None'}
-
-EXTRACTION GUIDELINES:
-- important_notes: Focus on personality traits, life experiences, values, beliefs, relationships, goals, fears, achievements, or significant events
-- key_preferences: Focus on likes, dislikes, hobbies, interests, work preferences, lifestyle choices, food preferences, entertainment choices, etc.
-- emotional_state_trends: Focus on emotional patterns, mood indicators, stress levels, energy levels, emotional triggers
-- goals_and_aspirations: Focus on future-oriented statements, dreams, plans, career goals, personal milestones
-
-EXTRACTION RULES:
-- Be specific and actionable - avoid generic statements
-- Extract only meaningful insights that would help personalize future interactions
-- If no meaningful insights are found for a category, return an empty array
-- Focus on information that would help create a more personalized experience
-- Combine related insights rather than creating multiple similar entries
-
-Focus on information that would help create a more personalized and understanding relationship.`;
+  const comprehensivePrompt = prompts.buildInsightsPrompt(existingContext);
 
   try {
     const conversationText = `User: ${userMessage}\n\nAI: ${aiResponse}`;
@@ -237,38 +208,29 @@ Focus on information that would help create a more personalized and understandin
     const insights = extractJson(response.text);
     // Prepare update data
     const updateData: any = {};
+    const now = new Date();
 
-    // Add all types of insights using $addToSet to avoid duplicates
-    let isModifyingArrays = false;
+    const fieldsUpdated: string[] = [];
 
-    if (insights.important_notes && insights.important_notes.length > 0) {
-      updateData['$addToSet'] = {
-        'important_notes': { $each: insights.important_notes }
-      };
-      isModifyingArrays = true;
-    }
-
-    if (insights.key_preferences && insights.key_preferences.length > 0) {
-      if (!updateData['$addToSet']) updateData['$addToSet'] = {};
-      updateData['$addToSet']['key_preferences'] = { $each: insights.key_preferences };
-      isModifyingArrays = true;
-    }
-
-    if (insights.emotional_state_trends && insights.emotional_state_trends.length > 0) {
-      if (!updateData['$addToSet']) updateData['$addToSet'] = {};
-      updateData['$addToSet']['emotional_state_trends'] = { $each: insights.emotional_state_trends };
-    }
-
-    if (insights.goals_and_aspirations && insights.goals_and_aspirations.length > 0) {
-      if (!updateData['$addToSet']) updateData['$addToSet'] = {};
-      updateData['$addToSet']['goals_and_aspirations'] = { $each: insights.goals_and_aspirations };
-    }
+    PERSONA_INSIGHT_FIELDS.forEach(field => {
+      if (insights?.[field] && insights?.[field].length > 0) {
+        updateData['$addToSet'] = {
+          [field]: { $each: insights[field] }
+        };
+        fieldsUpdated.push(field);
+      }
+    })
 
     if (Object.keys(updateData).length > 0) {
-      // Set last_array_update when important_notes or key_preferences are modified
-      if (isModifyingArrays) {
-        if (!updateData['$set']) updateData['$set'] = {};
-        updateData['$set'].last_array_update = new Date();
+      if (!updateData['$set']) updateData['$set'] = {};
+
+      // Set per-field update timestamps
+      if (fieldsUpdated.length > 0) {
+        updateData['$set'].last_array_update = now;
+
+        fieldsUpdated.forEach(field => {
+          updateData['$set'][`last_update.${field}`] = now;
+        });
       }
 
       await Persona.findOneAndUpdate(
