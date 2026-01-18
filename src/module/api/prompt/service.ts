@@ -28,9 +28,14 @@ export const getPrompts = async (user_id: string) => {
     return {
       data: todayPrompts
         .map(prompt => {
+          const promptId =
+            typeof prompt.prompt === 'string'
+              ? prompt.prompt
+              : prompt.prompt._id?.toString();
+
           return {
             ...prompt,
-            answered: answeredIds.has(prompt.prompt._id.toString()),
+            answered: promptId ? answeredIds.has(promptId) : false,
           };
         })
         .slice(0, MAX_PROMPT),
