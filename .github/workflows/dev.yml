@@ -29,7 +29,7 @@ jobs:
             
             # Stash any local changes and pull latest code
             git stash
-            git pull origin main
+            git pull origin dev
             
             # Install dependencies and compile
             yarn install --frozen-lockfile
