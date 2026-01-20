@@ -1,5 +1,6 @@
 import { model, PaginateModel, Schema } from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
+import { IFile } from './file';
 
 export interface IMemory {
   _id?: string
@@ -7,7 +8,7 @@ export interface IMemory {
   body: string
   type: string // story conversation
   user: string
-  attachments: string[]
+  attachments: (string | IFile)[]
   tags: string[]
   level: number
   refrence: string

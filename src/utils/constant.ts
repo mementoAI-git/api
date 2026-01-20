@@ -77,6 +77,8 @@ export const queueNames = {
     jobs: {
       conversation: 'conversation',
       persona: 'persona',
+      story: 'story',
+      memories: 'memories',
     }
   },
   system: {

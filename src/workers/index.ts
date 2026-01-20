@@ -5,6 +5,7 @@ import { getRedisConnection } from '../services/redis';
 import startInsightsExtractionWorker from './insight';
 import startSummarizationWorker from './summarizarion';
 import startSystemWorker from './system';
+import { logger } from '../utils';
 
 async function startWorkers() {
   await connectMongodb();
@@ -14,6 +15,7 @@ async function startWorkers() {
   const summarizationWorker = startSummarizationWorker(connection);
   const systemWorker = startSystemWorker(connection);
 
+  logger.info('Workers started');
   // Handle graceful shutdown
   process.on('SIGTERM', async () => {
     await insightsWorker.close();

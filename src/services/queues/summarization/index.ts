@@ -14,14 +14,14 @@ export interface SummarizationJobData {
   memory_id: string;
 }
 
-export async function queueSummarization(memoryId: string): Promise<void> {
+export async function queueSummarization(memoryId: string, type: 'conversation' | 'story'): Promise<void> {
   if (!summarizationQueue) {
     return;
   }
 
   try {
     await summarizationQueue.add(
-      queueNames.summarization.jobs.conversation,
+      queueNames.summarization.jobs[type],
       { memory_id: memoryId },
       {
         attempts: 3,
@@ -63,7 +63,7 @@ export async function initializeConversationSummary(): Promise<void> {
   }
 
   await summarizationQueue.upsertJobScheduler(
-    queueNames.summarization.jobs.conversation,
+    queueNames.summarization.jobs.memories,
     { pattern: "0 * * * *" }, // // Every hour at minute 0
     {
       opts: {

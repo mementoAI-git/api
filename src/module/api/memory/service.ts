@@ -20,6 +20,7 @@ import Message from "../../database/model/message";
 import { updateMemoryTitle } from "../ai/utils";
 import ActivePrompt from "../../database/model/active-prompt";
 import { queueStoryInsights } from "../../../services/queues/insights";
+import { queueSummarization } from "../../../services/queues/summarization";
 
 export async function memoryStats(user_id: string) {
   const memories = await Memory.find({
@@ -85,6 +86,7 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
   const isStory = !memory.type || memory.type === "story";
   if (isStory && status === "save" && body && body.trim().length > 0) {
     queueStoryInsights(user_id, memory.id);
+    queueSummarization(memory.id, "story");
   }
 
   updateStreak(user_id)
@@ -327,6 +329,7 @@ export async function updateMemory(_id: string, payload: Partial<IMemory>, user_
       level: level || memory?.level,
       status,
       tags,
+      last_active: dayjs().toDate(),
       $addToSet: { attachments: { $each: attachments } }
     },
     { new: true }
@@ -338,6 +341,7 @@ export async function updateMemory(_id: string, payload: Partial<IMemory>, user_
 
   if (hasChanges && updatedMemory?.status === MEMORY_STATUS.SAVE) {
     queueStoryInsights(user_id, updatedMemory.id);
+    queueSummarization(updatedMemory.id, "story");
   }
 
   await track({

@@ -1,17 +1,16 @@
 import path from "path";
 import fs from "fs/promises";
-import { createPartFromUri, createUserContent } from "@google/genai";
+import { createPartFromUri, createUserContent, PartListUnion } from "@google/genai";
 import { IMessage } from "../../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../../services/gemini";
 import File, { IFile } from "../../../database/model/file"
 import { TEMP_PATH } from "../../../../utils/config";
 import dayjs from "dayjs";
-import { extractJson, logger, prompts, PERSONA_INSIGHT_FIELDS } from "../../../../utils";
-import Memory from "../../../database/model/memory";
+import { isEmpty, prompts } from "../../../../utils";
+import Memory, { IMemory } from "../../../database/model/memory";
 import { getFileFromS3 } from "../../../media";
 import { Readable } from "stream";
 import { queueSummarization } from "../../../../services/queues";
-import Persona, { IPersona } from "../../../database/model/persona";
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024
 const INACTIVITY_MINUTES = 10; // Summarize after 10 minutes of inactivity
@@ -144,7 +143,7 @@ export async function triggerSummarization(memoryId: string): Promise<boolean> {
     }
 
     if (shouldSummarize(memory)) {
-      await queueSummarization(memoryId);
+      await queueSummarization(memoryId, "conversation");
       return true;
     }
 
@@ -154,15 +153,14 @@ export async function triggerSummarization(memoryId: string): Promise<boolean> {
   }
 }
 
-export async function getRecentConversationSummaries(
+export async function getMemorySummaries(
   userId: string,
   excludeMemoryId?: string,
-  limit: number = 5
 ): Promise<Array<{ title: string; summary: string; topics: string[] }>> {
   try {
     const query: any = {
       user: userId,
-      type: 'conversation',
+      status: { $nin: ['draft', 'deleted'] },
       summary: { $exists: true, $ne: null }
     };
 
@@ -170,12 +168,24 @@ export async function getRecentConversationSummaries(
       query._id = { $ne: excludeMemoryId };
     }
 
-    const memories = await Memory.find(query)
+    const stories = await Memory.find({ ...query, type: 'story' })
       .sort({ updated_at: -1 })
-      .limit(limit)
+      .limit(12)
       .select('title summary topics');
 
-    return memories.map(m => ({
+    const memories = await Memory.find({ ...query, type: 'conversation' })
+      .sort({ updated_at: -1 })
+      .limit(12)
+      .select('title summary topics');
+
+    const allMemories = [...memories, ...stories];
+    allMemories.sort((a, b) => {
+      const dateA = new Date(a.updated_at || 0).getTime();
+      const dateB = new Date(b.updated_at || 0).getTime();
+      return dateB - dateA;
+    });
+
+    return allMemories.map(m => ({
       title: m.title || 'Untitled conversation',
       summary: m.summary || '',
       topics: m.topics || []
@@ -186,61 +196,52 @@ export async function getRecentConversationSummaries(
   }
 }
 
-export async function extractAllUserInsights(user_id: string, userMessage: string, aiResponse: string): Promise<void> {
-  const persona = await Persona.findOne({ user: user_id });
-  const existingContext = persona || {} as IPersona;
-
-  const comprehensivePrompt = prompts.buildInsightsPrompt(existingContext);
-
-  try {
-    const conversationText = `User: ${userMessage}\n\nAI: ${aiResponse}`;
-
-    const contents = createUserContent([
-      comprehensivePrompt,
-      { text: conversationText }
-    ]);
-
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents
+export async function buildMemoryContent(memory: IMemory) {
+  const attachments = (memory.attachments || [])
+    .filter(a => {
+      if (typeof a !== 'string') {
+        return a.type.startsWith("image/");
+      }
+      return false;
     });
 
-    const insights = extractJson(response.text);
-    // Prepare update data
-    const updateData: any = {};
-    const now = new Date();
-
-    const fieldsUpdated: string[] = [];
-
-    PERSONA_INSIGHT_FIELDS.forEach(field => {
-      if (insights?.[field] && insights?.[field].length > 0) {
-        updateData['$addToSet'] = {
-          [field]: { $each: insights[field] }
-        };
-        fieldsUpdated.push(field);
+  const filesWithTranscription = memory.attachments
+    .filter(file => {
+      if (typeof file !== 'string') {
+        return !!file.transcription?.full_text;
       }
-    })
+      return false;
+    });
 
-    if (Object.keys(updateData).length > 0) {
-      if (!updateData['$set']) updateData['$set'] = {};
+  let text = '';
 
-      // Set per-field update timestamps
-      if (fieldsUpdated.length > 0) {
-        updateData['$set'].last_array_update = now;
+  if (memory.title) {
+    text += `Title: ${memory.title}\n\n`;
+  }
 
-        fieldsUpdated.forEach(field => {
-          updateData['$set'][`last_update.${field}`] = now;
-        });
+  if (!isEmpty(memory.body)) {
+    text += `Content: ${memory.body}\n\n`;
+  }
+
+  if (filesWithTranscription?.length > 0) {
+    text += 'Attached Audio/Video Transcriptions:\n';
+    filesWithTranscription.forEach((file, index) => {
+      if (typeof file !== 'string') {
+        text += `[Recording ${index + 1}]: ${file.transcription.full_text}\n`;
       }
+    });
+    text += '\n';
+  }
 
-      await Persona.findOneAndUpdate(
-        { user: user_id },
-        updateData,
-        { upsert: true, new: true }
-      );
-    }
+  let processedImages = [];
+  if (attachments?.length > 0) {
+    processedImages = await Promise.all(attachments.map(processFile))
+  }
 
-  } catch (error) {
-    console.error('Error extracting user insights:', error);
+  return {
+    text,
+    processedImages,
+    hasAttachments: attachments?.length > 0,
+    hasTranscription: filesWithTranscription?.length > 0
   }
 }

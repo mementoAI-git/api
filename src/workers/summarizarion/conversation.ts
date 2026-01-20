@@ -6,6 +6,7 @@ import Memory from "../../module/database/model/memory";
 import Message from "../../module/database/model/message";
 import logger from "../../utils/logger";
 import dayjs from "dayjs";
+import summarizeStory from "./story";
 
 const INACTIVITY_MINUTES = 10;
 const MIN_MESSAGES_FOR_INACTIVE_SUMMARY = 2; // Lower threshold for inactive conversations
@@ -53,7 +54,7 @@ export async function summarizeConversation(memoryId: string): Promise<void> {
 }
 
 // This summarizes inactive conversations
-export default async function summarizeAllConversations(): Promise<string> {
+export default async function summarizeAllMemories(): Promise<string> {
   try {
     const inactivityThreshold = dayjs().subtract(INACTIVITY_MINUTES, 'minute').toDate();
 
@@ -70,7 +71,6 @@ export default async function summarizeAllConversations(): Promise<string> {
      * while still allowing re-summarization when there's new content to include.
      */
     const inactiveConversations = await Memory.find({
-      type: 'conversation',
       summary: { $in: [null, ''] },
       $and: [
         {
@@ -104,7 +104,11 @@ export default async function summarizeAllConversations(): Promise<string> {
     }
 
     for (const memory of inactiveConversations) {
-      await summarizeConversation(memory.id);
+      if (memory.type === 'story') {
+        await summarizeStory(memory.id);
+      } else {
+        await summarizeConversation(memory.id);
+      }
     }
 
     return `Summarized ${inactiveConversations.length} inactive conversations`;

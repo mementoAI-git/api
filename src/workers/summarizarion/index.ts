@@ -3,8 +3,9 @@ export * from './conversation';
 import { Worker } from 'bullmq';
 import { compareStrings, queueNames } from '../../utils';
 import { summarizeAllPersonas } from './personal';
-import summarizeAllConversations, { summarizeConversation } from './conversation';
+import summarizeAllMemories, { summarizeConversation } from './conversation';
 import { RedisConnection } from '../../services/redis';
+import summarizeStory from './story';
 
 export default function startSummarizationWorker(connection: RedisConnection) {
   return new Worker(
@@ -19,8 +20,15 @@ export default function startSummarizationWorker(connection: RedisConnection) {
         if (memory_id) {
           return await summarizeConversation(memory_id);
         }
-
-        return await summarizeAllConversations();
+      }
+      if (compareStrings(job.name, queueNames.summarization.jobs.story)) {
+        const { memory_id } = job.data || {};
+        if (memory_id) {
+          return await summarizeStory(memory_id);
+        }
+      }
+      if (compareStrings(job.name, queueNames.summarization.jobs.memories)) {
+        return await summarizeAllMemories();
       }
     },
     {

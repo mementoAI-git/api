@@ -3,9 +3,9 @@ import { IUser } from "../module/database/model/user";
 import { isEmpty } from "./helpers";
 import Persona, { IPersona } from "../module/database/model/persona";
 import { IPrompt } from "../module/database/model/prompt";
-import { getRecentConversationSummaries } from "../module/api/ai/utils";
+import { getMemorySummaries } from "../module/api/ai/utils";
 
-function buildPastConversationsContext(
+function buildMemoriesContext(
   summaries: Array<{ title: string; summary: string; topics: string[] }>
 ): string {
   if (!summaries || summaries.length === 0) {
@@ -17,11 +17,11 @@ function buildPastConversationsContext(
     .join('\n');
 
   return `
-RECENT CONVERSATION HISTORY:
-The following are summaries of recent conversations with this user. Use this context to maintain continuity and reference past discussions when relevant:
+USER'S MEMORIES & EXPERIENCES:
+The following are summaries of the user's memories - including personal stories they've written and past conversations. These represent their experiences, thoughts, and meaningful moments:
 ${summariesText}
 
-Use this context naturally - don't explicitly mention "our past conversations" but do reference specific topics or insights when relevant.`;
+Use this context naturally to show you remember their experiences. Reference specific people, places, events, or topics they've shared when relevant. Don't explicitly say "you told me" or "in our past conversation" - just weave the knowledge naturally into your responses.`;
 }
 
 async function createSystemContext(user: IUser, currentMemoryId?: string, persona: IPersona = null): Promise<string> {
@@ -32,10 +32,10 @@ async function createSystemContext(user: IUser, currentMemoryId?: string, person
 
   const userPreferences = user.preferences || {};
 
-  const summaries = await getRecentConversationSummaries(user._id, currentMemoryId, 5);
-  const pastConversationsContext = buildPastConversationsContext(summaries);
+  const summaries = await getMemorySummaries(user._id, currentMemoryId);
+  const pastContext = buildMemoriesContext(summaries);
 
-  return buildSystemContext(user, userPreferences, userContext, pastConversationsContext);
+  return buildSystemContext(user, userPreferences, userContext, pastContext);
 }
 
 function buildSystemContext(
@@ -222,7 +222,7 @@ export async function createSystemContextWithPrompt(
  * Build the insights extraction prompt for a given user context
  */
 function buildInsightsPrompt(existingContext: IPersona): string {
-  return `Analyze this conversation exchange and extract comprehensive user insights.
+  return `Analyze this content and extract comprehensive user insights, preserving specific details.
 
 Return ONLY a valid JSON object with NEW insights (not already in existing context):
 
@@ -240,23 +240,53 @@ Emotional Trends: ${existingContext.emotional_state_trends?.join(', ') || 'None'
 Goals: ${existingContext.goals_and_aspirations?.join(', ') || 'None'}
 
 EXTRACTION GUIDELINES:
-- important_notes: Focus on personality traits, life experiences, values, beliefs, relationships, goals, fears, achievements, or significant events
+- important_notes: Focus on personality traits, life experiences, values, beliefs, relationships, achievements, or significant events. ALWAYS include specific names (people, pets, places), dates, and meaningful details.
 - key_preferences: Focus on likes, dislikes, hobbies, interests, work preferences, lifestyle choices, food preferences, entertainment choices, etc.
 - emotional_state_trends: Focus on emotional patterns, mood indicators, stress levels, energy levels, emotional triggers
-- goals_and_aspirations: Focus on future-oriented statements, dreams, plans, career goals, personal milestones
+- goals_and_aspirations: Focus on future-oriented statements, dreams, plans, career goals, personal milestones. Include specific timelines or target dates if mentioned.
+
+CRITICAL - PRESERVE SPECIFIC DETAILS:
+- Names of people (friends, family, colleagues, partners): "Best friend is Sarah" NOT "Has a best friend"
+- Names of places (cities, restaurants, venues): "Loves Le Petit Bistro in Paris" NOT "Enjoys French cafes"
+- Dates and times: "Birthday is March 15th" NOT "Has a birthday coming up"
+- Pet names: "Has a dog named Max" NOT "Has a pet dog"
+- Specific events: "Got married in June 2023" NOT "Is married"
+- Job/Company details: "Works as a software engineer at Google" NOT "Works in tech"
+- Specific preferences: "Favorite coffee is oat milk latte from Blue Bottle" NOT "Likes coffee"
 
 EXTRACTION RULES:
-- Be specific and actionable - avoid generic statements
+- Be specific and actionable - avoid generic or abstracted statements
+- NEVER generalize details that were specifically mentioned
 - Extract only meaningful insights that would help personalize future interactions
 - If no meaningful insights are found for a category, return an empty array
 - Focus on information that would help create a more personalized experience
-- Combine related insights rather than creating multiple similar entries
+- Combine related insights while KEEPING all specific details
 - DO NOT include insights that are already in the existing context
+
+BAD EXAMPLES (too generic):
+- "User has family members" → GOOD: "User's mother is named Maria and lives in Chicago"
+- "User traveled recently" → GOOD: "User visited Tokyo in December 2024 with partner Alex"
+- "User has work stress" → GOOD: "User stressed about Q1 deadline at current job at Acme Corp"
 
 Return ONLY the JSON object, no additional text.`;
 }
 
-function buildSummarizationPrompt(): string {
+function buildSummarizationPrompt(hasImages: boolean = false, hasTranscriptions: boolean = false): string {
+  let attachmentInstructions = '';
+
+  if (hasImages) {
+    attachmentInstructions += `
+- Include descriptions of significant visual elements from attached images
+- Reference specific people, locations, or objects visible in images
+`;
+  }
+
+  if (hasTranscriptions) {
+    attachmentInstructions += `
+- Incorporate spoken content from audio/video transcriptions into the summary
+`;
+  }
+
   return `You are a conversation summarizer. Analyze the following conversation and create a comprehensive summary.
 
 Return ONLY a valid JSON object with this structure:
@@ -268,11 +298,13 @@ Return ONLY a valid JSON object with this structure:
 
 SUMMARIZATION GUIDELINES:
 - Focus on the main themes and what was discussed
+- Preserve SPECIFIC names of people, places, and things mentioned
 - Capture any important decisions, preferences, or insights revealed
+- Include specific events, dates, or occasions if mentioned
 - Include emotional context if relevant (was the user stressed, happy, curious?)
 - Topics should be 1-3 words each, representing main subjects discussed
-- Key points should capture actionable or memorable information
-
+- Key points should capture actionable or memorable information or facts that would help personalize future conversations
+${attachmentInstructions}
 Return ONLY the JSON object, no additional text.`;
 }
 
