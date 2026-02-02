@@ -161,7 +161,17 @@ const capsulesDocs = {
                             body: { type: 'string', example: 'This is a message...' },
                             schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
                             status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause'], example: 'scheduled' },
-                            attachments: { type: 'array', items: { type: 'string' } },
+                            attachments: {
+                              type: 'array',
+                              items: {
+                                type: 'object',
+                                properties: {
+                                  _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+                                  name: { type: 'string', example: 'file-1234567890.jpg' },
+                                  url: { type: 'string', example: 'https://example.com/files/file-1234567890.jpg' },
+                                },
+                              },
+                            },
                             created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                             updated_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                           },
@@ -278,7 +288,13 @@ const capsulesDocs = {
                       body: { type: 'string', example: 'This is a message...' },
                       schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
                       status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause'], example: 'scheduled' },
-                      attachments: { type: 'array', items: { type: 'string' } },
+                      attachments: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          description: 'File attachment (populated with file details, excluding base64)',
+                        },
+                      },
                       created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                       updated_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                     },

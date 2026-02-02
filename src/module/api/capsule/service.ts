@@ -70,7 +70,7 @@ export async function updateCapsule(id: string, payload: Partial<ICapsule>, user
     payload.attachments = files.map(f => f.id)
   }
 
-  if (payload.schedule_date) {
+  if (payload?.schedule_date) {
     payload.schedule_date = dayjs(payload.schedule_date).toISOString()
     if (!payload.status) {
       payload.status = "scheduled"
