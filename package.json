@@ -4,8 +4,14 @@
   "description": "",
   "main": "build/src/index.js",
   "engines": {
-    "node": ">=20.19.0",
+    "node": ">=20.18.1",
     "npm": ">=10.0.0"
+  },
+  "resolutions": {
+    "mongoose": "^8.13.0"
+  },
+  "overrides": {
+    "mongoose": "^8.13.0"
   },
   "scripts": {
     "start": "node build/src/index.js",
