@@ -1,7 +1,8 @@
 import dayjs from "dayjs";
 import Beneficiary from "../../database/model/beneficiary";
 import Capsule, { ICapsule } from "../../database/model/capsule";
-import { isEmpty } from "../../../utils/helpers";
+import File from "../../database/model/file";
+import { isEmpty, filterGenerator } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
 import { track } from "../activity/service";
@@ -11,11 +12,28 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
   if (isEmpty(users)) {
     throw new NotFoundException("Users not found")
   }
+
+
+  let attachments: string[] = []
+  if (payload?.attachments && payload.attachments.length > 0) {
+    const files = await File.find({ _id: { $in: payload.attachments }, user: user_id })
+    if (files.length !== payload.attachments.length) {
+      throw new NotFoundException("Some attachment files not found")
+    }
+    attachments = files.map(f => f.id)
+  }
+
   const data = await Capsule.create({
     ...payload,
+    title: payload?.title.trim(),
+    body: payload?.body.trim(),
     user: user_id,
     recipients: users.map(u => u.id),
-    delivery_date: dayjs(payload.delivery_date).toISOString()
+    attachments,
+    ...(payload?.schedule_date ?
+      { schedule_date: dayjs(payload.schedule_date).toISOString(), status: "scheduled" } :
+      { status: "draft" }
+    )
   })
 
   await track({
@@ -28,6 +46,7 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
 
   return { message: "Capsule created successfully", data }
 }
+
 export async function updateCapsule(id: string, payload: Partial<ICapsule>, user_id: string) {
   const capsule = await Capsule.findOne({ _id: id, user: user_id })
   if (!capsule) {
@@ -42,11 +61,31 @@ export async function updateCapsule(id: string, payload: Partial<ICapsule>, user
     payload.recipients = users.map(u => u.id)
   }
 
-  if (payload.delivery_date) {
-    payload.delivery_date = dayjs(payload.delivery_date).toISOString()
+
+  if (!isEmpty(payload.attachments)) {
+    const files = await File.find({ _id: { $in: payload.attachments }, user: user_id })
+    if (files.length !== payload.attachments.length) {
+      throw new NotFoundException("Some attachment files not found")
+    }
+    payload.attachments = files.map(f => f.id)
   }
-  Object.assign(capsule, payload)
-  await capsule.save()
+
+  if (payload.schedule_date) {
+    payload.schedule_date = dayjs(payload.schedule_date).toISOString()
+    if (!payload.status) {
+      payload.status = "scheduled"
+    }
+  }
+
+  const updateCapsule = await Capsule.findByIdAndUpdate(id, {
+    title: payload.title,
+    body: payload.body,
+    schedule_date: payload.schedule_date,
+    status: payload.status,
+    attachments: {
+      $addToSet: payload.attachments
+    }
+  }, { new: true })
 
   await track({
     title: "Capsule Updated",
@@ -56,17 +95,25 @@ export async function updateCapsule(id: string, payload: Partial<ICapsule>, user
     reference: capsule.id
   }, user_id)
 
-  return { message: "Capsule updated successfully", data: capsule }
+  return { message: "Capsule updated successfully", data: updateCapsule }
 }
 
-export async function getCapsules({ page, limit }: IPagination, user: string) {
+export async function getCapsules(payload: IPagination, user: string) {
+  const { page, limit, ...query } = payload
+
+  const filters = filterGenerator(query, ["title", "body", "status"])
+  filters.push({ user })
+
   const data = await Capsule.paginate(
-    { user },
+    { $and: filters },
     {
       limit,
       page,
-      sort: { created_at: -1 },
-      populate: { path: "recipients", select: "email first_name last_name" }
+      sort: { created_at: -1, updated_at: -1 },
+      populate: [
+        { path: "recipients", select: "email first_name last_name" },
+        { path: "attachments", select: "_id name url" }
+      ]
     }
   )
 
@@ -102,4 +149,21 @@ export async function deleteCapsule(id: string, user: string) {
   }, user)
 
   return { message: "Time capsule deleted successfully", data: capsule }
+}
+
+export async function getCapsuleStats(user: string) {
+  const [delivered_count, scheduled_count, draft_count] = await Promise.all([
+    Capsule.countDocuments({ user, status: "delivered" }),
+    Capsule.countDocuments({ user, status: "scheduled" }),
+    Capsule.countDocuments({ user, status: "draft" })
+  ])
+
+  return {
+    message: "Capsule statistics retrieved successfully",
+    data: {
+      delivered_count,
+      scheduled_count,
+      draft_count
+    }
+  }
 }

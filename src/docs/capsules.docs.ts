@@ -11,7 +11,7 @@ const capsulesDocs = {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['recipients', 'title', 'body', 'delivery_date'],
+              required: ['recipients', 'title', 'body'],
               properties: {
                 recipients: {
                   type: 'array',
@@ -32,11 +32,17 @@ const capsulesDocs = {
                   description: 'Capsule content/body',
                   example: 'This is a message I want to send to my future self...',
                 },
-                delivery_date: {
+                schedule_date: {
                   type: 'string',
                   format: 'date-time',
-                  description: 'Date and time when the capsule should be delivered (ISO 8601 format)',
+                  description: 'Optional date and time when the capsule should be scheduled for delivery (ISO 8601 format). If provided, status will be set to "scheduled", otherwise "draft"',
                   example: '2025-12-31T23:59:59.000Z',
+                },
+                attachments: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Optional array of file IDs to attach to the capsule',
+                  example: ['507f1f77bcf86cd799439011'],
                 },
               },
             },
@@ -65,7 +71,7 @@ const capsulesDocs = {
                       },
                       title: { type: 'string', example: 'Future Message to Myself' },
                       body: { type: 'string', example: 'This is a message...' },
-                      delivery_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
+                      schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
                       status: { type: 'string', example: 'scheduled' },
                       attachments: { type: 'array', items: { type: 'string' } },
                       created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
@@ -112,6 +118,23 @@ const capsulesDocs = {
           schema: { type: 'number', default: 10 },
           description: 'Items per page',
         },
+        {
+          name: 'status',
+          in: 'query',
+          schema: {
+            type: 'string',
+            enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause'],
+          },
+          description: 'Filter capsules by status',
+          example: 'scheduled',
+        },
+        {
+          name: 'search',
+          in: 'query',
+          schema: { type: 'string' },
+          description: 'Search capsules by title or body content',
+          example: 'birthday',
+        },
       ],
       responses: {
         200: {
@@ -136,7 +159,7 @@ const capsulesDocs = {
                             recipients: { type: 'array', items: { type: 'string' } },
                             title: { type: 'string', example: 'Future Message to Myself' },
                             body: { type: 'string', example: 'This is a message...' },
-                            delivery_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
+                            schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
                             status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause'], example: 'scheduled' },
                             attachments: { type: 'array', items: { type: 'string' } },
                             created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
@@ -150,6 +173,58 @@ const capsulesDocs = {
                       totalPages: { type: 'number', example: 1 },
                       hasNextPage: { type: 'boolean', example: false },
                       hasPrevPage: { type: 'boolean', example: false },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {
+          description: 'Unauthorized',
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Error' },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/capsule/stats': {
+    get: {
+      tags: ['Capsules'],
+      summary: 'Get Capsule Statistics',
+      description: 'Get statistics about capsules including counts of delivered, scheduled, and draft capsules for the authenticated user',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: 'Capsule statistics retrieved successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', example: 'success' },
+                  message: { type: 'string', example: 'Capsule statistics retrieved successfully' },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      delivered_count: {
+                        type: 'number',
+                        description: 'Number of delivered capsules',
+                        example: 5,
+                      },
+                      scheduled_count: {
+                        type: 'number',
+                        description: 'Number of scheduled capsules',
+                        example: 10,
+                      },
+                      draft_count: {
+                        type: 'number',
+                        description: 'Number of draft capsules',
+                        example: 3,
+                      },
                     },
                   },
                 },
@@ -201,7 +276,7 @@ const capsulesDocs = {
                       recipients: { type: 'array', items: { type: 'string' } },
                       title: { type: 'string', example: 'Future Message to Myself' },
                       body: { type: 'string', example: 'This is a message...' },
-                      delivery_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
+                      schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
                       status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause'], example: 'scheduled' },
                       attachments: { type: 'array', items: { type: 'string' } },
                       created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
@@ -268,10 +343,10 @@ const capsulesDocs = {
                   type: 'string',
                   description: 'Capsule content/body',
                 },
-                delivery_date: {
+                schedule_date: {
                   type: 'string',
                   format: 'date-time',
-                  description: 'Date and time when the capsule should be delivered (ISO 8601 format)',
+                  description: 'Optional date and time when the capsule should be scheduled for delivery (ISO 8601 format). If provided, status will be set to "scheduled"',
                 },
                 attachments: {
                   type: 'array',

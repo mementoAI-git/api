@@ -4,7 +4,7 @@ import mongoosePaginate from 'mongoose-paginate-v2';
 export interface ICapsule {
   user: string
   recipients: string[]
-  delivery_date: string
+  schedule_date?: string
   title: string
   body: string
   attachments: string[]
@@ -19,7 +19,7 @@ const capsule = new Schema<ICapsule>({
     index: true
   },
   recipients: [{ type: String, ref: "beneficiary" }],
-  delivery_date: Date,
+  schedule_date: Date,
   title: String,
   body: String,
   attachments: [{

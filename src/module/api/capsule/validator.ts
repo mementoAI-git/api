@@ -1,5 +1,4 @@
-import dayjs from "dayjs";
-import { body } from "express-validator";
+import { body, query } from "express-validator";
 
 export default {
   createCapsule: [
@@ -7,9 +6,15 @@ export default {
     body("recipients.*").isEmail().withMessage("Invalid email address"),
     body("title").notEmpty().withMessage("Title is required"),
     body("body").notEmpty().withMessage("Body is required"),
-    body("delivery_date")
-      .notEmpty().withMessage("Delivery date is required")
-      .isISO8601().withMessage("Invalid delivery date, it must be in ISO 8601 format")
+    body("schedule_date")
+      .optional()
+      .isISO8601().withMessage("Invalid schedule date, it must be in ISO 8601 format"),
+    body("attachments")
+      .optional()
+      .isArray().withMessage("Attachments must be an array"),
+    body("attachments.*")
+      .optional()
+      .isMongoId().withMessage("Each attachment must be a valid ID")
   ],
   updateCapsule: [
     body("recipients")
@@ -18,9 +23,9 @@ export default {
     body("recipients.*")
       .optional()
       .isEmail().withMessage("Each recipient must be a valid email"),
-    body("delivery_date")
+    body("schedule_date")
       .optional()
-      .isISO8601().withMessage("Delivery date must be in ISO 8601 format"),
+      .isISO8601().withMessage("Schedule date must be in ISO 8601 format"),
     body("attachments")
       .optional()
       .isArray().withMessage("Attachments must be an array of strings"),
@@ -28,5 +33,11 @@ export default {
       .optional()
       .isIn(["scheduled", "draft", "pause"])
       .withMessage("Invalid status")
+  ],
+  getCapsules: [
+    query("status")
+      .optional()
+      .isIn(["scheduled", "draft", "delivered", "failed", "pause"])
+      .withMessage("Invalid status. Must be one of: scheduled, draft, delivered, failed, pause")
   ]
 }

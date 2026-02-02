@@ -25,6 +25,7 @@ export async function updateCapsule(req: IRequest, res: Response, next: NextFunc
 }
 export async function getCapsules(req: IRequest, res: Response, next: NextFunction) {
   try {
+    validateRequest(req)
     const { message, data } = await service.getCapsules(getPagination(req), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
@@ -42,6 +43,15 @@ export async function getCapsule(req: IRequest, res: Response, next: NextFunctio
 export async function deleteCapsule(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.deleteCapsule(req.params?.id, req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function getCapsuleStats(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getCapsuleStats(req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
