@@ -14,7 +14,13 @@ export default {
       .isArray().withMessage("Attachments must be an array"),
     body("attachments.*")
       .optional()
-      .isMongoId().withMessage("Each attachment must be a valid ID")
+      .isMongoId().withMessage("Each attachment must be a valid ID"),
+    body("memories")
+      .optional()
+      .isArray().withMessage("Memories must be an array"),
+    body("memories.*")
+      .optional()
+      .isMongoId().withMessage("Each memory must be a valid Mongo ID")
   ],
   updateCapsule: [
     body("recipients")
@@ -29,6 +35,12 @@ export default {
     body("attachments")
       .optional()
       .isArray().withMessage("Attachments must be an array of strings"),
+    body("memories")
+      .optional()
+      .isArray().withMessage("Memories must be an array"),
+    body("memories.*")
+      .optional()
+      .isMongoId().withMessage("Each memory must be a valid Mongo ID"),
     body("status")
       .optional()
       .isIn(["scheduled", "draft", "pause"])

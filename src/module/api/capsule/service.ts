@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import Beneficiary from "../../database/model/beneficiary";
 import Capsule, { ICapsule } from "../../database/model/capsule";
 import File from "../../database/model/file";
+import Memory from "../../database/model/memory";
 import { isEmpty, filterGenerator } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
@@ -23,6 +24,15 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
     attachments = files.map(f => f.id)
   }
 
+  let memories: string[] = []
+  if (payload?.memories && payload.memories.length > 0) {
+    const memoryDocs = await Memory.find({ _id: { $in: payload.memories }, user: user_id })
+    if (memoryDocs.length !== payload.memories.length) {
+      throw new NotFoundException("Some memories not found")
+    }
+    memories = memoryDocs.map(m => m.id)
+  }
+
   const data = await Capsule.create({
     ...payload,
     title: payload?.title.trim(),
@@ -30,6 +40,7 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
     user: user_id,
     recipients: users.map(u => u.id),
     attachments,
+    memories,
     ...(payload?.schedule_date ?
       { schedule_date: dayjs(payload.schedule_date).toISOString(), status: "scheduled" } :
       { status: "draft" }
@@ -70,6 +81,15 @@ export async function updateCapsule(id: string, payload: Partial<ICapsule>, user
     payload.attachments = files.map(f => f.id)
   }
 
+  let validatedMemories: string[] | undefined
+  if (payload?.memories && payload.memories.length > 0) {
+    const memoryDocs = await Memory.find({ _id: { $in: payload.memories }, user: user_id })
+    if (memoryDocs.length !== payload.memories.length) {
+      throw new NotFoundException("Some memories not found")
+    }
+    validatedMemories = memoryDocs.map(m => m.id)
+  }
+
   if (payload?.schedule_date) {
     payload.schedule_date = dayjs(payload.schedule_date).toISOString()
     if (!payload.status) {
@@ -77,15 +97,26 @@ export async function updateCapsule(id: string, payload: Partial<ICapsule>, user
     }
   }
 
-  const updateCapsule = await Capsule.findByIdAndUpdate(id, {
+  const updateData: any = {
     title: payload.title,
     body: payload.body,
     schedule_date: payload.schedule_date,
-    status: payload.status,
-    attachments: {
-      $addToSet: payload.attachments
+    status: payload.status
+  }
+
+  if (!isEmpty(payload.attachments)) {
+    updateData.attachments = {
+      $addToSet: { $each: payload.attachments }
     }
-  }, { new: true })
+  }
+
+  if (!isEmpty(validatedMemories)) {
+    updateData.memories = {
+      $addToSet: { $each: validatedMemories }
+    }
+  }
+
+  const updateCapsule = await Capsule.findByIdAndUpdate(id, updateData, { new: true })
 
   await track({
     title: "Capsule Updated",
@@ -112,7 +143,12 @@ export async function getCapsules(payload: IPagination, user: string) {
       sort: { created_at: -1, updated_at: -1 },
       populate: [
         { path: "recipients", select: "email first_name last_name" },
-        { path: "attachments", select: "_id name url" }
+        { path: "attachments", select: "_id name url" },
+        {
+          path: "memories",
+          select: "_id title body tags created_at attachments status",
+          populate: { path: "attachments", select: "_id name url" }
+        }
       ]
     }
   )
@@ -124,7 +160,12 @@ export async function getCapsule(id: string, user: string) {
   const capsule = await Capsule.findOne({ user, _id: id })
     .populate([
       { path: "recipients", select: "email first_name last_name" },
-      { path: "attachments", select: "-base64" }
+      { path: "attachments", select: "-base64" },
+      {
+        path: "memories",
+        select: "_id title body tags created_at attachments status",
+        populate: { path: "attachments", select: "_id name url" }
+      }
     ])
   if (!capsule) {
     throw new NotFoundException("Capsule not found")

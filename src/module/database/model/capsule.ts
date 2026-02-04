@@ -8,6 +8,7 @@ export interface ICapsule {
   title: string
   body: string
   attachments: string[]
+  memories?: string[]
   status: string // scheduled draft delivered failed pause
   created_at: string
   updated_at: string
@@ -25,6 +26,10 @@ const capsule = new Schema<ICapsule>({
   attachments: [{
     type: String,
     ref: "file"
+  }],
+  memories: [{
+    type: String,
+    ref: "memory"
   }],
   status: String
 }, {

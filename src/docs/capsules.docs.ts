@@ -44,6 +44,12 @@ const capsulesDocs = {
                   description: 'Optional array of file IDs to attach to the capsule',
                   example: ['507f1f77bcf86cd799439011'],
                 },
+                memories: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Optional array of memory IDs to attach to the capsule',
+                  example: ['507f1f77bcf86cd799439012'],
+                },
               },
             },
           },
@@ -74,6 +80,19 @@ const capsulesDocs = {
                       schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
                       status: { type: 'string', example: 'scheduled' },
                       attachments: { type: 'array', items: { type: 'string' } },
+                      memories: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            _id: { type: 'string', example: '507f1f77bcf86cd799439012' },
+                            title: { type: 'string', example: 'My Memory' },
+                            body: { type: 'string', example: 'Memory content...' },
+                            tags: { type: 'array', items: { type: 'string' }, example: ['tag1', 'tag2'] },
+                            created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                          },
+                        },
+                      },
                       created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                     },
                   },
@@ -295,6 +314,19 @@ const capsulesDocs = {
                           description: 'File attachment (populated with file details, excluding base64)',
                         },
                       },
+                      memories: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            _id: { type: 'string', example: '507f1f77bcf86cd799439012' },
+                            title: { type: 'string', example: 'My Memory' },
+                            body: { type: 'string', example: 'Memory content...' },
+                            tags: { type: 'array', items: { type: 'string' }, example: ['tag1', 'tag2'] },
+                            created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                          },
+                        },
+                      },
                       created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                       updated_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                     },
@@ -368,6 +400,11 @@ const capsulesDocs = {
                   type: 'array',
                   items: { type: 'string' },
                   description: 'Array of file IDs',
+                },
+                memories: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Optional array of memory IDs to append to the capsule',
                 },
                 status: {
                   type: 'string',
