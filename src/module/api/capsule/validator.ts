@@ -20,7 +20,7 @@ export default {
       .isArray().withMessage("Memories must be an array"),
     body("memories.*")
       .optional()
-      .isMongoId().withMessage("Each memory must be a valid Mongo ID")
+      .isMongoId().withMessage("Each memory must be a valid ID")
   ],
   updateCapsule: [
     body("recipients")
@@ -40,7 +40,7 @@ export default {
       .isArray().withMessage("Memories must be an array"),
     body("memories.*")
       .optional()
-      .isMongoId().withMessage("Each memory must be a valid Mongo ID"),
+      .isMongoId().withMessage("Each memory must be a valid ID"),
     body("status")
       .optional()
       .isIn(["scheduled", "draft", "pause"])

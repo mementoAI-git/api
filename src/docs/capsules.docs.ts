@@ -191,6 +191,31 @@ const capsulesDocs = {
                                 },
                               },
                             },
+                            memories: {
+                              type: 'array',
+                              items: {
+                                type: 'object',
+                                properties: {
+                                  _id: { type: 'string', example: '507f1f77bcf86cd799439012' },
+                                  title: { type: 'string', example: 'My Memory' },
+                                  body: { type: 'string', example: 'Memory content...' },
+                                  tags: { type: 'array', items: { type: 'string' }, example: ['tag1', 'tag2'] },
+                                  created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                                  attachments: {
+                                    type: 'array',
+                                    items: {
+                                      type: 'object',
+                                      properties: {
+                                        _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+                                        name: { type: 'string', example: 'file-1234567890.jpg' },
+                                        url: { type: 'string', example: 'https://example.com/files/file-1234567890.jpg' },
+                                      },
+                                    },
+                                  },
+                                  status: { type: 'string', example: 'published' },
+                                },
+                              },
+                            },
                             created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                             updated_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
                           },

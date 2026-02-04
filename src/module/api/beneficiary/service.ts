@@ -61,7 +61,7 @@ export async function list({ page, limit, ...query }: IPagination, user_id: stri
       page,
       limit,
       sort: { created_at: -1 },
-      populate: { path: "user", select: "emai first_name last_name picture picture_url" }
+      populate: { path: "user", select: "email first_name last_name picture picture_url" }
     }
   )
 
