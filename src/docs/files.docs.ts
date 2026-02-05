@@ -1,4 +1,109 @@
 const filesDocs = {
+  '/files': {
+    get: {
+      tags: ['Files'],
+      summary: 'Get All Files',
+      description: 'Get paginated list of files uploaded by the authenticated user',
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          name: 'page',
+          in: 'query',
+          schema: { type: 'number', default: 1 },
+          description: 'Page number',
+        },
+        {
+          name: 'limit',
+          in: 'query',
+          schema: { type: 'number', default: 25 },
+          description: 'Items per page',
+        },
+        {
+          name: 'type',
+          in: 'query',
+          schema: { type: 'string' },
+          description: 'Filter files by MIME type',
+          example: 'image/jpeg',
+        },
+        {
+          name: 'search',
+          in: 'query',
+          schema: { type: 'string' },
+          description: 'Search files by name',
+          example: 'photo',
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Files retrieved successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', example: 'success' },
+                  message: { type: 'string', example: 'Files retrieved successfully' },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      docs: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+                            name: { type: 'string', example: 'file-1234567890.jpg' },
+                            type: { type: 'string', example: 'image/jpeg' },
+                            size: { type: 'number', example: 1048576 },
+                            user: { type: 'string', example: '507f1f77bcf86cd799439012' },
+                            url: { type: 'string', example: 'https://example.com/files/file-1234567890.jpg' },
+                            duration: { type: 'number', example: 120, description: 'Duration in seconds for audio/video files' },
+                            transcription: {
+                              type: 'object',
+                              properties: {
+                                full_text: { type: 'string', example: 'Full transcription text...' },
+                                segments: {
+                                  type: 'array',
+                                  items: {
+                                    type: 'object',
+                                    properties: {
+                                      start: { type: 'number', example: 0 },
+                                      end: { type: 'number', example: 5 },
+                                      text: { type: 'string', example: 'Transcription segment...' },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                            created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                            updated_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                          },
+                        },
+                      },
+                      totalDocs: { type: 'number', example: 50 },
+                      limit: { type: 'number', example: 25 },
+                      page: { type: 'number', example: 1 },
+                      totalPages: { type: 'number', example: 2 },
+                      hasNextPage: { type: 'boolean', example: true },
+                      hasPrevPage: { type: 'boolean', example: false },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {
+          description: 'Unauthorized',
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Error' },
+            },
+          },
+        },
+      },
+    },
+  },
   '/files/upload': {
     post: {
       tags: ['Files'],

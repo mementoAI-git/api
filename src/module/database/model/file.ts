@@ -1,4 +1,5 @@
-import { model, Schema } from 'mongoose';
+import { model, PaginateModel, Schema } from 'mongoose';
+import mongoosePaginate from 'mongoose-paginate-v2';
 import { BACKEND_URL } from '../../../utils/config';
 
 export interface ITranscriptionSegment {
@@ -63,5 +64,7 @@ file.virtual('url').get(function () {
   return `${BACKEND_URL}/files/${this.name}`;
 });
 
-const File = model("file", file)
+file.plugin(mongoosePaginate);
+
+const File = model<IFile, PaginateModel<IFile>>("file", file)
 export default File

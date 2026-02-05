@@ -1,4 +1,4 @@
-import {RequestHandler, Router} from 'express';
+import { RequestHandler, Router } from 'express';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
@@ -11,6 +11,7 @@ router.post(
   fileUploadMiddleWare.array('file', 5) as RequestHandler,
   ctrl.uploadFile,
 );
+router.get('/', gaurd, ctrl.getUserFiles);
 router.get('/:name', ctrl.getFile);
 router.delete('/:name', gaurd, ctrl.removeFile);
 

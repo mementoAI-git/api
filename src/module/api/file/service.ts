@@ -1,7 +1,8 @@
-import { processFile } from "../../../utils/helpers";
+import { processFile, filterGenerator } from "../../../utils/helpers";
 import User from "../../database/model/user";
 import File from "../../database/model/file";
 import { NotFoundException, UnauthorizedException } from "../../../utils/service-error";
+import { IPagination } from "../../../utils/interface";
 import redis from "../../../services/redis"
 import { createHash } from "crypto";
 import { Readable } from "stream";
@@ -131,4 +132,24 @@ export function createFileStream(buffer: Buffer): Readable {
   stream.push(null);
 
   return stream;
+}
+
+export async function getFiles(payload: IPagination, user_id: string) {
+  const { page, limit, ...query } = payload;
+
+  const filters = filterGenerator(query, ["name", "type"]);
+  filters.push({ user: user_id });
+  filters.push({ deleted: { $ne: true } });
+
+  const data = await File.paginate(
+    { $and: filters },
+    {
+      limit,
+      page,
+      sort: { created_at: -1, updated_at: -1 },
+      select: "-base64" // Exclude base64 data from response
+    }
+  );
+
+  return { message: "Files retrieved successfully", data };
 }

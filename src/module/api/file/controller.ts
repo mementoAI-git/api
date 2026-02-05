@@ -1,7 +1,7 @@
 import { NextFunction, Response, Request } from "express"
 import { IRequest } from "../../../utils/interface"
 import * as service from "./service"
-import { getFiles, responsHandler } from "../../../utils/helpers"
+import { getFiles, responsHandler, getPagination, validateRequest } from "../../../utils/helpers"
 import { StatusCodes } from "http-status-codes"
 import dayjs from "dayjs"
 import { pipeline } from 'stream/promises';
@@ -140,6 +140,23 @@ export async function removeFile(
   try {
     const { message, data } = await service.removeFile(
       req.params.name,
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getUserFiles(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const { message, data } = await service.getFiles(
+      getPagination(req),
       req.auth.id,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
