@@ -17,7 +17,7 @@ export async function getPrompts(req: IRequest, res: Response, next: NextFunctio
 
 export async function getUserPrompt(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.getUserPromptResponse(req.params.id, req.auth.id)
+    const { message, data } = await service.getUserPromptResponse(String(req.params.id), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

@@ -6,4 +6,3 @@ error.log
 *.DS_Store*
 SWAGGER_DOCS_SETUP_PROMPT.md
 bun.lock
-yarn.lock
