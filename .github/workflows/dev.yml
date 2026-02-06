@@ -13,9 +13,9 @@ jobs:
       - name: Deploy and restart application
         uses: appleboy/ssh-action@v0.1.7
         with:
-          host: ${{ secrets.DEV_SSH_HOST }}
-          username: ${{ secrets.DEV_SSH_USERNAME }}
-          password: ${{ secrets.DEV_SSH_PASSWORD }}
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
             export NVM_DIR="$HOME/.nvm"
@@ -36,5 +36,5 @@ jobs:
             yarn compile
             
             # Restart PM2 instances
-            pm2 restart all
+            pm2 restart dev-server dev-worker
 
