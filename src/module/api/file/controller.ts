@@ -75,7 +75,7 @@ const setFileHeaders = (res: Response, metadata: any): void => {
 
 export async function getFile(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name } = req.params;
+    const name = String(req.params.name);
     const range = req.headers?.range;
 
     const metadata = await service.getFileMetadata(name);
@@ -139,7 +139,7 @@ export async function removeFile(
 ) {
   try {
     const { message, data } = await service.removeFile(
-      req.params.name,
+      String(req.params.name),
       req.auth.id,
     );
     return responsHandler(res, StatusCodes.OK, message, data);

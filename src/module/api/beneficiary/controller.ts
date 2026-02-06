@@ -25,7 +25,7 @@ export async function list(req: IRequest, res: Response, next: NextFunction) {
 
 export async function del(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.del(req.params.id, req.auth.id)
+    const { message, data } = await service.del(String(req.params.id), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -35,7 +35,7 @@ export async function del(req: IRequest, res: Response, next: NextFunction) {
 export async function update(req: IRequest, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
-    const { message, data } = await service.update(req.params.id, req.body, req.auth.id)
+    const { message, data } = await service.update(String(req.params.id), req.body, req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -65,7 +65,7 @@ export async function acceptInvite(req: IRequest, res: Response, next: NextFunct
 export async function getInvite(req: IRequest, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
-    const { message, data } = await service.getInvite(req.params.id)
+    const { message, data } = await service.getInvite(String(req.params.id))
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

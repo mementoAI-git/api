@@ -8,7 +8,7 @@ import { UnauthorizedException } from "../../../utils/service-error";
 export function generateOauthUrl(req: Request, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
-    const { message, data } = service.generateOauthUrl(req.params.provider)
+    const { message, data } = service.generateOauthUrl(String(req.params.provider))
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -18,7 +18,7 @@ export function generateOauthUrl(req: Request, res: Response, next: NextFunction
 export async function authorization(req: Request, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
-    const { message, data } = await service.oauthAuthorization(req.body, req.params.provider)
+    const { message, data } = await service.oauthAuthorization(req.body, String(req.params.provider))
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

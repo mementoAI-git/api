@@ -33,7 +33,7 @@ export async function getUserMessagesByConversation(req: IRequest, res: Response
     validateRequest(req)
 
     const { message, data } = await service.getUserMessagesByConversation(
-      req.params.id,
+      String(req.params.id),
       getPagination(req),
       req.auth.id
     )

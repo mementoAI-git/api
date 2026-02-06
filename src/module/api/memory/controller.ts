@@ -15,7 +15,7 @@ export async function memoryStats(req: IRequest, res: Response, next: NextFuncti
 
 export async function bookmark(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.bookmark(req.params.id, req.auth.id)
+    const { message, data } = await service.bookmark(String(req.params.id), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -63,7 +63,7 @@ export async function getStoryMemories(req: IRequest, res: Response, next: NextF
 
 export async function getMemory(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.getMemory(req.params.id, req.auth?.id)
+    const { message, data } = await service.getMemory(String(req.params.id), req.auth?.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -72,7 +72,7 @@ export async function getMemory(req: IRequest, res: Response, next: NextFunction
 
 export async function getMemoryByPrompt(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.getMemoryByPrompt(req.params.id, req.auth?.id)
+    const { message, data } = await service.getMemoryByPrompt(String(req.params.id), req.auth?.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -82,7 +82,7 @@ export async function getMemoryByPrompt(req: IRequest, res: Response, next: Next
 export async function updateMemory(req: IRequest, res: Response, next: NextFunction) {
   try {
     validateRequest(req)
-    const { message, data } = await service.updateMemory(req.params.id, req.body, req.auth.id)
+    const { message, data } = await service.updateMemory(String(req.params.id), req.body, req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -94,7 +94,7 @@ export async function deleteMemory(req: IRequest, res: Response, next: NextFunct
     validateRequest(req)
 
     const payload = {
-      memory_id: req.params.id,
+      memory_id: String(req.params.id),
       delete_permanently: req.body?.delete_permanently || false
     }
     const { message, data } = await service.deleteMemory(payload, req.auth.id)
@@ -106,7 +106,7 @@ export async function deleteMemory(req: IRequest, res: Response, next: NextFunct
 
 export async function restoreMemory(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.restoreMemory(req.params.id, req.auth.id)
+    const { message, data } = await service.restoreMemory(String(req.params.id), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -115,7 +115,7 @@ export async function restoreMemory(req: IRequest, res: Response, next: NextFunc
 
 export async function unbookmark(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.unbookmark(req.params.id, req.auth.id)
+    const { message, data } = await service.unbookmark(String(req.params.id), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -125,7 +125,7 @@ export async function unbookmark(req: IRequest, res: Response, next: NextFunctio
 export async function removeFileFromMemory(req: IRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     validateRequest(req)
-    const { message, data } = await service.removeFileFromMemory(req.params.id, req.auth.id)
+    const { message, data } = await service.removeFileFromMemory(String(req.params.id), req.auth.id)
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)

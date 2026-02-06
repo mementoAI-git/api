@@ -47,7 +47,7 @@ export async function getSuggestions(req: IRequest, res: Response, next: NextFun
 
 export async function getPromptDetails(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const { message, data } = await service.getPromptDetails(req.params.id)
+    const { message, data } = await service.getPromptDetails(String(req.params.id))
     return responsHandler(res, StatusCodes.OK, message, data)
   } catch (error) {
     next(error)
@@ -57,7 +57,7 @@ export async function getPromptDetails(req: IRequest, res: Response, next: NextF
 export async function getPromptsByCategory(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.getPromptsByCategory(
-      req.params.id,
+      String(req.params.id),
       req.auth.id,
       getPagination(req)
     )
