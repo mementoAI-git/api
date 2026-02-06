@@ -1,9 +1,9 @@
-import { RequestHandler, Router } from 'express';
+import { RequestHandler, Router, type IRouter } from 'express';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
 
-const router = Router();
+const router: IRouter = Router();
 
 router.post(
   '/upload',

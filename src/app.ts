@@ -1,4 +1,4 @@
-import express from 'express'
+import express, { Application } from 'express'
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from "compression"
@@ -10,7 +10,7 @@ import { setupBullBoard } from './services/queues';
 import { PORT } from './utils/config';
 import { logger } from './utils';
 
-export function createServer() {
+export function createServer(): Application {
   const app = express();
 
   app.set('trust proxy', 1);

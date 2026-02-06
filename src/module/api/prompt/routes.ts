@@ -1,11 +1,11 @@
-import {RequestHandler, Router} from 'express';
+import {RequestHandler, Router, type IRouter} from 'express';
 import * as ctrl from './controller';
 import valid from './validator';
 import gaurd from '../../../middleware/gaurd';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
 import {idValidator} from '../../../utils/helpers';
 
-const router = Router();
+const router: IRouter = Router();
 
 router.get('/', gaurd, ctrl.getPrompts);
 router.post(

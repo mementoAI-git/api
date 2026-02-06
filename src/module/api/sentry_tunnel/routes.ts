@@ -1,7 +1,7 @@
-import express, {Router} from 'express';
+import express, {Router, type IRouter} from 'express';
 import * as ctrl from './controller';
 
-const router = Router();
+const router: IRouter = Router();
 
 router.post('/', express.raw({limit: '5mb', type: () => true}), ctrl.tunnel);
 

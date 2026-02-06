@@ -1,10 +1,10 @@
-import { RequestHandler, Router } from 'express';
+import { RequestHandler, Router, type IRouter } from 'express';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
 import valid from './validator';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
 
-const router = Router();
+const router: IRouter = Router();
 router.use(gaurd)
 
 router.get('/profile', ctrl.getProfile);

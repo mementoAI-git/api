@@ -1,10 +1,10 @@
-import { Router } from "express";
+import { Router, type IRouter } from "express";
 import * as ctrl from "./controller";
 import valid from "./validator"
 import rateLimiter from "../../../middleware/rate-limiter";
 import guard from "../../../middleware/gaurd";
 
-const router = Router()
+const router: IRouter = Router()
 
 router.get("/oauth/:provider", valid.generateOauthUrl, ctrl.generateOauthUrl)
 router.post("/oauth/:provider", valid.authorization, ctrl.authorization)

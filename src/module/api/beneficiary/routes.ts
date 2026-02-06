@@ -1,9 +1,9 @@
-import { Router } from "express";
+import { Router, type IRouter } from "express";
 import valid from "./validator"
 import * as ctrl from "./controller"
 import gaurd from "../../../middleware/gaurd";
 
-const router = Router()
+const router: IRouter = Router()
 
 router.post("/", gaurd, valid.createBeneficiary, ctrl.create)
 router.get("/", gaurd, ctrl.list)

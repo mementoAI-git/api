@@ -1,4 +1,4 @@
-import { createClient } from "redis"
+import { createClient, RedisClientType } from "redis"
 import { REDIS_URL } from "../utils/config"
 import logger from "../utils/logger"
 
@@ -9,7 +9,7 @@ export interface RedisConnection {
   username?: string;
 }
 
-const client = createClient({ url: REDIS_URL })
+const client: RedisClientType = createClient({ url: REDIS_URL })
 
 client.on("error", (err) => logger.error(err, 'Redis Client Error'))
 client.on("connect", () => logger.info('Redis connected...'))

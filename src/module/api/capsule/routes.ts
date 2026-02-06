@@ -1,9 +1,9 @@
-import { Router } from "express";
+import { Router, type IRouter } from "express";
 import gaurd from "../../../middleware/gaurd";
 import * as ctrl from "./controller"
 import valid from "./validator"
 
-const router = Router()
+const router: IRouter = Router()
 
 router.post("/", valid.createCapsule, gaurd, ctrl.createCapsule)
 router.put("/:id", valid.updateCapsule, gaurd, ctrl.updateCapsule)

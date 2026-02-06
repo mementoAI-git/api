@@ -1,10 +1,10 @@
-import { Router } from "express"
+import { Router, type IRouter } from "express"
 import gaurd from "../../../middleware/gaurd"
 import * as ctrl from "./controller"
 import valid from "./validator"
 import { idValidator } from "../../../utils/helpers"
 
-const router = Router()
+const router: IRouter = Router()
 
 router.post("/prompt",
   valid.prompt,
