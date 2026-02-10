@@ -12,7 +12,6 @@ import {
   MEMORY_STATUS,
   emptyPaginatedList,
   isEmpty,
-  processFile
 } from "../../../utils";
 import Prompt from "../../database/model/prompt";
 import { updateStreak } from "../user/service";
@@ -21,6 +20,7 @@ import { updateMemoryTitle } from "../ai/utils";
 import ActivePrompt from "../../database/model/active-prompt";
 import { queueStoryInsights } from "../../../services/queues/insights";
 import { queueSummarization } from "../../../services/queues/summarization";
+import * as storage from "../../../services/storage"; 
 
 export async function memoryStats(user_id: string) {
   const memories = await Memory.find({
@@ -56,7 +56,7 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
   let attachments = payload?.attachments || []
   if (!isEmpty(files)) {
     const unsavedFiles = await Promise.all(
-      files.map((file) => processFile(file, user_id))
+      files.map((file) => storage.uploadFile(file, user_id))
     )
 
     const savedFiles = await File.insertMany(unsavedFiles)

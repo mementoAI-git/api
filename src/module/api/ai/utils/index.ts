@@ -8,7 +8,7 @@ import { TEMP_PATH } from "../../../../utils/config";
 import dayjs from "dayjs";
 import { isEmpty, prompts } from "../../../../utils";
 import Memory, { IMemory } from "../../../database/model/memory";
-import { getFileFromS3 } from "../../../media";
+import { getFileFromS3 } from "../../../../services/storage/s3";
 import { Readable } from "stream";
 import { queueSummarization } from "../../../../services/queues";
 

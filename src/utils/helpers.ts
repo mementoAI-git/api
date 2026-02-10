@@ -16,8 +16,6 @@ import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { getAudioDurationInSeconds } from 'get-audio-duration';
-import { IFile } from '../module/database/model/file';
-import { uploadToS3 } from '../module/media';
 import mongoose from '../module/database/connection';
 import { SENSITIVE_FIELDS, SUPPORTED_FILE_TYPES } from './constant';
 import { ClientSession } from 'mongoose';
@@ -318,32 +316,6 @@ export async function getMediaDuration(
       }
     }
   }
-}
-
-export async function processFile(
-  file: Express.Multer.File,
-  user: string,
-): Promise<Partial<IFile>> {
-  const fileName = reconstructFileName(file.originalname);
-
-  // Upload file to S3 using the filename as the key
-  const uploadResult = await uploadToS3(fileName, file.buffer, file.mimetype, {
-    originalName: file.originalname,
-    userId: user,
-    uploadedAt: new Date().toISOString(),
-  });
-
-  // Get duration for media files
-  const base64 = file.buffer.toString('base64');
-  const duration = await getMediaDuration(base64, file.mimetype);
-
-  return {
-    name: uploadResult?.key,
-    user,
-    size: file.size,
-    type: file.mimetype,
-    duration,
-  };
 }
 
 export const concatStrings = (...args: any[]): string => {

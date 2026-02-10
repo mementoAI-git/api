@@ -1,4 +1,5 @@
-import { processFile, filterGenerator } from "../../../utils/helpers";
+import * as storage from "../../../services/storage";
+import { filterGenerator } from "../../../utils/helpers";
 import User from "../../database/model/user";
 import File from "../../database/model/file";
 import { NotFoundException, UnauthorizedException } from "../../../utils/service-error";
@@ -6,11 +7,6 @@ import { IPagination } from "../../../utils/interface";
 import redis from "../../../services/redis"
 import { createHash } from "crypto";
 import { Readable } from "stream";
-import {
-  getFileFromS3,
-  getFileMetadataFromS3,
-  deleteFileFromS3
-} from "../../media";
 
 export async function uploadFile(payload: Express.Multer.File[], user_id: string) {
   const user = await User.findById(user_id)
@@ -19,7 +15,7 @@ export async function uploadFile(payload: Express.Multer.File[], user_id: string
   }
 
   const files = await Promise.all(
-    payload.map((file) => processFile(file, user_id))
+    payload.map((file) => storage.uploadFile(file, user_id))
   )
 
   const data = await File.insertMany(files)
@@ -36,8 +32,7 @@ export async function removeFile(name: string, user_id: string) {
     throw new UnauthorizedException()
   }
 
-  // Delete file from S3
-  await deleteFileFromS3(file.name);
+  await storage.deleteFile(file.name, file.provider ?? 's3');
 
   // Delete file record from database
   await File.deleteOne({ name })
@@ -55,22 +50,18 @@ export async function getFileMetadata(name: string) {
     throw new NotFoundException("File not found");
   }
 
-  // Get metadata from S3
-  const s3Metadata = await getFileMetadataFromS3(file.name);
+  const result = await storage.getFileMetadata(file.name, file.provider ?? 's3');
 
   const hash = createHash('md5');
   hash.update(`${file.name}-${file.size}`);
-  const etag = s3Metadata.etag || `${hash.digest('hex')}`;
+  const etag = result.etag || `${hash.digest('hex')}`;
 
-  const data = {
+  return {
     etag,
     ...file.toJSON(),
-    size: s3Metadata.size,
-    lastModified: s3Metadata.lastModified
-  }
-
-
-  return data;
+    size: result.size,
+    lastModified: result.lastModified
+  };
 }
 
 export async function getFileBuffer(name: string, size: number, range?: string) {
@@ -98,17 +89,15 @@ export async function getFileBuffer(name: string, size: number, range?: string) 
     throw new NotFoundException("File not found");
   }
 
-  // Get file from S3
-  const s3Range = range ? `bytes=${start}-${end}` : undefined;
-  const s3Response = await getFileFromS3(file.name, s3Range);
+  const rangeHeader = range ? `bytes=${start}-${end}` : undefined;
+  const fileResponse = await storage.getFile(file.name, rangeHeader, file.provider ?? 's3');
 
-  if (!s3Response.Body) {
+  if (!fileResponse.Body) {
     throw new NotFoundException("File content not found");
   }
 
-  // Convert S3 stream to buffer
   const chunks: Uint8Array[] = [];
-  const stream = s3Response.Body as Readable;
+  const stream = fileResponse.Body as Readable;
 
   for await (const chunk of stream) {
     chunks.push(chunk);
@@ -138,6 +127,7 @@ export async function getFiles(payload: IPagination, user_id: string) {
   const { page, limit, ...query } = payload;
 
   const filters = filterGenerator(query, ["name", "type"]);
+
   filters.push({ user: user_id });
   filters.push({ deleted: { $ne: true } });
 

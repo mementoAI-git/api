@@ -1,6 +1,6 @@
 import Axios from 'axios';
-import { STORAGE_API_KEY, STORAGE_BASE_URL } from '../../utils/config';
-import { BadRequestException, ServiceError } from '../../utils/service-error';
+import { STORAGE_API_KEY, STORAGE_BASE_URL } from '../../../utils/config';
+import { BadRequestException, ServiceError } from '../../../utils/service-error';
 
 const storage = Axios.create({
   baseURL: String(STORAGE_BASE_URL),

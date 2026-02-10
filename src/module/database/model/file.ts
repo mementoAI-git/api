@@ -13,13 +13,16 @@ export interface ITranscriptionData {
   segments: ITranscriptionSegment[];
 }
 
+export type FileStorageProvider = 's3' | 'gcs';
+
 export interface IFile {
   type: string
   size: number // bytes
   name: string
   url: string
   user: string
-  transcription: ITranscriptionData // support both old string format and new structured format
+  provider?: FileStorageProvider
+  transcription: ITranscriptionData
   duration?: number // duration in seconds for audio/video files
   deleted?: boolean // marks file as deleted so it can be cleaned up
   created_at: string
@@ -45,6 +48,11 @@ const file = new Schema<IFile>({
     unique: true
   },
   user: String,
+  provider: {
+    type: String,
+    enum: ['s3', 'gcs'],
+    default: 's3',
+  },
   transcription: transcriptionDataSchema,
   duration: Number,
   deleted: {

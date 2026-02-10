@@ -8,3 +8,4 @@ SWAGGER_DOCS_SETUP_PROMPT.md
 bun.lock
 yarn.lock
 *.lock*
+google-storage.json

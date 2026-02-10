@@ -27,8 +27,5 @@ router.post(
 router.delete('/account', ctrl.deleteUser);
 router.get('/stats', ctrl.getUserStats);
 
-// TODO: Remove this route after migration is complete
-router.post('/migrate-context-to-persona', ctrl.migrateContextToPersona);
-
 export const name = 'users';
 export default router;

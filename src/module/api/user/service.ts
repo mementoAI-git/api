@@ -6,7 +6,6 @@ import Memory from '../../database/model/memory';
 import {
   hashPassword,
   isEmpty,
-  processFile,
   withTransaction
 } from '../../../utils/helpers';
 import {
@@ -20,6 +19,7 @@ import {
   IVerifyTOTP,
 } from './interface';
 import File from '../../database/model/file';
+import * as storage from '../../../services/storage';
 import speakeasy from 'speakeasy';
 import Qr from 'qrcode';
 import mail from '../../mail';
@@ -128,7 +128,7 @@ export async function uploadPicture(
     throw new NotFoundException('User not found');
   }
 
-  const { name, type, size } = await processFile(payload[0], user_id);
+  const { name, type, size } = await storage.uploadFile(payload[0], user_id);
 
   const file = await File.create({
     name,
@@ -356,79 +356,5 @@ export async function getUserStats(user_id: string) {
   return {
     data: stats,
     message: 'User statistics retrieved successfully',
-  };
-}
-
-export async function migrateUserContextToPersona() {
-
-  // Find all users that have a context field (using raw MongoDB query)
-  const usersWithContext = await User.find({
-    context: { $exists: true, $ne: null }
-  } as any).lean();
-
-  let migrated = 0;
-  let skipped = 0;
-  let errors = 0;
-  const errorDetails: Array<{ user_id: string; error: string }> = [];
-
-  for (const user of usersWithContext) {
-    try {
-      const context = (user as any).context as Omit<IPersona, "user">;
-
-      // Check if context has any meaningful data
-      const hasData =
-        (context.important_notes && context.important_notes.length > 0) ||
-        (context.key_preferences && context.key_preferences.length > 0) ||
-        context.conversation_history_summary ||
-        (context.emotional_state_trends && context.emotional_state_trends.length > 0) ||
-        (context.goals_and_aspirations && context.goals_and_aspirations.length > 0) ||
-        context.self_description ||
-        context.current_priority ||
-        (context.join_reasons && context.join_reasons.length > 0);
-
-      if (!hasData) {
-        skipped++;
-        continue;
-      }
-
-      // Check if persona already exists for this user
-      const existingPersona = await Persona.findOne({ user: user._id });
-      if (existingPersona) {
-        skipped++;
-        continue;
-      }
-
-      // Create persona with context data
-      await Persona.create({
-        user: user._id,
-        important_notes: context.important_notes || [],
-        key_preferences: context.key_preferences || [],
-        conversation_history_summary: context.conversation_history_summary || undefined,
-        emotional_state_trends: context.emotional_state_trends || [],
-        goals_and_aspirations: context.goals_and_aspirations || [],
-        self_description: context.self_description || undefined,
-        current_priority: context.current_priority || undefined,
-        join_reasons: context.join_reasons || [],
-      });
-
-      migrated++;
-    } catch (error) {
-      errors++;
-      errorDetails.push({
-        user_id: (user._id as any).toString(),
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }
-
-  return {
-    message: 'Migration completed',
-    data: {
-      totalUsersWithContext: usersWithContext.length,
-      migrated,
-      skipped,
-      errors,
-      errorDetails: errors > 0 ? errorDetails : undefined,
-    },
   };
 }
