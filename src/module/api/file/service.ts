@@ -32,9 +32,10 @@ export async function removeFile(name: string, user_id: string) {
     throw new UnauthorizedException()
   }
 
-  await storage.deleteFile(file.name, file.provider ?? 's3');
+  if ((file.provider ?? 's3') === 'gcs') {
+    await storage.deleteFile(file.name, 'gcs');
+  }
 
-  // Delete file record from database
   await File.deleteOne({ name })
   return { data: file, message: "File deleted successfully" }
 }
@@ -47,6 +48,10 @@ export async function getFileMetadata(name: string) {
 
   const file = await File.findOne({ name });
   if (!file) {
+    throw new NotFoundException("File not found");
+  }
+
+  if ((file.provider ?? 's3') === 's3') {
     throw new NotFoundException("File not found");
   }
 
@@ -86,6 +91,9 @@ export async function getFileBuffer(name: string, size: number, range?: string) 
 
   const file = await File.findOne({ name });
   if (!file) {
+    throw new NotFoundException("File not found");
+  }
+  if ((file.provider ?? 's3') === 's3') {
     throw new NotFoundException("File not found");
   }
 
@@ -128,8 +136,11 @@ export async function getFiles(payload: IPagination, user_id: string) {
 
   const filters = filterGenerator(query, ["name", "type"]);
 
-  filters.push({ user: user_id });
-  filters.push({ deleted: { $ne: true } });
+  filters.push(
+    { user: user_id },
+    { provider: 'gcs' },
+    { deleted: { $ne: true } },
+  );
 
   const data = await File.paginate(
     { $and: filters },
