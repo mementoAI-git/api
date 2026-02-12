@@ -119,6 +119,7 @@ export const getUserPromptResponse = async (id: string, user_id: string) => {
   let memory = await Memory.findOne({ user: user_id, prompt: id }).populate({
     path: 'attachments',
     select: '-base64',
+    match: { provider: { $ne: 's3' } },
   });
 
   if (!memory) {

@@ -143,11 +143,11 @@ export async function getCapsules(payload: IPagination, user: string) {
       sort: { created_at: -1, updated_at: -1 },
       populate: [
         { path: "recipients", select: "email first_name last_name" },
-        { path: "attachments", select: "_id name url" },
+        { path: "attachments", select: "_id name url", match: { provider: { $ne: "s3" } } },
         {
           path: "memories",
           select: "_id title body tags created_at attachments status",
-          populate: { path: "attachments", select: "_id name url" }
+          populate: { path: "attachments", select: "_id name url", match: { provider: { $ne: "s3" } } }
         }
       ]
     }
@@ -160,11 +160,11 @@ export async function getCapsule(id: string, user: string) {
   const capsule = await Capsule.findOne({ user, _id: id })
     .populate([
       { path: "recipients", select: "email first_name last_name" },
-      { path: "attachments", select: "-base64" },
+      { path: "attachments", select: "-base64", match: { provider: { $ne: "s3" } } },
       {
         path: "memories",
         select: "_id title body tags created_at attachments status",
-        populate: { path: "attachments", select: "_id name url" }
+        populate: { path: "attachments", select: "_id name url", match: { provider: { $ne: "s3" } } }
       }
     ])
   if (!capsule) {

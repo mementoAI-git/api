@@ -132,7 +132,11 @@ export async function getUserMessages({ limit, ...query }: IPagination & { next?
 
   const messages = await Message.find(filter)
     .sort({ created_at: -1 })
-    .populate("attatchments", "-base64")
+    .populate({
+      path: "attatchments",
+      select: "-base64",
+      match: { provider: { $ne: "s3" } }
+    })
     .limit(fetch_limit)
 
   let next = null;
@@ -160,7 +164,7 @@ export async function getUserMessagesByConversation(id: string, { limit, ...quer
 
   const messages = await Message.find(filter)
     .sort({ created_at: -1 })
-    .populate("attatchments", "-base64")
+    .populate({ path: "attatchments", select: "-base64", match: { provider: { $ne: "s3" } } })
     .limit(fetch_limit)
 
   let next = null;

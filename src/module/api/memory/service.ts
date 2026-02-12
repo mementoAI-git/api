@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import { FilterQuery } from "mongoose";
 import Memory, { IMemory } from "../../database/model/memory";
 import File from "../../database/model/file";
 import User from "../../database/model/user";
@@ -20,7 +21,7 @@ import { updateMemoryTitle } from "../ai/utils";
 import ActivePrompt from "../../database/model/active-prompt";
 import { queueStoryInsights } from "../../../services/queues/insights";
 import { queueSummarization } from "../../../services/queues/summarization";
-import * as storage from "../../../services/storage"; 
+import * as storage from "../../../services/storage";
 
 export async function memoryStats(user_id: string) {
   const memories = await Memory.find({
@@ -97,199 +98,127 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
   }
 }
 
-export async function getMemories(payload: IPagination, user_id: string) {
-  const { page, limit, search = "", bookmarked = false, deleted = false } = payload
-  const filters = filterGenerator({ search }, ["title", "body", "tags"])
+async function paginateMemories(
+  filter: FilterQuery<IMemory>,
+  user_id: string,
+  options: { page: number; limit: number; bookmarked?: boolean }
+) {
+  const { page, limit, bookmarked = false } = options;
+  let query = filter;
+  let bookmarkedIds: Set<string> = new Set();
 
-  if (deleted) {
-    filters.push({
-      user: user_id,
-      status: "deleted"
-    })
-  } else {
-    filters.push({
-      user: user_id,
-      status: { $nin: ["draft", "deleted"] }
-    })
-  }
-
-  let memoryQuery = { $and: filters }
-
-  // If filtering by bookmarked, get only bookmarked memory IDs for the user
-  let bookmarkedIds: Set<string> = new Set()
   if (bookmarked) {
-    const userBookmarks = await Bookmark.find({ user: user_id })
-    const memoryIds = userBookmarks.map(b => b.memory)
+    const userBookmarks = await Bookmark.find({ user: user_id });
+    const memoryIds = userBookmarks.map((b) => b.memory);
     if (memoryIds.length === 0) {
-
-      return {
-        data: emptyPaginatedList({ limit, page }),
-        message: "User memories retrieved successfully"
-      }
+      return emptyPaginatedList({ limit, page });
     }
-    memoryQuery = { $and: [...filters, { _id: { $in: memoryIds } }] }
-    bookmarkedIds = new Set(memoryIds)
+    query = { $and: [filter, { _id: { $in: memoryIds } }] };
+    bookmarkedIds = new Set(memoryIds);
   }
 
-  const memories = await Memory.paginate(
-    memoryQuery,
-    {
-      page,
-      limit,
-      sort: { created_at: -1 },
-      populate: { path: "attachments", select: "-base64" }
-    }
-  )
+  const memories = await Memory.paginate(query, {
+    page,
+    limit,
+    sort: { created_at: -1 },
+    populate: {
+      path: "attachments",
+      select: "-base64",
+      match: { provider: { $ne: "s3" } },
+    },
+  });
 
-  // If not filtering by bookmarked, get bookmarks for the current page
   if (!bookmarked) {
-    const memoryIds = memories.docs.map(memory => memory.id)
+    const memoryIds = memories.docs.map((memory) => memory.id);
     const userBookmarks = await Bookmark.find({
       memory: { $in: memoryIds },
-      user: user_id
-    })
-    bookmarkedIds = new Set(userBookmarks.map(bookmark => bookmark.memory))
+      user: user_id,
+    });
+    bookmarkedIds = new Set(userBookmarks.map((bookmark) => bookmark.memory));
   }
 
-  const data = {
+  return {
     ...memories,
-    docs: memories.docs.map(memory => ({
+    docs: memories.docs.map((memory) => ({
       ...memory.toObject(),
-      bookmarked: bookmarkedIds.has(memory.id)
-    }))
-  }
+      bookmarked: bookmarkedIds.has(memory.id),
+    })),
+  };
+}
 
-  return { data, message: "User memories retrieved successfully" }
+export async function getMemories(payload: IPagination, user_id: string) {
+  const { page, limit, search, bookmarked = false, deleted = false } = payload;
+  const filters = filterGenerator({ search }, ["title", "body", "tags"]);
+
+  filters.push({
+    user: user_id,
+    status: deleted ? "deleted" : { $nin: ["draft", "deleted"] },
+  });
+
+  const data = await paginateMemories(
+    { $and: filters },
+    user_id,
+    { page, limit, bookmarked }
+  );
+
+  return { data, message: "User memories retrieved successfully" };
 }
 
 export async function getConversationMemories(payload: IPagination, user_id: string) {
-  const { page, limit, search, bookmarked = false, deleted = false } = payload
-  const filters = filterGenerator({ search }, ["title", "body", "tags"])
+  const { page, limit, search, bookmarked = false, deleted = false } = payload;
+
+  const filters = filterGenerator({ search }, ["title", "body", "tags"]);
 
   filters.push({
     user: user_id,
     type: "conversation",
-    status: deleted ? "deleted" : { $nin: ["draft", "deleted"] }
-  })
+    status: deleted ? "deleted" : { $nin: ["draft", "deleted"] },
+  });
 
-  let memoryQuery = { $and: filters }
+  const data = await paginateMemories(
+    { $and: filters },
+    user_id,
+    { page, limit, bookmarked }
+  );
 
-  // If filtering by bookmarked, get only bookmarked memory IDs for the user
-  let bookmarkedIds: Set<string> = new Set()
-  if (bookmarked) {
-    const userBookmarks = await Bookmark.find({ user: user_id })
-    const memoryIds = userBookmarks.map(b => b.memory)
-    if (memoryIds.length === 0) {
-      return {
-        data: emptyPaginatedList({ limit, page }),
-        message: "Conversation memories retrieved successfully"
-      }
-    }
-    memoryQuery = { $and: [...filters, { _id: { $in: memoryIds } }] }
-    bookmarkedIds = new Set(memoryIds)
-  }
-
-  const memories = await Memory.paginate(
-    memoryQuery,
-    {
-      page,
-      limit,
-      sort: { created_at: -1 },
-      populate: { path: "attachments", select: "-base64" }
-    }
-  )
-
-  // If not filtering by bookmarked, get bookmarks for the current page
-  if (!bookmarked) {
-    const memoryIds = memories.docs.map(memory => memory.id)
-    const userBookmarks = await Bookmark.find({
-      memory: { $in: memoryIds },
-      user: user_id
-    })
-    bookmarkedIds = new Set(userBookmarks.map(bookmark => bookmark.memory))
-  }
-
-  const data = {
-    ...memories,
-    docs: memories.docs.map(memory => ({
-      ...memory.toObject(),
-      bookmarked: bookmarkedIds.has(memory.id)
-    }))
-  }
-
-  return { data, message: "Conversation memories retrieved successfully" }
+  return { data, message: "Conversation memories retrieved successfully" };
 }
 
 export async function getStoryMemories(payload: IPagination, user_id: string) {
-  const { page, limit, search, bookmarked = false, deleted = false } = payload
-  const filters = filterGenerator({ search }, ["title", "body", "tags"])
+  const { page, limit, search, bookmarked = false, deleted = false } = payload;
 
+  const filters = filterGenerator({ search }, ["title", "body", "tags"]);
   filters.push({
     user: user_id,
     type: "story",
-    status: deleted ? "deleted" : { $nin: ["draft", "deleted"] }
-  })
+    status: deleted ? "deleted" : { $nin: ["draft", "deleted"] },
+  });
 
-  let memoryQuery = { $and: filters }
+  const data = await paginateMemories(
+    { $and: filters },
+    user_id,
+    { page, limit, bookmarked }
+  );
 
-  // If filtering by bookmarked, get only bookmarked memory IDs for the user
-  let bookmarkedIds: Set<string> = new Set()
-  if (bookmarked) {
-    const userBookmarks = await Bookmark.find({ user: user_id })
-    const memoryIds = userBookmarks.map(b => b.memory)
-    if (memoryIds.length === 0) {
-      return {
-        data: emptyPaginatedList({ limit, page }),
-        message: "Story memories retrieved successfully"
-      }
-    }
-    memoryQuery = { $and: [...filters, { _id: { $in: memoryIds } }] }
-    bookmarkedIds = new Set(memoryIds)
-  }
-
-  const memories = await Memory.paginate(
-    memoryQuery,
-    {
-      page,
-      limit,
-      sort: { created_at: -1 },
-      populate: { path: "attachments", select: "-base64" }
-    }
-  )
-
-  // If not filtering by bookmarked, get bookmarks for the current page
-  if (!bookmarked) {
-    const memoryIds = memories.docs.map(memory => memory.id)
-    const userBookmarks = await Bookmark.find({
-      memory: { $in: memoryIds },
-      user: user_id
-    })
-    bookmarkedIds = new Set(userBookmarks.map(bookmark => bookmark.memory))
-  }
-
-  const data = {
-    ...memories,
-    docs: memories.docs.map(memory => ({
-      ...memory.toObject(),
-      bookmarked: bookmarkedIds.has(memory.id)
-    }))
-  }
-
-  return { data, message: "Story memories retrieved successfully" }
+  return { data, message: "Story memories retrieved successfully" };
 }
 
 export async function getMemory(_id: string, user_id: string = null) {
   const memory = await Memory
     .findOne({ _id, status: { $nin: ["draft", "deleted"] } })
-    .populate("attachments", "-base64")
+    .populate({
+      path: "attachments",
+      select: "-base64",
+      match: { provider: { $ne: "s3" } },
+    })
 
   if (!memory) {
     throw new NotFoundException("Memory not found")
   }
 
-  const bookmark = await Bookmark.findOne({ memory: memory.id, user: user_id })
+  const bookmark_count = await Bookmark.countDocuments({ memory: memory.id, user: user_id })
 
-  const data = { ...memory.toObject(), bookmarked: !isEmpty(bookmark) }
+  const data = { ...memory.toObject(), bookmarked: bookmark_count > 0 }
 
   return { data, message: "User memory retrieved successfully" }
 }

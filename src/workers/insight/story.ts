@@ -8,7 +8,10 @@ import { buildMemoryContent } from "../../module/api/ai/utils";
 
 export async function extractStoryInsights(memoryId: string, userId: string): Promise<void> {
   try {
-    const memory = await Memory.findById(memoryId).populate('attachments');
+    const memory = await Memory.findById(memoryId).populate({
+      path: 'attachments',
+      match: { provider: { $ne: 's3' } },
+    });
     const { text, processedImages } = await buildMemoryContent(memory);
 
     const persona = await Persona.findOne({ user: userId });

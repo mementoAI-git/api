@@ -233,7 +233,8 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
         [key]: { $regex: new RegExp(`${queries[i][1]}`), $options: 'i' },
       }));
       proccessed.push({ $or: search_filters });
-    } else proccessed.push({ [queries[i][0]]: queries[i][1] });
+    }
+    else proccessed.push({ [queries[i][0]]: queries[i][1] });
   }
 
   return proccessed;

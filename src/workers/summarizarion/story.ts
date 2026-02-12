@@ -6,7 +6,10 @@ import gemini, { GEMINI_MODEL } from "../../services/gemini";
 
 export default async function summarizeStory(memoryId: string): Promise<void> {
   try {
-    const memory = await Memory.findById(memoryId).populate('attachments');
+    const memory = await Memory.findById(memoryId).populate({
+      path: 'attachments',
+      match: { provider: { $ne: 's3' } },
+    });
     const { text, processedImages, hasAttachments, hasTranscription } = await buildMemoryContent(memory);
 
     const prompt = prompts.buildSummarizationPrompt(
