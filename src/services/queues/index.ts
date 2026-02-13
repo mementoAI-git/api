@@ -4,7 +4,7 @@ import { ExpressAdapter } from "@bull-board/express";
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
 import { insightQueue } from './insights';
-import { initializeResetStreak, systemQueue } from './system';
+import { initializeFileBackup, initializeResetStreak, systemQueue } from './system';
 import logger from '../../utils/logger';
 
 export function setupBullBoard(app: Application) {
@@ -31,6 +31,7 @@ export function setupBullBoard(app: Application) {
 export async function initializeScheduler() {
   logger.info('Initializing scheduler...');
   await initializeResetStreak();
+  await initializeFileBackup();
   await initializePersonaSummarization();
   await initializeConversationSummary();
 }

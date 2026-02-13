@@ -10,7 +10,7 @@ import type {
   StorageGetFileResponse,
 } from '../types';
 
-const storage = new Storage(
+const gcsStorage = new Storage(
   {
     projectId: GCS_PROJECT_ID,
     ...(GCS_KEY_FILENAME ? { keyFilename: GCS_KEY_FILENAME } : {}),
@@ -21,7 +21,7 @@ function getBucket() {
   if (!GCS_BUCKET_NAME) {
     throw new Error('GCS_BUCKET_NAME is not configured');
   }
-  return storage.bucket(GCS_BUCKET_NAME);
+  return gcsStorage.bucket(GCS_BUCKET_NAME);
 }
 
 /**
@@ -144,4 +144,4 @@ export async function generatePresignedUrl(
   return url;
 }
 
-export default storage;
+export default gcsStorage;

@@ -7,6 +7,7 @@ import { IPagination } from "../../../utils/interface";
 import redis from "../../../services/redis"
 import { createHash } from "crypto";
 import { Readable } from "stream";
+import { STORAGE_PROVIDERS } from "../../../utils/constant";
 
 export async function uploadFile(payload: Express.Multer.File[], user_id: string) {
   const user = await User.findById(user_id)
@@ -24,20 +25,26 @@ export async function uploadFile(payload: Express.Multer.File[], user_id: string
 }
 
 export async function removeFile(name: string, user_id: string) {
-  const file = await File.findOne({ name })
+  const file = await File.findActiveOne({ name }).select("+backup_at");
   if (!file) {
-    throw new NotFoundException("file not found")
+    throw new NotFoundException("file not found");
   }
   if (file.user !== user_id) {
-    throw new UnauthorizedException()
+    throw new UnauthorizedException();
   }
 
-  if ((file.provider ?? 's3') === 'gcs') {
-    await storage.deleteFile(file.name, 'gcs');
+  const isBackedUp = !!file.backup_at;
+
+  if (isBackedUp) {
+    await File.updateOne({ name }, { $set: { deleted: true } });
+  } else {
+    if ((file.provider ?? STORAGE_PROVIDERS.s3) === STORAGE_PROVIDERS.gcs) {
+      await storage.deleteFile(file.name, STORAGE_PROVIDERS.gcs);
+    }
+    await File.deleteOne({ name });
   }
 
-  await File.deleteOne({ name })
-  return { data: file, message: "File deleted successfully" }
+  return { data: file, message: "File deleted successfully" };
 }
 
 export async function getFileMetadata(name: string) {
@@ -46,16 +53,12 @@ export async function getFileMetadata(name: string) {
   const meta = await redis.get(key)
   if (meta) return JSON.parse(meta as string);
 
-  const file = await File.findOne({ name });
+  const file = await File.findActiveOne({ name });
   if (!file) {
     throw new NotFoundException("File not found");
   }
 
-  if ((file.provider ?? 's3') === 's3') {
-    throw new NotFoundException("File not found");
-  }
-
-  const result = await storage.getFileMetadata(file.name, file.provider ?? 's3');
+  const result = await storage.getFileMetadata(file.name, file.provider ?? STORAGE_PROVIDERS.gcs);
 
   const hash = createHash('md5');
   hash.update(`${file.name}-${file.size}`);
@@ -89,11 +92,8 @@ export async function getFileBuffer(name: string, size: number, range?: string) 
     return { ...result, buffer: Buffer.from(result.buffer.data) };
   }
 
-  const file = await File.findOne({ name });
+  const file = await File.findActiveOne({ name })
   if (!file) {
-    throw new NotFoundException("File not found");
-  }
-  if ((file.provider ?? 's3') === 's3') {
     throw new NotFoundException("File not found");
   }
 
@@ -138,8 +138,8 @@ export async function getFiles(payload: IPagination, user_id: string) {
 
   filters.push(
     { user: user_id },
-    { provider: 'gcs' },
-    { deleted: { $ne: true } },
+    { provider: { $ne: STORAGE_PROVIDERS.s3 } },
+    { deleted: false },
   );
 
   const data = await File.paginate(

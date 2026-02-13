@@ -1,10 +1,10 @@
-import { STORAGE_PROVIDER } from '../../utils/config';
 import { uploadToGCS, getFileFromGCS, getFileMetadataFromGCS, deleteFileFromGCS } from './gcs';
 import { getFileFromS3, getFileMetadataFromS3, deleteFileFromS3 } from './s3';
 import { reconstructFileName, getMediaDuration } from '../../utils/helpers';
 import type { IFile } from '../../module/database/model/file';
 import type { StorageFileMetadata, StorageGetFileResponse } from './types';
 import type { FileStorageProvider } from '../../module/database/model/file';
+import { DEFAULT_STORAGE_PROVIDER } from '../../utils/constant';
 
 export async function uploadFile(
   file: Express.Multer.File,
@@ -27,7 +27,7 @@ export async function uploadFile(
     size: file.size,
     type: file.mimetype,
     duration,
-    provider: STORAGE_PROVIDER,
+    provider: DEFAULT_STORAGE_PROVIDER,
   };
 }
 
@@ -36,7 +36,7 @@ export async function uploadFile(
  */
 export async function getFileMetadata(
   key: string,
-  provider: FileStorageProvider = STORAGE_PROVIDER,
+  provider: FileStorageProvider = DEFAULT_STORAGE_PROVIDER
 ): Promise<StorageFileMetadata> {
   if (provider === 'gcs') {
     return getFileMetadataFromGCS(key);
@@ -50,7 +50,7 @@ export async function getFileMetadata(
 export async function getFile(
   key: string,
   range?: string,
-  provider: FileStorageProvider = STORAGE_PROVIDER,
+  provider: FileStorageProvider = DEFAULT_STORAGE_PROVIDER
 ): Promise<StorageGetFileResponse> {
   if (provider === 'gcs') {
     return getFileFromGCS(key, range);
@@ -68,7 +68,7 @@ export async function getFile(
  */
 export async function deleteFile(
   key: string,
-  provider: FileStorageProvider = STORAGE_PROVIDER,
+  provider: FileStorageProvider = DEFAULT_STORAGE_PROVIDER
 ): Promise<void> {
   if (provider === 'gcs') {
     return deleteFileFromGCS(key);

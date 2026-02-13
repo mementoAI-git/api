@@ -191,7 +191,7 @@ export const reconstructFileName = (name: string) => {
   const extension = name.split('.').pop();
   const timestamp = dayjs().format('YYMMDDHHmmss');
 
-  return `${file_name.replace(/\.[^/.]+$/, '')}_${timestamp}.${extension}`;
+  return `${file_name.replace(/\.[^/.]+$/, '')}_${timestamp}.${extension}`.toLowerCase();
 };
 
 export const verifyAccessToken = (token: string): any => {

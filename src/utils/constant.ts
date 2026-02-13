@@ -85,6 +85,7 @@ export const queueNames = {
     id: 'system',
     jobs: {
       resetStreak: 'reset-streak',
+      backupFiles: 'backup-files',
     }
   }
 }
@@ -103,3 +104,11 @@ export const PERSONA_INSIGHT_FIELDS = [
   'emotional_state_trends',
   'goals_and_aspirations'
 ] as const;
+
+export const STORAGE_PROVIDERS = {
+  s3: 's3',
+  gcs: 'gcs',
+  cloudinary: 'cloudinary',
+} as const;
+
+export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.gcs;

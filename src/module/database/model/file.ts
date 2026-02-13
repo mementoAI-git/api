@@ -1,6 +1,7 @@
-import { model, PaginateModel, Schema } from 'mongoose';
+import { model, Model, PaginateModel, Schema } from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 import { BACKEND_URL } from '../../../utils/config';
+import { DEFAULT_STORAGE_PROVIDER, STORAGE_PROVIDERS } from '../../../utils/constant';
 
 export interface ITranscriptionSegment {
   start: number; // start time in seconds
@@ -22,11 +23,16 @@ export interface IFile {
   url: string
   user: string
   provider?: FileStorageProvider
+  backup_at?: Date
   transcription: ITranscriptionData
   duration?: number // duration in seconds for audio/video files
   deleted?: boolean // marks file as deleted so it can be cleaned up
   created_at: string
   updated_at: string
+}
+
+export interface IFileModel extends PaginateModel<IFile> {
+  findActiveOne: Model<IFile>['findOne'];
 }
 
 const transcriptionSegmentSchema = new Schema({
@@ -45,14 +51,17 @@ const file = new Schema<IFile>({
   size: Number,
   name: {
     type: String,
-    unique: true
+    unique: true,
+    index: true,
+    trim: true,
   },
   user: String,
   provider: {
     type: String,
-    enum: ['s3', 'gcs'],
-    default: 's3',
+    enum: Object.values(STORAGE_PROVIDERS),
+    default: DEFAULT_STORAGE_PROVIDER,
   },
+  backup_at: { type: Date, select: false },
   transcription: transcriptionDataSchema,
   duration: Number,
   deleted: {
@@ -74,5 +83,20 @@ file.virtual('url').get(function () {
 
 file.plugin(mongoosePaginate);
 
-const File = model<IFile, PaginateModel<IFile>>("file", file)
-export default File
+file.statics.findActiveOne = function (filter = {}, projection?: unknown, options?: unknown) {
+  return this.findOne(
+    {
+      $and: [
+        {
+          deleted: { $ne: true },
+          provider: { $ne: STORAGE_PROVIDERS.s3 }
+        },
+        filter]
+    },
+    projection,
+    options
+  );
+};
+
+const File = model<IFile, IFileModel>("file", file);
+export default File;

@@ -4,6 +4,7 @@ import os from "os"
 export const JWT_SECRET = process.env.JWT_SECRET
 
 export const NODE_ENV = process.env.NODE_ENV || 'development';
+export const IS_PRODUCTION = NODE_ENV === 'production';
 export const PORT = process.env.PORT || 5000;
 
 export const MONGODB_URL = process.env.MONGODB_URL;
@@ -45,5 +46,6 @@ export const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
 export const GCS_PROJECT_ID = process.env.GCS_PROJECT_ID;
 export const GCS_KEY_FILENAME = process.env.GCS_KEY_FILENAME; // optional; uses ADC if not set
 
-/** Active storage backend: 'gcs' | 's3'. Used for upload/retrieve/delete. */
-export const STORAGE_PROVIDER = (process.env.STORAGE_PROVIDER || 'gcs') as 'gcs' | 's3';
+export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
+export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
