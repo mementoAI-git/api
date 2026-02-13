@@ -32,9 +32,9 @@ export async function initializeResetStreak(): Promise<void> {
 
 /** Weekly backup (Sunday 00:00 UTC). */
 export async function initializeFileBackup(): Promise<void> {
-  // if (!IS_PRODUCTION) {
-  //   return;
-  // }
+  if (!IS_PRODUCTION) {
+    return;
+  }
 
   if (!systemQueue) {
     logger.error('System queue not available, cannot initialize GCS→Cloudinary backup');
@@ -43,8 +43,7 @@ export async function initializeFileBackup(): Promise<void> {
 
   await systemQueue.upsertJobScheduler(
     queueNames.system.jobs.backupFiles,
-    // { pattern: "0 0 * * 0" },
-    { pattern: "* * * * *" },
+    { pattern: "0 0 * * 0" },
     {
       opts: {
         removeOnComplete: true,
