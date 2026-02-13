@@ -84,6 +84,7 @@ export default async function backupFiles() {
   })
     .select("_id name type backup_at deleted")
     .sort({ _id: 1 })
+    .limit(50)
     .lean();
 
   let backedUp = 0;
