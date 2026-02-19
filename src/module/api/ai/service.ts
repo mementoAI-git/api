@@ -24,6 +24,7 @@ import {
 import Prompt from "../../database/model/prompt";
 import { updateStreak } from "../user/service";
 import { addToInsightsBuffer } from "../../../services/queues/insights";
+import * as supermemory from "../../../services/supermemory";
 
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
@@ -42,7 +43,13 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
 
   let content: PartListUnion = [payload.text]
 
-  const systemInstruction = await prompts.createSystemContext(user, payload.memory);
+  const { formatedText: longTermContext } = await supermemory.getContextForUser(user_id, payload.text);
+  const systemInstruction = await prompts.createSystemContext(
+    user,
+    payload.memory,
+    null,
+    longTermContext
+  );
 
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
@@ -112,6 +119,12 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
           console.error('Error queueing insights extraction:', error);
         });
       }
+
+      supermemory
+        .addConversation(user, userMessage, text)
+        .catch(error => {
+          console.error('Error storing conversation in Supermemory:', error);
+        });
 
       triggerSummarization(memory)
     }

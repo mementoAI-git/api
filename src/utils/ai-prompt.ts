@@ -24,7 +24,12 @@ ${summariesText}
 Use this context naturally to show you remember their experiences. Reference specific people, places, events, or topics they've shared when relevant. Don't explicitly say "you told me" or "in our past conversation" - just weave the knowledge naturally into your responses.`;
 }
 
-async function createSystemContext(user: IUser, currentMemoryId?: string, persona: IPersona = null): Promise<string> {
+async function createSystemContext(
+  user: IUser,
+  currentMemoryId?: string,
+  persona: IPersona = null,
+  longTermContext?: string
+): Promise<string> {
   let userContext = persona || {} as IPersona;
   if (!persona) {
     userContext = await Persona.findOne({ user: user._id });
@@ -35,14 +40,15 @@ async function createSystemContext(user: IUser, currentMemoryId?: string, person
   const summaries = await getMemorySummaries(user._id, currentMemoryId);
   const pastContext = buildMemoriesContext(summaries);
 
-  return buildSystemContext(user, userPreferences, userContext, pastContext);
+  return buildSystemContext(user, userPreferences, userContext, pastContext, longTermContext);
 }
 
 function buildSystemContext(
   user: IUser,
   userPreferences: any,
   userContext: any,
-  pastConversationsContext: string
+  pastConversationsContext: string,
+  longTermContext?: string
 ): string {
 
   return `You are Memento — a warm, reflective AI companion who listens deeply and engages like a trusted friend.
@@ -118,6 +124,7 @@ ${userContext.goals_and_aspirations?.map((goal: string) => `- ${goal}`).join('\n
 EMOTIONAL PATTERNS:
 ${userContext.emotional_state_trends?.map((trend: string) => `- ${trend}`).join('\n') || 'Observing emotional patterns...'}
 ${pastConversationsContext}
+${longTermContext ?? ''}
 
 IMPORTANT GUIDELINES:
 1. Always address the user by their nickname when appropriate (prefer nickname over full name)

@@ -85,6 +85,7 @@
     "rate-limit-redis": "^4.2.1",
     "redis": "^5.0.1",
     "speakeasy": "^2.0.0",
+    "supermemory": "^4.11.1",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "ts-node": "^10.9.2",
