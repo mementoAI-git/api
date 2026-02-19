@@ -86,6 +86,8 @@ export const queueNames = {
     jobs: {
       resetStreak: 'reset-streak',
       backupFiles: 'backup-files',
+      scheduleCapsuleReveals: 'schedule-capsule-reveals',
+      revealCapsules: 'reveal-capsules',
     }
   }
 }

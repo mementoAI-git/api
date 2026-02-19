@@ -122,7 +122,7 @@ const capsulesDocs = {
     get: {
       tags: ['Capsules'],
       summary: 'Get All Capsules',
-      description: 'Get paginated list of time capsules for the authenticated user',
+      description: 'Get paginated list of time capsules. Returns sent capsules by default. Use status=received to list capsules received as a beneficiary.',
       security: [{ bearerAuth: [] }],
       parameters: [
         {
@@ -142,9 +142,9 @@ const capsulesDocs = {
           in: 'query',
           schema: {
             type: 'string',
-            enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause'],
+            enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause', 'received'],
           },
-          description: 'Filter capsules by status',
+          description: 'Filter capsules by status. Use status=received for capsules received as a beneficiary.',
           example: 'scheduled',
         },
         {
@@ -179,7 +179,7 @@ const capsulesDocs = {
                             title: { type: 'string', example: 'Future Message to Myself' },
                             body: { type: 'string', example: 'This is a message...' },
                             schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
-                            status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause'], example: 'scheduled' },
+                            status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause', 'received'], example: 'scheduled' },
                             attachments: {
                               type: 'array',
                               items: {
@@ -301,7 +301,7 @@ const capsulesDocs = {
     get: {
       tags: ['Capsules'],
       summary: 'Get Capsule by ID',
-      description: 'Get a specific time capsule by ID',
+      description: 'Get a capsule by ID. Works for both sent and received capsules. For received capsules (e.g. from email link), sets viewed_at on first view.',
       security: [{ bearerAuth: [] }],
       parameters: [
         {
@@ -331,7 +331,7 @@ const capsulesDocs = {
                       title: { type: 'string', example: 'Future Message to Myself' },
                       body: { type: 'string', example: 'This is a message...' },
                       schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
-                      status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause'], example: 'scheduled' },
+                      status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause', 'received'], example: 'scheduled' },
                       attachments: {
                         type: 'array',
                         items: {

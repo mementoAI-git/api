@@ -1,15 +1,22 @@
 import { model, PaginateModel, Schema } from "mongoose"
 import mongoosePaginate from 'mongoose-paginate-v2';
+import { IUser } from "./user";
+import "./beneficiary"
 
 export interface ICapsule {
-  user: string
+  user: string | IUser
+  /** Sender – ref to User who sent the capsule. Set for status "received". */
+  benefactor?: string
+  /** Self-ref to the sent capsule. Set on received capsules. */
+  source?: string
   recipients: string[]
   schedule_date?: string
   title: string
   body: string
   attachments: string[]
   memories?: string[]
-  status: string // scheduled draft delivered failed pause
+  status: string // draft scheduled delivered failed pause received
+  viewed_at?: Date
   created_at: string
   updated_at: string
 }
@@ -17,7 +24,18 @@ export interface ICapsule {
 const capsule = new Schema<ICapsule>({
   user: {
     type: String,
-    index: true
+    index: true,
+    ref: "user"
+  },
+  benefactor: {
+    type: String,
+    ref: "user",
+    index: true,
+  },
+  source: {
+    type: String,
+    ref: "capsule",
+    index: true,
   },
   recipients: [{ type: String, ref: "beneficiary" }],
   schedule_date: Date,
@@ -31,7 +49,8 @@ const capsule = new Schema<ICapsule>({
     type: String,
     ref: "memory"
   }],
-  status: String
+  status: String,
+  viewed_at: Date,
 }, {
   timestamps: {
     createdAt: 'created_at',

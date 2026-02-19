@@ -1,4 +1,4 @@
-import { body, query } from "express-validator";
+import { body, param, query } from "express-validator";
 
 export default {
   createCapsule: [
@@ -49,7 +49,7 @@ export default {
   getCapsules: [
     query("status")
       .optional()
-      .isIn(["scheduled", "draft", "delivered", "failed", "pause"])
-      .withMessage("Invalid status. Must be one of: scheduled, draft, delivered, failed, pause")
+      .isIn(["scheduled", "draft", "delivered", "failed", "pause", "received"])
+      .withMessage("Invalid status. Must be one of: scheduled, draft, delivered, failed, pause, received")
   ]
 }

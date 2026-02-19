@@ -40,6 +40,7 @@ export async function getCapsule(req: IRequest, res: Response, next: NextFunctio
     next(error)
   }
 }
+
 export async function deleteCapsule(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.deleteCapsule(String(req.params?.id || ''), req.auth.id)

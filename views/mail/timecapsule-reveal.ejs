@@ -1,0 +1,10 @@
+<%- include('components/header') %>
+  <h1 class="subject">Your Time Capsule is Ready</h1>
+  <%- include('components/greetings', { name }) %>
+    <p>
+      A time capsule from <%= benefactorName %> has been revealed for you. Click the button below to view it.
+    </p>
+
+    <%- include('components/btn-link', { title: 'View Time Capsule', url }) %>
+      <%- include('components/closing-text') %>
+        <%- include('components/footer') %>

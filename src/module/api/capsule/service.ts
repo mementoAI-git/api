@@ -7,13 +7,13 @@ import { isEmpty, filterGenerator } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
 import { track } from "../activity/service";
+import { scheduleCapsuleDelivery } from "../../../services/queues/system";
 
 export async function createCapsule(payload: ICapsule, user_id: string) {
   const users = await Beneficiary.find({ email: { $in: payload.recipients }, benefactor: user_id })
   if (isEmpty(users)) {
     throw new NotFoundException("Users not found")
   }
-
 
   let attachments: string[] = []
   if (payload?.attachments && payload.attachments.length > 0) {
@@ -33,7 +33,7 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
     memories = memoryDocs.map(m => m.id)
   }
 
-  const data = await Capsule.create({
+  const capsule = await Capsule.create({
     ...payload,
     title: payload?.title.trim(),
     body: payload?.body.trim(),
@@ -47,15 +47,22 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
     )
   })
 
+  if (
+    capsule.status === "scheduled" &&
+    dayjs(capsule.schedule_date).isBefore(dayjs().endOf("day"))
+  ) {
+    await scheduleCapsuleDelivery(capsule.id, capsule.schedule_date)
+  }
+
   await track({
     title: "Capsule Created",
     description: `Created capsule: "${payload.title}"`,
     type: "capsule",
     action: "created",
-    reference: data.id
+    reference: capsule.id
   }, user_id)
 
-  return { message: "Capsule created successfully", data }
+  return { message: "Capsule created successfully", data: capsule.toObject() }
 }
 
 export async function updateCapsule(id: string, payload: Partial<ICapsule>, user_id: string) {
@@ -143,6 +150,7 @@ export async function getCapsules(payload: IPagination, user: string) {
       sort: { created_at: -1, updated_at: -1 },
       populate: [
         { path: "recipients", select: "email first_name last_name" },
+        { path: "benefactor", select: "first_name last_name fullname" },
         { path: "attachments", select: "_id name url", match: { provider: { $ne: "s3" } } },
         {
           path: "memories",
@@ -160,6 +168,7 @@ export async function getCapsule(id: string, user: string) {
   const capsule = await Capsule.findOne({ user, _id: id })
     .populate([
       { path: "recipients", select: "email first_name last_name" },
+      { path: "benefactor", select: "first_name last_name fullname" },
       { path: "attachments", select: "-base64", match: { provider: { $ne: "s3" } } },
       {
         path: "memories",

@@ -93,6 +93,27 @@ class MailService {
     });
   }
 
+  async sendCapsuleReveal(payload: {
+    email: string;
+    name: string;
+    url: string;
+    benefactorName: string;
+  }) {
+    const { email, name, url, benefactorName } = payload;
+    const html = await this.renderTemplate('timecapsule-reveal', {
+      name,
+      email,
+      url,
+      benefactorName,
+    });
+
+    await this.send({
+      to: email,
+      subject: '[Memento] Your Time Capsule is Ready',
+      html,
+    });
+  }
+
   async sendInviteCode(payload: {
     email: string;
     code: string;
