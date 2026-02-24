@@ -241,15 +241,28 @@ export const getPromptsByCategory = async (
 
 export const getSuggestions = async (pagination: IPagination) => {
   const { page, limit } = pagination;
+  const skip = (Math.max(1, page) - 1) * limit;
 
-  const data = await Prompt.paginate(
-    {},
-    {
-      page,
-      limit,
-      sort: { created_at: -1 },
-    },
-  );
+  const total = await Prompt.countDocuments({});
+  const sampleSize = Math.min(total, skip + limit);
+  const docs = await Prompt.aggregate([
+    { $sample: { size: sampleSize } },
+    { $skip: skip },
+    { $limit: limit },
+  ]).sort({ title: 1 });
+
+  const data = {
+    docs,
+    totalDocs: total,
+    limit,
+    page: Math.max(1, page),
+    totalPages: Math.ceil(total / limit) || 1,
+    hasNextPage: page * limit < total,
+    hasPrevPage: page > 1,
+    pagingCounter: skip + 1,
+    nextPage: page * limit < total ? page + 1 : null,
+    prevPage: page > 1 ? page - 1 : null,
+  };
 
   return {
     data,
