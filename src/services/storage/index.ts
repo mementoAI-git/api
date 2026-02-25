@@ -4,7 +4,10 @@ import { reconstructFileName, getMediaDuration } from '../../utils/helpers';
 import type { IFile } from '../../module/database/model/file';
 import type { StorageFileMetadata, StorageGetFileResponse } from './types';
 import type { FileStorageProvider } from '../../module/database/model/file';
-import { DEFAULT_STORAGE_PROVIDER } from '../../utils/constant';
+import { DEFAULT_STORAGE_PROVIDER, FREE_STORAGE_LIMIT_BYTES, STORAGE_PROVIDERS } from '../../utils/constant';
+import User, { IUser } from '../../module/database/model/user';
+import File from '../../module/database/model/file';
+import { ForbiddenException } from '../../utils/service-error';
 
 export async function uploadFile(
   file: Express.Multer.File,
@@ -74,4 +77,40 @@ export async function deleteFile(
     return deleteFileFromGCS(key);
   }
   return deleteFileFromS3(key);
+}
+
+export async function getUserStorageUsed(user_id: string): Promise<number> {
+  const result = await File.aggregate<{ total: number }>([
+    {
+      $match: {
+        user: user_id,
+        deleted: false,
+        provider: { $ne: STORAGE_PROVIDERS.s3 },
+      },
+    },
+    { $group: { _id: null, total: { $sum: '$size' } } },
+  ]);
+  return result[0]?.total ?? 0;
+}
+
+export async function checkStorageQuota(user: string | IUser, additional_bytes: number = 0) {
+  let _user: null | IUser = typeof user !== "string" ? user : null;
+
+  if (!_user) {
+    _user = await User.findById(user).select('storage_limit').lean();
+  }
+
+  const storage_limit = _user?.storage_limit || FREE_STORAGE_LIMIT_BYTES;
+  const used = await getUserStorageUsed(_user?._id)
+
+  const data = {
+    used,
+    limit: storage_limit
+  }
+
+  if (used + additional_bytes > storage_limit) {
+    throw new ForbiddenException('Storage limit exceeded. Upgrade for more space.', data);
+  }
+
+  return data
 }

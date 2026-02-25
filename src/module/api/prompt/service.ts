@@ -157,6 +157,8 @@ export const replyPrompt = async (
 
   let attachments = payload?.attachments || [];
   if (!isEmpty(files)) {
+    const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
+    await storage.checkStorageQuota(user, additionalBytes);
     const unsavedFiles = await Promise.all(
       files.map(file => storage.uploadFile(file, user_id)),
     );

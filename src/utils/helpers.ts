@@ -71,6 +71,17 @@ export const getStringSize = (str: string, format: string = 'base64') => {
   return Buffer.byteLength(str, 'utf8');
 };
 
+export const formatBytes = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const unit = units[Math.min(i, units.length - 1)];
+  const value = bytes / Math.pow(k, Math.min(i, units.length - 1));
+  const decimals = value >= 100 ? 0 : value >= 1 ? 1 : 1;
+  return `${value.toFixed(decimals)}${unit}`;
+};
+
 export const compareStrings = (str1: string, str2: string) => {
   return str1?.toLowerCase().trim() === str2?.toLowerCase().trim();
 };

@@ -73,6 +73,12 @@ export class ActionNotAllowed extends ServiceError {
   }
 }
 
+export class ForbiddenException extends ServiceError {
+  constructor(message: string = "Storage limit exceeded", data?: { used?: number; limit?: number }) {
+    super(message, StatusCodes.FORBIDDEN, data, 'failed');
+  }
+}
+
 export class UnprocessableContent extends ServiceError {
   constructor(message: string, data?: any) {
     super(message, StatusCodes.UNPROCESSABLE_ENTITY, data, 'failed');

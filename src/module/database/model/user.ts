@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import { model, Schema } from 'mongoose';
 import { BACKEND_URL } from '../../../utils/config';
 import { concatStrings, isEmpty } from '../../../utils/helpers';
+import { FREE_STORAGE_LIMIT_BYTES } from '../../../utils/constant';
 
 // Add to User model
 interface IUserPreferences {
@@ -58,6 +59,7 @@ export interface IUser {
   fullname?: string | null
   newsletter_subscriber: boolean
   created_at: string
+  storage_limit: number
 }
 
 const user = new Schema<IUser>({
@@ -126,6 +128,10 @@ const user = new Schema<IUser>({
     default: 1
   },
   location: String,
+  storage_limit: {
+    type: Number,
+    default: FREE_STORAGE_LIMIT_BYTES
+  },
   preferences: {
     communication_style: {
       type: String,

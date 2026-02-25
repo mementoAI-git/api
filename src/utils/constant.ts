@@ -114,3 +114,5 @@ export const STORAGE_PROVIDERS = {
 } as const;
 
 export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.gcs;
+
+export const FREE_STORAGE_LIMIT_BYTES = 5 * 1024 ** 3; // 5 GB

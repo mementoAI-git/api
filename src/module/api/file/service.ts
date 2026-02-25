@@ -15,6 +15,9 @@ export async function uploadFile(payload: Express.Multer.File[], user_id: string
     throw new NotFoundException("User not found")
   }
 
+  const additionalBytes = payload.reduce((acc, f) => acc + f.size, 0)
+  await storage.checkStorageQuota(user, additionalBytes)
+
   const files = await Promise.all(
     payload.map((file) => storage.uploadFile(file, user_id))
   )

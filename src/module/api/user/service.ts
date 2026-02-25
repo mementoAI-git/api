@@ -128,6 +128,8 @@ export async function uploadPicture(
     throw new NotFoundException('User not found');
   }
 
+  await storage.checkStorageQuota(user, payload[0].size);
+
   const { name, type, size } = await storage.uploadFile(payload[0], user_id);
 
   const file = await File.create({

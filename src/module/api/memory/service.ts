@@ -13,6 +13,9 @@ import {
   MEMORY_STATUS,
   emptyPaginatedList,
   isEmpty,
+  STORAGE_PROVIDERS,
+  formatBytes,
+  FREE_STORAGE_LIMIT_BYTES,
 } from "../../../utils";
 import Prompt from "../../database/model/prompt";
 import { updateStreak } from "../user/service";
@@ -24,21 +27,27 @@ import { queueSummarization } from "../../../services/queues/summarization";
 import * as storage from "../../../services/storage";
 
 export async function memoryStats(user_id: string) {
-  const memories = await Memory.find({
+  const memory_count = await Memory.countDocuments({
     user: user_id,
-
     status: { $nin: ["draft", "deleted"] }
   })
   const bookmark_count = await Bookmark.countDocuments({ user: user_id })
-  const stories = memories.filter(memory => memory.type === "story")
-  const conversations = memories.filter(memory => memory.type === "conversation")
-  const memory_count = memories.length
+  const media_count = await File.countDocuments({
+    user: user_id,
+    deleted: false,
+    provider: { $ne: STORAGE_PROVIDERS.s3 }
+  })
+
+  const user = await User.findById(user_id).select('storage_limit').lean()
+
+  const storage_size = await storage.getUserStorageUsed(user_id)
+  const storage_limit = user?.storage_limit || FREE_STORAGE_LIMIT_BYTES
 
   const data = {
     memory_count,
     bookmark_count,
-    stories_count: stories.length,
-    conversations_count: conversations.length
+    media_count,
+    storage: `${formatBytes(storage_size)}/${formatBytes(storage_limit)}`,
   }
 
   return {
@@ -56,6 +65,8 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
 
   let attachments = payload?.attachments || []
   if (!isEmpty(files)) {
+    const additionalBytes = files.reduce((acc, f) => acc + f.size, 0)
+    await storage.checkStorageQuota(user, additionalBytes)
     const unsavedFiles = await Promise.all(
       files.map((file) => storage.uploadFile(file, user_id))
     )
