@@ -104,22 +104,26 @@ export async function updateCapsule(id: string, payload: Partial<ICapsule>, user
     }
   }
 
-  const updateData: any = {
-    title: payload.title,
-    body: payload.body,
-    schedule_date: payload.schedule_date,
-    status: payload.status
+  const updateData: Record<string, unknown> = {
+    $set: {
+      ...(payload.title !== undefined && { title: payload.title }),
+      ...(payload.body !== undefined && { body: payload.body }),
+      ...(payload.schedule_date !== undefined && { schedule_date: payload.schedule_date }),
+      ...(payload.status !== undefined && { status: payload.status })
+    }
   }
 
   if (!isEmpty(payload.attachments)) {
-    updateData.attachments = {
-      $addToSet: { $each: payload.attachments }
+    updateData.$addToSet = {
+      ...(updateData.$addToSet as Record<string, unknown>),
+      attachments: { $each: payload.attachments }
     }
   }
 
   if (!isEmpty(validatedMemories)) {
-    updateData.memories = {
-      $addToSet: { $each: validatedMemories }
+    updateData.$addToSet = {
+      ...(updateData.$addToSet as Record<string, unknown>),
+      memories: { $each: validatedMemories }
     }
   }
 
