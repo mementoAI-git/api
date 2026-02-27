@@ -43,7 +43,12 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
 
   let content: PartListUnion = [payload.text]
 
-  const { formatedText: longTermContext } = await supermemory.getContextForUser(user_id, payload.text);
+  let longTermContext = "";
+  if (isSignificantMessage(payload.text)) {
+    const context = await supermemory.getContextForUser(user_id, payload.text);
+    longTermContext = context.formatedText;
+  }
+
   const systemInstruction = await prompts.createSystemContext(
     user,
     payload.memory,
@@ -118,13 +123,13 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
         addToInsightsBuffer(user, memory, userMessage, text).catch(error => {
           console.error('Error queueing insights extraction:', error);
         });
-      }
 
-      supermemory
-        .addConversation(user, userMessage, text)
-        .catch(error => {
-          console.error('Error storing conversation in Supermemory:', error);
-        });
+        supermemory
+          .addConversation(user, userMessage, text)
+          .catch(error => {
+            console.error('Error storing conversation in Supermemory:', error);
+          });
+      }
 
       triggerSummarization(memory)
     }

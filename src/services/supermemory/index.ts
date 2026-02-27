@@ -1,5 +1,8 @@
 import Supermemory from "supermemory";
-import { IS_PRODUCTION, SUPERMEMORY_API_KEY } from "../../utils/config";
+import {
+  IS_PRODUCTION,
+  SUPERMEMORY_API_KEY
+} from "../../utils/config";
 import logger from "../../utils/logger";
 
 export function getContainerTag(userId: string): string {
@@ -72,12 +75,14 @@ export async function getContextForUser(
     }
     const formatedText = parts.length === 0 ? "" : "\n\nLONG-TERM USER CONTEXT:\n" + parts.join("\n\n");
 
-    return {
+    const result: SupermemoryContext = {
       static: staticFacts,
       dynamic: dynamicContext,
       result: resultText,
       formatedText,
     };
+
+    return result;
   } catch (err) {
     logger.warn({ err, userId: containerTag }, "Supermemory profile failed");
     return { ...empty };
@@ -102,10 +107,7 @@ export async function addConversation(
   const content = `user: ${userMessage}\nassistant: ${assistantResponse}`;
 
   try {
-    await c.add({
-      content,
-      containerTag,
-    });
+    await c.add({ content, containerTag });
   } catch (err) {
     logger.warn({ err, userId: containerTag }, "Supermemory add conversation failed");
   }
