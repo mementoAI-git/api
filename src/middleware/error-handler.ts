@@ -37,12 +37,12 @@ const errorHandler = (
     return responsHandler(res, err.statusCode, err?.message, err?.data);
   }
 
-  if (compareStrings(NODE_ENV, 'production')) {
-    mail.send({
-      subject: 'Memento error',
-      text: JSON.stringify(error_payload, null, 2),
-    });
-  }
+  // if (compareStrings(NODE_ENV, 'production')) {
+  //   mail.send({
+  //     subject: 'Memento error',
+  //     text: JSON.stringify(error_payload, null, 2),
+  //   });
+  // }
 
   logger.fatal(error_payload, 'Error occurred')
   // mail.send({
