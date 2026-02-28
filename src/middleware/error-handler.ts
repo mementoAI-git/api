@@ -45,10 +45,10 @@ const errorHandler = (
   }
 
   logger.fatal(error_payload, 'Error occurred')
-  mail.send({
-    subject: 'Memento error',
-    text: JSON.stringify(error_payload, null, 2),
-  });
+  // mail.send({
+  //   subject: 'Memento error',
+  //   text: JSON.stringify(error_payload, null, 2),
+  // });
   return responsHandler(
     res,
     StatusCodes.INTERNAL_SERVER_ERROR,
