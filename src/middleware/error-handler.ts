@@ -1,10 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
 import { StatusCodes } from 'http-status-codes';
 import dayjs from 'dayjs';
-import { compareStrings, responsHandler } from '../utils/helpers';
+import { responsHandler } from '../utils/helpers';
 import { ServiceError } from '../utils/service-error';
-import mail from '../module/mail';
-import { NODE_ENV } from '../utils/config';
 import logger from '../utils/logger';
 
 const errorHandler = (
