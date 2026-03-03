@@ -98,23 +98,4 @@ export default {
     param("id").notEmpty().withMessage("Memory ID is required").isMongoId().withMessage("Invalid memory ID"),
     body("delete_permanently").optional().isBoolean().withMessage("delete_permanently must be a boolean").toBoolean(),
   ],
-  autogenerateTags: [
-    body("title")
-      .optional()
-      .isString().withMessage("Title must be a string")
-      .trim(),
-    body("body")
-      .optional()
-      .isString().withMessage("Body must be a string")
-      .trim(),
-    body()
-      .custom((value) => {
-        const title = (value?.title ?? "").trim();
-        const bodyText = (value?.body ?? "").trim();
-        if (!title && !bodyText) {
-          throw new Error("At least one of title or body is required");
-        }
-        return true;
-      }),
-  ],
 }

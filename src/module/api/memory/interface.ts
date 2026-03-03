@@ -23,8 +23,3 @@ export interface IDeleteMemoryPayload {
   memory_id: string
   delete_permanently: boolean
 }
-
-export interface IAutogenerateTagsPayload {
-  title?: string
-  body?: string
-}

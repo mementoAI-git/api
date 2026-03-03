@@ -3,6 +3,8 @@ import gaurd from "../../../middleware/gaurd"
 import * as ctrl from "./controller"
 import valid from "./validator"
 import { idValidator } from "../../../utils/helpers"
+import validate from "../../../middleware/validator"
+import * as dto from "./dto"
 
 const router: IRouter = Router()
 
@@ -20,7 +22,21 @@ router.get(
   gaurd,
   idValidator,
   ctrl.getUserMessagesByConversation
-)
+);
+
+router.post(
+  "/conversation/new",
+  gaurd,
+  valid.startConversation,
+  ctrl.startConversation
+);
+
+router.post(
+  "/generate-tags",
+  gaurd,
+  validate(dto.generateTagsSchema),
+  ctrl.autogenerateTags
+);
 
 router.post("/conversation/new", gaurd, valid.startConversation, ctrl.startConversation)
 router.post("/transcribe-audio", gaurd, ctrl.transcribeAudio)

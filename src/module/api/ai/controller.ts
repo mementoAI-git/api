@@ -1,12 +1,20 @@
 import { NextFunction, Response } from "express";
-import { getPagination, responsHandler, validateRequest } from "../../../utils/helpers"
+import { getPagination, responsHandler } from "../../../utils/helpers"
 import * as service from "./service";
 import { IRequest } from "../../../utils/interface";
 import { StatusCodes } from "http-status-codes";
 
+export async function autogenerateTags(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.autogenerateTags(req.body);
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function prompt(req: IRequest, res: Response, next: NextFunction) {
   try {
-    validateRequest(req)
     const response = await service.prompt(req.body, req.auth.id)
     return await service.handleStreaming(
       req.auth.id,
@@ -30,8 +38,6 @@ export async function getUserMessages(req: IRequest, res: Response, next: NextFu
 
 export async function getUserMessagesByConversation(req: IRequest, res: Response, next: NextFunction) {
   try {
-    validateRequest(req)
-
     const { message, data } = await service.getUserMessagesByConversation(
       String(req.params.id),
       getPagination(req),

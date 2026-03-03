@@ -8,12 +8,6 @@ const router: IRouter = Router();
 
 router.get('/stats', gaurd, ctrl.memoryStats);
 router.post(
-  '/generate-tags',
-  gaurd,
-  valid.autogenerateTags,
-  ctrl.autogenerateTags,
-);
-router.post(
   '/',
   gaurd,
   fileUploadMiddleWare.array('file', 5) as RequestHandler,

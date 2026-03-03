@@ -330,3 +330,33 @@ export async function createEphemeralToken() {
     }
   };
 }
+
+export async function autogenerateTags(payload: { title?: string; body?: string }) {
+  const title = (payload.title ?? "").trim();
+  const body = (payload.body ?? "").trim();
+  const prompt = prompts.buildTagsPrompt();
+  const contents = createUserContent([
+    prompt,
+    { text: `TITLE:\n${title || "(none)"}\n\nBODY:\n${body || "(none)"}` },
+  ]);
+
+  const response = await gemini.models.generateContent({
+    model: GEMINI_MODEL,
+    contents,
+  });
+
+  console.log(response.text)
+  const parsed = extractJson(response.text);
+  console.log(parsed)
+  const tags = Array.isArray(parsed?.tags) ? parsed.tags : [];
+  console.log(tags)
+  const normalizedTags = tags
+    .filter((t): t is string => typeof t === "string")
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+
+  return {
+    data: { tags: normalizedTags },
+    message: "Tags generated successfully",
+  };
+}

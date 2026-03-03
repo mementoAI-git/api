@@ -141,13 +141,3 @@ export async function addMessageToMemory(req: IRequest, res: Response, next: Nex
     next(error)
   }
 }
-
-export async function autogenerateTags(req: IRequest, res: Response, next: NextFunction) {
-  try {
-    validateRequest(req)
-    const { message, data } = await service.autogenerateTags(req.body)
-    return responsHandler(res, StatusCodes.OK, message, data)
-  } catch (error) {
-    next(error)
-  }
-}
