@@ -41,9 +41,10 @@ export async function removeFile(name: string, user_id: string) {
   if (isBackedUp) {
     await File.updateOne({ name }, { $set: { deleted: true } });
   } else {
-    if ((file.provider ?? STORAGE_PROVIDERS.s3) === STORAGE_PROVIDERS.gcs) {
-      await storage.deleteFile(file.name, STORAGE_PROVIDERS.gcs);
-    }
+    await storage.deleteFile(
+      file.name,
+      file.provider ?? STORAGE_PROVIDERS.gcs
+    );
     await File.deleteOne({ name });
   }
 

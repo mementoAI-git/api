@@ -1,4 +1,4 @@
-import {RequestHandler, Router, type IRouter} from 'express';
+import { RequestHandler, Router, type IRouter } from 'express';
 import valid from './validator';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
@@ -7,6 +7,12 @@ import fileUploadMiddleWare from '../../../middleware/file-upload';
 const router: IRouter = Router();
 
 router.get('/stats', gaurd, ctrl.memoryStats);
+router.post(
+  '/generate-tags',
+  gaurd,
+  valid.autogenerateTags,
+  ctrl.autogenerateTags,
+);
 router.post(
   '/',
   gaurd,

@@ -358,6 +358,29 @@ CRITICAL:
 - The number of output items should be LESS than or equal to the number of input items`;
 }
 
+/**
+ * Build the prompt for auto-generating tags from a story's title and body.
+ */
+function buildTagsPrompt(): string {
+  return `You are a tag generator for personal stories and memories. Given a story title and/or body, generate relevant tags that would help the user find and organize this story later.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "tags": ["tag1", "tag2", "tag3", ...]
+}
+
+GUIDELINES:
+- Generate 5 to 12 tags. Prefer the lower end if content is short.
+- Use lowercase, single words or short phrases (1-3 words).
+- Tags should reflect: main topics, themes, people (if mentioned), places, activities, emotions, and key concepts.
+- Be specific to the content (e.g. "weekend hike" not just "hiking" if that fits).
+- No duplicate or near-duplicate tags.
+- No generic filler tags (e.g. avoid "story", "memory", "post" unless central).
+- If only a title is provided, infer sensible tags from it. If only body is provided, use that. Use both when available.
+
+Return ONLY the JSON object, no markdown, no explanation.`;
+}
+
 const prompts = {
   createSystemContext,
   buildInsightsPrompt,
@@ -365,7 +388,8 @@ const prompts = {
   buildTopicSummarizationPrompt,
   createTranscriptionPrompt,
   createTitlePrompt,
-  createSystemContextWithPrompt
+  createSystemContextWithPrompt,
+  buildTagsPrompt
 }
 
 export default prompts;

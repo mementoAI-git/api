@@ -5,7 +5,7 @@ import File from "../../database/model/file";
 import User from "../../database/model/user";
 import { IPagination } from "../../../utils/interface";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
-import { IAddMessageToMemory, ICreateMemoryPayload, IDeleteMemoryPayload } from "./interface";
+import { IAddMessageToMemory, IAutogenerateTagsPayload, ICreateMemoryPayload, IDeleteMemoryPayload } from "./interface";
 import Bookmark from "../../database/model/bookmarks";
 import { track } from "../activity/service";
 import {
@@ -16,7 +16,11 @@ import {
   STORAGE_PROVIDERS,
   formatBytes,
   FREE_STORAGE_LIMIT_BYTES,
+  extractJson,
+  prompts,
 } from "../../../utils";
+import { createUserContent } from "@google/genai";
+import gemini, { GEMINI_MODEL } from "../../../services/gemini";
 import Prompt from "../../database/model/prompt";
 import { updateStreak } from "../user/service";
 import Message from "../../database/model/message";
@@ -54,6 +58,26 @@ export async function memoryStats(user_id: string) {
     data,
     message: "Memory stats retrieved successfully"
   }
+}
+
+export async function autogenerateTags(payload: IAutogenerateTagsPayload) {
+  const { title, body } = payload
+
+  const prompt = prompts.buildTagsPrompt();
+  const contents = createUserContent([prompt, { text: `TITLE:\n${title?.trim() || "(none)"}\n\nBODY:\n${body?.trim() || "(none)"}` }]);
+
+  const response = await gemini.models.generateContent({
+    model: GEMINI_MODEL,
+    contents,
+  });
+
+  const parsed = extractJson(response.text);
+  const tags = Array.isArray(parsed?.tags) ? parsed.tags : [];
+
+  return {
+    data: { tags },
+    message: "Tags generated successfully",
+  };
 }
 
 export async function createMemory(payload: ICreateMemoryPayload, user_id: string, files: Express.Multer.File[] | null = null) {

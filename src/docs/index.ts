@@ -5,6 +5,7 @@ import { BACKEND_URL } from '../utils/config';
 import authDocs from './auth.docs';
 import usersDocs from './users.docs';
 import beneficiariesDocs from './beneficiaries.docs';
+import groupsDocs from './groups.docs';
 import capsulesDocs from './capsules.docs';
 import memoriesDocs from './memories.docs';
 import aiDocs from './ai.docs';
@@ -91,6 +92,7 @@ const options: swaggerJsdoc.Options = {
       { name: 'Auth', description: 'Authentication and authorization endpoints' },
       { name: 'Users', description: 'User management endpoints' },
       { name: 'Beneficiaries', description: 'Beneficiary management endpoints' },
+      { name: 'Groups', description: 'Group management – create groups and add beneficiaries' },
       { name: 'Capsules', description: 'Time capsule management endpoints' },
       { name: 'Memories', description: 'Memory management endpoints' },
       { name: 'AI', description: 'AI conversation and interaction endpoints' },
@@ -141,6 +143,7 @@ const options: swaggerJsdoc.Options = {
       ...authDocs,
       ...usersDocs,
       ...beneficiariesDocs,
+      ...groupsDocs,
       ...capsulesDocs,
       ...memoriesDocs,
       ...aiDocs,

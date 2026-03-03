@@ -14,7 +14,7 @@ export interface ITranscriptionData {
   segments: ITranscriptionSegment[];
 }
 
-export type FileStorageProvider = 's3' | 'gcs';
+export type FileStorageProvider = 's3' | 'gcs' | 'cloudinary';
 
 export interface IFile {
   type: string

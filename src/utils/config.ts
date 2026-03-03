@@ -45,9 +45,14 @@ export const AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
 export const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
 export const GCS_PROJECT_ID = process.env.GCS_PROJECT_ID;
 export const GCS_KEY_FILENAME = process.env.GCS_KEY_FILENAME; // optional; uses ADC if not set
+/** When true, GCS is not used (e.g. billing disabled). All uploads go to Cloudinary. */
+export const GCS_DISABLED = process.env.GCS_DISABLED === "true";
 
 export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
+/** When true, image uploads go to Cloudinary instead of GCS. Ignored when GCS_DISABLED is true. */
+export const CLOUDINARY_UPLOAD_IMAGES =
+  process.env.CLOUDINARY_UPLOAD_IMAGES === "true";
 
 export const SUPERMEMORY_API_KEY = process.env.SUPERMEMORY_API_KEY;
