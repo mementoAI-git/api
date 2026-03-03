@@ -3,9 +3,10 @@ import Beneficiary from "../../database/model/beneficiary";
 import { filterGenerator, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
+import { CreateGroupBody, UpdateGroupBody } from "./dto";
 
 export async function create(
-  payload: Pick<IGroup, "name" | "description">,
+  payload: CreateGroupBody,
   user_id: string
 ) {
   const data = await Group.create({
@@ -52,7 +53,7 @@ export async function getOne(id: string, user_id: string) {
 
 export async function update(
   id: string,
-  payload: Partial<Pick<IGroup, "name" | "description">>,
+  payload: UpdateGroupBody,
   user_id: string
 ) {
   const group = await Group.findOne({ _id: id, user: user_id });

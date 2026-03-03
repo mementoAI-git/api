@@ -1,20 +1,21 @@
 import { Router, type IRouter } from "express";
-import valid from "./validator";
 import * as ctrl from "./controller";
 import gaurd from "../../../middleware/gaurd";
+import * as dto from "./dto"
+import validate from "../../../middleware/validator";
 
 const router: IRouter = Router();
 
-router.post("/", gaurd, valid.createGroup, ctrl.create);
+router.post("/", gaurd, validate(dto.createGroupSchema), ctrl.create);
 router.get("/", gaurd, ctrl.list);
-router.get("/:id", gaurd, valid.getGroup, ctrl.getOne);
-router.put("/:id", gaurd, valid.updateGroup, ctrl.update);
-router.delete("/:id", gaurd, valid.deleteGroup, ctrl.del);
-router.post("/:id/members", gaurd, valid.addMembers, ctrl.addMembers);
+router.get("/:id", gaurd, validate(dto.getGroupSchema), ctrl.getOne);
+router.put("/:id", gaurd, validate(dto.updateGroupSchema), ctrl.update);
+router.delete("/:id", gaurd, validate(dto.deleteGroupSchema), ctrl.del);
+router.post("/:id/members", gaurd, validate(dto.addMembersSchema), ctrl.addMembers);
 router.delete(
   "/:id/members/:beneficiaryId",
   gaurd,
-  valid.removeMember,
+  validate(dto.removeMemberSchema),
   ctrl.removeMember
 );
 
