@@ -4,6 +4,7 @@ import { isEmpty } from "./helpers";
 import Persona, { IPersona } from "../module/database/model/persona";
 import { IPrompt } from "../module/database/model/prompt";
 import { getMemorySummaries } from "../module/api/ai/utils";
+import { PREDEFINED_STORY_TAGS } from "./constant";
 
 function buildMemoriesContext(
   summaries: Array<{ title: string; summary: string; topics: string[] }>
@@ -360,23 +361,27 @@ CRITICAL:
 
 /**
  * Build the prompt for auto-generating tags from a story's title and body.
+ * Only tags from the predefined list may be returned; maximum 5 tags.
  */
 function buildTagsPrompt(): string {
-  return `You are a tag generator for personal stories and memories. Given a story title and/or body, generate relevant tags that would help the user find and organize this story later.
+  const predefinedTags = PREDEFINED_STORY_TAGS;
+  const tagList = predefinedTags.join(", ");
+  return `You are a tag generator for personal stories and memories. Given a story title and/or body, choose the most relevant tags from the ALLOWED LIST below to help the user find and organize this story later.
+
+ALLOWED TAGS (you may ONLY use these exact tags, no others):
+${tagList}
 
 Return ONLY a valid JSON object with this structure:
 {
-  "tags": ["tag1", "tag2", "tag3", ...]
+  "tags": ["tag1", "tag2", ...]
 }
 
-GUIDELINES:
-- Generate 5 to 12 tags. Prefer the lower end if content is short.
-- Use lowercase, single words or short phrases (1-3 words).
-- Tags should reflect: main topics, themes, people (if mentioned), places, activities, emotions, and key concepts.
-- Be specific to the content (e.g. "weekend hike" not just "hiking" if that fits).
-- No duplicate or near-duplicate tags.
-- No generic filler tags (e.g. avoid "story", "memory", "post" unless central).
-- If only a title is provided, infer sensible tags from it. If only body is provided, use that. Use both when available.
+RULES:
+- Pick at most 5 tags from the allowed list above. Fewer is fine if only 2–3 fit well.
+- Choose only tags that clearly match the story's topics, themes, people, places, activities, or emotions.
+- Use the exact spelling and casing from the allowed list (all lowercase).
+- No duplicates. No tags outside the allowed list.
+- If only a title is provided, infer from it. If only body is provided, use that. Use both when available.
 
 Return ONLY the JSON object, no markdown, no explanation.`;
 }

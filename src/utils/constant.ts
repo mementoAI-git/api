@@ -116,3 +116,32 @@ export const STORAGE_PROVIDERS = {
 export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.gcs;
 
 export const FREE_STORAGE_LIMIT_BYTES = 5 * 1024 ** 3; // 5 GB
+
+/** Predefined tags for story/memory auto-generation. Only these may be returned by the AI. */
+export const PREDEFINED_STORY_TAGS = [
+  'family',
+  'friends',
+  'travel',
+  'work',
+  'health',
+  'love',
+  'adventure',
+  'reflection',
+  'milestone',
+  'gratitude',
+  'learning',
+  'creativity',
+  'nature',
+  'food',
+  'music',
+  'celebration',
+  'childhood',
+  'growth',
+  'loss',
+  'hope',
+  'faith',
+  'hobby',
+  'sport',
+  'career',
+  'home',
+] as const;
