@@ -162,11 +162,11 @@ export async function search(query: string, user_id: string) {
   const searchResults = groups
     .map((group) => ({
       name: group.name,
-      id: group.id,
+      id: group._id,
       source: "group"
     })).concat(beneficiaries.map((beneficiary) => ({
       name: beneficiary.name,
-      id: beneficiary.id,
+      id: beneficiary._id,
       source: "beneficiary"
     })));
 
