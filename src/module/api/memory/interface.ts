@@ -6,6 +6,10 @@ export interface ICreateMemoryPayload {
   status: string
   level: number
   attachments: string[]
+  /** Group IDs that have access (user can tag more than one group). */
+  groups?: string[]
+  /** Beneficiary IDs who have access. */
+  beneficiaries?: string[]
 }
 
 export interface IAddMessageToMemory {

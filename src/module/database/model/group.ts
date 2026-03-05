@@ -44,8 +44,6 @@ const group = new Schema<IGroup>(
   }
 );
 
-group.index({ user: 1 });
-
 group.plugin(mongoosePaginate);
 
 const Group = model<IGroup, PaginateModel<IGroup>>("group", group);

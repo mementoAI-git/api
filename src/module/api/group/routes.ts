@@ -8,6 +8,7 @@ const router: IRouter = Router();
 
 router.post("/", gaurd, validate(dto.createGroupSchema), ctrl.create);
 router.get("/", gaurd, ctrl.list);
+router.get("/search", gaurd, validate(dto.searchSchema), ctrl.search);
 router.get("/:id", gaurd, validate(dto.getGroupSchema), ctrl.getOne);
 router.put("/:id", gaurd, validate(dto.updateGroupSchema), ctrl.update);
 router.delete("/:id", gaurd, validate(dto.deleteGroupSchema), ctrl.del);

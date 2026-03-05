@@ -3,6 +3,8 @@ import { FilterQuery } from "mongoose";
 import Memory, { IMemory } from "../../database/model/memory";
 import File from "../../database/model/file";
 import User from "../../database/model/user";
+import Group from "../../database/model/group";
+import Beneficiary from "../../database/model/beneficiary";
 import { IPagination } from "../../../utils/interface";
 import { BadRequestException, NotFoundException } from "../../../utils/service-error";
 import { IAddMessageToMemory, ICreateMemoryPayload, IDeleteMemoryPayload } from "./interface";
@@ -57,10 +59,22 @@ export async function memoryStats(user_id: string) {
 }
 
 export async function createMemory(payload: ICreateMemoryPayload, user_id: string, files: Express.Multer.File[] | null = null) {
-  const { title, body, status, tags = [], level = 1 } = payload
+  const { title, body, status, tags = [], level = 1, groups: groupIds = [], beneficiaries: beneficiaryIds = [] } = payload
   const user = await User.findById(user_id)
   if (!user) {
     throw new NotFoundException("User not found")
+  }
+
+  let validGroupIds: string[] = []
+  if (!isEmpty(groupIds)) {
+    const groups = await Group.find({ _id: { $in: groupIds }, user: user_id })
+    validGroupIds = groups.map((g) => g.id)
+  }
+
+  let validBeneficiaryIds: string[] = []
+  if (!isEmpty(beneficiaryIds)) {
+    const beneficiaries = await Beneficiary.find({ _id: { $in: beneficiaryIds }, benefactor: user_id })
+    validBeneficiaryIds = beneficiaries.map((b) => b.id)
   }
 
   let attachments = payload?.attachments || []
@@ -82,7 +96,9 @@ export async function createMemory(payload: ICreateMemoryPayload, user_id: strin
     level,
     status,
     tags,
-    attachments
+    attachments,
+    ...(!isEmpty(validGroupIds) && { groups: validGroupIds }),
+    ...(!isEmpty(validBeneficiaryIds) && { beneficiaries: validBeneficiaryIds }),
   })
 
   // Track activity
@@ -132,11 +148,15 @@ async function paginateMemories(
     page,
     limit,
     sort: { created_at: -1 },
-    populate: {
-      path: "attachments",
-      select: "-base64",
-      match: { provider: { $ne: "s3" } },
-    },
+    populate: [
+      {
+        path: "attachments",
+        select: "-base64",
+        match: { provider: { $ne: "s3" } },
+      },
+      { path: "groups", select: "name description" },
+      { path: "beneficiaries", select: "name email relationship" },
+    ],
   });
 
   if (!bookmarked) {
@@ -222,6 +242,8 @@ export async function getMemory(_id: string, user_id: string = null) {
       select: "-base64",
       match: { provider: { $ne: "s3" } },
     })
+    .populate({ path: "groups", select: "name description" })
+    .populate({ path: "beneficiaries", select: "name email relationship" })
 
   if (!memory) {
     throw new NotFoundException("Memory not found")
@@ -255,22 +277,52 @@ export async function getMemoryByPrompt(prompt_id: string, user_id: string = nul
 }
 
 export async function updateMemory(_id: string, payload: Partial<IMemory>, user_id: string) {
-  const { status, attachments = [], body, title, tags, level } = payload
+  const { status, attachments = [], body, title, tags, level, groups: groupIds, beneficiaries: beneficiaryIds } = payload
   let memory = await Memory.findOne({ _id, user: user_id })
   if (!memory) {
     throw new NotFoundException("Memory not found")
   }
 
+  let resolvedGroupIds: string[] | undefined
+  if (groupIds !== undefined) {
+    if (isEmpty(groupIds)) {
+      resolvedGroupIds = []
+    } else {
+      const groups = await Group.find({ _id: { $in: groupIds }, user: user_id })
+      resolvedGroupIds = groups.map((g) => g.id)
+    }
+  }
+
+  let resolvedBeneficiaryIds: string[] | undefined
+  if (beneficiaryIds !== undefined) {
+    if (isEmpty(beneficiaryIds)) {
+      resolvedBeneficiaryIds = []
+    } else {
+      const beneficiaries = await Beneficiary.find({ _id: { $in: beneficiaryIds }, benefactor: user_id })
+      resolvedBeneficiaryIds = beneficiaries.map((b) => b.id)
+    }
+  }
+
+  const setPayload: Record<string, unknown> = {
+    title: title ?? memory?.title,
+    body: body ?? memory?.body,
+    level: level ?? memory?.level,
+    status: status ?? memory?.status,
+    tags: tags ?? memory?.tags,
+    last_active: dayjs().toDate(),
+  }
+  if (groupIds !== undefined) {
+    setPayload.groups = resolvedGroupIds
+  }
+  if (beneficiaryIds !== undefined) {
+    setPayload.beneficiaries = resolvedBeneficiaryIds
+  }
+
   const updatedMemory = await Memory.findByIdAndUpdate(
     _id,
     {
-      title: title || memory?.title,
-      body: body || memory?.body,
-      level: level || memory?.level,
-      status,
-      tags,
-      last_active: dayjs().toDate(),
-      $addToSet: { attachments: { $each: attachments } }
+      $set: setPayload,
+      ...(attachments.length > 0 && { $addToSet: { attachments: { $each: attachments } } }),
     },
     { new: true }
   )

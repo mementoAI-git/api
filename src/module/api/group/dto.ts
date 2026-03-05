@@ -73,6 +73,12 @@ export const removeMemberSchema = z.object({
   }),
 });
 
+export const searchSchema = z.object({
+  query: z.strictObject({
+    q: z.string().min(1, "Search query is required").trim().max(100, "Query too long"),
+  }),
+});
+
 // Type exports
 export type CreateGroupBody = z.infer<typeof createGroupSchema>["body"];
 export type GetGroupParams = z.infer<typeof getGroupSchema>["params"];
@@ -82,3 +88,4 @@ export type DeleteGroupParams = z.infer<typeof deleteGroupSchema>["params"];
 export type AddMembersParams = z.infer<typeof addMembersSchema>["params"];
 export type AddMembersBody = z.infer<typeof addMembersSchema>["body"];
 export type RemoveMemberParams = z.infer<typeof removeMemberSchema>["params"];
+export type SearchQuery = z.infer<typeof searchSchema>["query"];

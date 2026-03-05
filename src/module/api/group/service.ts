@@ -137,3 +137,41 @@ export async function removeMember(
     data: null,
   };
 }
+
+export async function search(query: string, user_id: string) {
+  const SEARCH_LIMIT = 20;
+  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+
+  const [groups, beneficiaries] = await Promise.all([
+    Group.find({
+      user: user_id,
+      name: regex,
+    })
+      .select("name")
+      .limit(SEARCH_LIMIT)
+      .lean(),
+    Beneficiary.find({
+      benefactor: user_id,
+      $or: [{ name: regex }, { email: regex }],
+    })
+      .select("name email")
+      .limit(SEARCH_LIMIT)
+      .lean(),
+  ]);
+
+  const searchResults = groups
+    .map((group) => ({
+      name: group.name,
+      id: group.id,
+      source: "group"
+    })).concat(beneficiaries.map((beneficiary) => ({
+      name: beneficiary.name,
+      id: beneficiary.id,
+      source: "beneficiary"
+    })));
+
+  return {
+    message: "Search completed successfully",
+    data: searchResults,
+  };
+}

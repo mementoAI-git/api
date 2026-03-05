@@ -18,6 +18,8 @@ export interface IMemory {
   last_opened: string
   created_at: string
   updated_at?: string
+  groups?: string[]
+  beneficiaries?: string[]
   // AI context optimization fields
   summary?: string              // AI-generated conversation summary
   topics?: string[]             // Key topics discussed in this conversation
@@ -47,6 +49,14 @@ const memory = new Schema<IMemory>({
     type: Number,
     default: 1
   },
+  groups: [{
+    type: String,
+    ref: "group"
+  }],
+  beneficiaries: [{
+    type: String,
+    ref: "beneficiary"
+  }],
   refrence: String,
   prompt: String,
   session_id: String,

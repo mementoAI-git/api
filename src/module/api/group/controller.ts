@@ -98,3 +98,13 @@ export async function removeMember(
     next(error);
   }
 }
+
+export async function search(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const q = (req.query?.q as string)?.trim() ?? "";
+    const { message, data } = await service.search(q, req.auth!.id);
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
