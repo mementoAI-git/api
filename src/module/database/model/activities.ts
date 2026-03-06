@@ -1,4 +1,4 @@
-import {model, Schema, PaginateModel} from 'mongoose';
+import { model, Schema, PaginateModel } from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
 export interface IActivity {
@@ -7,15 +7,15 @@ export interface IActivity {
   description: string;
   type: string;
   action:
-    | 'created'
-    | 'updated'
-    | 'deleted'
-    | 'viewed'
-    | 'bookmarked'
-    | 'unbookmarked'
-    | 'responded'
-    | 'shared'
-    | 'restored';
+  | 'created'
+  | 'updated'
+  | 'deleted'
+  | 'viewed'
+  | 'bookmarked'
+  | 'unbookmarked'
+  | 'responded'
+  | 'shared'
+  | 'restored';
   reference?: string;
   metadata?: Record<string, any>;
   created_at: string;
@@ -40,7 +40,7 @@ const activity = new Schema<IActivity>(
     type: {
       type: String,
       required: true,
-      enum: ['memory', 'prompt', 'beneficiary', 'user', 'feedback'],
+      enum: ['memory', 'prompt', 'beneficiary', 'user', 'feedback', 'capsule'],
     },
     action: {
       type: String,
