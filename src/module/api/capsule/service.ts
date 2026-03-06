@@ -1,17 +1,17 @@
 import dayjs from 'dayjs';
 import Beneficiary from '../../database/model/beneficiary';
-import Capsule, {ICapsule} from '../../database/model/capsule';
+import Capsule, { ICapsule } from '../../database/model/capsule';
 import File from '../../database/model/file';
 import Memory from '../../database/model/memory';
-import {isEmpty, filterGenerator} from '../../../utils/helpers';
-import {IPagination} from '../../../utils/interface';
-import {NotFoundException} from '../../../utils/service-error';
-import {track} from '../activity/service';
-import {scheduleCapsuleDelivery} from '../../../services/queues/system';
+import { isEmpty, filterGenerator } from '../../../utils/helpers';
+import { IPagination } from '../../../utils/interface';
+import { NotFoundException } from '../../../utils/service-error';
+import { track } from '../activity/service';
+import { scheduleCapsuleDelivery } from '../../../services/queues/system';
 
 export async function createCapsule(payload: ICapsule, user_id: string) {
   const users = await Beneficiary.find({
-    email: {$in: payload.recipients},
+    email: { $in: payload.recipients },
     benefactor: user_id,
   });
   if (isEmpty(users)) {
@@ -21,7 +21,7 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
   let attachments: string[] = [];
   if (payload?.attachments && payload.attachments.length > 0) {
     const files = await File.find({
-      _id: {$in: payload.attachments},
+      _id: { $in: payload.attachments },
       user: user_id,
     });
     if (files.length !== payload.attachments.length) {
@@ -33,7 +33,7 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
   let memories: string[] = [];
   if (payload?.memories && payload.memories.length > 0) {
     const memoryDocs = await Memory.find({
-      _id: {$in: payload.memories},
+      _id: { $in: payload.memories },
       user: user_id,
     });
     if (memoryDocs.length !== payload.memories.length) {
@@ -52,10 +52,10 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
     memories,
     ...(payload?.schedule_date
       ? {
-          schedule_date: dayjs(payload.schedule_date).toISOString(),
-          status: 'scheduled',
-        }
-      : {status: 'draft'}),
+        schedule_date: dayjs(payload.schedule_date).toISOString(),
+        status: 'scheduled',
+      }
+      : { status: 'draft' }),
   });
 
   if (
@@ -76,7 +76,7 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
     user_id,
   );
 
-  return {message: 'Capsule created successfully', data: capsule.toObject()};
+  return { message: 'Capsule created successfully', data: capsule.toObject() };
 }
 
 export async function updateCapsule(
@@ -84,14 +84,14 @@ export async function updateCapsule(
   payload: Partial<ICapsule>,
   user_id: string,
 ) {
-  const capsule = await Capsule.findOne({_id: id, user: user_id});
+  const capsule = await Capsule.findOne({ _id: id, user: user_id });
   if (!capsule) {
     throw new NotFoundException('Capsule not found');
   }
 
   if (payload.recipients && payload.recipients.length > 0) {
     const users = await Beneficiary.find({
-      email: {$in: payload.recipients},
+      email: { $in: payload.recipients },
       benefactor: user_id,
     });
     if (isEmpty(users)) {
@@ -102,7 +102,7 @@ export async function updateCapsule(
 
   if (!isEmpty(payload.attachments)) {
     const files = await File.find({
-      _id: {$in: payload.attachments},
+      _id: { $in: payload.attachments },
       user: user_id,
     });
     if (files.length !== payload.attachments.length) {
@@ -114,7 +114,7 @@ export async function updateCapsule(
   let validatedMemories: string[] | undefined;
   if (payload?.memories && payload.memories.length > 0) {
     const memoryDocs = await Memory.find({
-      _id: {$in: payload.memories},
+      _id: { $in: payload.memories },
       user: user_id,
     });
     if (memoryDocs.length !== payload.memories.length) {
@@ -132,26 +132,26 @@ export async function updateCapsule(
 
   const updateData: Record<string, unknown> = {
     $set: {
-      ...(payload.title !== undefined && {title: payload.title}),
-      ...(payload.body !== undefined && {body: payload.body}),
+      ...(payload.title !== undefined && { title: payload.title }),
+      ...(payload.body !== undefined && { body: payload.body }),
       ...(payload.schedule_date !== undefined && {
         schedule_date: payload.schedule_date,
       }),
-      ...(payload.status !== undefined && {status: payload.status}),
+      ...(payload.status !== undefined && { status: payload.status }),
     },
   };
 
   if (!isEmpty(payload.attachments)) {
     updateData.$addToSet = {
       ...(updateData.$addToSet as Record<string, unknown>),
-      attachments: {$each: payload.attachments},
+      attachments: { $each: payload.attachments },
     };
   }
 
   if (!isEmpty(validatedMemories)) {
     updateData.$addToSet = {
       ...(updateData.$addToSet as Record<string, unknown>),
-      memories: {$each: validatedMemories},
+      memories: { $each: validatedMemories },
     };
   }
 
@@ -170,28 +170,28 @@ export async function updateCapsule(
     user_id,
   );
 
-  return {message: 'Capsule updated successfully', data: updateCapsule};
+  return { message: 'Capsule updated successfully', data: updateCapsule };
 }
 
 export async function getCapsules(payload: IPagination, user: string) {
-  const {page, limit, ...query} = payload;
+  const { page, limit, ...query } = payload;
 
   const filters = filterGenerator(query, ['title', 'body', 'status']);
-  filters.push({user});
+  filters.push({ user });
 
   const data = await Capsule.paginate(
-    {$and: filters},
+    { $and: filters },
     {
       limit,
       page,
-      sort: {created_at: -1, updated_at: -1},
+      sort: { created_at: -1, updated_at: -1 },
       populate: [
-        {path: 'recipients', select: 'email first_name last_name'},
-        {path: 'benefactor', select: 'first_name last_name fullname'},
+        { path: 'recipients', select: 'email first_name last_name' },
+        { path: 'benefactor', select: 'first_name last_name fullname' },
         {
           path: 'attachments',
           select: '_id name url',
-          match: {provider: {$ne: 's3'}},
+          match: { provider: { $ne: 's3' } },
         },
         {
           path: 'memories',
@@ -199,28 +199,28 @@ export async function getCapsules(payload: IPagination, user: string) {
           populate: {
             path: 'attachments',
             select: '_id name url',
-            match: {provider: {$ne: 's3'}},
+            match: { provider: { $ne: 's3' } },
           },
         },
       ],
     },
   );
 
-  return {message: 'Time capsules retrieved successfully', data};
+  return { message: 'Time capsules retrieved successfully', data };
 }
 
 export async function getCapsule(id: string, user: string) {
-  const capsule = await Capsule.findOne({user, _id: id}).populate([
-    {path: 'recipients', select: 'email first_name last_name'},
-    {path: 'benefactor', select: 'first_name last_name fullname'},
-    {path: 'attachments', select: '-base64', match: {provider: {$ne: 's3'}}},
+  const capsule = await Capsule.findOne({ user, _id: id }).populate([
+    { path: 'recipients', select: 'email first_name last_name' },
+    { path: 'benefactor', select: 'first_name last_name fullname' },
+    { path: 'attachments', select: '-base64', match: { provider: { $ne: 's3' } } },
     {
       path: 'memories',
       select: '_id title body tags created_at attachments status',
       populate: {
         path: 'attachments',
         select: '_id name url',
-        match: {provider: {$ne: 's3'}},
+        match: { provider: { $ne: 's3' } },
       },
     },
   ]);
@@ -228,11 +228,11 @@ export async function getCapsule(id: string, user: string) {
     throw new NotFoundException('Capsule not found');
   }
 
-  return {message: 'Time capsule retrieved successfully', data: capsule};
+  return { message: 'Time capsule retrieved successfully', data: capsule };
 }
 
 export async function deleteCapsule(id: string, user: string) {
-  const capsule = await Capsule.findOne({user, _id: id});
+  const capsule = await Capsule.findOne({ user, _id: id });
   if (!capsule) {
     throw new NotFoundException('Capsule not found');
   }
@@ -249,7 +249,7 @@ export async function deleteCapsule(id: string, user: string) {
     user,
   );
 
-  return {message: 'Time capsule deleted successfully', data: capsule};
+  return { message: 'Time capsule deleted successfully', data: capsule };
 }
 
 // export async function getCapsuleStats(user: string) {
@@ -279,14 +279,14 @@ export async function getCapsuleStats(user: string) {
     {
       $match: {
         user,
-        status: {$in: ['delivered', 'scheduled', 'draft', 'pause']},
+        status: { $in: ['delivered', 'scheduled', 'draft', 'pause'] },
       },
     },
-    {$group: {_id: '$status', count: {$sum: 1}}},
+    { $group: { _id: '$status', count: { $sum: 1 } } },
   ]);
 
   const counts = Object.fromEntries(
-    stats.map(({_id, count}) => [`${_id}_count`, count]),
+    stats.map(({ _id, count }) => [`${_id}_count`, count]),
   );
 
   return {
@@ -295,7 +295,7 @@ export async function getCapsuleStats(user: string) {
       delivered_count: counts.delivered_count ?? 0,
       scheduled_count: counts.scheduled_count ?? 0,
       draft_count: counts.draft_count ?? 0,
-      paused_count: counts.paused_count ?? 0,
+      paused_count: counts.pause_count ?? 0,
     },
   };
 }
