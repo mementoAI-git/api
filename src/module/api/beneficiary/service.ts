@@ -3,69 +3,119 @@ import { compareStrings, filterGenerator, isEmpty } from "../../../utils/helpers
 import { IPagination } from "../../../utils/interface";
 import { BadRequestException, NotFoundException, UnauthorizedException } from "../../../utils/service-error";
 import Beneficiary, { IBeneficiary } from "../../database/model/beneficiary";
+import Group from "../../database/model/group";
 import { track } from "../activity/service";
 import dayjs from "dayjs";
 import { IAcceptInivite } from "./interface";
 import User from "../../database/model/user";
 import { v4 as uuid } from "uuid";
 import AuthCode from "../../database/model/auth-code";
+import { CreateBeneficiaryBody } from "./dto";
 
-export async function create(payload: IBeneficiary, user_id: string) {
-  const { email, level, name = "", relationship = "friend" } = payload
+export async function create(payload: CreateBeneficiaryBody, user_id: string) {
+  const { email, name = "", relationship = "friend", groups = [] } = payload;
 
-  const benefactor = await User.findOne({ _id: user_id })
+  const benefactor = await User.findOne({ _id: user_id });
   if (!benefactor) {
-    throw new UnauthorizedException("benefactor not found")
+    throw new UnauthorizedException("benefactor not found");
   }
   if (compareStrings(benefactor.email, email)) {
-    throw new BadRequestException("Can't add self as a beneficiary")
+    throw new BadRequestException("Can't add self as a beneficiary");
   }
 
-  const beneficiary = await Beneficiary.findOne({ benefactor: user_id, email })
+  const beneficiary = await Beneficiary.findOne({ benefactor: user_id, email });
   if (beneficiary) {
-    throw new BadRequestException("Beneficiary has already been invited")
+    throw new BadRequestException("Beneficiary has already been invited");
   }
 
-  const user = await User.findOne({ email })
+  const user = await User.findOne({ email });
 
   const data = await Beneficiary.create({
     email,
     name,
     relationship,
-    level: level || 1,
     due_at: dayjs().add(3, "days").toDate(),
     user: user?.id || null,
-    benefactor: user_id
-  })
+    benefactor: user_id,
+  });
 
-  if (data) {
-    await mail.sendBeneficiaryInvite(data)
-    await track({
-      title: "Beneficiary Invited",
-      description: `Invited beneficiary: "${name}"`,
-      type: "beneficiary",
-      action: "created",
-      reference: data.id
-    }, user_id)
+  if (data && groups.length > 0) {
+    const userGroups = await Group.find({ _id: { $in: groups }, user: user_id });
+    if (userGroups.length > 0) {
+      const groupIds = userGroups.map((g) => g.id);
+      await Group.updateMany(
+        { _id: { $in: groupIds } },
+        { $addToSet: { members: data.id } }
+      );
+    }
   }
 
-  return { message: "Beneficiary added successfully", data }
+  if (data) {
+    await mail.sendBeneficiaryInvite(data);
+    await track(
+      {
+        title: "Beneficiary Invited",
+        description: `Invited beneficiary: "${name}"`,
+        type: "beneficiary",
+        action: "created",
+        reference: data.id,
+      },
+      user_id
+    );
+  }
+
+  return { message: "Beneficiary added successfully", data };
 }
 
 export async function list({ page, limit, ...query }: IPagination, user_id: string) {
-  const filters = filterGenerator(query, ["name", "email", "relationship"])
-  filters.push({ benefactor: user_id })
+  const filters = filterGenerator(query, ["name", "email", "relationship"]);
+  filters.push({ benefactor: user_id });
+
   const data = await Beneficiary.paginate(
     { $and: filters },
     {
       page,
       limit,
       sort: { created_at: -1 },
-      populate: { path: "user", select: "email first_name last_name picture picture_url" }
+      populate: { path: "user", select: "email first_name last_name picture picture_url" },
+      lean: true,
     }
-  )
+  );
 
-  return { message: "Beneficiary retrieved successfully", data }
+  const docs = (data.docs || []) as Array<IBeneficiary & { _id: unknown }>;
+  const beneficiaryIds = docs.map((d) => String(d._id));
+  const beneficiaryIdSet = new Set(beneficiaryIds);
+  const groupsByBeneficiaryId: Record<string, Array<{ _id: string; name: string }>> = {};
+
+  if (beneficiaryIds.length > 0) {
+    const groups = await Group.find({
+      user: user_id,
+      members: { $in: beneficiaryIds },
+    })
+      .select("_id name members")
+      .lean();
+
+    for (const g of groups) {
+      const groupInfo = { _id: String(g._id), name: g.name };
+      for (const memberId of g.members || []) {
+        const id = String(memberId);
+        if (beneficiaryIdSet.has(id)) {
+          if (!groupsByBeneficiaryId[id]) groupsByBeneficiaryId[id] = [];
+          groupsByBeneficiaryId[id].push(groupInfo);
+        }
+      }
+    }
+  }
+
+  const docsWithGroups = docs.map((doc) => ({
+    ...doc,
+    groups: groupsByBeneficiaryId[String(doc._id)] || [],
+  }));
+
+  return {
+    message: "Beneficiary retrieved successfully",
+    data: { ...data, docs: docsWithGroups },
+  };
 }
 
 export async function del(id: string, user_id: string) {

@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
-import valid from "./validator"
-import * as ctrl from "./controller"
+import valid from "./validator";
+import * as ctrl from "./controller";
+import * as dto from "./dto";
 import gaurd from "../../../middleware/gaurd";
+import validate from "../../../middleware/validator";
 
-const router: IRouter = Router()
+const router: IRouter = Router();
 
-router.post("/", gaurd, valid.createBeneficiary, ctrl.create)
+router.post("/", gaurd, validate(dto.createBeneficiarySchema), ctrl.create);
 router.get("/", gaurd, ctrl.list)
 router.put("/:id", gaurd, valid.updateBeneficiary, ctrl.update)
 router.delete("/:id", gaurd, ctrl.del)

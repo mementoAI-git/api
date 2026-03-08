@@ -3,7 +3,7 @@ import Beneficiary from "../../database/model/beneficiary";
 import { filterGenerator, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { NotFoundException } from "../../../utils/service-error";
-import { CreateGroupBody, UpdateGroupBody } from "./dto";
+import { CreateGroupBody, SearchQuery, UpdateGroupBody } from "./dto";
 
 export async function create(
   payload: CreateGroupBody,
@@ -138,37 +138,47 @@ export async function removeMember(
   };
 }
 
-export async function search(query: string, user_id: string) {
-  const SEARCH_LIMIT = 20;
-  const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+const SEARCH_LIMIT = 20;
+
+export async function search(
+  payload: SearchQuery,
+  user_id: string,
+) {
+  const { q, resource = "all" } = payload;
+  const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+
+  const shouldSearchGroups = resource === "all" || resource === "group";
+  const shouldSearchBeneficiaries = resource === "all" || resource === "beneficiary";
 
   const [groups, beneficiaries] = await Promise.all([
-    Group.find({
-      user: user_id,
-      name: regex,
-    })
-      .select("name")
-      .limit(SEARCH_LIMIT)
-      .lean(),
-    Beneficiary.find({
-      benefactor: user_id,
-      $or: [{ name: regex }, { email: regex }],
-    })
-      .select("name email")
-      .limit(SEARCH_LIMIT)
-      .lean(),
+    shouldSearchGroups
+      ? Group.find({ user: user_id, name: regex })
+        .select("name")
+        .limit(SEARCH_LIMIT)
+        .lean()
+      : Promise.resolve([]),
+    shouldSearchBeneficiaries
+      ? Beneficiary.find({
+        benefactor: user_id,
+        $or: [{ name: regex }, { email: regex }],
+      })
+        .select("name email")
+        .limit(SEARCH_LIMIT)
+        .lean()
+      : Promise.resolve([]),
   ]);
 
-  const searchResults = groups
-    .map((group) => ({
-      name: group.name,
-      id: group._id,
-      source: "group"
-    })).concat(beneficiaries.map((beneficiary) => ({
-      name: beneficiary.name,
-      id: beneficiary._id,
-      source: "beneficiary"
-    })));
+  const groupResults = groups.map((group) => ({
+    name: group.name,
+    id: group._id,
+    source: "group" as const,
+  }));
+  const beneficiaryResults = beneficiaries.map((beneficiary) => ({
+    name: beneficiary.name,
+    id: beneficiary._id,
+    source: "beneficiary" as const,
+  }));
+  const searchResults = [...groupResults, ...beneficiaryResults];
 
   return {
     message: "Search completed successfully",

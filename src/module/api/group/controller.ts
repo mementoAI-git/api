@@ -3,6 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { getPagination, responsHandler, validateRequest } from "../../../utils/helpers";
 import * as service from "./service";
 import { IRequest } from "../../../utils/interface";
+import { SearchQuery } from "./dto";
 
 export async function create(req: IRequest, res: Response, next: NextFunction) {
   try {
@@ -101,8 +102,7 @@ export async function removeMember(
 
 export async function search(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const q = (req.query?.q as string)?.trim() ?? "";
-    const { message, data } = await service.search(q, req.auth!.id);
+    const { message, data } = await service.search(req.query as SearchQuery, req.auth!.id);
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

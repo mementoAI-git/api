@@ -76,6 +76,7 @@ export const removeMemberSchema = z.object({
 export const searchSchema = z.object({
   query: z.strictObject({
     q: z.string().min(1, "Search query is required").trim().max(100, "Query too long"),
+    resource: z.enum(["group", "beneficiary", "all"]).optional().default("all"),
   }),
 });
 

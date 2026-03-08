@@ -6,7 +6,6 @@ import { IRequest } from "../../../utils/interface";
 
 export async function create(req: IRequest, res: Response, next: NextFunction) {
   try {
-    validateRequest(req)
     const { message, data } = await service.create(req.body, req.auth.id)
     return responsHandler(res, StatusCodes.CREATED, message, data)
   } catch (error) {
