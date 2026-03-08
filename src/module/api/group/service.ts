@@ -1,8 +1,8 @@
-import Group, { IGroup } from "../../database/model/group";
+import Group from "../../database/model/group";
 import Beneficiary from "../../database/model/beneficiary";
 import { filterGenerator, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
-import { BadRequestException, NotFoundException } from "../../../utils/service-error";
+import { NotFoundException } from "../../../utils/service-error";
 import { CreateGroupBody, UpdateGroupBody } from "./dto";
 
 export async function create(
