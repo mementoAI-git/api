@@ -19,6 +19,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   if (!benefactor) {
     throw new UnauthorizedException("benefactor not found");
   }
+
   if (compareStrings(benefactor.email, email)) {
     throw new BadRequestException("Can't add self as a beneficiary");
   }

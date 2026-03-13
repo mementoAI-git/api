@@ -118,12 +118,13 @@ class MailService {
     email: string;
     code: string;
     invite_code: string;
+    name: string;
   }) {
-    const { email, code, invite_code } = payload;
+    const { email, code, invite_code, name } = payload;
     const html = await this.renderTemplate('invite-code', {
       email,
       code,
-      name: '',
+      name,
       imageUrl: `${BACKEND_URL}/assets/images/beneficiary-invite.png`,
       inviteLink: invite_code,
     });

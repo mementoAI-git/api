@@ -270,8 +270,8 @@ export async function logout(userId: string) {
   };
 }
 
-export async function sendInviteCode(payload: { email?: string }) {
-  const { email = null } = payload
+export async function sendInviteCode(payload: { email?: string, name?: string }) {
+  const { email = null, name = null } = payload
 
   if (!isEmpty(email)) {
     const user = await User.findOne({ email })
@@ -287,7 +287,8 @@ export async function sendInviteCode(payload: { email?: string }) {
     await mail.sendInviteCode({
       email: email!,
       code,
-      invite_code
+      invite_code,
+      name
     })
   }
 
