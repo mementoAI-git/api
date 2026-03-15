@@ -1,6 +1,7 @@
 import { BadRequestException } from '../../../utils/service-error';
 import Feedback, { IFeedback } from '../../database/model/feedback';
 import mail from '../../mail';
+import discord from '../../../services/discord';
 import { getProfile } from '../user/service';
 import File from '../../database/model/file';
 
@@ -20,25 +21,28 @@ export async function createFeedback(payload: IFeedback, user_id: string) {
     throw new BadRequestException('Unable to save feedback');
   }
 
-  const mailPayload = {
-    name: user?.fullname ?? undefined,
+  const notifyPayload = {
+    name: user?.fullname ?? 'Anonymous',
+    email: email ?? '',
     type,
     message,
-    screenshot: "",
-    feedbackId: "",
+    screenshot: '',
+    feedbackId: feedback.id,
   };
 
-  mail.sendFeedbackConfirmation({ ...mailPayload, email });
 
   if (screenshotId) {
     const file = await File.findById(screenshotId);
     if (file) {
-      mailPayload.screenshot = file.url;
+      notifyPayload.screenshot = file.url;
     }
   }
 
-  mailPayload.feedbackId = feedback.id;
-  mail.notifyTeamFeedback(mailPayload);
+  mail.sendFeedbackConfirmation({ ...notifyPayload, email });
+
+  // Fire notifications — neither blocks the response
+  mail.notifyTeamFeedback(notifyPayload);
+  discord.notifyFeedback(notifyPayload);
 
   return {
     message: 'Feedback Sent Successfully',
