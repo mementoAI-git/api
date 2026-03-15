@@ -33,11 +33,11 @@
     </p>
     <% } %>
 
-      <%- include('components/btn-link', { title: 'View in Dashboard' , url: feedbackUrl }) %>
+      <%- include('components/btn-link', { title: `Reply to ${name}`, url: `mailto:${email}` }) %>
 
         <p class="footer-note">
           <strong>Quick Actions:</strong><br>
-          Reply to <%= email %> directly or manage this feedback in the admin dashboard.
+          Hit reply or click the button above to respond to <%= name %> at <%= email %>.
         </p>
 
         <%- include('components/closing-text') %>
