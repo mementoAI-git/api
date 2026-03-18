@@ -9,7 +9,7 @@ import { createHash } from "crypto";
 import { Readable } from "stream";
 import { STORAGE_PROVIDERS } from "../../../utils/constant";
 
-export async function uploadFile(payload: Express.Multer.File[], user_id: string) {
+export async function uploadFile(payload: Express.Multer.File[], user_id: string, clientDuration?: number) {
   const user = await User.findById(user_id)
   if (!user) {
     throw new NotFoundException("User not found")
@@ -19,7 +19,7 @@ export async function uploadFile(payload: Express.Multer.File[], user_id: string
   await storage.checkStorageQuota(user, additionalBytes)
 
   const files = await Promise.all(
-    payload.map((file) => storage.uploadFile(file, user_id))
+    payload.map((file) => storage.uploadFile(file, user_id, clientDuration))
   )
 
   const data = await File.insertMany(files)

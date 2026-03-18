@@ -12,6 +12,7 @@ import { ForbiddenException } from '../../utils/service-error';
 export async function uploadFile(
   file: Express.Multer.File,
   user: string,
+  clientDuration?: number,
 ): Promise<Partial<IFile>> {
   const fileName = reconstructFileName(file.originalname);
 
@@ -22,7 +23,9 @@ export async function uploadFile(
   });
 
   const base64 = file.buffer.toString('base64');
-  const duration = await getMediaDuration(base64, file.mimetype);
+  const detectedDuration = await getMediaDuration(base64, file.mimetype);
+  // Use client-supplied duration if server-side detection fails (e.g. WebM from MediaRecorder)
+  const duration = detectedDuration ?? clientDuration;
 
   return {
     name: uploadResult?.key,
