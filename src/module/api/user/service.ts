@@ -4,9 +4,10 @@ import User, { IUser } from '../../database/model/user';
 import Persona, { IPersona } from '../../database/model/persona';
 import Memory from '../../database/model/memory';
 import {
+  concatStrings,
   hashPassword,
   isEmpty,
-  withTransaction
+  withTransaction,
 } from '../../../utils/helpers';
 import {
   BadRequestException,
@@ -23,6 +24,7 @@ import * as storage from '../../../services/storage';
 import speakeasy from 'speakeasy';
 import Qr from 'qrcode';
 import mail from '../../mail';
+import { OnboardingBody } from './dto';
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const { new_password, old_password } = payload;
@@ -44,7 +46,7 @@ export async function setPassword(payload: ISetPassword, user_id: string) {
 
 export async function getProfile(user_id: string) {
   const user = await User.findById(user_id)
-    .select('-password -providers -two_factor.secret')
+    .select('-password -providers -two_factor.secret ')
   if (!user) {
     throw new NotFoundException('User not found', null);
   }
@@ -84,7 +86,7 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
   )
     .select('-password -providers -public_key -private_key')
 
-  return { message: 'User profile updated successfully', data };
+  return { message: 'User profile updated successfully', data: null };
 }
 
 export async function updateStreak(user_id: string) {
@@ -229,7 +231,7 @@ export async function completeOnboarding(
     if (!isEmpty(payload?.self_description)) {
       personaData.self_description = payload.self_description;
     }
-    if (!isEmpty(payload?.current_priority)) {
+    if (Array.isArray(payload?.current_priority) && payload.current_priority.length > 0) {
       personaData.current_priority = payload.current_priority;
     }
     if (
@@ -252,7 +254,7 @@ export async function completeOnboarding(
         user.dob = payload.dob;
       }
 
-      user.onbaorded = true;
+      user.onboarding_status = 'completed';
       await user.save({ session });
 
     });
@@ -358,5 +360,121 @@ export async function getUserStats(user_id: string) {
   return {
     data: stats,
     message: 'User statistics retrieved successfully',
+  };
+}
+
+export async function onboarding(payload: OnboardingBody, user_id: string) {
+  const user = await User.findById(user_id);
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  const allowedFields = new Set([
+    'first_name',
+    'last_name',
+    'nickname',
+    'location',
+    'age_range'
+  ]);
+
+  const updatePayload = Object.entries(payload).reduce((acc, p) => {
+    if (allowedFields.has(p[0])) {
+      acc[p[0]] = p[1];
+    }
+    return acc;
+  }, {});
+
+  const allowedPersonaFields = new Set([
+    'join_reasons',
+    'audience',
+    'current_priority',
+    'communication_style',
+  ]);
+
+  const personaUpdate = Object.entries(payload).reduce((acc, p) => {
+    if (
+      allowedPersonaFields.has(p[0]) &&
+      Array.isArray(p[1]) &&
+      p[1].length > 0
+    ) {
+      acc[p[0]] = p[1];
+    }
+    return acc;
+  }, {});
+
+  await withTransaction(async (session) => {
+    await User.findByIdAndUpdate(
+      user_id, { ...updatePayload, onbaorded: true }, { session });
+    if (Object.keys(personaUpdate).length > 0) {
+      await Persona.findOneAndUpdate(
+        { user: user_id },
+        { $set: personaUpdate },
+        { upsert: true, session }
+      );
+    }
+  });
+
+  return { message: 'Onboarding saved successfully', data: null };
+}
+
+export async function skipOnboarding(user_id: string) {
+  const user = await User.findById(user_id);
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  if (user.onboarding_status === 'completed') {
+    return {
+      message: 'Onboarding already completed',
+      data: { onboarding_status: 'completed' as const },
+    };
+  }
+
+  await User.findByIdAndUpdate(user_id, { onboarding_status: 'skipped' });
+
+  return {
+    message: 'Onboarding skipped',
+    data: { onboarding_status: 'skipped' as const },
+  };
+}
+
+export async function getOnboardingDetails(user_id: string) {
+  const user = await User.findById(user_id).lean();
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+  const persona = await Persona.findOne({ user: user_id }).lean();
+  const u = user as Record<string, unknown>;
+  const first = String(u.first_name ?? '');
+  const last = String(u.last_name ?? '');
+  const full_name = concatStrings(first, last, ' ').trim();
+
+  let current_priority: string[] = [];
+  const cp = persona?.current_priority as unknown;
+  if (Array.isArray(cp)) {
+    current_priority = cp.filter((x): x is string => typeof x === 'string');
+  } else if (typeof cp === 'string' && cp) {
+    current_priority = [cp];
+  }
+
+  return {
+    message: 'Onboarding profile retrieved successfully',
+    data: {
+      onboarding_status: String(u.onboarding_status ?? 'never'),
+      user: {
+        first_name: first,
+        last_name: last,
+        nickname: String(u.nickname ?? ''),
+        full_name,
+        age_range: String(u.age_range ?? ''),
+        location: String(u.location ?? ''),
+      },
+      persona: {
+        join_reasons: persona?.join_reasons ?? [],
+        audience: persona?.audience ?? [],
+        current_priority,
+        communication_style: persona?.communication_style ?? [],
+      },
+    },
   };
 }

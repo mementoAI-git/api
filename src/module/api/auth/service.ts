@@ -101,7 +101,8 @@ export async function login(payload: ILogin) {
 
   const data = {
     ...tokens,
-    onboarded: user?.onbaorded || false
+    onboarding_status: user?.onboarding_status ?? 'never',
+    onboarded: user?.onboarding_status === 'completed',
   }
 
   return { data, message: "User login is successful" }

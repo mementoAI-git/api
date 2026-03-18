@@ -35,7 +35,8 @@ export interface IUser {
   dob: string
   country: string
   password: string
-  onbaorded: boolean
+  /** never | skipped | completed */
+  onboarding_status?: string
   providers: string[]
   preferences: IUserPreferences
   context: IUserContext
@@ -50,6 +51,7 @@ export interface IUser {
   }
   picture: string
   location?: string
+  age_range?: string
   picture_url?: string
   last_seen: string
   last_task_date?: string
@@ -98,9 +100,10 @@ const user = new Schema<IUser>({
   },
   providers: [String],
   phone_number: String,
-  onbaorded: {
-    type: Boolean,
-    default: false,
+  onboarding_status: {
+    type: String,
+    enum: ['never', 'skipped', 'completed', 'in_progress'],
+    default: 'never',
   },
   verified: {
     type: Boolean,
@@ -128,6 +131,7 @@ const user = new Schema<IUser>({
     default: 1
   },
   location: String,
+  age_range: String,
   storage_limit: {
     type: Number,
     default: FREE_STORAGE_LIMIT_BYTES

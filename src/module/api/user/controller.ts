@@ -109,3 +109,30 @@ export async function getUserStats(req: IRequest, res: Response, next: NextFunct
     next(error)
   }
 }
+
+export async function onboarding(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.onboarding(req.body, req.auth!.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function skipOnboarding(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.skipOnboarding(req.auth!.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function getOnboardingDetails(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getOnboardingDetails(req.auth!.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

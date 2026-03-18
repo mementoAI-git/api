@@ -16,12 +16,14 @@ export default {
     body("emotional_state_trends").optional().isArray(),
     body("goals_and_aspirations").optional().isArray(),
     body("self_description").optional().isString().isLength({ max: 500 }),
-    body("current_priority").optional().isString().isLength({ max: 200 }),
+    body("current_priority").optional().isArray(),
+    body("current_priority.*").optional().isString().isLength({ max: 200 }),
     body("join_reasons").optional().isArray()
   ],
   completeOnboarding: [
     body("self_description").optional().isString().isLength({ max: 500 }),
-    body("current_priority").optional().isString().isLength({ max: 200 }),
+    body("current_priority").optional().isArray(),
+    body("current_priority.*").optional().isString().isLength({ max: 200 }),
     body("dob").optional().isISO8601().toDate(),
     body("join_reasons").optional().isArray()
   ]

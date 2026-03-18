@@ -9,8 +9,10 @@ export interface IPersona {
   emotional_state_trends?: string[]
   goals_and_aspirations?: string[]
   self_description?: string
-  current_priority?: string
+  current_priority?: string[]
   join_reasons?: string[]
+  audience?: string[]
+  communication_style?: string[]
   last_array_update?: Date
   last_summarized_at?: Date
   last_update?: Record<string, Date> // Per-field update timestamps
@@ -32,8 +34,10 @@ const persona = new Schema<IPersona>({
   emotional_state_trends: [String],
   goals_and_aspirations: [String],
   self_description: String,
-  current_priority: String,
+  current_priority: [String],
   join_reasons: [String],
+  audience: [String],
+  communication_style: [String],
   last_array_update: Date,
   last_summarized_at: Date,
   last_update: {

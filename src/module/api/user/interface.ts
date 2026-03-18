@@ -9,7 +9,7 @@ export interface IVerifyTOTP {
 
 export interface ICompleteOnboardingPayload {
   self_description?: string
-  current_priority?: string
+  current_priority?: string[]
   dob?: string
   join_reasons?: string[]
 }
@@ -21,6 +21,6 @@ export interface IUpdateContext {
   emotional_state_trends?: string[]
   goals_and_aspirations?: string[]
   self_description?: string
-  current_priority?: string
+  current_priority?: string[]
   join_reasons?: string[]
 }

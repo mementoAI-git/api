@@ -9,3 +9,4 @@ bun.lock
 yarn.lock
 *.lock*
 google-storage.json
+docs

@@ -1,5 +1,6 @@
 import { Application, NextFunction, Request, Response } from "express";
-import { readdirSync } from "fs";
+import { existsSync, readdirSync } from "fs";
+import { join } from "path";
 import { responsHandler } from "../../utils/helpers";
 import { StatusCodes } from "http-status-codes";
 import errorHandler from "../../middleware/error-handler";
@@ -19,6 +20,7 @@ function health(_req: Request, res: Response, _next: NextFunction) {
 function router(app: Application) {
   readdirSync(__dirname)
     .filter(file => !file.startsWith('.') && !file.includes('index'))
+    .filter(file => existsSync(join(__dirname, file, 'routes.ts')) || existsSync(join(__dirname, file, 'routes.js')))
     .forEach(file => {
       const route = require(`./${file}/routes`);
       const path = route?.name || file.replace(/\.[^/.]+$/, "")
