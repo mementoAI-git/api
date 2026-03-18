@@ -1,6 +1,8 @@
 import { NextFunction, Response, Request } from "express"
 import { IRequest } from "../../../utils/interface"
 import * as service from "./service"
+import * as storage from "../../../services/storage"
+import File from "../../database/model/file"
 import { getFiles, responsHandler, getPagination, validateRequest } from "../../../utils/helpers"
 import { StatusCodes } from "http-status-codes"
 import dayjs from "dayjs"
@@ -14,7 +16,8 @@ export async function uploadFile(
 ) {
   try {
     const files = getFiles(req, true);
-    const { message, data } = await service.uploadFile(files, req.auth.id);
+    const clientDuration = req.body?.duration ? parseFloat(req.body.duration) : undefined;
+    const { message, data } = await service.uploadFile(files, req.auth.id, clientDuration);
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -81,14 +84,13 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     const metadata = await service.getFileMetadata(name);
     setFileHeaders(res, metadata);
 
-    const data = await service.getFileBuffer(
-      name,
-      parseInt(metadata.size, 10),
-      range,
-    );
-
-    // Handle range requests (partial content)
+    // ── Range request (partial content) ─────────────────────────────────────
     if (range) {
+      const data = await service.getFileBuffer(
+        name,
+        parseInt(metadata.size, 10),
+        range,
+      );
       const { start, end, buffer } = data;
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${metadata.size}`,
@@ -104,18 +106,47 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
         'Last-Modified': dayjs(metadata.updated_at).toDate().toUTCString(),
         'Content-Disposition': `inline; filename="${metadata.name}"`,
       });
-
       const stream = service.createFileStream(buffer);
       await safeStreamToResponse(stream, res);
       return;
     }
 
-    // Handle full file requests
+    // ── Full-file audio/video: pipe storage stream directly → response ───────
+    // Buffering the whole file first (the old path) causes the browser to wait
+    // for the API server to download the entire file from GCS before it gets
+    // a single byte, delaying `canplay` and the Play button by several seconds.
+    // Piping the stream directly means the browser starts receiving data
+    // almost immediately (only limited by cloud → API → browser network time).
+    const isMedia =
+      metadata.type?.startsWith('audio/') ||
+      metadata.type?.startsWith('video/');
+
+    if (isMedia) {
+      const file = await File.findActiveOne({ name });
+      if (!file) throw new Error('File not found');
+
+      res.setHeader('Content-Length', metadata.size);
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.status(200);
+
+      const fileResponse = await storage.getFile(
+        file.name,
+        undefined,
+        file.provider ?? 's3',
+      );
+      if (!fileResponse.Body) throw new Error('File content not found');
+      await safeStreamToResponse(fileResponse.Body as NodeJS.ReadableStream, res);
+      return;
+    }
+
+    // ── Non-media files: buffered path (supports Redis cache) ────────────────
+    const data = await service.getFileBuffer(
+      name,
+      parseInt(metadata.size, 10),
+    );
     res.setHeader('Content-Length', metadata.size);
     res.setHeader('Accept-Ranges', 'bytes');
     res.status(200);
-
-    // Send small files directly, stream larger files
     if (Number(metadata.size) < data.chunk_size) {
       res.send(data.buffer);
     } else {
