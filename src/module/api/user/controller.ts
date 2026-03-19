@@ -83,6 +83,15 @@ export async function completeOnboarding(req: IRequest, res: Response, next: Nex
   }
 }
 
+export async function getPersona(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.getPersona(req.auth.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export async function updateContext(req: IRequest, res: Response, next: NextFunction) {
   try {
     const { message, data } = await service.updateContext(req.body, req.auth.id)

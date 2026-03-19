@@ -15,6 +15,7 @@ router.post('/onboarding/skip', ctrl.skipOnboarding);
 router.post('/onboarding', validate(dto.onboardingSchema), ctrl.onboarding);
 router.post('/change-password', valid.setPassword, ctrl.setPassword);
 router.put('/profile', ctrl.updateProfile);
+router.get('/persona', ctrl.getPersona);
 router.put('/persona', valid.updateContext, ctrl.updateContext);
 router.post(
   '/upload-picture',

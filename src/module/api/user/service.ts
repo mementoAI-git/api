@@ -46,12 +46,21 @@ export async function setPassword(payload: ISetPassword, user_id: string) {
 
 export async function getProfile(user_id: string) {
   const user = await User.findById(user_id)
-    .select('-password -providers -two_factor.secret ')
+    .select('-password -providers -two_factor.secret -context')
   if (!user) {
     throw new NotFoundException('User not found', null);
   }
 
   return { message: 'User profile retrieved successfully', data: user };
+}
+
+export async function getPersona(user_id: string) {
+  const persona = await Persona.findOne({ user: user_id }).lean();
+
+  return {
+    message: 'Persona retrieved successfully',
+    data: persona,
+  };
 }
 
 export async function updateProfile(payload: Partial<IUser>, user_id: string) {
