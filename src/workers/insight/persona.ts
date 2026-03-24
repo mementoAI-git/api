@@ -7,8 +7,8 @@ import Persona, { IPersona } from "../../module/database/model/persona";
 export async function extractBatchInsights(
   user_id: string,
   exchanges: Array<{ user: string; ai: string }>
-): Promise<void> {
-  if (!exchanges || exchanges.length === 0) return;
+): Promise<Record<string, unknown> | undefined> {
+  if (!exchanges || exchanges.length === 0) return undefined;
 
   try {
     const persona = await Persona.findOne({ user: user_id });
@@ -34,5 +34,6 @@ export async function extractBatchInsights(
     return insights;
   } catch (error) {
     logger.error(error, 'Error extracting batch insights');
+    return undefined;
   }
 }

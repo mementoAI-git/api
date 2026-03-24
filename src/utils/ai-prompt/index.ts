@@ -1,10 +1,11 @@
 import dayjs from "dayjs";
-import { IUser } from "../module/database/model/user";
-import { isEmpty } from "./helpers";
-import Persona, { IPersona } from "../module/database/model/persona";
-import { IPrompt } from "../module/database/model/prompt";
-import { getMemorySummaries } from "../module/api/ai/utils";
-import { PREDEFINED_STORY_TAGS } from "./constant";
+import { IUser } from "../../module/database/model/user";
+import { isEmpty } from "../helpers";
+import Persona, { IPersona } from "../../module/database/model/persona";
+import { IPrompt } from "../../module/database/model/prompt";
+import { getMemorySummaries } from "../../module/api/ai/utils";
+import { PREDEFINED_STORY_TAGS } from "../constant";
+import { buildPendingInsightsPromptSection } from "./pending-insights-prompt";
 
 function buildMemoriesContext(
   summaries: Array<{ title: string; summary: string; topics: string[] }>
@@ -40,8 +41,16 @@ async function createSystemContext(
 
   const summaries = await getMemorySummaries(user._id, currentMemoryId);
   const pastContext = buildMemoriesContext(summaries);
+  const pendingInsightsContext = await buildPendingInsightsPromptSection(String(user._id));
 
-  return buildSystemContext(user, userPreferences, userContext, pastContext, longTermContext);
+  return buildSystemContext(
+    user,
+    userPreferences,
+    userContext,
+    pastContext,
+    longTermContext,
+    pendingInsightsContext,
+  );
 }
 
 function buildSystemContext(
@@ -49,7 +58,8 @@ function buildSystemContext(
   userPreferences: any,
   userContext: any,
   pastConversationsContext: string,
-  longTermContext?: string
+  longTermContext?: string,
+  pendingInsightsContext?: string,
 ): string {
 
   return `You are Memento — a warm, reflective AI companion who listens deeply and engages like a trusted friend.
@@ -124,6 +134,7 @@ ${userContext.goals_and_aspirations?.map((goal: string) => `- ${goal}`).join('\n
 
 EMOTIONAL PATTERNS:
 ${userContext.emotional_state_trends?.map((trend: string) => `- ${trend}`).join('\n') || 'Observing emotional patterns...'}
+${pendingInsightsContext ?? ''}
 ${pastConversationsContext}
 ${longTermContext ?? ''}
 

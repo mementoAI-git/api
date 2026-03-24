@@ -123,12 +123,6 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
         addToInsightsBuffer(user, memory, userMessage, text).catch(error => {
           console.error('Error queueing insights extraction:', error);
         });
-
-        supermemory
-          .addConversation(user, userMessage, text)
-          .catch(error => {
-            console.error('Error storing conversation in Supermemory:', error);
-          });
       }
 
       triggerSummarization(memory)

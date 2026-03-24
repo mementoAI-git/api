@@ -6,7 +6,10 @@ import Persona, { IPersona } from "../../module/database/model/persona";
 import Memory from "../../module/database/model/memory";
 import { buildMemoryContent } from "../../module/api/ai/utils";
 
-export async function extractStoryInsights(memoryId: string, userId: string): Promise<void> {
+export async function extractStoryInsights(
+  memoryId: string,
+  userId: string,
+): Promise<Record<string, unknown> | null> {
   try {
     const memory = await Memory.findById(memoryId).populate({
       path: 'attachments',

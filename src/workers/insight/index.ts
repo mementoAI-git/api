@@ -3,40 +3,35 @@ import { Worker } from "bullmq";
 import { extractBatchInsights } from "./persona";
 import { extractStoryInsights } from "./story";
 import { PERSONA_INSIGHT_FIELDS } from "../../utils";
-import Persona from "../../module/database/model/persona";
+import PendingInsight, { PendingInsightSource } from "../../module/database/model/pending-insight";
 
-async function updatePersonaInsights(insights: any, userId: string) {
-  const updateData: any = {};
-  const now = new Date();
+async function savePendingInsights(
+  insights: Record<string, unknown>,
+  userId: string,
+  memoryId: string,
+  source: PendingInsightSource
+): Promise<void> {
+  const docs: Array<{
+    user: string;
+    memory: string;
+    source: PendingInsightSource;
+    field: string;
+    content: string;
+  }> = [];
 
-  const fieldsUpdated: string[] = [];
-
-  PERSONA_INSIGHT_FIELDS.forEach(field => {
-    if (insights?.[field] && insights?.[field].length > 0) {
-      updateData['$addToSet'] = {
-        [field]: { $each: insights[field] }
-      };
-      fieldsUpdated.push(field);
+  for (const field of PERSONA_INSIGHT_FIELDS) {
+    const items = insights[field];
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      const text = typeof item === 'string' ? item.trim() : '';
+      if (text) {
+        docs.push({ user: userId, memory: memoryId, source, field, content: text });
+      }
     }
-  })
+  }
 
-  if (Object.keys(updateData).length > 0) {
-    if (!updateData['$set']) updateData['$set'] = {};
-
-    // Set per-field update timestamps
-    if (fieldsUpdated.length > 0) {
-      updateData['$set'].last_array_update = now;
-
-      fieldsUpdated.forEach(field => {
-        updateData['$set'][`last_update.${field}`] = now;
-      });
-    }
-
-    await Persona.findOneAndUpdate(
-      { user: userId },
-      updateData,
-      { upsert: true, new: true }
-    );
+  if (docs.length > 0) {
+    await PendingInsight.insertMany(docs);
   }
 }
 
@@ -46,18 +41,16 @@ export default function startInsightsExtractionWorker(connection: RedisConnectio
     async (job) => {
       const { user_id, memory_id, exchanges } = job.data;
 
-      let insights: any = null;
+      const isStory = !exchanges || exchanges.length === 0;
+      const source: PendingInsightSource = isStory ? 'story' : 'conversation';
 
-      if (memory_id && (!exchanges || exchanges.length === 0)) {
-        insights = await extractStoryInsights(memory_id, user_id);
-      } else {
-        insights = await extractBatchInsights(user_id, exchanges);
-      }
+      const insights = isStory
+        ? await extractStoryInsights(memory_id, user_id)
+        : await extractBatchInsights(user_id, exchanges);
 
-      if (insights) {
-        await updatePersonaInsights(insights, user_id);
-      }
-      return;
+      if (!insights || typeof insights !== 'object') return;
+
+      await savePendingInsights(insights, user_id, memory_id, source);
     },
     {
       connection,

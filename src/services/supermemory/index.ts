@@ -90,25 +90,25 @@ export async function getContextForUser(
 }
 
 /**
- * Store a conversation turn in Supermemory.
- * No-op when Supermemory is disabled or on error.
+ * Store host-approved insight text in Supermemory. No-op when disabled or content empty.
+ * Throws on API failure when the client is configured (caller can avoid deleting pending rows).
  */
-export async function addConversation(
-  userId: string,
-  userMessage: string,
-  assistantResponse: string
-): Promise<void> {
+export async function addApprovedMemory(userId: string, content: string): Promise<void> {
   const c = getClient();
   if (!c) {
     return;
   }
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return;
+  }
 
   const containerTag = getContainerTag(userId);
-  const content = `user: ${userMessage}\nassistant: ${assistantResponse}`;
 
   try {
-    await c.add({ content, containerTag });
+    await c.add({ content: trimmed, containerTag });
   } catch (err) {
-    logger.warn({ err, userId: containerTag }, "Supermemory add conversation failed");
+    logger.warn({ err, userId: containerTag }, "Supermemory add approved memory failed");
+    throw err;
   }
 }

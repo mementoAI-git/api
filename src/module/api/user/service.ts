@@ -20,6 +20,7 @@ import {
   IVerifyTOTP,
 } from './interface';
 import File from '../../database/model/file';
+import PendingInsight from '../../database/model/pending-insight';
 import * as storage from '../../../services/storage';
 import speakeasy from 'speakeasy';
 import Qr from 'qrcode';
@@ -47,11 +48,22 @@ export async function setPassword(payload: ISetPassword, user_id: string) {
 export async function getProfile(user_id: string) {
   const user = await User.findById(user_id)
     .select('-password -providers -two_factor.secret -context')
+    .lean();
   if (!user) {
     throw new NotFoundException('User not found', null);
   }
 
-  return { message: 'User profile retrieved successfully', data: user };
+  const pending_insights_count = await PendingInsight.countDocuments({
+    user: user_id,
+  });
+
+  return {
+    message: 'User profile retrieved successfully',
+    data: {
+      ...user,
+      pending_insights_count,
+    },
+  };
 }
 
 export async function getPersona(user_id: string) {
@@ -360,10 +372,15 @@ export async function getUserStats(user_id: string) {
     status: { $in: ['save', 'queued', 'on_chain'] },
   });
 
+  const pending_insights_count = await PendingInsight.countDocuments({
+    user: user_id,
+  });
+
   const stats = {
     streak_count,
     reflections_count,
     stories_count,
+    pending_insights_count,
   };
 
   return {
