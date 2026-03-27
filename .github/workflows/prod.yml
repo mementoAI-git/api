@@ -61,17 +61,21 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            DEPLOY_DIR=${{ secrets.PROD_DEPLOY_DIRECTORY }}
 
-            cd ${{ secrets.PROD_DEPLOY_DIRECTORY }}
+            # Fix git ownership mismatch (dir owned by nodeapp, SSH user is root)
+            git config --global --add safe.directory "$DEPLOY_DIR"
 
-            # Pull latest code (package.json, .env templates, etc.)
+            # Pull latest code
+            cd "$DEPLOY_DIR"
             git stash
             git pull origin main
 
-            # Install production deps only — skip postinstall compile (build came from CI)
-            yarn install --production --frozen-lockfile --ignore-scripts
-
-            # Restart PM2
-            pm2 restart memento-backend-prod memento-backend-prod-worker
+            # Install production deps and restart PM2 as nodeapp (yarn/PM2 live under nodeapp's NVM)
+            runuser -l nodeapp -c "
+              export NVM_DIR=\"\$HOME/.nvm\"
+              [ -s \"\$NVM_DIR/nvm.sh\" ] && . \"\$NVM_DIR/nvm.sh\"
+              cd ${{ secrets.PROD_DEPLOY_DIRECTORY }}
+              yarn install --production --frozen-lockfile --ignore-scripts
+              pm2 restart memento-backend-prod memento-backend-prod-worker
+            "
