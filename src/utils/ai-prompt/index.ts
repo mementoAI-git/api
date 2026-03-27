@@ -575,18 +575,15 @@ RULES:
 - Return ONLY the JSON object, no markdown, no explanation.`;
 }
 
-// @ts-expect-error - ENRICHMENT_CATEGORIES might be in the frontend repo
-import { ENRICHMENT_CATEGORIES } from '@/features/enrichment/enrichment-categories';
+import {
+  CATEGORY_LABELS,
+  ENRICHMENT_CATEGORIES,
+} from '../../services/enrichment';
 
 export function buildDimensionTaggingPrompt(): string {
-  let dimensionList = "- Placeholder";
-  try {
-    if (ENRICHMENT_CATEGORIES) {
-      dimensionList = (ENRICHMENT_CATEGORIES as any[]).map((c: any) => `- ${c.key} (${c.label})`).join('\n');
-    }
-  } catch (e) {
-    // Ignore error if ENRICHMENT_CATEGORIES is undefined at runtime
-  }
+  const dimensionList = ENRICHMENT_CATEGORIES.map(
+    (key) => `- ${key} (${CATEGORY_LABELS[key]})`,
+  ).join('\n');
 
   return `You are classifying a conversation by which life dimensions it touched.
 

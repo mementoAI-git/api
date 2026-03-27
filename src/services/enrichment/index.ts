@@ -58,8 +58,8 @@ export interface EnrichmentResult {
   beneficiary_access_unlocked: boolean;  // true if score ever reached 20%
 }
 
-// Friendly labels for each category
-const CATEGORY_LABELS: Record<EnrichmentCategory, string> = {
+// Friendly labels for each category (exported for prompts / tooling)
+export const CATEGORY_LABELS: Record<EnrichmentCategory, string> = {
   identity_self: 'Identity & Self',
   relationships_people: 'Relationships & People',
   work_purpose: 'Work & Purpose',

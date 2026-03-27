@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   redis:
-    image: redis:7
+    # Official image: tracks latest Redis 8.x (Alpine). Run `docker compose pull redis` periodically.
+    image: redis:8-alpine
     container_name: memento-redis
     ports:
       - "6379:6379"
