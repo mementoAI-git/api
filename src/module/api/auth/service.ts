@@ -64,7 +64,13 @@ export async function oauthAuthorization({ code }: IOAuthAuthorization, provider
   // Store refresh token in database
   await user.updateOne({ refresh_token: tokens.refresh_token })
 
-  return { data: tokens, message: "User signin is successful" }
+  const data = {
+    ...tokens,
+    onboarding_status: user?.onboarding_status ?? 'never',
+    onboarded: user?.onboarding_status === 'completed',
+  }
+
+  return { data, message: "User signin is successful" }
 }
 
 export async function login(payload: ILogin) {
@@ -109,18 +115,10 @@ export async function login(payload: ILogin) {
 }
 
 export async function register(payload: IRegister) {
-  const { email, first_name, last_name, invite_code } = payload
+  const { email, first_name, last_name } = payload
   const user = await User.findOne({ email })
   if (user) {
     throw new NotFoundException("User with this email address already exists")
-  }
-
-  const inviteResult = await otp.verify(invite_code, 'invite')
-  if (!inviteResult.valid) {
-    throw new BadRequestException("Invalid or expired invite code")
-  }
-  if (inviteResult.alreadyUsed) {
-    throw new BadRequestException("Invite code has already been used")
   }
 
   const password = await hashPassword(payload.password)
@@ -128,8 +126,6 @@ export async function register(payload: IRegister) {
 
   await User.create({ last_name, first_name, password, email, ...keys })
   await mail.sendLink(email, first_name || last_name || "", "verify")
-
-  await otp.delete(invite_code, 'invite')
 
   const data = { requires_verification: true, email }
 

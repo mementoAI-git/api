@@ -57,10 +57,14 @@ export async function getProfile(user_id: string) {
     user: user_id,
   });
 
+  // Manually compute virtual fields stripped by .lean()
+  const fullname = concatStrings(user.first_name, user.last_name, ' ').trim();
+
   return {
     message: 'User profile retrieved successfully',
     data: {
       ...user,
+      fullname: fullname || null,
       pending_insights_count,
     },
   };
