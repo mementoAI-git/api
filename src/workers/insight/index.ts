@@ -1,9 +1,11 @@
 import { RedisConnection } from "../../services/redis";
 import { Worker } from "bullmq";
-import { extractBatchInsights } from "./persona";
+import { extractBatchInsights, extractOpenThreads, extractConversationDimensions } from "./persona";
 import { extractStoryInsights } from "./story";
 import { PERSONA_INSIGHT_FIELDS } from "../../utils";
 import PendingInsight, { PendingInsightSource } from "../../module/database/model/pending-insight";
+import Persona from "../../module/database/model/persona";
+import Memory from "../../module/database/model/memory";
 
 async function savePendingInsights(
   insights: Record<string, unknown>,
@@ -48,9 +50,34 @@ export default function startInsightsExtractionWorker(connection: RedisConnectio
         ? await extractStoryInsights(memory_id, user_id)
         : await extractBatchInsights(user_id, exchanges);
 
-      if (!insights || typeof insights !== 'object') return;
+      if (insights && typeof insights === 'object') {
+        await savePendingInsights(insights, user_id, memory_id, source);
+      }
 
-      await savePendingInsights(insights, user_id, memory_id, source);
+      if (!isStory) {
+        try {
+          const [threads, dims] = await Promise.all([
+            extractOpenThreads(user_id, exchanges),
+            extractConversationDimensions(exchanges)
+          ]);
+
+          if (threads) {
+            await Persona.findOneAndUpdate(
+              { user: user_id },
+              { $set: { open_threads: threads } },
+              { upsert: true }
+            );
+          }
+
+          if (dims && dims.length > 0) {
+            await Memory.findByIdAndUpdate(memory_id, {
+              $addToSet: { dimensions: { $each: dims } }
+            });
+          }
+        } catch (err) {
+          console.error("Error running parallel insight extractions:", err);
+        }
+      }
     },
     {
       connection,

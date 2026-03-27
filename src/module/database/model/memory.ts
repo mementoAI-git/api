@@ -26,6 +26,7 @@ export interface IMemory {
   last_summarized_at?: Date     // Track when the conversation was last summarized
   message_count?: number        // Track message count for summarization triggers
   last_active?: Date            // Track last activity for inactivity-based summarization
+  dimensions?: string[]         // Dimensions discussed in this conversation
 }
 
 const memory = new Schema<IMemory>({
@@ -77,7 +78,8 @@ const memory = new Schema<IMemory>({
   last_active: {
     type: Date,
     default: null
-  }
+  },
+  dimensions: [String]
 }, {
   timestamps: {
     createdAt: 'created_at',

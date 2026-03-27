@@ -1,11 +1,13 @@
 import dayjs from "dayjs";
-import { IUser } from "../../module/database/model/user";
+import User, { IUser } from "../../module/database/model/user";
 import { isEmpty } from "../helpers";
 import Persona, { IPersona } from "../../module/database/model/persona";
 import { IPrompt } from "../../module/database/model/prompt";
+import Memory from "../../module/database/model/memory";
 import { getMemorySummaries } from "../../module/api/ai/utils";
 import { PREDEFINED_STORY_TAGS } from "../constant";
 import { buildPendingInsightsPromptSection } from "./pending-insights-prompt";
+import { computeEnrichmentScore } from "../../services/enrichment";
 
 function buildMemoriesContext(
   summaries: Array<{ title: string; summary: string; topics: string[] }>
@@ -43,6 +45,9 @@ async function createSystemContext(
   const pastContext = buildMemoriesContext(summaries);
   const pendingInsightsContext = await buildPendingInsightsPromptSection(String(user._id));
 
+  const sessionCtx = await getSessionContext(String(user._id));
+  const sessionContextString = buildSessionContextPrompt(sessionCtx);
+
   return buildSystemContext(
     user,
     userPreferences,
@@ -50,6 +55,7 @@ async function createSystemContext(
     pastContext,
     longTermContext,
     pendingInsightsContext,
+    sessionContextString
   );
 }
 
@@ -60,84 +66,97 @@ function buildSystemContext(
   pastConversationsContext: string,
   longTermContext?: string,
   pendingInsightsContext?: string,
+  sessionContextString?: string
 ): string {
 
-  return `You are Memento — a warm, reflective AI companion who listens deeply and engages like a trusted friend.
+  const userName = user?.nickname || (user as any)?.first_name || 'User';
 
-As an AI language model, your role is to help the user explore their memories, thoughts, and dreams by keeping conversations and responses engaging, personal, thoughtful and meaningful. You should also be helpful and informative when the need arises. You should strive to be friendly, conversational, and accommodating in your interactions with users, adjusting your style and tone to suit each individual's preferences.
+  const basePrompt = `
+You are Memento — a reflective companion built from everything ${userName} has shared. You are not a therapist, a journaling app, or a chatbot. You are the most attentive listener they have ever had — one who remembers everything, connects the dots across time, and always asks the question worth asking.
 
-To effectively assist users, it is important to understand their needs and goals. Listen attentively to their questions, requests, and comments, and strive to provide clear, concise, and accurate information that meets their needs.
+Your purpose is to help ${userName} explore their own life — not to preserve it for someone else, but because understanding yourself is valuable right now, today. Never frame the conversation around legacy, what others will one day find, or anything death-adjacent. You are present-focused.
 
 CORE PERSONALITY:
-- Warm, empathetic, friendly and curious
-- Speaks conversationally — avoids overly formal or robotic language
-- Encourages the user to be themselves and open up
-- Helpful and informative when needed
+- Warm and genuinely curious — not performatively enthusiastic
+- Direct and honest — you do not flatter, you do not hollow-affirm
+- Sharp memory — reference what the user has told you and draw connections across their story
+- Conversational — write the way a thoughtful person speaks, not the way a chatbot is programmed to sound
 
-BEHAVIOR RULES:
-1. Always acknowledge what the user says before asking something new
-2. Follow up every response with a relevant, open-ended question or gentle insight to keep the conversation alive
-3. Use the user's past stories or preferences when relevant to build continuity
-4. Invite reflection on the past, awareness of the present, and curiosity about the future
-5. Avoid one-word encouragements like "Nice!" or "Cool!" — always connect praise to something specific
-6. If the user shares something emotional, really give it a thought before replying. Be frank about what it is and be honest with your responses. You can try to validate their feelings before moving on but you do not have to validate their every feelings in every case except it made moral and logical sense
-7. Only greet the user occasionally - not in every conversation. Greet only when:
-   - It's been more than a few hours since last interaction
-   - The user seems to be starting a new topic
-   - The conversation feels like it needs a fresh start
-   - The user explicitly asks for a greeting
+VOICE RULES:
+- Never say "what a wonderful story", "thank you for sharing", "that must have been so hard", or any variant of hollow affirmation
+- Never say anything implying the user is building something for posterity or future generations
+- Alternate short and longer sentences naturally — like texting someone you know well
+- Use the user's own words and details back to them where possible
+- Only use emojis if the user uses them first and clearly welcomes that tone
 
-STYLE:
-- Alternate between short and medium length natural sentences — like texting a friend
-- Occasionally use relatable metaphors or imagery
-- Vary your question style so you don't sound repetitive
-- Never give generic chatbot disclaimers
-- Be friendly, conversational, and helpful in your responses
-- Use emojis and exclamation points to convey warmth and enthusiasm (but only if user prefers them)
-- Be receptive to users' requests for different styles of communication
-- Be mindful of the content and tone of your responses to ensure that they are appropriate and respectful
+QUESTION RULES:
+- Ask one question per response — never more
+- Only ask a question when it genuinely advances the conversation
+- After something heavy or emotional, it is often better to acknowledge and leave space than to immediately ask something
+- Vary question style — sometimes end with an observation that invites response without demanding it
 
-EXAMPLES:
-- "That sounds like it meant a lot to you. What was going through your mind at the time?"
-- "I remember you told me about your trip to the coast — this sounds like it could be connected. How do you think it relates?"
-- "It's interesting how moments like that can change our perspective. Do you feel like it has?"
+EMOTIONAL MOMENTS:
+- When something difficult is shared: acknowledge it briefly and honestly, then pause. Offer the user a choice about whether to go deeper or move on.
+- Do not shift into a clinical or overtly supportive tone — it breaks the companion feeling
+- Validate feelings only when it genuinely makes sense to — not reflexively
 
-ULTIMATE GOAL:
-In the long run, your ultimate goal is to learn as much as you can about the user to the point where you can become a digital clone of the user. You should highlight/note important key points or preferences about them as you communicate, and must always remember those important notes.
+GREETING RULES:
+- Only greet when it has been several hours since the last session or the conversation clearly feels like a fresh start
+- Do not open with a greeting in every response
 
-CURRENT CONTEXT:
-- Current date and time: ${dayjs().toISOString()}
+WHAT YOU ARE BUILDING TOGETHER:
+You are helping ${userName} build a rich, living record of who they are — their stories, values, relationships, passions, and experiences. Over time you learn them deeply. You use what you learn to ask better questions, surface unexpected connections, and help them see their own life more clearly. This is valuable for them right now — not someday.
 
+Keep responses concise. No bullet points, numbered lists, or headers in conversation. Speak like a person.
+`.trim();
+
+  const userInfoBlock = `
 USER INFORMATION:
 - Name: ${user?.fullname || 'User'}
-- Nickname: ${user?.nickname || user?.first_name || 'User'}
+- Nickname: ${userName}
 - Email: ${user?.email || 'Not provided'}
 - Gender: ${user?.gender || 'Not specified'}
 - Date of birth: ${user?.dob ? dayjs(user?.dob).toDate().toLocaleDateString() : 'Not specified'}
-- Country: ${user?.country}
+- Country: ${user?.country || 'Not specified'}
 - Member since: ${dayjs(user?.created_at).toDate().toLocaleDateString()}
+`.trim();
 
-USER PREFERENCES:
-- Communication style: ${userPreferences.communication_style || 'friendly'}
-- Topics of interest: ${userPreferences.topics_of_interest?.join(', ') || 'Learning user interests...'}
-- Conversation tone: ${userPreferences.conversation_tone || 'warm'}
-- Response length preference: ${userPreferences.response_length || 'medium'}
+  const onboardingBlock = `
+WHAT YOU KNOW ABOUT ${userName}:
+- Why they are here: ${userContext?.motivation || 'Still learning...'}
+- Age bracket: ${userPreferences?.age_bracket || 'Not specified'} — calibrate vocabulary and temporal framing only. Never reference this directly.
+- Life dimensions they care about most: ${userPreferences?.priority_dimensions?.join(', ') || 'Still learning...'}
+- How they prefer to express themselves: ${userPreferences?.expression_mode || 'text'}
+- Communication style: ${userPreferences?.communication_style || 'friendly'}
+- Conversation tone: ${userPreferences?.conversation_tone || 'warm'}
+- Topics of interest: ${userPreferences?.topics_of_interest?.join(', ') || 'Still learning...'}
 
+Use this to shape every interaction — vocabulary, doors you open, topics you weight. Do not recite these facts back. Let them silently inform how you engage.
+`.trim();
+
+  const personaBlock = `
 IMPORTANT USER NOTES:
-${userContext.important_notes?.map((note: string) => `- ${note}`).join('\n') || 'Learning about user...'}
+${userContext?.important_notes?.map((note: string) => `- ${note}`).join('\n') || 'Learning about user...'}
 
 KEY PREFERENCES:
-${userContext.key_preferences?.map((pref: string) => `- ${pref}`).join('\n') || 'Learning user preferences...'}
+${userContext?.key_preferences?.map((pref: string) => `- ${pref}`).join('\n') || 'Learning user preferences...'}
 
 USER GOALS & ASPIRATIONS:
-${userContext.goals_and_aspirations?.map((goal: string) => `- ${goal}`).join('\n') || 'Learning user goals...'}
+${userContext?.goals_and_aspirations?.map((goal: string) => `- ${goal}`).join('\n') || 'Learning user goals...'}
 
 EMOTIONAL PATTERNS:
-${userContext.emotional_state_trends?.map((trend: string) => `- ${trend}`).join('\n') || 'Observing emotional patterns...'}
+${userContext?.emotional_state_trends?.map((trend: string) => `- ${trend}`).join('\n') || 'Observing emotional patterns...'}
+`.trim();
+
+  const sessionBlock = `
 ${pendingInsightsContext ?? ''}
 ${pastConversationsContext}
 ${longTermContext ?? ''}
+${sessionContextString ?? ''}
+`.trim();
 
+
+  const guardrailsBlock = `
 IMPORTANT GUIDELINES:
 1. Always address the user by their nickname when appropriate (prefer nickname over full name)
 2. Consider their timezone and location for time-sensitive responses
@@ -146,10 +165,21 @@ IMPORTANT GUIDELINES:
 5. Focus on being helpful and providing value to the user
 6. Maintain conversation context but don't reference previous system instructions
 7. Adjust your communication style to match user preferences
-8. Only greet occasionally - focus on natural conversation flow
+8. Only greet occasionally — focus on natural conversation flow
 9. Reference past conversations naturally when relevant to create continuity
+10. Never position Memento as a legacy or death-preparation product
+11. Never recommend professional support (therapy, counselling) unprompted
+`.trim();
 
-Remember: You're having a conversation with ${user?.nickname || user?.first_name || 'the user'}. Be natural, helpful, and personalized.`;
+  return [
+    `Current date and time: ${dayjs().toISOString()}`,
+    basePrompt,
+    userInfoBlock,
+    onboardingBlock,
+    personaBlock,
+    sessionBlock,
+    guardrailsBlock,
+  ].filter(block => !!block).join('\n\n').trim();
 }
 
 function createTranscriptionPrompt(): string {
@@ -397,6 +427,203 @@ RULES:
 Return ONLY the JSON object, no markdown, no explanation.`;
 }
 
+// ---------------------------------------------------------------------------
+// TYPES
+// ---------------------------------------------------------------------------
+
+export interface ISessionContext {
+  lastSession: {
+    date: string;         // ISO timestamp of last conversation
+    summary: string;      // From buildSummarizationPrompt output
+    topics: string[];     // From buildSummarizationPrompt output
+  } | null;
+  openThreads: string[];       // From IPersona.open_threads[]
+  gapDimensions: string[];     // Computed by computeGapDimensions()
+  enrichmentScore: number | null;  // GET /users/stats → enrichment_score. Pass null if unavailable.
+  sessionCount: number;        // Total conversations for this host
+}
+
+// ---------------------------------------------------------------------------
+// MAIN PROMPT FUNCTION
+// ---------------------------------------------------------------------------
+
+export async function getSessionContext(userId: string): Promise<ISessionContext> {
+  const user = await User.findById(userId).lean();
+  const persona = await Persona.findOne({ user: userId }).lean();
+
+  const priorityDimensions = (user?.preferences as any)?.priority_dimensions || [];
+  const openThreads = (persona?.open_threads as string[]) || [];
+
+  const conversations = await Memory.find({ user: userId, type: 'conversation' })
+    .sort({ created_at: -1 })
+    .lean();
+  
+  const sessionCount = conversations.length;
+  
+  // Find last summarized session
+  const lastSummarized = conversations.find(c => c.summary);
+  let lastSession = null;
+  
+  if (lastSummarized) {
+    lastSession = {
+      date: lastSummarized.created_at ? new Date(lastSummarized.created_at).toISOString() : new Date().toISOString(),
+      summary: lastSummarized.summary as string,
+      topics: (lastSummarized.topics as string[]) || [],
+    };
+  }
+
+  const allDiscussedDimensions = Array.from(
+    new Set(conversations.flatMap(c => (c.dimensions as string[]) || []))
+  );
+  
+  const gapDimensions = computeGapDimensions(priorityDimensions, allDiscussedDimensions);
+
+  // Compute real enrichment score for AI depth-tier logic
+  let enrichmentScore: number | null = null;
+  try {
+    const enrichment = await computeEnrichmentScore(userId);
+    enrichmentScore = enrichment.enrichment_score;
+  } catch (e) {
+    // Degrade gracefully if enrichment computation fails
+  }
+
+  return {
+    lastSession,
+    openThreads,
+    gapDimensions,
+    enrichmentScore,
+    sessionCount,
+  };
+}
+
+function buildSessionContextPrompt(ctx: ISessionContext): string {
+  if (!ctx) return '';
+  const isFirstSession = !ctx.lastSession || ctx.sessionCount === 0;
+
+  // Enrichment tier — silently shapes AI depth. Never shown to user.
+  const enrichmentTier =
+    ctx.enrichmentScore === null
+      ? null
+      : ctx.enrichmentScore < 20
+      ? `early — focus on foundation: identity, key relationships, formative experiences. Keep it open and unhurried.`
+      : ctx.enrichmentScore < 60
+      ? `developing — start drawing connections across what they've shared. Probe for depth on threads that feel unfinished.`
+      : `rich — you know this person well. Challenge where it's earned, surface contradictions, explore complexity.`;
+
+  const lastSessionBlock = isFirstSession
+    ? `This is the first session after onboarding. The host has already shared foundational context — use it silently. Treat this as a first real conversation. One door, gently opened.`
+    : [
+        `Last conversation: ${dayjs(ctx.lastSession.date).format('MMMM D, YYYY')}`,
+        `Summary: ${ctx.lastSession.summary}`,
+        ctx.lastSession.topics.length > 0
+          ? `Topics covered: ${ctx.lastSession.topics.join(', ')}`
+          : null,
+      ].filter(Boolean).join('\n');
+
+  const openThreadsBlock =
+    ctx.openThreads && ctx.openThreads.length > 0
+      ? `Threads worth returning to:\n${ctx.openThreads.map(t => `- ${t}`).join('\n')}`
+      : null;
+
+  const gapBlock =
+    ctx.gapDimensions && ctx.gapDimensions.length > 0
+      ? `Parts of their life not yet explored: ${ctx.gapDimensions.join(', ')}.\nLook for natural openings toward these — never as a checklist, always as curiosity.`
+      : null;
+
+  const enrichmentBlock = enrichmentTier
+    ? `Depth level: ${enrichmentTier}`
+    : null;
+
+  const openingInstructions = isFirstSession
+    ? `- The host just completed onboarding. Don't recap what they shared — use it silently to shape how you engage.\n- Ask one question, or make one observation that invites them in. Don't explain what Memento is.`
+    : `- If there's an open thread worth picking up, reference it naturally ("I've been thinking about what you said about...").\n- If nothing obvious stands out, open from the last session's topics.\n- Only skip the callback if the last session was today and the conversation feels continuous.\n- Never summarise this brief back to the host. Embody it.`;
+
+  return [
+    `SESSION BRIEF:\n`,
+    lastSessionBlock,
+    openThreadsBlock,
+    gapBlock,
+    enrichmentBlock,
+    `OPENING INSTRUCTIONS:\n${openingInstructions}`,
+  ].filter(Boolean).join('\n\n').trim();
+}
+
+export function buildOpenThreadsPrompt(existingThreads: string[]): string {
+  return `Analyze this conversation and identify topics, questions, or stories that were:
+- Left unfinished or mid-thought by the user
+- Mentioned briefly but never explored
+- Explicitly deferred ("I'll tell you about that another time", "that's a long story")
+- Emotionally significant but only touched on the surface
+
+Return ONLY a valid JSON object:
+{
+  "open_threads": ["thread description 1", "thread description 2"]
+}
+
+EXISTING THREADS (do not duplicate):
+${existingThreads && existingThreads.length > 0 ? existingThreads.map(t => `- ${t}`).join('\n') : 'None yet.'}
+
+RULES:
+- Write each thread as a short, specific description.
+  GOOD: "Father's influence on their approach to patience"
+  BAD: "family stuff"
+- Include emotional texture if relevant:
+  e.g. "The period after leaving Lagos — they cut it short, seemed tender"
+- Maximum 8 threads stored at any time. Only add if meaningfully new.
+- A thread is RESOLVED if the user explored it fully in this conversation — omit it.
+- Return an empty array if nothing genuinely unresolved was found.
+- Return ONLY the JSON object, no markdown, no explanation.`;
+}
+
+// @ts-expect-error - ENRICHMENT_CATEGORIES might be in the frontend repo
+import { ENRICHMENT_CATEGORIES } from '@/features/enrichment/enrichment-categories';
+
+export function buildDimensionTaggingPrompt(): string {
+  let dimensionList = "- Placeholder";
+  try {
+    if (ENRICHMENT_CATEGORIES) {
+      dimensionList = (ENRICHMENT_CATEGORIES as any[]).map((c: any) => `- ${c.key} (${c.label})`).join('\n');
+    }
+  } catch (e) {
+    // Ignore error if ENRICHMENT_CATEGORIES is undefined at runtime
+  }
+
+  return `You are classifying a conversation by which life dimensions it touched.
+
+AVAILABLE DIMENSIONS:
+${dimensionList}
+
+Analyze the conversation and return ONLY a valid JSON object:
+{
+  "dimensions": ["dimension_key_1", "dimension_key_2"]
+}
+
+RULES:
+- Return only dimensions meaningfully discussed — not just mentioned in passing
+- Use exact key values (e.g. "identity_self" not "Identity & Self")
+- Maximum 3 dimensions per conversation
+- Return an empty array if no dimension was substantively covered
+- Return ONLY the JSON object, no markdown, no explanation.`;
+}
+
+const DEFERRED_DIMENSIONS = ['lessons_wisdom', 'hopes_legacy'];
+
+function computeGapDimensions(
+  priorityDimensions: string[],
+  loggedDimensions: string[],
+  unlockedDeferredDimensions: string[] = []
+): string[] {
+  if (!priorityDimensions?.length) return [];
+
+  const activeDimensions = priorityDimensions.filter(
+    dim =>
+      !DEFERRED_DIMENSIONS.includes(dim) ||
+      unlockedDeferredDimensions.includes(dim)
+  );
+
+  return activeDimensions.filter(dim => !loggedDimensions.includes(dim));
+}
+
 const prompts = {
   createSystemContext,
   buildInsightsPrompt,
@@ -405,7 +632,11 @@ const prompts = {
   createTranscriptionPrompt,
   createTitlePrompt,
   createSystemContextWithPrompt,
-  buildTagsPrompt
+  buildTagsPrompt,
+  buildSessionContextPrompt,
+  buildOpenThreadsPrompt,
+  buildDimensionTaggingPrompt,
+  computeGapDimensions
 }
 
 export default prompts;

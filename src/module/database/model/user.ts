@@ -10,6 +10,9 @@ interface IUserPreferences {
   topics_of_interest?: string[]
   conversation_tone?: 'upbeat' | 'calm' | 'analytical' | 'creative'
   response_length?: 'short' | 'medium' | 'long'
+  age_bracket?: string
+  priority_dimensions?: string[]
+  expression_mode?: 'text' | 'voice' | 'mixed'
 }
 
 // TODO: to be remove after thorough test and confirmation 
@@ -152,6 +155,13 @@ const user = new Schema<IUser>({
       type: String,
       enum: ['short', 'medium', 'long'],
       default: 'medium'
+    },
+    age_bracket: String,
+    priority_dimensions: [String],
+    expression_mode: {
+      type: String,
+      enum: ['text', 'voice', 'mixed'],
+      default: 'text'
     }
   }
 }, {

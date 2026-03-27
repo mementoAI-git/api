@@ -26,6 +26,7 @@ import speakeasy from 'speakeasy';
 import Qr from 'qrcode';
 import mail from '../../mail';
 import { OnboardingBody } from './dto';
+import { computeEnrichmentScore } from '../../../services/enrichment';
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const { new_password, old_password } = payload;
@@ -380,11 +381,17 @@ export async function getUserStats(user_id: string) {
     user: user_id,
   });
 
+  const enrichment = await computeEnrichmentScore(user_id);
+
   const stats = {
     streak_count,
     reflections_count,
     stories_count,
     pending_insights_count,
+    enrichment_score: enrichment.enrichment_score,
+    category_scores: enrichment.category_scores,
+    lowest_category: enrichment.lowest_category,
+    beneficiary_access_unlocked: enrichment.beneficiary_access_unlocked,
   };
 
   return {
@@ -419,6 +426,7 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'audience',
     'current_priority',
     'communication_style',
+    'motivation'
   ]);
 
   const personaUpdate = Object.entries(payload).reduce((acc, p) => {
@@ -428,13 +436,28 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
       p[1].length > 0
     ) {
       acc[p[0]] = p[1];
+    } else if (p[0] === 'motivation' && typeof p[1] === 'string' && p[1]) {
+      acc[p[0]] = p[1];
     }
     return acc;
-  }, {});
+  }, {} as any);
+
+  const allowedPreferencesFields = new Set([
+    'age_bracket',
+    'priority_dimensions',
+    'expression_mode'
+  ]);
+
+  const preferencesUpdate = Object.entries(payload).reduce((acc, p) => {
+    if (allowedPreferencesFields.has(p[0])) {
+      acc[`preferences.${p[0]}`] = p[1];
+    }
+    return acc;
+  }, {} as any);
 
   await withTransaction(async (session) => {
     await User.findByIdAndUpdate(
-      user_id, { ...updatePayload, onbaorded: true }, { session });
+      user_id, { ...updatePayload, ...preferencesUpdate, onbaorded: true }, { session });
     if (Object.keys(personaUpdate).length > 0) {
       await Persona.findOneAndUpdate(
         { user: user_id },
@@ -498,12 +521,16 @@ export async function getOnboardingDetails(user_id: string) {
         full_name,
         age_range: String(u.age_range ?? ''),
         location: String(u.location ?? ''),
+        age_bracket: String((u.preferences as any)?.age_bracket ?? ''),
+        priority_dimensions: Array.isArray((u.preferences as any)?.priority_dimensions) ? (u.preferences as any).priority_dimensions : [],
+        expression_mode: String((u.preferences as any)?.expression_mode ?? 'text')
       },
       persona: {
         join_reasons: persona?.join_reasons ?? [],
         audience: persona?.audience ?? [],
         current_priority,
         communication_style: persona?.communication_style ?? [],
+        motivation: persona?.motivation ?? ''
       },
     },
   };

@@ -37,3 +37,73 @@ export async function extractBatchInsights(
     return undefined;
   }
 }
+
+export async function extractOpenThreads(
+  user_id: string,
+  exchanges: Array<{ user: string; ai: string }>
+): Promise<string[] | undefined> {
+  if (!exchanges || exchanges.length === 0) return undefined;
+
+  try {
+    const persona = await Persona.findOne({ user: user_id });
+    const currentThreads = (persona?.open_threads as string[]) || [];
+
+    const prompt = prompts.buildOpenThreadsPrompt(currentThreads);
+
+    const conversationText = exchanges
+      .map((ex, i) => `--- Exchange ${i + 1} ---\nUser: ${ex.user}\nAI: ${ex.ai}`)
+      .join('\n\n');
+
+    const contents = createUserContent([
+      prompt,
+      { text: conversationText }
+    ]);
+
+    const response = await gemini.models.generateContent({
+      model: GEMINI_MODEL,
+      contents
+    });
+
+    const parsed = extractJson(response.text);
+    return Array.isArray(parsed?.open_threads)
+      ? parsed.open_threads.filter((t: any) => typeof t === 'string').slice(0, 8)
+      : undefined;
+
+  } catch (error) {
+    logger.error(error, 'Error extracting open threads');
+    return undefined;
+  }
+}
+
+export async function extractConversationDimensions(
+  exchanges: Array<{ user: string; ai: string }>
+): Promise<string[] | undefined> {
+  if (!exchanges || exchanges.length === 0) return undefined;
+
+  try {
+    const prompt = prompts.buildDimensionTaggingPrompt();
+
+    const conversationText = exchanges
+      .map((ex, i) => `--- Exchange ${i + 1} ---\nUser: ${ex.user}\nAI: ${ex.ai}`)
+      .join('\n\n');
+
+    const contents = createUserContent([
+      prompt,
+      { text: conversationText }
+    ]);
+
+    const response = await gemini.models.generateContent({
+      model: GEMINI_MODEL,
+      contents
+    });
+
+    const parsed = extractJson(response.text);
+    return Array.isArray(parsed?.dimensions)
+      ? parsed.dimensions.filter((t: any) => typeof t === 'string').slice(0, 3)
+      : undefined;
+
+  } catch (error) {
+    logger.error(error, 'Error extracting conversation dimensions');
+    return undefined;
+  }
+}

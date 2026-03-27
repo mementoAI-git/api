@@ -11,6 +11,8 @@ export interface IPersona {
   self_description?: string
   current_priority?: string[]
   join_reasons?: string[]
+  motivation?: string
+  open_threads?: string[]
   audience?: string[]
   communication_style?: string[]
   last_array_update?: Date
@@ -36,6 +38,8 @@ const persona = new Schema<IPersona>({
   self_description: String,
   current_priority: [String],
   join_reasons: [String],
+  motivation: String,
+  open_threads: [String],
   audience: [String],
   communication_style: [String],
   last_array_update: Date,
