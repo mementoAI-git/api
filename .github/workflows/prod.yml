@@ -17,13 +17,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: npm
+          cache: yarn
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: yarn install --frozen-lockfile --ignore-scripts
 
       - name: Build TypeScript
-        run: npm run build
+        run: yarn build
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -71,7 +71,7 @@ jobs:
             git pull origin main
 
             # Install production deps only — skip postinstall compile (build came from CI)
-            npm install --omit=dev --ignore-scripts
+            yarn install --production --frozen-lockfile --ignore-scripts
 
             # Restart PM2
             pm2 restart memento-backend-prod memento-backend-prod-worker
