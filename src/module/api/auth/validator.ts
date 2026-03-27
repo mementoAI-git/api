@@ -35,10 +35,6 @@ export default {
     body("password")
       .notEmpty().withMessage("Password is required")
       .isStrongPassword().withMessage("Password must be strong"),
-    body("invite_code")
-      .notEmpty().withMessage("Invite code is required")
-      .isNumeric().withMessage("Invite code must be numeric")
-      .isLength({ min: 6, max: 6 }).withMessage("Invite code must be exactly 6 digits")
   ],
   sendLink: [
     emailValidator,

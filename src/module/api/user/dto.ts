@@ -13,6 +13,10 @@ export const onboardingSchema = z.object({
     current_priority: z.array(z.string().trim()).optional().default([]), // replacing priorityDimensions
     prefered_communication_style: z.string().trim().optional().default(""), // replacing expressionMode
     onboarding_status: z.enum(['never', 'skipped', 'completed', 'in_progress']).optional().default('never'),
+    motivation: z.string().trim().optional().default(""),
+    age_bracket: z.string().trim().optional().default(""),
+    priority_dimensions: z.array(z.string().trim()).optional().default([]),
+    expression_mode: z.enum(['text', 'voice', 'mixed']).optional().default("text"),
   })
 })
 export type OnboardingBody = z.infer<typeof onboardingSchema>["body"];
