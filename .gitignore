@@ -10,3 +10,5 @@ yarn.lock
 *.lock*
 google-storage.json
 docs
+yarn.lock
+.claude

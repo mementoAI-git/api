@@ -1,16 +1,59 @@
-name: Deploy to Development
+name: Deploy to Production
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Deploy and restart application
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: build/
+          retention-days: 7
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: build/
+
+      - name: Rsync build to server
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          rsync -avz --delete \
+            -e "ssh -i /tmp/deploy_key -p 22 -o StrictHostKeyChecking=no" \
+            ./build/ \
+            ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ secrets.PROD_DEPLOY_DIRECTORY }}/build/
+
+      - name: Install production deps and restart PM2
         uses: appleboy/ssh-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -20,21 +63,15 @@ jobs:
           script: |
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            
-            # Set the project directory
-            project_path=${{ secrets.PROD_DEPLOY_DIRECTORY }}
-            
-            # Navigate to project directory
-            cd $project_path
-            
-            # Stash any local changes and pull latest code
+
+            cd ${{ secrets.PROD_DEPLOY_DIRECTORY }}
+
+            # Pull latest code (package.json, .env templates, etc.)
             git stash
             git pull origin main
-            
-            # Install dependencies and compile
-            yarn install --frozen-lockfile
-            yarn compile
-            
-            # Restart PM2 instances
-            pm2 restart dev-server dev-worker
 
+            # Install production deps only — skip postinstall compile (build came from CI)
+            npm install --omit=dev --ignore-scripts
+
+            # Restart PM2
+            pm2 restart memento-backend-prod memento-backend-prod-worker
