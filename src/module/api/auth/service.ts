@@ -1,6 +1,26 @@
 import bcrypt from "bcrypt"
+import speakeasy from "speakeasy"
+import { v4 as uuid } from "uuid"
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} from "@simplewebauthn/server"
 
-import { ILogin, IOAuthAuthorization, IRegister, ISendLink, ISetPassword, IVerifyEmail, IRefreshToken } from "./interface";
+import {
+  ILogin,
+  IOAuthAuthorization,
+  IPasskeyLoginBegin,
+  IPasskeyLoginComplete,
+  IPasskeyRegisterComplete,
+  IRefreshToken,
+  IRegister,
+  ISendLink,
+  ISetPassword,
+  IVerifyEmail,
+  IVerify2FALogin,
+} from "./interface";
 import { OAUTH_PROVIDERS } from "../../../utils/constant";
 import { compareStrings, createTokenPair, generateKeys, hashPassword, isEmpty, verifyRefreshToken } from "../../../utils/helpers";
 import { BadRequestException, NotFoundException, UnauthorizedException } from "../../../utils/service-error";
@@ -8,7 +28,33 @@ import axios from "axios";
 import mail from "../../mail";
 import User from "../../database/model/user";
 import otp from "../../../services/otp";
-import { FRONTEND_URL } from "../../../utils/config";
+import redis from "../../../services/redis";
+import { FRONTEND_URL, WEBAUTHN_RP_ID, WEBAUTHN_RP_NAME, WEBAUTHN_ORIGIN } from "../../../utils/config";
+
+// ---------------------------------------------------------------------------
+// 2FA pending session helpers (Redis, 5-min TTL)
+// ---------------------------------------------------------------------------
+const TWO_FA_PREFIX = "2fa:pending:";
+const TWO_FA_TTL = 5 * 60;
+
+async function create2FAPendingToken(userId: string, remember_for_30_days: boolean): Promise<string> {
+  const token = uuid();
+  await redis.set(`${TWO_FA_PREFIX}${token}`, JSON.stringify({ userId, remember_for_30_days }), { EX: TWO_FA_TTL });
+  return token;
+}
+
+async function consume2FAPendingToken(token: string) {
+  const raw = await redis.get(`${TWO_FA_PREFIX}${token}`);
+  if (!raw) return null;
+  await redis.del(`${TWO_FA_PREFIX}${token}`);
+  return JSON.parse(raw.toString()) as { userId: string; remember_for_30_days: boolean };
+}
+
+// ---------------------------------------------------------------------------
+// WebAuthn challenge helpers (Redis, 5-min TTL)
+// ---------------------------------------------------------------------------
+const WA_PREFIX = "webauthn:challenge:";
+const WA_TTL = 5 * 60;
 
 export function generateOauthUrl(provider: string) {
   const { authoriation_url, redirect_uri } = OAUTH_PROVIDERS[provider || "google"]
@@ -97,6 +143,12 @@ export async function login(payload: ILogin) {
       { requires_verification: true, email }
     )
   }
+  // If 2FA is enabled, issue a short-lived pending token instead of full tokens
+  if (user.two_factor?.enabled) {
+    const two_fa_token = await create2FAPendingToken(user.id, remember_for_30_days);
+    return { data: { requires_2fa: true, two_fa_token }, message: "2FA verification required" };
+  }
+
   const expires_in = remember_for_30_days ? 30 : 7
   const access_token_expires_in = expires_in * 24 * 60 * 60 * 1000
   const refresh_token_expires_in = 30 * 24 * 60 * 60 * 1000
@@ -112,6 +164,197 @@ export async function login(payload: ILogin) {
   }
 
   return { data, message: "User login is successful" }
+}
+
+export async function verify2FALogin(payload: IVerify2FALogin) {
+  const { two_fa_token, code } = payload;
+
+  const pending = await consume2FAPendingToken(two_fa_token);
+  if (!pending) {
+    throw new BadRequestException("Invalid or expired 2FA session. Please log in again.");
+  }
+
+  const user = await User.findById(pending.userId);
+  if (!user) throw new NotFoundException("User not found");
+  if (!user.two_factor?.enabled || !user.two_factor.secret) {
+    throw new BadRequestException("2FA is not enabled on this account");
+  }
+
+  const isValid = speakeasy.totp.verify({
+    secret: user.two_factor.secret,
+    encoding: "base32",
+    token: code,
+    window: 1,
+  });
+  if (!isValid) throw new BadRequestException("Invalid 2FA code");
+
+  const expires_in = pending.remember_for_30_days ? 30 : 7;
+  const tokens = createTokenPair(user.id, expires_in * 24 * 60 * 60 * 1000, 30 * 24 * 60 * 60 * 1000);
+  await user.updateOne({ refresh_token: tokens.refresh_token });
+
+  return {
+    data: {
+      ...tokens,
+      onboarding_status: user.onboarding_status ?? "never",
+      onboarded: user.onboarding_status === "completed",
+    },
+    message: "Login successful",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Passkey registration (requires authenticated user)
+// ---------------------------------------------------------------------------
+
+export async function beginPasskeyRegistration(userId: string) {
+  const user = await User.findById(userId);
+  if (!user) throw new NotFoundException("User not found");
+
+  const options = await generateRegistrationOptions({
+    rpName: WEBAUTHN_RP_NAME,
+    rpID: WEBAUTHN_RP_ID,
+    userName: user.email,
+    userDisplayName: user.first_name || user.email,
+    attestationType: "none",
+    excludeCredentials: (user.passkeys || []).map((pk) => ({ id: pk.credential_id })),
+    authenticatorSelection: {
+      residentKey: "required",
+      userVerification: "required",
+    },
+  });
+
+  await redis.set(`${WA_PREFIX}reg:${userId}`, options.challenge, { EX: WA_TTL });
+
+  return { data: options, message: "Registration options generated" };
+}
+
+export async function completePasskeyRegistration(userId: string, payload: IPasskeyRegisterComplete) {
+  const { response, device_name = "Unknown device" } = payload;
+
+  const user = await User.findById(userId);
+  if (!user) throw new NotFoundException("User not found");
+
+  const expectedChallenge = await redis.get(`${WA_PREFIX}reg:${userId}`);
+  if (!expectedChallenge) throw new BadRequestException("Registration session expired. Please try again.");
+
+  let verification;
+  try {
+    verification = await verifyRegistrationResponse({
+      response: response as unknown as Parameters<typeof verifyRegistrationResponse>[0]["response"],
+      expectedChallenge: expectedChallenge.toString(),
+      expectedOrigin: WEBAUTHN_ORIGIN,
+      expectedRPID: WEBAUTHN_RP_ID,
+    });
+  } catch {
+    throw new BadRequestException("Passkey registration failed. Please try again.");
+  }
+
+  if (!verification.verified || !verification.registrationInfo) {
+    throw new BadRequestException("Passkey registration failed.");
+  }
+
+  await redis.del(`${WA_PREFIX}reg:${userId}`);
+
+  const { credential } = verification.registrationInfo;
+
+  const newPasskey = {
+    credential_id: credential.id,
+    public_key: Buffer.from(credential.publicKey).toString("base64"),
+    counter: credential.counter,
+    device_name,
+    created_at: new Date(),
+  };
+
+  await User.findByIdAndUpdate(userId, { $push: { passkeys: newPasskey } });
+
+  return {
+    data: { credential_id: credential.id, device_name },
+    message: "Passkey registered successfully",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Passkey authentication (public — no existing session required)
+// ---------------------------------------------------------------------------
+
+export async function beginPasskeyLogin(payload: IPasskeyLoginBegin) {
+  const { email } = payload;
+
+  let allowCredentials: { id: string }[] = [];
+  if (email) {
+    const user = await User.findOne({ email }).select("passkeys");
+    if (user?.passkeys?.length) {
+      allowCredentials = user.passkeys.map((pk) => ({ id: pk.credential_id }));
+    }
+  }
+
+  const options = await generateAuthenticationOptions({
+    rpID: WEBAUTHN_RP_ID,
+    allowCredentials,
+    userVerification: "required",
+  });
+
+  const challengeId = uuid();
+  await redis.set(`${WA_PREFIX}auth:${challengeId}`, options.challenge, { EX: WA_TTL });
+
+  return { data: { ...options, challenge_id: challengeId }, message: "Authentication options generated" };
+}
+
+export async function completePasskeyLogin(payload: IPasskeyLoginComplete) {
+  const { challenge_id, response } = payload;
+
+  const expectedChallenge = await redis.get(`${WA_PREFIX}auth:${challenge_id}`);
+  if (!expectedChallenge) throw new BadRequestException("Authentication session expired. Please try again.");
+
+  const credentialId = (response as { id?: string }).id;
+  if (!credentialId) throw new BadRequestException("Invalid response");
+
+  const user = await User.findOne({ "passkeys.credential_id": credentialId });
+  if (!user) throw new NotFoundException("Passkey not recognised");
+
+  const passkey = user.passkeys?.find((pk) => pk.credential_id === credentialId);
+  if (!passkey) throw new NotFoundException("Passkey not found");
+
+  let verification;
+  try {
+    const pubKeyBuf = Buffer.from(passkey.public_key, "base64");
+    const publicKey = new Uint8Array(pubKeyBuf.buffer, pubKeyBuf.byteOffset, pubKeyBuf.byteLength);
+    verification = await verifyAuthenticationResponse({
+      response: response as unknown as Parameters<typeof verifyAuthenticationResponse>[0]["response"],
+      expectedChallenge: expectedChallenge.toString(),
+      expectedOrigin: WEBAUTHN_ORIGIN,
+      expectedRPID: WEBAUTHN_RP_ID,
+      credential: {
+        id: passkey.credential_id,
+        publicKey,
+        counter: passkey.counter,
+      },
+    });
+  } catch {
+    throw new BadRequestException("Passkey authentication failed.");
+  }
+
+  if (!verification.verified) throw new BadRequestException("Passkey authentication failed.");
+
+  await redis.del(`${WA_PREFIX}auth:${challenge_id}`);
+
+  // Update replay-attack counter
+  await User.updateOne(
+    { _id: user.id, "passkeys.credential_id": credentialId },
+    { $set: { "passkeys.$.counter": verification.authenticationInfo.newCounter } },
+  );
+
+  const tokens = createTokenPair(user.id);
+  await user.updateOne({ refresh_token: tokens.refresh_token });
+
+  return {
+    data: {
+      ...tokens,
+      onboarding_status: user.onboarding_status ?? "never",
+      onboarded: user.onboarding_status === "completed",
+    },
+    message: "Login successful",
+  };
 }
 
 export async function register(payload: IRegister) {

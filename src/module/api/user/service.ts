@@ -247,6 +247,31 @@ export async function disable2FA(user_id: string) {
   return { data: null, message: '2FA disabled successfully' };
 }
 
+export async function listPasskeys(user_id: string) {
+  const user = await User.findById(user_id).select('passkeys');
+  if (!user) throw new NotFoundException('User not found');
+
+  const passkeys = (user.passkeys || []).map((pk) => ({
+    credential_id: pk.credential_id,
+    device_name: pk.device_name,
+    created_at: pk.created_at,
+  }));
+
+  return { data: passkeys, message: 'Passkeys retrieved successfully' };
+}
+
+export async function deletePasskey(user_id: string, credential_id: string) {
+  const user = await User.findById(user_id);
+  if (!user) throw new NotFoundException('User not found');
+
+  const exists = (user.passkeys || []).some((pk) => pk.credential_id === credential_id);
+  if (!exists) throw new NotFoundException('Passkey not found');
+
+  await User.updateOne({ _id: user_id }, { $pull: { passkeys: { credential_id } } });
+
+  return { data: null, message: 'Passkey removed successfully' };
+}
+
 export async function completeOnboarding(
   user_id: string,
   payload?: ICompleteOnboardingPayload,

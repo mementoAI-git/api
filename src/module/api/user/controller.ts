@@ -145,3 +145,21 @@ export async function getOnboardingDetails(req: IRequest, res: Response, next: N
     next(error)
   }
 }
+export async function listPasskeys(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.listPasskeys(req.auth!.id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function deletePasskey(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const credential_id = String(req.params.credential_id)
+    const { message, data } = await service.deletePasskey(req.auth!.id, credential_id)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

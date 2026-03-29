@@ -31,3 +31,22 @@ export interface IOAuthAuthorization {
 export interface IRefreshToken {
   refresh_token: string
 }
+
+export interface IVerify2FALogin {
+  two_fa_token: string
+  code: string
+}
+
+export interface IPasskeyLoginBegin {
+  email?: string
+}
+
+export interface IPasskeyLoginComplete {
+  challenge_id: string
+  response: Record<string, unknown>
+}
+
+export interface IPasskeyRegisterComplete {
+  response: Record<string, unknown>
+  device_name?: string
+}
