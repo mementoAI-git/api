@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import Memory from '../../module/database/model/memory';
 import Persona from '../../module/database/model/persona';
 import PendingInsight from '../../module/database/model/pending-insight';
+import { NotFoundException } from '../../utils/service-error';
 
 // ---------------------------------------------------------------------------
 // CANONICAL ENRICHMENT CATEGORIES (10 life dimensions)
@@ -71,6 +72,76 @@ export const CATEGORY_LABELS: Record<EnrichmentCategory, string> = {
   hopes_legacy: 'Hopes & Legacy',
   everyday_life: 'Everyday Life',
 };
+
+// Deep-dive nudge questions — one compelling question per category
+export const CATEGORY_NUDGES: Record<EnrichmentCategory, string> = {
+  identity_self: "What's something about yourself that most people don't know but you wish they did?",
+  relationships_people: 'Who has had the biggest influence on who you are today, and in what way?',
+  work_purpose: 'What kind of work makes you lose track of time?',
+  memories_experiences: "What's a moment from your past that you find yourself returning to often?",
+  beliefs_worldview: "Is there a belief you hold now that you didn't have 10 years ago?",
+  passions_interests: "What's something you're into that you rarely get to talk about?",
+  heritage_roots: "What's something about where you come from that shaped who you are?",
+  lessons_wisdom: "What's the hardest lesson you've had to learn — and what changed after you learned it?",
+  hopes_legacy: 'What do you want to still be true about your life 20 years from now?',
+  everyday_life: 'What does a really good day look like for you?',
+};
+
+// Jump pill starters — short prompts to launch a themed conversation
+export const CATEGORY_STARTERS: Record<EnrichmentCategory, string> = {
+  identity_self: 'Tell me about who you are',
+  relationships_people: 'Tell me about someone important to you',
+  work_purpose: 'Tell me about your work',
+  memories_experiences: 'Share a memory that matters',
+  beliefs_worldview: 'Tell me what you believe',
+  passions_interests: 'Tell me what you love',
+  heritage_roots: 'Tell me about your roots',
+  lessons_wisdom: "Share something you've learned",
+  hopes_legacy: 'Tell me about your hopes',
+  everyday_life: 'Tell me about your daily life',
+};
+
+// Enrichment milestones
+export const MILESTONES: Array<{ threshold: number; label: string; description: string }> = [
+  { threshold: 20, label: 'Memory Keeper', description: "You've begun sharing your story." },
+  { threshold: 40, label: 'Life Chronicler', description: 'Your story is taking shape.' },
+  { threshold: 60, label: 'Story Weaver', description: 'A rich picture of your life is emerging.' },
+  { threshold: 80, label: 'Heritage Guardian', description: 'Your story is becoming truly full.' },
+  { threshold: 100, label: 'Living Legacy', description: 'Your story is complete and vivid.' },
+];
+
+// ---------------------------------------------------------------------------
+// ADDITIONAL TYPES
+// ---------------------------------------------------------------------------
+
+export interface MilestoneInfo {
+  reached_threshold: number;
+  reached_label: string;
+  reached_description: string;
+  next_threshold: number | null;
+  next_label: string | null;
+  is_max: boolean;
+}
+
+export interface NudgeQuestion {
+  category_key: EnrichmentCategory;
+  category_label: string;
+  question: string;
+}
+
+export interface JumpPill {
+  category_key: EnrichmentCategory;
+  category_label: string;
+  starter: string;
+}
+
+export interface ConversationEnrichment {
+  memory_id: string;
+  dimensions: EnrichmentCategory[];
+  category_labels: Partial<Record<EnrichmentCategory, string>>;
+  message_count: number;
+  last_active: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // MAIN COMPUTATION
@@ -213,5 +284,122 @@ export async function computeEnrichmentScore(userId: string): Promise<Enrichment
     category_scores: categoryScores,
     lowest_category: lowest?.key || null,
     beneficiary_access_unlocked,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// MILESTONE
+// ---------------------------------------------------------------------------
+
+export function getMilestone(score: number): MilestoneInfo {
+  const reached = MILESTONES.filter(m => score >= m.threshold);
+  const current = reached.length > 0 ? reached[reached.length - 1] : MILESTONES[0];
+  const nextIndex = MILESTONES.indexOf(current) + 1;
+  const next = nextIndex < MILESTONES.length ? MILESTONES[nextIndex] : null;
+
+  // If score hasn't hit the first threshold yet, use the first milestone as the target
+  if (reached.length === 0) {
+    return {
+      reached_threshold: 0,
+      reached_label: 'Just Starting',
+      reached_description: 'Share your first story to begin.',
+      next_threshold: MILESTONES[0].threshold,
+      next_label: MILESTONES[0].label,
+      is_max: false,
+    };
+  }
+
+  return {
+    reached_threshold: current.threshold,
+    reached_label: current.label,
+    reached_description: current.description,
+    next_threshold: next?.threshold ?? null,
+    next_label: next?.label ?? null,
+    is_max: next === null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// NUDGE + JUMP PILLS
+// ---------------------------------------------------------------------------
+
+export function getNudge(lowestCategoryKey: string | null): NudgeQuestion | null {
+  if (!lowestCategoryKey) return null;
+  const key = lowestCategoryKey as EnrichmentCategory;
+  if (!CATEGORY_NUDGES[key]) return null;
+  return {
+    category_key: key,
+    category_label: CATEGORY_LABELS[key],
+    question: CATEGORY_NUDGES[key],
+  };
+}
+
+export function getJumpPills(
+  gapDimensions: string[],
+  priorityDimensions: string[],
+  limit = 4,
+): JumpPill[] {
+  // Prefer gap dimensions (unexplored priority dimensions), then fall back to all priorities
+  const ordered = [
+    ...gapDimensions,
+    ...priorityDimensions.filter(d => !gapDimensions.includes(d)),
+  ];
+
+  const seen = new Set<string>();
+  const pills: JumpPill[] = [];
+
+  for (const dim of ordered) {
+    if (seen.has(dim)) continue;
+    seen.add(dim);
+    const key = dim as EnrichmentCategory;
+    if (CATEGORY_STARTERS[key]) {
+      pills.push({
+        category_key: key,
+        category_label: CATEGORY_LABELS[key],
+        starter: CATEGORY_STARTERS[key],
+      });
+    }
+    if (pills.length >= limit) break;
+  }
+
+  return pills;
+}
+
+// ---------------------------------------------------------------------------
+// PER-CONVERSATION ENRICHMENT
+// ---------------------------------------------------------------------------
+
+export async function getConversationEnrichment(
+  memoryId: string,
+  userId: string,
+): Promise<ConversationEnrichment> {
+  const memory = await Memory.findOne({
+    _id: memoryId,
+    user: userId,
+    type: 'conversation',
+    status: { $nin: ['draft', 'deleted'] },
+  })
+    .select('dimensions message_count last_active')
+    .lean();
+
+  if (!memory) {
+    throw new NotFoundException('Conversation not found');
+  }
+
+  const dimensions = ((memory.dimensions as string[]) || []).filter(
+    (d): d is EnrichmentCategory => ENRICHMENT_CATEGORIES.includes(d as EnrichmentCategory),
+  );
+
+  const categoryLabels: Partial<Record<EnrichmentCategory, string>> = {};
+  for (const dim of dimensions) {
+    categoryLabels[dim] = CATEGORY_LABELS[dim];
+  }
+
+  return {
+    memory_id: memoryId,
+    dimensions,
+    category_labels: categoryLabels,
+    message_count: (memory.message_count as number) || 0,
+    last_active: memory.last_active ? new Date(memory.last_active as Date).toISOString() : null,
   };
 }
