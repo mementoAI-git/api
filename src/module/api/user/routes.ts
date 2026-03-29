@@ -35,3 +35,5 @@ router.get('/stats', ctrl.getUserStats);
 
 export const name = 'users';
 export default router;
+router.get('/passkeys', ctrl.listPasskeys);
+router.delete('/passkeys/:credential_id', ctrl.deletePasskey);

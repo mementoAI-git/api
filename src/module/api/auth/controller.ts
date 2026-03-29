@@ -107,3 +107,55 @@ export async function sendInviteCode(req: Request, res: Response, next: NextFunc
     next(error)
   }
 }
+
+export async function verify2FALogin(req: Request, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.verify2FALogin(req.body)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function beginPasskeyRegistration(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const userId = req.auth?.id;
+    if (!userId) throw new UnauthorizedException("User not authenticated");
+    const { message, data } = await service.beginPasskeyRegistration(userId)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function completePasskeyRegistration(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const userId = req.auth?.id;
+    if (!userId) throw new UnauthorizedException("User not authenticated");
+    const { message, data } = await service.completePasskeyRegistration(userId, req.body)
+    return responsHandler(res, StatusCodes.CREATED, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function beginPasskeyLogin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { message, data } = await service.beginPasskeyLogin(req.body)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export async function completePasskeyLogin(req: Request, res: Response, next: NextFunction) {
+  try {
+    validateRequest(req)
+    const { message, data } = await service.completePasskeyLogin(req.body)
+    return responsHandler(res, StatusCodes.OK, message, data)
+  } catch (error) {
+    next(error)
+  }
+}

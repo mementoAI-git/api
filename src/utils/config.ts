@@ -60,3 +60,7 @@ export const SUPERMEMORY_API_KEY = process.env.SUPERMEMORY_API_KEY;
 export const TALLY_WEBHOOK_SECRET = process.env.TALLY_WEBHOOK_SECRET;
 
 export const DISCORD_FEEDBACK_WEBHOOK_URL = process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+// WebAuthn / Passkeys
+export const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
+export const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Memento';
+export const WEBAUTHN_ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';

@@ -65,4 +65,16 @@ export default {
     .default(null)
     .isEmail().withMessage("Invalid email address")
     .toLowerCase(),
+  verify2FALogin: [
+    body("two_fa_token").notEmpty().withMessage("2FA session token is required"),
+    body("code").notEmpty().withMessage("2FA code is required").isLength({ min: 6, max: 6 }).withMessage("Code must be 6 digits"),
+  ],
+  completePasskeyRegistration: [
+    body("response").notEmpty().withMessage("WebAuthn response is required"),
+    body("device_name").optional().isString(),
+  ],
+  completePasskeyLogin: [
+    body("challenge_id").notEmpty().withMessage("Challenge ID is required"),
+    body("response").notEmpty().withMessage("WebAuthn response is required"),
+  ],
 }

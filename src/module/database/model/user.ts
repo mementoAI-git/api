@@ -27,6 +27,14 @@ interface IUserContext {
   join_reasons?: string[]
 }
 
+export interface IPasskey {
+  credential_id: string   // base64url
+  public_key: string      // base64url-encoded Uint8Array
+  counter: number
+  device_name: string
+  created_at: Date
+}
+
 export interface IUser {
   _id?: string
   email: string
@@ -66,6 +74,7 @@ export interface IUser {
   created_at: string
   storage_limit: number
   primary_conversation_id?: string | null
+  passkeys?: IPasskey[]
 }
 
 const user = new Schema<IUser>({
@@ -168,7 +177,14 @@ const user = new Schema<IUser>({
   primary_conversation_id: {
     type: String,
     default: null
-  }
+  },
+  passkeys: [{
+    credential_id: { type: String, required: true },
+    public_key: { type: String, required: true },
+    counter: { type: Number, default: 0 },
+    device_name: { type: String, default: 'Unknown device' },
+    created_at: { type: Date, default: Date.now },
+  }]
 }, {
   timestamps: {
     createdAt: 'created_at',
