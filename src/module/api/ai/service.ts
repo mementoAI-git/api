@@ -225,17 +225,44 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
 export async function startConversation(payload: IStartMemory, user_id: string) {
   let prompt = null
   const user = await User.findById(user_id)
+  if (!user) {
+    throw new NotFoundException("User not found")
+  }
 
   if (!isEmpty(payload.prompt_id)) {
     prompt = await Prompt.findById(payload.prompt_id)
   }
 
-  const systemInstruction = await prompts.createSystemContextWithPrompt(user, prompt);
+  // Single-conversation: reuse existing primary conversation if it exists
+  let memory = null
+  if (user.primary_conversation_id) {
+    memory = await Memory.findById(user.primary_conversation_id)
+  }
+
+  // Create the primary conversation if it doesn't exist yet
+  if (!memory) {
+    memory = await Memory.create({
+      title: null,
+      user: user_id,
+      type: "conversation",
+      status: "save",
+      message_count: 0,
+      last_active: dayjs().toDate()
+    })
+    await User.findByIdAndUpdate(user_id, { primary_conversation_id: memory.id })
+  }
+
+  // Load recent message history for context
+  const recentMessages = await Message.find({ user: user_id, memory: memory.id })
+    .sort({ created_at: -1 })
+    .limit(25)
+  const history = recentMessages.reverse()
+
+  const systemInstruction = await prompts.createSystemContextWithPrompt(user, prompt, memory.id);
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
-    config: {
-      systemInstruction
-    }
+    config: { systemInstruction },
+    history: createChatHistory(history)
   });
 
   let content: PartListUnion = [payload.text]
@@ -245,41 +272,36 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     content = [...content, ...result]
   }
 
-  const memory = await Memory.create({
-    title: prompt?.title || null,
-    user: user_id,
-    type: "conversation",
-    status: "save",
-    prompt: prompt?._id || null,
-    message_count: 2,
-    last_active: dayjs().toDate()
-  })
-
-  const userMessage = {
-    user: user_id,
-    memory: memory?.id,
-    role: 'user',
-    attatchments: payload?.attachments || [],
-    text: payload?.text,
-    created_at: dayjs().toDate()
-  }
-
   const response = await chat.sendMessage({ message: content });
 
-  const aiMessage = {
-    user: user_id,
-    memory: memory?.id,
-    role: 'ai',
-    text: response.text,
-    created_at: dayjs().add(1, "second").toDate()
-  }
+  const now = dayjs()
+  await Message.insertMany([
+    {
+      user: user_id,
+      memory: memory.id,
+      role: 'user',
+      attatchments: payload?.attachments || [],
+      text: payload?.text,
+      created_at: now.toDate()
+    },
+    {
+      user: user_id,
+      memory: memory.id,
+      role: 'ai',
+      text: response.text,
+      created_at: now.add(1, "second").toDate()
+    }
+  ])
 
-  await Message.insertMany([userMessage, aiMessage])
-  if (isEmpty(memory?.title)) {
+  await Memory.findByIdAndUpdate(memory.id, {
+    $inc: { message_count: 2 },
+    $set: { last_active: now.toDate() }
+  })
+
+  if (isEmpty(memory.title)) {
     updateMemoryTitle(memory.id, payload.text, response.text)
   }
 
-  // Queue insights extraction for significant first messages
   if (isSignificantMessage(payload.text)) {
     addToInsightsBuffer(user_id, memory.id, payload.text, response.text).catch(error => {
       console.error('Error queueing insights extraction:', error);
@@ -289,8 +311,8 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
   updateStreak(user_id)
 
   return {
-    data: { response: response.text, memory_id: memory?.id },
-    message: "Conversation initialized successfully"
+    data: { response: response.text, memory_id: memory.id },
+    message: "Conversation started successfully"
   }
 }
 

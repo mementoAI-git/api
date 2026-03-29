@@ -141,3 +141,12 @@ export async function addMessageToMemory(req: IRequest, res: Response, next: Nex
     next(error)
   }
 }
+
+export async function getConversationEnrichment(req: IRequest, res: Response, next: NextFunction) {
+  try {
+    const data = await service.getConversationEnrichment(String(req.params.id), req.auth.id)
+    return responsHandler(res, StatusCodes.OK, 'Conversation enrichment retrieved successfully', data)
+  } catch (error) {
+    next(error)
+  }
+}
