@@ -26,6 +26,11 @@ import { updateStreak } from "../user/service";
 import { addToInsightsBuffer } from "../../../services/queues/insights";
 import * as supermemory from "../../../services/supermemory";
 
+function getSessionTurnCount(messages: Array<{ role: string; created_at: string | Date }>): number {
+  const fourHoursAgo = dayjs().subtract(4, 'hour').toDate();
+  return messages.filter(m => m.role === 'user' && new Date(m.created_at) >= fourHoursAgo).length;
+}
+
 export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
   const user = await User.findById(user_id)
   if (!user) {
@@ -41,6 +46,8 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
 
   messages = messages.reverse()
 
+  const sessionTurnCount = getSessionTurnCount(messages);
+
   let content: PartListUnion = [payload.text]
 
   let longTermContext = "";
@@ -53,7 +60,8 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
     user,
     payload.memory,
     null,
-    longTermContext
+    longTermContext,
+    sessionTurnCount
   );
 
   const chat = gemini.chats.create({
@@ -258,7 +266,8 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     .limit(25)
   const history = recentMessages.reverse()
 
-  const systemInstruction = await prompts.createSystemContextWithPrompt(user, prompt, memory.id);
+  const sessionTurnCount = getSessionTurnCount(history);
+  const systemInstruction = await prompts.createSystemContextWithPrompt(user, prompt, memory.id, sessionTurnCount);
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
     config: { systemInstruction },
