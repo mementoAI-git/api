@@ -26,7 +26,12 @@ import speakeasy from 'speakeasy';
 import Qr from 'qrcode';
 import mail from '../../mail';
 import { OnboardingBody } from './dto';
-import { computeEnrichmentScore } from '../../../services/enrichment';
+import {
+  computeEnrichmentScore,
+  getMilestone,
+  getNudge,
+  getJumpPills,
+} from '../../../services/enrichment';
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const { new_password, old_password } = payload;
@@ -383,6 +388,27 @@ export async function getUserStats(user_id: string) {
 
   const enrichment = await computeEnrichmentScore(user_id);
 
+  const milestone = getMilestone(enrichment.enrichment_score);
+  const nudge = getNudge(enrichment.lowest_category);
+
+  // Compute gap dimensions: priority dims not yet discussed in any conversation
+  const priorityDimensions: string[] = (user.preferences as any)?.priority_dimensions || [];
+  const conversations = await Memory.find({
+    user: user_id,
+    type: 'conversation',
+    status: { $nin: ['draft', 'deleted'] },
+  })
+    .select('dimensions')
+    .lean();
+  const discussedDimensions = Array.from(
+    new Set(conversations.flatMap(c => (c.dimensions as string[]) || []))
+  );
+  const DEFERRED = new Set(['lessons_wisdom', 'hopes_legacy']);
+  const gapDimensions = priorityDimensions.filter(
+    d => !DEFERRED.has(d) && !discussedDimensions.includes(d)
+  );
+  const jumpPills = getJumpPills(gapDimensions, priorityDimensions);
+
   const stats = {
     streak_count,
     reflections_count,
@@ -392,6 +418,9 @@ export async function getUserStats(user_id: string) {
     category_scores: enrichment.category_scores,
     lowest_category: enrichment.lowest_category,
     beneficiary_access_unlocked: enrichment.beneficiary_access_unlocked,
+    milestone,
+    nudge,
+    jump_pills: jumpPills,
   };
 
   return {

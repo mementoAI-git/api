@@ -65,6 +65,7 @@ export interface IUser {
   newsletter_subscriber: boolean
   created_at: string
   storage_limit: number
+  primary_conversation_id?: string | null
 }
 
 const user = new Schema<IUser>({
@@ -163,6 +164,10 @@ const user = new Schema<IUser>({
       enum: ['text', 'voice', 'mixed'],
       default: 'text'
     }
+  },
+  primary_conversation_id: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: {

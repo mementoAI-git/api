@@ -27,6 +27,9 @@ import ActivePrompt from "../../database/model/active-prompt";
 import { queueStoryInsights } from "../../../services/queues/insights";
 import { queueSummarization } from "../../../services/queues/summarization";
 import * as storage from "../../../services/storage";
+import { getConversationEnrichment } from "../../../services/enrichment";
+
+export { getConversationEnrichment };
 
 export async function memoryStats(user_id: string) {
   const memory_count = await Memory.countDocuments({
