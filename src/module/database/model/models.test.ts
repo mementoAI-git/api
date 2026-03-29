@@ -55,4 +55,109 @@ describe('Database Model Schema Validation', () => {
 
     assert.deepStrictEqual(memory.dimensions, ['career_work', 'identity_self']);
   });
+
+  it('User model should store passkeys with required fields', () => {
+    const user = new User({
+      email: 'passkey@test.com',
+      first_name: 'Jane',
+      last_name: 'Doe',
+      nickname: 'Janey',
+      gender: 'F',
+      dob: new Date(),
+      country: 'UK',
+      password: 'secret',
+      private_key: 'priv',
+      public_key: 'pub',
+      providers: [],
+      phone_number: '0000000000',
+      picture: 'pic.jpg',
+      passkeys: [
+        {
+          credential_id: 'base64url-cred-id',
+          public_key: 'base64-pub-key',
+          counter: 0,
+          device_name: 'MacBook Pro',
+        },
+      ],
+    });
+
+    assert.strictEqual(user.passkeys?.length, 1);
+    assert.strictEqual(user.passkeys?.[0].credential_id, 'base64url-cred-id');
+    assert.strictEqual(user.passkeys?.[0].public_key, 'base64-pub-key');
+    assert.strictEqual(user.passkeys?.[0].counter, 0);
+    assert.strictEqual(user.passkeys?.[0].device_name, 'MacBook Pro');
+  });
+
+  it('User passkey counter defaults to 0 when not provided', () => {
+    const user = new User({
+      email: 'passkey2@test.com',
+      first_name: 'John',
+      last_name: 'Smith',
+      nickname: 'Johnny',
+      gender: 'M',
+      dob: new Date(),
+      country: 'US',
+      password: 'secret',
+      private_key: 'priv',
+      public_key: 'pub',
+      providers: [],
+      phone_number: '1111111111',
+      picture: 'pic.jpg',
+      passkeys: [
+        {
+          credential_id: 'cred-2',
+          public_key: 'pub-key-2',
+          device_name: 'iPhone',
+        },
+      ],
+    });
+
+    assert.strictEqual(user.passkeys?.[0].counter, 0);
+  });
+
+  it('User passkey device_name defaults to "Unknown device" when not provided', () => {
+    const user = new User({
+      email: 'passkey3@test.com',
+      first_name: 'Alex',
+      last_name: 'Jones',
+      nickname: 'AJ',
+      gender: 'other',
+      dob: new Date(),
+      country: 'CA',
+      password: 'secret',
+      private_key: 'priv',
+      public_key: 'pub',
+      providers: [],
+      phone_number: '2222222222',
+      picture: 'pic.jpg',
+      passkeys: [
+        {
+          credential_id: 'cred-3',
+          public_key: 'pub-key-3',
+        },
+      ],
+    });
+
+    assert.strictEqual(user.passkeys?.[0].device_name, 'Unknown device');
+  });
+
+  it('User model accepts empty passkeys array', () => {
+    const user = new User({
+      email: 'nopk@test.com',
+      first_name: 'No',
+      last_name: 'Passkey',
+      nickname: 'NoPK',
+      gender: 'M',
+      dob: new Date(),
+      country: 'AU',
+      password: 'secret',
+      private_key: 'priv',
+      public_key: 'pub',
+      providers: [],
+      phone_number: '3333333333',
+      picture: 'pic.jpg',
+    });
+
+    assert.deepStrictEqual(user.passkeys, []);
+  });
 });
