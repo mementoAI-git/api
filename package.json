@@ -14,16 +14,16 @@
     "mongoose": "^8.13.0"
   },
   "scripts": {
-    "start": "node build/src/index.js",
-    "dev": "nodemon src/index.ts",
+    "start": "node --dns-result-order=ipv4first build/src/index.js",
+    "dev": "NODE_OPTIONS=--dns-result-order=ipv4first nodemon src/index.ts",
     "build": "npm run clean && npm run compile",
     "lint": "gts lint",
     "clean": "gts clean",
     "compile": "tsc",
     "fix": "gts fix",
     "postinstall": "npm run compile",
-    "worker": "ts-node src/workers/index.ts",
-    "worker:prod": "node build/src/workers/index.js"
+    "worker": "NODE_OPTIONS=--dns-result-order=ipv4first ts-node src/workers/index.ts",
+    "worker:prod": "node --dns-result-order=ipv4first build/src/workers/index.js"
   },
   "author": "Frank",
   "license": "MIT",
