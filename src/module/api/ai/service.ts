@@ -76,7 +76,7 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
   }
 
   const response = await chat.sendMessageStream({ message: content });
-
+  console.log(response);
   await Message.create({
     user: user_id,
     memory: payload.memory,
