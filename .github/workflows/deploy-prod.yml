@@ -1,0 +1,158 @@
+# ──────────────────────────────────────────────────────────────
+# Backend — Deploy to Production
+# Triggers on push to main. Requires manual approval via the
+# "production" GitHub environment before deploying.
+# ──────────────────────────────────────────────────────────────
+name: "Backend: Deploy Prod"
+
+on:
+  push:
+    branches: ["main"]
+
+# Queue production deploys — never cancel one mid-flight.
+concurrency:
+  group: backend-deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  # ── 1. Lint ────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run linter
+        run: yarn lint
+
+  # ── 2. Build ───────────────────────────────────────────────
+  build:
+    name: Build
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn build
+
+      - name: Verify build output
+        run: |
+          if [ ! -d "build" ] || [ -z "$(ls -A build)" ]; then
+            echo "::error::Build directory is empty or missing"
+            exit 1
+          fi
+          echo "Build output OK — $(find build -type f | wc -l) files"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-prod-${{ github.sha }}
+          retention-days: 7
+          path: |
+            build/
+            package.json
+            yarn.lock
+
+  # ── 3. Deploy (requires manual approval) ───────────────────
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    # ⚠️  Requires a "production" environment configured in GitHub
+    #     with required reviewers for manual approval.
+    environment: production
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-prod-${{ github.sha }}
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Backup current deployment
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} \
+            'DEPLOY_DIR=/opt/memento/backend-prod && \
+             BACKUP_DIR=/opt/memento/backups/backend-prod && \
+             mkdir -p "$BACKUP_DIR" && \
+             if [ -d "$DEPLOY_DIR/build" ]; then \
+               cp -a "$DEPLOY_DIR/build" "$BACKUP_DIR/build-$(date +%Y%m%d-%H%M%S)"; \
+             fi && \
+             ls -dt "$BACKUP_DIR"/build-* 2>/dev/null | tail -n +4 | xargs rm -rf'
+
+      - name: Rsync to server
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }}" \
+            ./build/ \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:/opt/memento/backend-prod/build/
+
+          rsync -az \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }}" \
+            ./package.json ./yarn.lock \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:/opt/memento/backend-prod/
+
+      - name: Install deps and reload PM2
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} << 'REMOTE'
+          set -e
+          cd /opt/memento/backend-prod
+
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+          yarn install --production --frozen-lockfile --ignore-scripts
+
+          pm2 reload memento-backend-prod --update-env
+          pm2 reload memento-backend-prod-worker --update-env
+          REMOTE
+
+      - name: Health check
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} << 'REMOTE'
+          set -e
+          echo "Waiting for app to start..."
+          for i in $(seq 1 15); do
+            if curl -sf http://localhost:4001/health > /dev/null 2>&1; then
+              echo "Health check passed on attempt $i"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Health check failed after 30 seconds"
+          exit 1
+          REMOTE
+
+      - name: Cleanup SSH credentials
+        if: always()
+        run: rm -rf ~/.ssh/deploy_key ~/.ssh/known_hosts

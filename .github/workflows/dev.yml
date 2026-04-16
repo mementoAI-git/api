@@ -18,6 +18,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: yarn
+          cache-dependency-path: |
+            **/yarn.lock
+            **/package-lock.json
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile --ignore-scripts
