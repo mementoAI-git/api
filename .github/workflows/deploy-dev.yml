@@ -170,3 +170,42 @@ jobs:
       - name: Cleanup SSH credentials
         if: always()
         run: rm -rf ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+      - name: Discord notification
+        if: always()
+        env:
+          STATUS: ${{ job.status }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ "$STATUS" = "success" ]; then
+            COLOR=3066993
+            TITLE="Dev Deploy Succeeded"
+            EMOJI="✅"
+          else
+            COLOR=15158332
+            TITLE="Dev Deploy Failed"
+            EMOJI="❌"
+          fi
+
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${COMMIT_SHA}"
+
+          curl -sf -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"${EMOJI} ${TITLE}\",
+                \"color\": ${COLOR},
+                \"fields\": [
+                  {\"name\": \"Environment\", \"value\": \"Development\", \"inline\": true},
+                  {\"name\": \"Branch\", \"value\": \"\`${{ github.ref_name }}\`\", \"inline\": true},
+                  {\"name\": \"Commit\", \"value\": \"[\`${SHORT_SHA}\`](${COMMIT_URL})\", \"inline\": true},
+                  {\"name\": \"Message\", \"value\": $(echo "$COMMIT_MSG" | head -1 | jq -Rs .)},
+                  {\"name\": \"Triggered by\", \"value\": \"${{ github.actor }}\", \"inline\": true},
+                  {\"name\": \"Workflow\", \"value\": \"[View run](${RUN_URL})\", \"inline\": true}
+                ],
+                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+              }]
+            }" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
