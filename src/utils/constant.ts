@@ -39,7 +39,7 @@ export const SENSITIVE_FIELDS = [
   'new_password',
   'authorization',
   'access_token',
-  "token",
+  'token',
   'refresh_token',
 ];
 
@@ -79,7 +79,7 @@ export const queueNames = {
       persona: 'persona',
       story: 'story',
       memories: 'memories',
-    }
+    },
   },
   system: {
     id: 'system',
@@ -88,23 +88,23 @@ export const queueNames = {
       backupFiles: 'backup-files',
       scheduleCapsuleReveals: 'schedule-capsule-reveals',
       revealCapsules: 'reveal-capsules',
-    }
-  }
-}
+    },
+  },
+};
 
 export const MEMORY_STATUS = {
-  DRAFT: "draft",
-  SAVE: "save",
-  QUEUED: "queued",
-  ON_CHAIN: "on_chain",
-  DELETED: "deleted",
-}
+  DRAFT: 'draft',
+  SAVE: 'save',
+  QUEUED: 'queued',
+  ON_CHAIN: 'on_chain',
+  DELETED: 'deleted',
+};
 
 export const PERSONA_INSIGHT_FIELDS = [
   'important_notes',
   'key_preferences',
   'emotional_state_trends',
-  'goals_and_aspirations'
+  'goals_and_aspirations',
 ] as const;
 
 export const STORAGE_PROVIDERS = {

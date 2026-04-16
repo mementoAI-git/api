@@ -1,5 +1,5 @@
-import { model, PaginateModel, Schema } from "mongoose";
-import mongoosePaginate from "mongoose-paginate-v2";
+import {model, PaginateModel, Schema} from 'mongoose';
+import mongoosePaginate from 'mongoose-paginate-v2';
 
 export interface IGroup {
   id?: string;
@@ -21,30 +21,30 @@ const group = new Schema<IGroup>(
     description: {
       type: String,
       trim: true,
-      default: "",
+      default: '',
     },
     user: {
       type: String,
-      ref: "user",
+      ref: 'user',
       required: true,
       index: true,
     },
     members: [
       {
         type: String,
-        ref: "beneficiary",
+        ref: 'beneficiary',
       },
     ],
   },
   {
     timestamps: {
-      createdAt: "created_at",
-      updatedAt: "updated_at",
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
     },
-  }
+  },
 );
 
 group.plugin(mongoosePaginate);
 
-const Group = model<IGroup, PaginateModel<IGroup>>("group", group);
+const Group = model<IGroup, PaginateModel<IGroup>>('group', group);
 export default Group;

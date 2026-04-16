@@ -1,4 +1,4 @@
-import { Storage } from '@google-cloud/storage';
+import {Storage} from '@google-cloud/storage';
 import {
   GCS_BUCKET_NAME,
   GCS_PROJECT_ID,
@@ -10,12 +10,10 @@ import type {
   StorageGetFileResponse,
 } from '../types';
 
-const gcsStorage = new Storage(
-  {
-    projectId: GCS_PROJECT_ID,
-    ...(GCS_KEY_FILENAME ? { keyFilename: GCS_KEY_FILENAME } : {}),
-  }
-);
+const gcsStorage = new Storage({
+  projectId: GCS_PROJECT_ID,
+  ...(GCS_KEY_FILENAME ? {keyFilename: GCS_KEY_FILENAME} : {}),
+});
 
 function getBucket() {
   if (!GCS_BUCKET_NAME) {
@@ -27,12 +25,12 @@ function getBucket() {
 /**
  * Parse Range header value (e.g. "bytes=0-1023") into start and end.
  */
-function parseRange(range: string): { start: number; end: number } | null {
+function parseRange(range: string): {start: number; end: number} | null {
   const match = range.match(/bytes=(\d+)-(\d*)/);
   if (!match) return null;
   const start = parseInt(match[1], 10);
   const end = match[2] ? parseInt(match[2], 10) : undefined;
-  return { start, end: end ?? start };
+  return {start, end: end ?? start};
 }
 
 /**
@@ -42,7 +40,7 @@ export async function uploadToGCS(
   key: string,
   body: Buffer | Uint8Array | string,
   contentType: string,
-  metadata?: Record<string, string>
+  metadata?: Record<string, string>,
 ): Promise<StorageUploadResult> {
   const bucket = getBucket();
   const file = bucket.file(key);
@@ -71,12 +69,12 @@ export async function uploadToGCS(
  */
 export async function getFileFromGCS(
   key: string,
-  range?: string
+  range?: string,
 ): Promise<StorageGetFileResponse> {
   const bucket = getBucket();
   const file = bucket.file(key);
 
-  const options: { start?: number; end?: number } = {};
+  const options: {start?: number; end?: number} = {};
   if (range) {
     const parsed = parseRange(range);
     if (parsed) {
@@ -90,7 +88,9 @@ export async function getFileFromGCS(
 
   return {
     Body: stream,
-    ContentLength: metadata.size ? parseInt(String(metadata.size), 10) : undefined,
+    ContentLength: metadata.size
+      ? parseInt(String(metadata.size), 10)
+      : undefined,
     ContentType: metadata.contentType,
   };
 }
@@ -99,15 +99,13 @@ export async function getFileFromGCS(
  * Get file metadata from GCS (same interface as S3).
  */
 export async function getFileMetadataFromGCS(
-  key: string
+  key: string,
 ): Promise<StorageFileMetadata> {
   const bucket = getBucket();
   const file = bucket.file(key);
   const [metadata] = await file.getMetadata();
 
-  const updated = metadata.updated
-    ? new Date(metadata.updated)
-    : new Date();
+  const updated = metadata.updated ? new Date(metadata.updated) : new Date();
   const etag = (metadata.etag ?? '').replace(/"/g, '');
   const size = metadata.size ? parseInt(String(metadata.size), 10) : 0;
 
@@ -133,7 +131,7 @@ export async function deleteFileFromGCS(key: string): Promise<void> {
  */
 export async function generatePresignedUrl(
   key: string,
-  expiresIn: number = 3600
+  expiresIn = 3600,
 ): Promise<string> {
   const bucket = getBucket();
   const file = bucket.file(key);

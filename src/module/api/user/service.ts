@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import dayjs from 'dayjs';
-import User, { IUser } from '../../database/model/user';
-import Persona, { IPersona } from '../../database/model/persona';
+import User, {IUser} from '../../database/model/user';
+import Persona, {IPersona} from '../../database/model/persona';
 import Memory from '../../database/model/memory';
 import {
   concatStrings,
@@ -25,7 +25,7 @@ import * as storage from '../../../services/storage';
 import speakeasy from 'speakeasy';
 import Qr from 'qrcode';
 import mail from '../../mail';
-import { OnboardingBody } from './dto';
+import {OnboardingBody} from './dto';
 import {
   computeEnrichmentScore,
   getMilestone,
@@ -34,21 +34,21 @@ import {
 } from '../../../services/enrichment';
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
-  const { new_password, old_password } = payload;
+  const {new_password, old_password} = payload;
   const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException('User not found');
   }
 
-  let is_match = await bcrypt.compare(old_password, `${user?.password}`);
+  const is_match = await bcrypt.compare(old_password, `${user?.password}`);
   if (!is_match) {
     throw new BadRequestException('Incorrect password');
   }
 
   const password = await hashPassword(new_password);
-  await user.updateOne({ password });
+  await user.updateOne({password});
 
-  return { message: 'Password updated successfully', data: null };
+  return {message: 'Password updated successfully', data: null};
 }
 
 export async function getProfile(user_id: string) {
@@ -77,7 +77,7 @@ export async function getProfile(user_id: string) {
 }
 
 export async function getPersona(user_id: string) {
-  const persona = await Persona.findOne({ user: user_id }).lean();
+  const persona = await Persona.findOne({user: user_id}).lean();
 
   return {
     message: 'Persona retrieved successfully',
@@ -110,14 +110,11 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     return acc;
   }, {});
 
-  const data = await User.findByIdAndUpdate(
-    user_id,
-    updatePayload,
-    { new: true }
-  )
-    .select('-password -providers -public_key -private_key')
+  const data = await User.findByIdAndUpdate(user_id, updatePayload, {
+    new: true,
+  }).select('-password -providers -public_key -private_key');
 
-  return { message: 'User profile updated successfully', data: null };
+  return {message: 'User profile updated successfully', data: null};
 }
 
 export async function updateStreak(user_id: string) {
@@ -149,7 +146,7 @@ export async function updateStreak(user_id: string) {
     last_task_date: user.last_task_date,
     streak: user.streak,
   };
-  return { message: 'Streak updated successfully', data };
+  return {message: 'Streak updated successfully', data};
 }
 
 export async function uploadPicture(
@@ -163,7 +160,7 @@ export async function uploadPicture(
 
   await storage.checkStorageQuota(user, payload[0].size);
 
-  const { name, type, size } = await storage.uploadFile(payload[0], user_id);
+  const {name, type, size} = await storage.uploadFile(payload[0], user_id);
 
   const file = await File.create({
     name,
@@ -174,12 +171,12 @@ export async function uploadPicture(
   });
 
   if (user.picture) {
-    await File.deleteOne({ name: user.picture });
+    await File.deleteOne({name: user.picture});
   }
 
-  await user.updateOne({ picture: file.name });
+  await user.updateOne({picture: file.name});
 
-  return { message: 'Profile pics uploaded successfully', data: file };
+  return {message: 'Profile pics uploaded successfully', data: file};
 }
 
 export async function setup2FA(user_id: string) {
@@ -192,18 +189,18 @@ export async function setup2FA(user_id: string) {
     name: `Memento (${user.email})`,
   });
 
-  await user.updateOne({ 'two_factor.secret': secret.base32 });
+  await user.updateOne({'two_factor.secret': secret.base32});
   const qrcode = await Qr.toDataURL(secret.otpauth_url);
 
   return {
-    data: { url: secret.otpauth_url, qrcode, secret: secret.base32 },
+    data: {url: secret.otpauth_url, qrcode, secret: secret.base32},
     message:
       '2FA setup successful. Scan the QR code with your Authenticator app.',
   };
 }
 
 //verify time-base one-time-password
-export async function verifyTOTP({ token }: IVerifyTOTP, user_id: string) {
+export async function verifyTOTP({token}: IVerifyTOTP, user_id: string) {
   const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException('User not found');
@@ -221,14 +218,14 @@ export async function verifyTOTP({ token }: IVerifyTOTP, user_id: string) {
   });
 
   if (!verified) {
-    throw new BadRequestException('Invalid token', { verified });
+    throw new BadRequestException('Invalid token', {verified});
   }
 
   if (!user?.two_factor?.enabled) {
-    await user.updateOne({ 'two_factor.enabled': true });
+    await user.updateOne({'two_factor.enabled': true});
   }
 
-  return { data: { verified }, message: 'Verification successful' };
+  return {data: {verified}, message: 'Verification successful'};
 }
 
 export async function disable2FA(user_id: string) {
@@ -244,32 +241,34 @@ export async function disable2FA(user_id: string) {
     },
   });
 
-  return { data: null, message: '2FA disabled successfully' };
+  return {data: null, message: '2FA disabled successfully'};
 }
 
 export async function listPasskeys(user_id: string) {
   const user = await User.findById(user_id).select('passkeys');
   if (!user) throw new NotFoundException('User not found');
 
-  const passkeys = (user.passkeys || []).map((pk) => ({
+  const passkeys = (user.passkeys || []).map(pk => ({
     credential_id: pk.credential_id,
     device_name: pk.device_name,
     created_at: pk.created_at,
   }));
 
-  return { data: passkeys, message: 'Passkeys retrieved successfully' };
+  return {data: passkeys, message: 'Passkeys retrieved successfully'};
 }
 
 export async function deletePasskey(user_id: string, credential_id: string) {
   const user = await User.findById(user_id);
   if (!user) throw new NotFoundException('User not found');
 
-  const exists = (user.passkeys || []).some((pk) => pk.credential_id === credential_id);
+  const exists = (user.passkeys || []).some(
+    pk => pk.credential_id === credential_id,
+  );
   if (!exists) throw new NotFoundException('Passkey not found');
 
-  await User.updateOne({ _id: user_id }, { $pull: { passkeys: { credential_id } } });
+  await User.updateOne({_id: user_id}, {$pull: {passkeys: {credential_id}}});
 
-  return { data: null, message: 'Passkey removed successfully' };
+  return {data: null, message: 'Passkey removed successfully'};
 }
 
 export async function completeOnboarding(
@@ -287,7 +286,10 @@ export async function completeOnboarding(
     if (!isEmpty(payload?.self_description)) {
       personaData.self_description = payload.self_description;
     }
-    if (Array.isArray(payload?.current_priority) && payload.current_priority.length > 0) {
+    if (
+      Array.isArray(payload?.current_priority) &&
+      payload.current_priority.length > 0
+    ) {
       personaData.current_priority = payload.current_priority;
     }
     if (
@@ -297,13 +299,12 @@ export async function completeOnboarding(
       personaData.join_reasons = payload.join_reasons;
     }
 
-    await withTransaction(async (session) => {
+    await withTransaction(async session => {
       if (Object.keys(personaData).length > 0) {
-        await Persona.findOneAndUpdate(
-          { user: user_id },
-          personaData,
-          { upsert: true, session }
-        );
+        await Persona.findOneAndUpdate({user: user_id}, personaData, {
+          upsert: true,
+          session,
+        });
       }
 
       if (!isEmpty(payload?.dob)) {
@@ -311,17 +312,16 @@ export async function completeOnboarding(
       }
 
       user.onboarding_status = 'completed';
-      await user.save({ session });
-
+      await user.save({session});
     });
   }
 
-  mail.sendWelcome({
+  void mail.sendWelcome({
     email: user.email,
     name: user?.nickname || user?.first_name || user?.last_name || '',
   });
 
-  return { data: null, message: 'Onboarding completed successfully' };
+  return {data: null, message: 'Onboarding completed successfully'};
 }
 
 export async function updateContext(payload: IUpdateContext, user_id: string) {
@@ -355,16 +355,15 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
     updateDoc.last_array_update = new Date();
   }
 
-  const persona = await Persona.findOneAndUpdate(
-    { user: user_id },
-    updateDoc,
-    { upsert: true, new: true }
-  );
+  const persona = await Persona.findOneAndUpdate({user: user_id}, updateDoc, {
+    upsert: true,
+    new: true,
+  });
   if (!persona) {
     throw new NotFoundException('Persona not found');
   }
 
-  return { message: 'User context updated successfully', data: null };
+  return {message: 'User context updated successfully', data: null};
 }
 
 export async function deleteUser(user_id: string) {
@@ -397,14 +396,14 @@ export async function getUserStats(user_id: string) {
   // Count answered prompts (memories that have a prompt field)
   const reflections_count = await Memory.countDocuments({
     user: user_id,
-    prompt: { $exists: true, $ne: null },
+    prompt: {$exists: true, $ne: null},
   });
 
   // Count uploaded stories (memories with type "story" and status "save" or higher)
   const stories_count = await Memory.countDocuments({
     user: user_id,
     type: 'story',
-    status: { $in: ['save', 'queued', 'on_chain'] },
+    status: {$in: ['save', 'queued', 'on_chain']},
   });
 
   const pending_insights_count = await PendingInsight.countDocuments({
@@ -417,20 +416,21 @@ export async function getUserStats(user_id: string) {
   const nudge = getNudge(enrichment.lowest_category);
 
   // Compute gap dimensions: priority dims not yet discussed in any conversation
-  const priorityDimensions: string[] = (user.preferences as any)?.priority_dimensions || [];
+  const priorityDimensions: string[] =
+    (user.preferences as any)?.priority_dimensions || [];
   const conversations = await Memory.find({
     user: user_id,
     type: 'conversation',
-    status: { $nin: ['draft', 'deleted'] },
+    status: {$nin: ['draft', 'deleted']},
   })
     .select('dimensions')
     .lean();
   const discussedDimensions = Array.from(
-    new Set(conversations.flatMap(c => (c.dimensions as string[]) || []))
+    new Set(conversations.flatMap(c => (c.dimensions as string[]) || [])),
   );
   const DEFERRED = new Set(['lessons_wisdom', 'hopes_legacy']);
   const gapDimensions = priorityDimensions.filter(
-    d => !DEFERRED.has(d) && !discussedDimensions.includes(d)
+    d => !DEFERRED.has(d) && !discussedDimensions.includes(d),
   );
   const jumpPills = getJumpPills(gapDimensions, priorityDimensions);
 
@@ -465,7 +465,7 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'last_name',
     'nickname',
     'location',
-    'age_range'
+    'age_range',
   ]);
 
   const updatePayload = Object.entries(payload).reduce((acc, p) => {
@@ -480,7 +480,7 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'audience',
     'current_priority',
     'communication_style',
-    'motivation'
+    'motivation',
   ]);
 
   const personaUpdate = Object.entries(payload).reduce((acc, p) => {
@@ -499,7 +499,7 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
   const allowedPreferencesFields = new Set([
     'age_bracket',
     'priority_dimensions',
-    'expression_mode'
+    'expression_mode',
   ]);
 
   const preferencesUpdate = Object.entries(payload).reduce((acc, p) => {
@@ -509,19 +509,22 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     return acc;
   }, {} as any);
 
-  await withTransaction(async (session) => {
+  await withTransaction(async session => {
     await User.findByIdAndUpdate(
-      user_id, { ...updatePayload, ...preferencesUpdate, onbaorded: true }, { session });
+      user_id,
+      {...updatePayload, ...preferencesUpdate, onbaorded: true},
+      {session},
+    );
     if (Object.keys(personaUpdate).length > 0) {
       await Persona.findOneAndUpdate(
-        { user: user_id },
-        { $set: personaUpdate },
-        { upsert: true, session }
+        {user: user_id},
+        {$set: personaUpdate},
+        {upsert: true, session},
       );
     }
   });
 
-  return { message: 'Onboarding saved successfully', data: null };
+  return {message: 'Onboarding saved successfully', data: null};
 }
 
 export async function skipOnboarding(user_id: string) {
@@ -533,15 +536,15 @@ export async function skipOnboarding(user_id: string) {
   if (user.onboarding_status === 'completed') {
     return {
       message: 'Onboarding already completed',
-      data: { onboarding_status: 'completed' as const },
+      data: {onboarding_status: 'completed' as const},
     };
   }
 
-  await User.findByIdAndUpdate(user_id, { onboarding_status: 'skipped' });
+  await User.findByIdAndUpdate(user_id, {onboarding_status: 'skipped'});
 
   return {
     message: 'Onboarding skipped',
-    data: { onboarding_status: 'skipped' as const },
+    data: {onboarding_status: 'skipped' as const},
   };
 }
 
@@ -550,7 +553,7 @@ export async function getOnboardingDetails(user_id: string) {
   if (!user) {
     throw new NotFoundException('User not found');
   }
-  const persona = await Persona.findOne({ user: user_id }).lean();
+  const persona = await Persona.findOne({user: user_id}).lean();
   const u = user as Record<string, unknown>;
   const first = String(u.first_name ?? '');
   const last = String(u.last_name ?? '');
@@ -576,15 +579,21 @@ export async function getOnboardingDetails(user_id: string) {
         age_range: String(u.age_range ?? ''),
         location: String(u.location ?? ''),
         age_bracket: String((u.preferences as any)?.age_bracket ?? ''),
-        priority_dimensions: Array.isArray((u.preferences as any)?.priority_dimensions) ? (u.preferences as any).priority_dimensions : [],
-        expression_mode: String((u.preferences as any)?.expression_mode ?? 'text')
+        priority_dimensions: Array.isArray(
+          (u.preferences as any)?.priority_dimensions,
+        )
+          ? (u.preferences as any).priority_dimensions
+          : [],
+        expression_mode: String(
+          (u.preferences as any)?.expression_mode ?? 'text',
+        ),
       },
       persona: {
         join_reasons: persona?.join_reasons ?? [],
         audience: persona?.audience ?? [],
         current_priority,
         communication_style: persona?.communication_style ?? [],
-        motivation: persona?.motivation ?? ''
+        motivation: persona?.motivation ?? '',
       },
     },
   };

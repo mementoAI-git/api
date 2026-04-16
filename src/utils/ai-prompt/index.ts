@@ -1,23 +1,26 @@
-import dayjs from "dayjs";
-import User, { IUser } from "../../module/database/model/user";
-import { isEmpty } from "../helpers";
-import Persona, { IPersona } from "../../module/database/model/persona";
-import { IPrompt } from "../../module/database/model/prompt";
-import Memory from "../../module/database/model/memory";
-import { getMemorySummaries } from "../../module/api/ai/utils";
-import { PREDEFINED_STORY_TAGS } from "../constant";
-import { buildPendingInsightsPromptSection } from "./pending-insights-prompt";
-import { computeEnrichmentScore } from "../../services/enrichment";
+import dayjs from 'dayjs';
+import User, {IUser} from '../../module/database/model/user';
+import {isEmpty} from '../helpers';
+import Persona, {IPersona} from '../../module/database/model/persona';
+import {IPrompt} from '../../module/database/model/prompt';
+import Memory from '../../module/database/model/memory';
+import {getMemorySummaries} from '../../module/api/ai/utils';
+import {PREDEFINED_STORY_TAGS} from '../constant';
+import {buildPendingInsightsPromptSection} from './pending-insights-prompt';
+import {computeEnrichmentScore} from '../../services/enrichment';
 
 function buildMemoriesContext(
-  summaries: Array<{ title: string; summary: string; topics: string[] }>
+  summaries: Array<{title: string; summary: string; topics: string[]}>,
 ): string {
   if (!summaries || summaries.length === 0) {
     return '';
   }
 
   const summariesText = summaries
-    .map((s, i) => `${i + 1}. "${s.title}": ${s.summary}${s.topics?.length ? ` (Topics: ${s.topics.join(', ')})` : ''}`)
+    .map(
+      (s, i) =>
+        `${i + 1}. "${s.title}": ${s.summary}${s.topics?.length ? ` (Topics: ${s.topics.join(', ')})` : ''}`,
+    )
     .join('\n');
 
   return `
@@ -33,18 +36,20 @@ async function createSystemContext(
   currentMemoryId?: string,
   persona: IPersona = null,
   longTermContext?: string,
-  sessionTurnCount: number = 0
+  sessionTurnCount = 0,
 ): Promise<string> {
-  let userContext = persona || {} as IPersona;
+  let userContext = persona || ({} as IPersona);
   if (!persona) {
-    userContext = await Persona.findOne({ user: user._id });
+    userContext = await Persona.findOne({user: user._id});
   }
 
   const userPreferences = user.preferences || {};
 
   const summaries = await getMemorySummaries(user._id, currentMemoryId);
   const pastContext = buildMemoriesContext(summaries);
-  const pendingInsightsContext = await buildPendingInsightsPromptSection(String(user._id));
+  const pendingInsightsContext = await buildPendingInsightsPromptSection(
+    String(user._id),
+  );
 
   const sessionCtx = await getSessionContext(String(user._id));
   const sessionContextString = buildSessionContextPrompt(sessionCtx);
@@ -57,14 +62,15 @@ async function createSystemContext(
     longTermContext,
     pendingInsightsContext,
     sessionContextString,
-    sessionTurnCount
+    sessionTurnCount,
   );
 }
 
 function buildConversationalBehaviourSection(sessionTurnCount: number): string {
-  const warmUpNote = sessionTurnCount < 2
-    ? `\nCurrent session turn: ${sessionTurnCount}. Warm-up rule is active — do not reference past topics or go deep yet.`
-    : `\nCurrent session turn: ${sessionTurnCount}.`;
+  const warmUpNote =
+    sessionTurnCount < 2
+      ? `\nCurrent session turn: ${sessionTurnCount}. Warm-up rule is active — do not reference past topics or go deep yet.`
+      : `\nCurrent session turn: ${sessionTurnCount}.`;
 
   return `
 CONVERSATIONAL BEHAVIOUR
@@ -195,9 +201,8 @@ function buildSystemContext(
   longTermContext?: string,
   pendingInsightsContext?: string,
   sessionContextString?: string,
-  sessionTurnCount: number = 0
+  sessionTurnCount = 0,
 ): string {
-
   const userName = user?.nickname || (user as any)?.first_name || 'User';
 
   const basePrompt = `
@@ -268,8 +273,8 @@ ${longTermContext ?? ''}
 ${sessionContextString ?? ''}
 `.trim();
 
-
-  const conversationalBehaviourBlock = buildConversationalBehaviourSection(sessionTurnCount);
+  const conversationalBehaviourBlock =
+    buildConversationalBehaviourSection(sessionTurnCount);
 
   const guardrailsBlock = `
 IMPORTANT GUIDELINES:
@@ -293,7 +298,10 @@ IMPORTANT GUIDELINES:
     personaBlock,
     sessionBlock,
     guardrailsBlock,
-  ].filter(block => !!block).join('\n\n').trim();
+  ]
+    .filter(block => !!block)
+    .join('\n\n')
+    .trim();
 }
 
 function createTranscriptionPrompt(): string {
@@ -367,9 +375,15 @@ export async function createSystemContextWithPrompt(
   user: IUser,
   prompt: IPrompt = null,
   currentMemoryId?: string,
-  sessionTurnCount: number = 0
+  sessionTurnCount = 0,
 ): Promise<string> {
-  let context = await createSystemContext(user, currentMemoryId, null, undefined, sessionTurnCount);
+  let context = await createSystemContext(
+    user,
+    currentMemoryId,
+    null,
+    undefined,
+    sessionTurnCount,
+  );
   if (isEmpty(prompt)) return context;
 
   context += `\n\nCONVERSATION CONTEXT:
@@ -377,9 +391,9 @@ export async function createSystemContextWithPrompt(
   This prompt is categorized as: ${prompt.type || 'general'}.
   ${prompt.tags && prompt.tags.length > 0 ? `Related topics: ${prompt.tags.join(', ')}.` : ''}
   
-  Keep this context in mind as you respond. The user's message is related to this prompt, so tailor your response to be relevant to the prompt's theme while maintaining your warm, conversational style.`
+  Keep this context in mind as you respond. The user's message is related to this prompt, so tailor your response to be relevant to the prompt's theme while maintaining your warm, conversational style.`;
 
-  return context
+  return context;
 }
 
 /**
@@ -435,7 +449,10 @@ BAD EXAMPLES (too generic):
 Return ONLY the JSON object, no additional text.`;
 }
 
-function buildSummarizationPrompt(hasImages: boolean = false, hasTranscriptions: boolean = false): string {
+function buildSummarizationPrompt(
+  hasImages = false,
+  hasTranscriptions = false,
+): string {
   let attachmentInstructions = '';
 
   if (hasImages) {
@@ -474,15 +491,18 @@ Return ONLY the JSON object, no additional text.`;
 
 function buildTopicSummarizationPrompt(
   items: string[],
-  fieldType: 'important_notes' | 'key_preferences' | 'goals_and_aspirations'
+  fieldType: 'important_notes' | 'key_preferences' | 'goals_and_aspirations',
 ): string {
   let fieldDescription: string;
   if (fieldType === 'important_notes') {
-    fieldDescription = 'important notes about the user (personality traits, life experiences, values, beliefs, relationships, goals, fears, achievements, or significant events)';
+    fieldDescription =
+      'important notes about the user (personality traits, life experiences, values, beliefs, relationships, goals, fears, achievements, or significant events)';
   } else if (fieldType === 'key_preferences') {
-    fieldDescription = 'key preferences (likes, dislikes, hobbies, interests, work preferences, lifestyle choices, food preferences, entertainment choices, etc.)';
+    fieldDescription =
+      'key preferences (likes, dislikes, hobbies, interests, work preferences, lifestyle choices, food preferences, entertainment choices, etc.)';
   } else {
-    fieldDescription = 'goals and aspirations (future-oriented statements, dreams, plans, career goals, personal milestones, aspirations, and long-term objectives)';
+    fieldDescription =
+      'goals and aspirations (future-oriented statements, dreams, plans, career goals, personal milestones, aspirations, and long-term objectives)';
   }
 
   return `You are an expert at consolidating and summarizing user information. Your task is to analyze the following ${fieldDescription} and create consolidated summaries by grouping related items together.
@@ -521,7 +541,7 @@ CRITICAL:
  */
 function buildTagsPrompt(): string {
   const predefinedTags = PREDEFINED_STORY_TAGS;
-  const tagList = predefinedTags.join(", ");
+  const tagList = predefinedTags.join(', ');
   return `You are a tag generator for personal stories and memories. Given a story title and/or body, choose the most relevant tags from the ALLOWED LIST below to help the user find and organize this story later.
 
 ALLOWED TAGS (you may ONLY use these exact tags, no others):
@@ -548,50 +568,58 @@ Return ONLY the JSON object, no markdown, no explanation.`;
 
 export interface ISessionContext {
   lastSession: {
-    date: string;         // ISO timestamp of last conversation
-    summary: string;      // From buildSummarizationPrompt output
-    topics: string[];     // From buildSummarizationPrompt output
+    date: string; // ISO timestamp of last conversation
+    summary: string; // From buildSummarizationPrompt output
+    topics: string[]; // From buildSummarizationPrompt output
   } | null;
-  openThreads: string[];       // From IPersona.open_threads[]
-  gapDimensions: string[];     // Computed by computeGapDimensions()
-  enrichmentScore: number | null;  // GET /users/stats → enrichment_score. Pass null if unavailable.
-  sessionCount: number;        // Total conversations for this host
+  openThreads: string[]; // From IPersona.open_threads[]
+  gapDimensions: string[]; // Computed by computeGapDimensions()
+  enrichmentScore: number | null; // GET /users/stats → enrichment_score. Pass null if unavailable.
+  sessionCount: number; // Total conversations for this host
 }
 
 // ---------------------------------------------------------------------------
 // MAIN PROMPT FUNCTION
 // ---------------------------------------------------------------------------
 
-export async function getSessionContext(userId: string): Promise<ISessionContext> {
+export async function getSessionContext(
+  userId: string,
+): Promise<ISessionContext> {
   const user = await User.findById(userId).lean();
-  const persona = await Persona.findOne({ user: userId }).lean();
+  const persona = await Persona.findOne({user: userId}).lean();
 
-  const priorityDimensions = (user?.preferences as any)?.priority_dimensions || [];
+  const priorityDimensions =
+    (user?.preferences as any)?.priority_dimensions || [];
   const openThreads = (persona?.open_threads as string[]) || [];
 
-  const conversations = await Memory.find({ user: userId, type: 'conversation' })
-    .sort({ created_at: -1 })
+  const conversations = await Memory.find({user: userId, type: 'conversation'})
+    .sort({created_at: -1})
     .lean();
-  
+
   const sessionCount = conversations.length;
-  
+
   // Find last summarized session
   const lastSummarized = conversations.find(c => c.summary);
   let lastSession = null;
-  
+
   if (lastSummarized) {
     lastSession = {
-      date: lastSummarized.created_at ? new Date(lastSummarized.created_at).toISOString() : new Date().toISOString(),
+      date: lastSummarized.created_at
+        ? new Date(lastSummarized.created_at).toISOString()
+        : new Date().toISOString(),
       summary: lastSummarized.summary as string,
       topics: (lastSummarized.topics as string[]) || [],
     };
   }
 
   const allDiscussedDimensions = Array.from(
-    new Set(conversations.flatMap(c => (c.dimensions as string[]) || []))
+    new Set(conversations.flatMap(c => (c.dimensions as string[]) || [])),
   );
-  
-  const gapDimensions = computeGapDimensions(priorityDimensions, allDiscussedDimensions);
+
+  const gapDimensions = computeGapDimensions(
+    priorityDimensions,
+    allDiscussedDimensions,
+  );
 
   // Compute real enrichment score for AI depth-tier logic
   let enrichmentScore: number | null = null;
@@ -620,10 +648,10 @@ function buildSessionContextPrompt(ctx: ISessionContext): string {
     ctx.enrichmentScore === null
       ? null
       : ctx.enrichmentScore < 20
-      ? `early — focus on foundation: identity, key relationships, formative experiences. Keep it open and unhurried.`
-      : ctx.enrichmentScore < 60
-      ? `developing — start drawing connections across what they've shared. Probe for depth on threads that feel unfinished.`
-      : `rich — you know this person well. Challenge where it's earned, surface contradictions, explore complexity.`;
+        ? `early — focus on foundation: identity, key relationships, formative experiences. Keep it open and unhurried.`
+        : ctx.enrichmentScore < 60
+          ? `developing — start drawing connections across what they've shared. Probe for depth on threads that feel unfinished.`
+          : `rich — you know this person well. Challenge where it's earned, surface contradictions, explore complexity.`;
 
   const lastSessionBlock = isFirstSession
     ? `This is the first session after onboarding. The host has already shared foundational context — use it silently. Treat this as a first real conversation. One door, gently opened.`
@@ -633,7 +661,9 @@ function buildSessionContextPrompt(ctx: ISessionContext): string {
         ctx.lastSession.topics.length > 0
           ? `Topics covered: ${ctx.lastSession.topics.join(', ')}`
           : null,
-      ].filter(Boolean).join('\n');
+      ]
+        .filter(Boolean)
+        .join('\n');
 
   const openThreadsBlock =
     ctx.openThreads && ctx.openThreads.length > 0
@@ -660,7 +690,10 @@ function buildSessionContextPrompt(ctx: ISessionContext): string {
     gapBlock,
     enrichmentBlock,
     `OPENING INSTRUCTIONS:\n${openingInstructions}`,
-  ].filter(Boolean).join('\n\n').trim();
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+    .trim();
 }
 
 export function buildOpenThreadsPrompt(existingThreads: string[]): string {
@@ -697,7 +730,7 @@ import {
 
 export function buildDimensionTaggingPrompt(): string {
   const dimensionList = ENRICHMENT_CATEGORIES.map(
-    (key) => `- ${key} (${CATEGORY_LABELS[key]})`,
+    key => `- ${key} (${CATEGORY_LABELS[key]})`,
   ).join('\n');
 
   return `You are classifying a conversation by which life dimensions it touched.
@@ -723,14 +756,14 @@ const DEFERRED_DIMENSIONS = ['lessons_wisdom', 'hopes_legacy'];
 function computeGapDimensions(
   priorityDimensions: string[],
   loggedDimensions: string[],
-  unlockedDeferredDimensions: string[] = []
+  unlockedDeferredDimensions: string[] = [],
 ): string[] {
   if (!priorityDimensions?.length) return [];
 
   const activeDimensions = priorityDimensions.filter(
     dim =>
       !DEFERRED_DIMENSIONS.includes(dim) ||
-      unlockedDeferredDimensions.includes(dim)
+      unlockedDeferredDimensions.includes(dim),
   );
 
   return activeDimensions.filter(dim => !loggedDimensions.includes(dim));
@@ -748,8 +781,7 @@ const prompts = {
   buildSessionContextPrompt,
   buildOpenThreadsPrompt,
   buildDimensionTaggingPrompt,
-  computeGapDimensions
-}
+  computeGapDimensions,
+};
 
 export default prompts;
-

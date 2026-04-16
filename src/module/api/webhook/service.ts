@@ -1,46 +1,55 @@
-import { createHmac } from "crypto";
-import { TALLY_WEBHOOK_SECRET } from "../../../utils/config";
-import { UnauthorizedException } from "../../../utils/service-error";
-import type { ITallyWebhookPayload, ITallySubmissionData } from "./interface";
-import * as authService from "../auth/service";
-import { compareStrings } from "../../../utils";
+import {createHmac} from 'crypto';
+import {TALLY_WEBHOOK_SECRET} from '../../../utils/config';
+import {UnauthorizedException} from '../../../utils/service-error';
+import type {ITallyWebhookPayload, ITallySubmissionData} from './interface';
+import * as authService from '../auth/service';
+import {compareStrings} from '../../../utils';
 
-export function verifyTallySignature(rawBody: ITallyWebhookPayload, signature: string | undefined): void {
+export function verifyTallySignature(
+  rawBody: ITallyWebhookPayload,
+  signature: string | undefined,
+): void {
   if (!TALLY_WEBHOOK_SECRET) {
     return;
   }
   if (!signature) {
-    throw new UnauthorizedException("Missing Tally-Signature header");
+    throw new UnauthorizedException('Missing Tally-Signature header');
   }
 
-  const calculatedSignature = createHmac("sha256", TALLY_WEBHOOK_SECRET)
+  const calculatedSignature = createHmac('sha256', TALLY_WEBHOOK_SECRET)
     .update(JSON.stringify(rawBody))
-    .digest("base64");
+    .digest('base64');
 
   if (signature !== calculatedSignature) {
-    throw new UnauthorizedException("Invalid Tally webhook signature");
+    throw new UnauthorizedException('Invalid Tally webhook signature');
   }
 }
 
 /**
  * Extract email and optional name from Tally payload fields.
  */
-export function parseTallySubmission(payload: ITallyWebhookPayload): ITallySubmissionData | null {
+export function parseTallySubmission(
+  payload: ITallyWebhookPayload,
+): ITallySubmissionData | null {
   const data = payload.data;
-  const fields = (data?.fields) ?? [];
+  const fields = data?.fields ?? [];
   if (fields.length === 0) return null;
 
-  const emailField = fields.find(field =>
-    compareStrings(field.key, "question_EWjeWq") &&
-    compareStrings(field.type, "INPUT_EMAIL"))
+  const emailField = fields.find(
+    field =>
+      compareStrings(field.key, 'question_EWjeWq') &&
+      compareStrings(field.type, 'INPUT_EMAIL'),
+  );
   if (!emailField) return null;
 
   const email = emailField.value;
   if (!email) return null;
 
-  const nameField = fields.find(field =>
-    compareStrings(field.key, "question_POMLOd") &&
-    compareStrings(field.type, "INPUT_TEXT"))
+  const nameField = fields.find(
+    field =>
+      compareStrings(field.key, 'question_POMLOd') &&
+      compareStrings(field.type, 'INPUT_TEXT'),
+  );
 
   return {
     email: email.trim(),
@@ -49,32 +58,34 @@ export function parseTallySubmission(payload: ITallyWebhookPayload): ITallySubmi
   };
 }
 
-export async function processTallySubmission(payload: ITallyWebhookPayload): Promise<{
+export async function processTallySubmission(
+  payload: ITallyWebhookPayload,
+): Promise<{
   message: string;
   data: {
     email?: string;
-    inviteSent: boolean
+    inviteSent: boolean;
   };
 }> {
   const submission = parseTallySubmission(payload);
   if (!submission) {
     return {
-      message: "No email in submission; skipped",
-      data: { inviteSent: false },
+      message: 'No email in submission; skipped',
+      data: {inviteSent: false},
     };
   }
 
   try {
-    await authService.sendInviteCode({ email: submission.email });
+    await authService.sendInviteCode({email: submission.email});
   } catch (error) {
     return {
-      message: "Failed to send invite code",
-      data: { inviteSent: false },
+      message: 'Failed to send invite code',
+      data: {inviteSent: false},
     };
   }
 
   return {
-    message: "Early access invite sent",
-    data: { email: submission.email, inviteSent: true },
+    message: 'Early access invite sent',
+    data: {email: submission.email, inviteSent: true},
   };
 }

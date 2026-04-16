@@ -1,4 +1,4 @@
-import { model, PaginateModel, Schema, Types } from 'mongoose';
+import {model, PaginateModel, Schema, Types} from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
 const FEEDBACK_TYPES = [

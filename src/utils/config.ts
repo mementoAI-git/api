@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import os from "os"
+import os from 'os';
 
-export const JWT_SECRET = process.env.JWT_SECRET
+export const JWT_SECRET = process.env.JWT_SECRET;
 
 export const NODE_ENV = process.env.NODE_ENV || 'development';
 export const IS_PRODUCTION = NODE_ENV === 'production';
@@ -44,7 +44,7 @@ export const CLOUDFLARE_AI_ACCOUNT_ID = process.env.CLOUDFLARE_AI_ACCOUNT_ID;
 export const DEV_MAILS = process.env.DEV_MAILS?.split(',') || [];
 export const SUPPORT_MAILS = process.env.SUPPORT_MAILS?.split(',') || [];
 
-export const TEMP_PATH = process.env.TEMP_PATH ?? os.tmpdir()
+export const TEMP_PATH = process.env.TEMP_PATH ?? os.tmpdir();
 
 export const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
 export const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
@@ -55,21 +55,24 @@ export const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
 export const GCS_PROJECT_ID = process.env.GCS_PROJECT_ID;
 export const GCS_KEY_FILENAME = process.env.GCS_KEY_FILENAME; // optional; uses ADC if not set
 /** When true, GCS is not used (e.g. billing disabled). All uploads go to Cloudinary. */
-export const GCS_DISABLED = process.env.GCS_DISABLED === "true";
+export const GCS_DISABLED = process.env.GCS_DISABLED === 'true';
 
 export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
 /** When true, image uploads go to Cloudinary instead of GCS. Ignored when GCS_DISABLED is true. */
-export const CLOUDINARY_UPLOAD_IMAGES = process.env.CLOUDINARY_UPLOAD_IMAGES === "true";
+export const CLOUDINARY_UPLOAD_IMAGES =
+  process.env.CLOUDINARY_UPLOAD_IMAGES === 'true';
 
 export const SUPERMEMORY_API_KEY = process.env.SUPERMEMORY_API_KEY;
 
 export const TALLY_WEBHOOK_SECRET = process.env.TALLY_WEBHOOK_SECRET;
 
-export const DISCORD_FEEDBACK_WEBHOOK_URL = process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+export const DISCORD_FEEDBACK_WEBHOOK_URL =
+  process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
 // WebAuthn / Passkeys
 export const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 export const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Memento';
-export const WEBAUTHN_ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';
+export const WEBAUTHN_ORIGIN =
+  process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';

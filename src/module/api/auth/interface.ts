@@ -1,52 +1,52 @@
 export interface ILogin {
-  email: string
-  password: string
-  remember_for_30_days?: boolean
+  email: string;
+  password: string;
+  remember_for_30_days?: boolean;
 }
 
-export interface IRegister extends Omit<ILogin, "remember_for_30_days"> {
-  first_name: string
-  last_name: string
+export interface IRegister extends Omit<ILogin, 'remember_for_30_days'> {
+  first_name: string;
+  last_name: string;
 }
 
 export interface IVerifyEmail {
-  email: string
-  token: string
+  email: string;
+  token: string;
 }
 
 export interface ISetPassword {
-  password: string
-  token: string
+  password: string;
+  token: string;
 }
 
 export interface ISendLink {
-  email: string
-  type: 'reset' | 'verify'
+  email: string;
+  type: 'reset' | 'verify';
 }
 
 export interface IOAuthAuthorization {
-  code: string
+  code: string;
 }
 
 export interface IRefreshToken {
-  refresh_token: string
+  refresh_token: string;
 }
 
 export interface IVerify2FALogin {
-  two_fa_token: string
-  code: string
+  two_fa_token: string;
+  code: string;
 }
 
 export interface IPasskeyLoginBegin {
-  email?: string
+  email?: string;
 }
 
 export interface IPasskeyLoginComplete {
-  challenge_id: string
-  response: Record<string, unknown>
+  challenge_id: string;
+  response: Record<string, unknown>;
 }
 
 export interface IPasskeyRegisterComplete {
-  response: Record<string, unknown>
-  device_name?: string
+  response: Record<string, unknown>;
+  device_name?: string;
 }

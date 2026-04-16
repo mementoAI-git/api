@@ -3,8 +3,9 @@ const capsulesDocs = {
     post: {
       tags: ['Capsules'],
       summary: 'Create Time Capsule',
-      description: 'Create a new time capsule that will be delivered to recipients on the specified date',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Create a new time capsule that will be delivered to recipients on the specified date',
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -30,24 +31,28 @@ const capsulesDocs = {
                 body: {
                   type: 'string',
                   description: 'Capsule content/body',
-                  example: 'This is a message I want to send to my future self...',
+                  example:
+                    'This is a message I want to send to my future self...',
                 },
                 schedule_date: {
                   type: 'string',
                   format: 'date-time',
-                  description: 'Optional date and time when the capsule should be scheduled for delivery (ISO 8601 format). If provided, status will be set to "scheduled", otherwise "draft"',
+                  description:
+                    'Optional date and time when the capsule should be scheduled for delivery (ISO 8601 format). If provided, status will be set to "scheduled", otherwise "draft"',
                   example: '2025-12-31T23:59:59.000Z',
                 },
                 attachments: {
                   type: 'array',
-                  items: { type: 'string' },
-                  description: 'Optional array of file IDs to attach to the capsule',
+                  items: {type: 'string'},
+                  description:
+                    'Optional array of file IDs to attach to the capsule',
                   example: ['507f1f77bcf86cd799439011'],
                 },
                 memories: {
                   type: 'array',
-                  items: { type: 'string' },
-                  description: 'Optional array of memory IDs to attach to the capsule',
+                  items: {type: 'string'},
+                  description:
+                    'Optional array of memory IDs to attach to the capsule',
                   example: ['507f1f77bcf86cd799439012'],
                 },
               },
@@ -63,37 +68,71 @@ const capsulesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Capsule created successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Capsule created successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                      user: { type: 'string', example: '507f1f77bcf86cd799439012' },
+                      _id: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439011',
+                      },
+                      user: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439012',
+                      },
                       recipients: {
                         type: 'array',
-                        items: { type: 'string' },
+                        items: {type: 'string'},
                         example: ['recipient1@example.com'],
                       },
-                      title: { type: 'string', example: 'Future Message to Myself' },
-                      body: { type: 'string', example: 'This is a message...' },
-                      schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
-                      status: { type: 'string', example: 'scheduled' },
-                      attachments: { type: 'array', items: { type: 'string' } },
+                      title: {
+                        type: 'string',
+                        example: 'Future Message to Myself',
+                      },
+                      body: {type: 'string', example: 'This is a message...'},
+                      schedule_date: {
+                        type: 'string',
+                        format: 'date-time',
+                        example: '2025-12-31T23:59:59.000Z',
+                      },
+                      status: {type: 'string', example: 'scheduled'},
+                      attachments: {type: 'array', items: {type: 'string'}},
                       memories: {
                         type: 'array',
                         items: {
                           type: 'object',
                           properties: {
-                            _id: { type: 'string', example: '507f1f77bcf86cd799439012' },
-                            title: { type: 'string', example: 'My Memory' },
-                            body: { type: 'string', example: 'Memory content...' },
-                            tags: { type: 'array', items: { type: 'string' }, example: ['tag1', 'tag2'] },
-                            created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                            _id: {
+                              type: 'string',
+                              example: '507f1f77bcf86cd799439012',
+                            },
+                            title: {type: 'string', example: 'My Memory'},
+                            body: {
+                              type: 'string',
+                              example: 'Memory content...',
+                            },
+                            tags: {
+                              type: 'array',
+                              items: {type: 'string'},
+                              example: ['tag1', 'tag2'],
+                            },
+                            created_at: {
+                              type: 'string',
+                              format: 'date-time',
+                              example: '2024-01-01T00:00:00.000Z',
+                            },
                           },
                         },
                       },
-                      created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                      created_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        example: '2024-01-01T00:00:00.000Z',
+                      },
                     },
                   },
                 },
@@ -105,7 +144,7 @@ const capsulesDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -113,7 +152,7 @@ const capsulesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -122,19 +161,20 @@ const capsulesDocs = {
     get: {
       tags: ['Capsules'],
       summary: 'Get All Capsules',
-      description: 'Get paginated list of time capsules. Returns sent capsules by default. Use status=received to list capsules received as a beneficiary.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Get paginated list of time capsules. Returns sent capsules by default. Use status=received to list capsules received as a beneficiary.',
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'page',
           in: 'query',
-          schema: { type: 'number', default: 1 },
+          schema: {type: 'number', default: 1},
           description: 'Page number',
         },
         {
           name: 'limit',
           in: 'query',
-          schema: { type: 'number', default: 10 },
+          schema: {type: 'number', default: 10},
           description: 'Items per page',
         },
         {
@@ -142,15 +182,23 @@ const capsulesDocs = {
           in: 'query',
           schema: {
             type: 'string',
-            enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause', 'received'],
+            enum: [
+              'scheduled',
+              'draft',
+              'delivered',
+              'failed',
+              'pause',
+              'received',
+            ],
           },
-          description: 'Filter capsules by status. Use status=received for capsules received as a beneficiary.',
+          description:
+            'Filter capsules by status. Use status=received for capsules received as a beneficiary.',
           example: 'scheduled',
         },
         {
           name: 'search',
           in: 'query',
-          schema: { type: 'string' },
+          schema: {type: 'string'},
           description: 'Search capsules by title or body content',
           example: 'birthday',
         },
@@ -163,8 +211,11 @@ const capsulesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Capsules retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Capsules retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
@@ -173,21 +224,61 @@ const capsulesDocs = {
                         items: {
                           type: 'object',
                           properties: {
-                            _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                            user: { type: 'string', example: '507f1f77bcf86cd799439012' },
-                            recipients: { type: 'array', items: { type: 'string' } },
-                            title: { type: 'string', example: 'Future Message to Myself' },
-                            body: { type: 'string', example: 'This is a message...' },
-                            schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
-                            status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause', 'received'], example: 'scheduled' },
+                            _id: {
+                              type: 'string',
+                              example: '507f1f77bcf86cd799439011',
+                            },
+                            user: {
+                              type: 'string',
+                              example: '507f1f77bcf86cd799439012',
+                            },
+                            recipients: {
+                              type: 'array',
+                              items: {type: 'string'},
+                            },
+                            title: {
+                              type: 'string',
+                              example: 'Future Message to Myself',
+                            },
+                            body: {
+                              type: 'string',
+                              example: 'This is a message...',
+                            },
+                            schedule_date: {
+                              type: 'string',
+                              format: 'date-time',
+                              example: '2025-12-31T23:59:59.000Z',
+                            },
+                            status: {
+                              type: 'string',
+                              enum: [
+                                'scheduled',
+                                'draft',
+                                'delivered',
+                                'failed',
+                                'pause',
+                                'received',
+                              ],
+                              example: 'scheduled',
+                            },
                             attachments: {
                               type: 'array',
                               items: {
                                 type: 'object',
                                 properties: {
-                                  _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                                  name: { type: 'string', example: 'file-1234567890.jpg' },
-                                  url: { type: 'string', example: 'https://example.com/files/file-1234567890.jpg' },
+                                  _id: {
+                                    type: 'string',
+                                    example: '507f1f77bcf86cd799439011',
+                                  },
+                                  name: {
+                                    type: 'string',
+                                    example: 'file-1234567890.jpg',
+                                  },
+                                  url: {
+                                    type: 'string',
+                                    example:
+                                      'https://example.com/files/file-1234567890.jpg',
+                                  },
                                 },
                               },
                             },
@@ -196,37 +287,72 @@ const capsulesDocs = {
                               items: {
                                 type: 'object',
                                 properties: {
-                                  _id: { type: 'string', example: '507f1f77bcf86cd799439012' },
-                                  title: { type: 'string', example: 'My Memory' },
-                                  body: { type: 'string', example: 'Memory content...' },
-                                  tags: { type: 'array', items: { type: 'string' }, example: ['tag1', 'tag2'] },
-                                  created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                                  _id: {
+                                    type: 'string',
+                                    example: '507f1f77bcf86cd799439012',
+                                  },
+                                  title: {type: 'string', example: 'My Memory'},
+                                  body: {
+                                    type: 'string',
+                                    example: 'Memory content...',
+                                  },
+                                  tags: {
+                                    type: 'array',
+                                    items: {type: 'string'},
+                                    example: ['tag1', 'tag2'],
+                                  },
+                                  created_at: {
+                                    type: 'string',
+                                    format: 'date-time',
+                                    example: '2024-01-01T00:00:00.000Z',
+                                  },
                                   attachments: {
                                     type: 'array',
                                     items: {
                                       type: 'object',
                                       properties: {
-                                        _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                                        name: { type: 'string', example: 'file-1234567890.jpg' },
-                                        url: { type: 'string', example: 'https://example.com/files/file-1234567890.jpg' },
+                                        _id: {
+                                          type: 'string',
+                                          example: '507f1f77bcf86cd799439011',
+                                        },
+                                        name: {
+                                          type: 'string',
+                                          example: 'file-1234567890.jpg',
+                                        },
+                                        url: {
+                                          type: 'string',
+                                          example:
+                                            'https://example.com/files/file-1234567890.jpg',
+                                        },
                                       },
                                     },
                                   },
-                                  status: { type: 'string', example: 'published' },
+                                  status: {
+                                    type: 'string',
+                                    example: 'published',
+                                  },
                                 },
                               },
                             },
-                            created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
-                            updated_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                            created_at: {
+                              type: 'string',
+                              format: 'date-time',
+                              example: '2024-01-01T00:00:00.000Z',
+                            },
+                            updated_at: {
+                              type: 'string',
+                              format: 'date-time',
+                              example: '2024-01-01T00:00:00.000Z',
+                            },
                           },
                         },
                       },
-                      totalDocs: { type: 'number', example: 10 },
-                      limit: { type: 'number', example: 10 },
-                      page: { type: 'number', example: 1 },
-                      totalPages: { type: 'number', example: 1 },
-                      hasNextPage: { type: 'boolean', example: false },
-                      hasPrevPage: { type: 'boolean', example: false },
+                      totalDocs: {type: 'number', example: 10},
+                      limit: {type: 'number', example: 10},
+                      page: {type: 'number', example: 1},
+                      totalPages: {type: 'number', example: 1},
+                      hasNextPage: {type: 'boolean', example: false},
+                      hasPrevPage: {type: 'boolean', example: false},
                     },
                   },
                 },
@@ -238,7 +364,7 @@ const capsulesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -249,8 +375,9 @@ const capsulesDocs = {
     get: {
       tags: ['Capsules'],
       summary: 'Get Capsule Statistics',
-      description: 'Get statistics about capsules including counts of delivered, scheduled, and draft capsules for the authenticated user',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Get statistics about capsules including counts of delivered, scheduled, and draft capsules for the authenticated user',
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Capsule statistics retrieved successfully',
@@ -259,8 +386,11 @@ const capsulesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Capsule statistics retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Capsule statistics retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
@@ -290,7 +420,7 @@ const capsulesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -301,15 +431,16 @@ const capsulesDocs = {
     get: {
       tags: ['Capsules'],
       summary: 'Get Capsule by ID',
-      description: 'Get a capsule by ID. Works for both sent and received capsules. For received capsules (e.g. from email link), sets viewed_at on first view.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Get a capsule by ID. Works for both sent and received capsules. For received capsules (e.g. from email link), sets viewed_at on first view.',
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Capsule ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       responses: {
@@ -320,23 +451,51 @@ const capsulesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Capsule retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Capsule retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                      user: { type: 'string', example: '507f1f77bcf86cd799439012' },
-                      recipients: { type: 'array', items: { type: 'string' } },
-                      title: { type: 'string', example: 'Future Message to Myself' },
-                      body: { type: 'string', example: 'This is a message...' },
-                      schedule_date: { type: 'string', format: 'date-time', example: '2025-12-31T23:59:59.000Z' },
-                      status: { type: 'string', enum: ['scheduled', 'draft', 'delivered', 'failed', 'pause', 'received'], example: 'scheduled' },
+                      _id: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439011',
+                      },
+                      user: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439012',
+                      },
+                      recipients: {type: 'array', items: {type: 'string'}},
+                      title: {
+                        type: 'string',
+                        example: 'Future Message to Myself',
+                      },
+                      body: {type: 'string', example: 'This is a message...'},
+                      schedule_date: {
+                        type: 'string',
+                        format: 'date-time',
+                        example: '2025-12-31T23:59:59.000Z',
+                      },
+                      status: {
+                        type: 'string',
+                        enum: [
+                          'scheduled',
+                          'draft',
+                          'delivered',
+                          'failed',
+                          'pause',
+                          'received',
+                        ],
+                        example: 'scheduled',
+                      },
                       attachments: {
                         type: 'array',
                         items: {
                           type: 'object',
-                          description: 'File attachment (populated with file details, excluding base64)',
+                          description:
+                            'File attachment (populated with file details, excluding base64)',
                         },
                       },
                       memories: {
@@ -344,16 +503,38 @@ const capsulesDocs = {
                         items: {
                           type: 'object',
                           properties: {
-                            _id: { type: 'string', example: '507f1f77bcf86cd799439012' },
-                            title: { type: 'string', example: 'My Memory' },
-                            body: { type: 'string', example: 'Memory content...' },
-                            tags: { type: 'array', items: { type: 'string' }, example: ['tag1', 'tag2'] },
-                            created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                            _id: {
+                              type: 'string',
+                              example: '507f1f77bcf86cd799439012',
+                            },
+                            title: {type: 'string', example: 'My Memory'},
+                            body: {
+                              type: 'string',
+                              example: 'Memory content...',
+                            },
+                            tags: {
+                              type: 'array',
+                              items: {type: 'string'},
+                              example: ['tag1', 'tag2'],
+                            },
+                            created_at: {
+                              type: 'string',
+                              format: 'date-time',
+                              example: '2024-01-01T00:00:00.000Z',
+                            },
                           },
                         },
                       },
-                      created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
-                      updated_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                      created_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        example: '2024-01-01T00:00:00.000Z',
+                      },
+                      updated_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        example: '2024-01-01T00:00:00.000Z',
+                      },
                     },
                   },
                 },
@@ -365,7 +546,7 @@ const capsulesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -373,7 +554,7 @@ const capsulesDocs = {
           description: 'Capsule not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -383,14 +564,14 @@ const capsulesDocs = {
       tags: ['Capsules'],
       summary: 'Update Capsule',
       description: 'Update an existing time capsule',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Capsule ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       requestBody: {
@@ -419,17 +600,19 @@ const capsulesDocs = {
                 schedule_date: {
                   type: 'string',
                   format: 'date-time',
-                  description: 'Optional date and time when the capsule should be scheduled for delivery (ISO 8601 format). If provided, status will be set to "scheduled"',
+                  description:
+                    'Optional date and time when the capsule should be scheduled for delivery (ISO 8601 format). If provided, status will be set to "scheduled"',
                 },
                 attachments: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Array of file IDs',
                 },
                 memories: {
                   type: 'array',
-                  items: { type: 'string' },
-                  description: 'Optional array of memory IDs to append to the capsule',
+                  items: {type: 'string'},
+                  description:
+                    'Optional array of memory IDs to append to the capsule',
                 },
                 status: {
                   type: 'string',
@@ -449,9 +632,12 @@ const capsulesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Capsule updated successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Capsule updated successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -461,7 +647,7 @@ const capsulesDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -469,7 +655,7 @@ const capsulesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -477,7 +663,7 @@ const capsulesDocs = {
           description: 'Capsule not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -487,14 +673,14 @@ const capsulesDocs = {
       tags: ['Capsules'],
       summary: 'Delete Capsule',
       description: 'Delete a time capsule',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Capsule ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       responses: {
@@ -505,9 +691,12 @@ const capsulesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Capsule deleted successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Capsule deleted successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -517,7 +706,7 @@ const capsulesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -525,7 +714,7 @@ const capsulesDocs = {
           description: 'Capsule not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -535,4 +724,3 @@ const capsulesDocs = {
 };
 
 export default capsulesDocs;
-

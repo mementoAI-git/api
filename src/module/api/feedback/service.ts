@@ -1,13 +1,13 @@
-import { BadRequestException } from '../../../utils/service-error';
-import Feedback, { IFeedback } from '../../database/model/feedback';
+import {BadRequestException} from '../../../utils/service-error';
+import Feedback, {IFeedback} from '../../database/model/feedback';
 import mail from '../../mail';
 import discord from '../../../services/discord';
-import { getProfile } from '../user/service';
+import {getProfile} from '../user/service';
 import File from '../../database/model/file';
 
 export async function createFeedback(payload: IFeedback, user_id: string) {
-  const { type, email, message, screenshot: screenshotId } = payload;
-  const { data: user } = await getProfile(user_id);
+  const {type, email, message, screenshot: screenshotId} = payload;
+  const {data: user} = await getProfile(user_id);
 
   const feedback = await Feedback.create({
     type,
@@ -30,7 +30,6 @@ export async function createFeedback(payload: IFeedback, user_id: string) {
     feedbackId: feedback.id,
   };
 
-
   if (screenshotId) {
     const file = await File.findById(screenshotId);
     if (file) {
@@ -38,11 +37,11 @@ export async function createFeedback(payload: IFeedback, user_id: string) {
     }
   }
 
-  mail.sendFeedbackConfirmation({ ...notifyPayload, email });
+  void mail.sendFeedbackConfirmation({...notifyPayload, email});
 
   // Fire notifications — neither blocks the response
-  mail.notifyTeamFeedback(notifyPayload);
-  discord.notifyFeedback(notifyPayload);
+  void mail.notifyTeamFeedback(notifyPayload);
+  void discord.notifyFeedback(notifyPayload);
 
   return {
     message: 'Feedback Sent Successfully',

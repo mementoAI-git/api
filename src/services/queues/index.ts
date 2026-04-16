@@ -1,24 +1,31 @@
-import { Application } from 'express';
-import { initializeConversationSummary, initializePersonaSummarization, summarizationQueue } from './summarization';
-import { ExpressAdapter } from "@bull-board/express";
-import { createBullBoard } from '@bull-board/api';
-import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
-import { insightQueue } from './insights';
-import { initializeCapsuleReveal, initializeFileBackup, initializeResetStreak, systemQueue } from './system';
+import {Application} from 'express';
+import {
+  initializeConversationSummary,
+  initializePersonaSummarization,
+  summarizationQueue,
+} from './summarization';
+import {ExpressAdapter} from '@bull-board/express';
+import {createBullBoard} from '@bull-board/api';
+import {BullMQAdapter} from '@bull-board/api/bullMQAdapter';
+import {insightQueue} from './insights';
+import {
+  initializeCapsuleReveal,
+  initializeFileBackup,
+  initializeResetStreak,
+  systemQueue,
+} from './system';
 import logger from '../../utils/logger';
 
 export function setupBullBoard(app: Application) {
   const serverAdapter = new ExpressAdapter();
 
-  const path = '/queues'
+  const path = '/queues';
 
   serverAdapter.setBasePath(path);
 
-  const queues = [
-    summarizationQueue,
-    insightQueue,
-    systemQueue
-  ].map((queue) => new BullMQAdapter(queue))
+  const queues = [summarizationQueue, insightQueue, systemQueue].map(
+    queue => new BullMQAdapter(queue),
+  );
 
   createBullBoard({
     queues,
@@ -39,4 +46,3 @@ export async function initializeScheduler() {
 
 export * from './insights';
 export * from './summarization';
-

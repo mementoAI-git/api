@@ -3,8 +3,9 @@ const memoriesDocs = {
     post: {
       tags: ['Memories'],
       summary: 'Create Memory',
-      description: 'Create a new memory (story or conversation) with optional attachments',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Create a new memory (story or conversation) with optional attachments',
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -30,14 +31,16 @@ const memoriesDocs = {
                 },
                 tags: {
                   type: 'array',
-                  items: { type: 'string' },
-                  description: 'Array of tags (comma-separated string or array)',
+                  items: {type: 'string'},
+                  description:
+                    'Array of tags (comma-separated string or array)',
                   example: ['family', 'vacation'],
                 },
                 attachments: {
                   type: 'array',
-                  items: { type: 'string' },
-                  description: 'Array of file IDs (comma-separated string or array)',
+                  items: {type: 'string'},
+                  description:
+                    'Array of file IDs (comma-separated string or array)',
                   example: ['507f1f77bcf86cd799439011'],
                 },
               },
@@ -53,21 +56,38 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memory created successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory created successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                      user: { type: 'string', example: '507f1f77bcf86cd799439012' },
-                      title: { type: 'string', example: 'My First Memory' },
-                      body: { type: 'string', example: 'This is a memory...' },
-                      type: { type: 'string', enum: ['story', 'conversation'], example: 'story' },
-                      level: { type: 'number', example: 1 },
-                      tags: { type: 'array', items: { type: 'string' } },
-                      attachments: { type: 'array', items: { type: 'string' } },
-                      status: { type: 'string', example: 'save' },
-                      created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                      _id: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439011',
+                      },
+                      user: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439012',
+                      },
+                      title: {type: 'string', example: 'My First Memory'},
+                      body: {type: 'string', example: 'This is a memory...'},
+                      type: {
+                        type: 'string',
+                        enum: ['story', 'conversation'],
+                        example: 'story',
+                      },
+                      level: {type: 'number', example: 1},
+                      tags: {type: 'array', items: {type: 'string'}},
+                      attachments: {type: 'array', items: {type: 'string'}},
+                      status: {type: 'string', example: 'save'},
+                      created_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        example: '2024-01-01T00:00:00.000Z',
+                      },
                     },
                   },
                 },
@@ -79,7 +99,7 @@ const memoriesDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -87,7 +107,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -96,31 +116,32 @@ const memoriesDocs = {
     get: {
       tags: ['Memories'],
       summary: 'Get All Memories',
-      description: 'Get paginated list of memories with optional search and tag filtering',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Get paginated list of memories with optional search and tag filtering',
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'page',
           in: 'query',
-          schema: { type: 'number', default: 1 },
+          schema: {type: 'number', default: 1},
           description: 'Page number',
         },
         {
           name: 'limit',
           in: 'query',
-          schema: { type: 'number', default: 10 },
+          schema: {type: 'number', default: 10},
           description: 'Items per page',
         },
         {
           name: 'search',
           in: 'query',
-          schema: { type: 'string' },
+          schema: {type: 'string'},
           description: 'Search term for title or body',
         },
         {
           name: 'tags',
           in: 'query',
-          schema: { type: 'string' },
+          schema: {type: 'string'},
           description: 'Comma-separated tags to filter by',
         },
       ],
@@ -132,21 +153,24 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memories retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memories retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
                       docs: {
                         type: 'array',
-                        items: { type: 'object' },
+                        items: {type: 'object'},
                       },
-                      totalDocs: { type: 'number', example: 50 },
-                      limit: { type: 'number', example: 10 },
-                      page: { type: 'number', example: 1 },
-                      totalPages: { type: 'number', example: 5 },
-                      hasNextPage: { type: 'boolean', example: true },
-                      hasPrevPage: { type: 'boolean', example: false },
+                      totalDocs: {type: 'number', example: 50},
+                      limit: {type: 'number', example: 10},
+                      page: {type: 'number', example: 1},
+                      totalPages: {type: 'number', example: 5},
+                      hasNextPage: {type: 'boolean', example: true},
+                      hasPrevPage: {type: 'boolean', example: false},
                     },
                   },
                 },
@@ -158,7 +182,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -170,7 +194,7 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Get Memory Statistics',
       description: 'Get statistics about user memories',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Statistics retrieved successfully',
@@ -179,15 +203,18 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Statistics retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Statistics retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      total: { type: 'number', example: 50 },
-                      stories: { type: 'number', example: 30 },
-                      conversations: { type: 'number', example: 20 },
-                      bookmarked: { type: 'number', example: 5 },
+                      total: {type: 'number', example: 50},
+                      stories: {type: 'number', example: 30},
+                      conversations: {type: 'number', example: 20},
+                      bookmarked: {type: 'number', example: 5},
                     },
                   },
                 },
@@ -199,7 +226,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -211,18 +238,18 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Get Conversation Memories',
       description: 'Get paginated list of conversation-type memories',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'page',
           in: 'query',
-          schema: { type: 'number', default: 1 },
+          schema: {type: 'number', default: 1},
           description: 'Page number',
         },
         {
           name: 'limit',
           in: 'query',
-          schema: { type: 'number', default: 10 },
+          schema: {type: 'number', default: 10},
           description: 'Items per page',
         },
       ],
@@ -234,18 +261,21 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Conversation memories retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Conversation memories retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      docs: { type: 'array', items: { type: 'object' } },
-                      totalDocs: { type: 'number', example: 20 },
-                      limit: { type: 'number', example: 10 },
-                      page: { type: 'number', example: 1 },
-                      totalPages: { type: 'number', example: 2 },
-                      hasNextPage: { type: 'boolean', example: true },
-                      hasPrevPage: { type: 'boolean', example: false },
+                      docs: {type: 'array', items: {type: 'object'}},
+                      totalDocs: {type: 'number', example: 20},
+                      limit: {type: 'number', example: 10},
+                      page: {type: 'number', example: 1},
+                      totalPages: {type: 'number', example: 2},
+                      hasNextPage: {type: 'boolean', example: true},
+                      hasPrevPage: {type: 'boolean', example: false},
                     },
                   },
                 },
@@ -257,7 +287,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -269,18 +299,18 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Get Story Memories',
       description: 'Get paginated list of story-type memories',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'page',
           in: 'query',
-          schema: { type: 'number', default: 1 },
+          schema: {type: 'number', default: 1},
           description: 'Page number',
         },
         {
           name: 'limit',
           in: 'query',
-          schema: { type: 'number', default: 10 },
+          schema: {type: 'number', default: 10},
           description: 'Items per page',
         },
       ],
@@ -292,18 +322,21 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Story memories retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Story memories retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      docs: { type: 'array', items: { type: 'object' } },
-                      totalDocs: { type: 'number', example: 30 },
-                      limit: { type: 'number', example: 10 },
-                      page: { type: 'number', example: 1 },
-                      totalPages: { type: 'number', example: 3 },
-                      hasNextPage: { type: 'boolean', example: true },
-                      hasPrevPage: { type: 'boolean', example: false },
+                      docs: {type: 'array', items: {type: 'object'}},
+                      totalDocs: {type: 'number', example: 30},
+                      limit: {type: 'number', example: 10},
+                      page: {type: 'number', example: 1},
+                      totalPages: {type: 'number', example: 3},
+                      hasNextPage: {type: 'boolean', example: true},
+                      hasPrevPage: {type: 'boolean', example: false},
                     },
                   },
                 },
@@ -315,7 +348,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -327,14 +360,14 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Get Memory by Prompt ID',
       description: 'Get memory associated with a specific prompt',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Prompt ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       responses: {
@@ -345,9 +378,12 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memory retrieved successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory retrieved successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -357,7 +393,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -365,7 +401,7 @@ const memoriesDocs = {
           description: 'Memory not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -377,14 +413,14 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Get Memory by ID',
       description: 'Get a specific memory by ID',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Memory ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       responses: {
@@ -395,23 +431,40 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memory retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                      user: { type: 'string', example: '507f1f77bcf86cd799439012' },
-                      title: { type: 'string', example: 'My First Memory' },
-                      body: { type: 'string', example: 'This is a memory...' },
-                      type: { type: 'string', enum: ['story', 'conversation'], example: 'story' },
-                      level: { type: 'number', example: 1 },
-                      tags: { type: 'array', items: { type: 'string' } },
-                      attachments: { type: 'array', items: { type: 'string' } },
-                      status: { type: 'string', example: 'save' },
-                      prompt: { type: 'string', nullable: true },
-                      session_id: { type: 'string', nullable: true },
-                      created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                      _id: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439011',
+                      },
+                      user: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439012',
+                      },
+                      title: {type: 'string', example: 'My First Memory'},
+                      body: {type: 'string', example: 'This is a memory...'},
+                      type: {
+                        type: 'string',
+                        enum: ['story', 'conversation'],
+                        example: 'story',
+                      },
+                      level: {type: 'number', example: 1},
+                      tags: {type: 'array', items: {type: 'string'}},
+                      attachments: {type: 'array', items: {type: 'string'}},
+                      status: {type: 'string', example: 'save'},
+                      prompt: {type: 'string', nullable: true},
+                      session_id: {type: 'string', nullable: true},
+                      created_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        example: '2024-01-01T00:00:00.000Z',
+                      },
                     },
                   },
                 },
@@ -423,7 +476,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -431,7 +484,7 @@ const memoriesDocs = {
           description: 'Memory not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -441,14 +494,14 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Update Memory',
       description: 'Update an existing memory',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Memory ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       requestBody: {
@@ -458,18 +511,20 @@ const memoriesDocs = {
             schema: {
               type: 'object',
               properties: {
-                title: { type: 'string', example: 'Updated Memory Title' },
-                body: { type: 'string', example: 'Updated memory content...' },
-                level: { type: 'integer', minimum: 1, example: 2 },
+                title: {type: 'string', example: 'Updated Memory Title'},
+                body: {type: 'string', example: 'Updated memory content...'},
+                level: {type: 'integer', minimum: 1, example: 2},
                 tags: {
                   type: 'array',
-                  items: { type: 'string' },
-                  description: 'Array of tags (comma-separated string or array)',
+                  items: {type: 'string'},
+                  description:
+                    'Array of tags (comma-separated string or array)',
                 },
                 attachments: {
                   type: 'array',
-                  items: { type: 'string' },
-                  description: 'Array of file IDs (comma-separated string or array)',
+                  items: {type: 'string'},
+                  description:
+                    'Array of file IDs (comma-separated string or array)',
                 },
                 status: {
                   type: 'string',
@@ -489,9 +544,12 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memory updated successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory updated successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -501,7 +559,7 @@ const memoriesDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -509,7 +567,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -517,7 +575,7 @@ const memoriesDocs = {
           description: 'Memory not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -526,15 +584,16 @@ const memoriesDocs = {
     delete: {
       tags: ['Memories'],
       summary: 'Delete Memory',
-      description: 'Delete a memory (soft delete by default, permanent if delete_permanently is true)',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Delete a memory (soft delete by default, permanent if delete_permanently is true)',
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Memory ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       requestBody: {
@@ -562,9 +621,12 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memory deleted successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory deleted successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -574,7 +636,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -582,7 +644,7 @@ const memoriesDocs = {
           description: 'Memory not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -594,14 +656,14 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Restore Memory',
       description: 'Restore a soft-deleted memory',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Memory ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       responses: {
@@ -612,9 +674,12 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memory restored successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory restored successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -624,7 +689,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -632,7 +697,7 @@ const memoriesDocs = {
           description: 'Memory not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -644,14 +709,14 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Bookmark Memory',
       description: 'Bookmark a memory',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Memory ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       responses: {
@@ -662,9 +727,12 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memory bookmarked successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory bookmarked successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -674,7 +742,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -682,7 +750,7 @@ const memoriesDocs = {
           description: 'Memory not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -692,14 +760,14 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Unbookmark Memory',
       description: 'Remove bookmark from a memory',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Memory ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       responses: {
@@ -710,9 +778,12 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Memory unbookmarked successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory unbookmarked successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -722,7 +793,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -730,7 +801,7 @@ const memoriesDocs = {
           description: 'Memory not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -742,14 +813,14 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Remove File from Memory',
       description: 'Remove a file attachment from a memory',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'File ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
       ],
       responses: {
@@ -760,9 +831,12 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'File removed successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'File removed successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -772,7 +846,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -780,7 +854,7 @@ const memoriesDocs = {
           description: 'File not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -792,7 +866,7 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Add Message to Memory',
       description: 'Add messages to a memory (for conversation-type memories)',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -835,12 +909,14 @@ const memoriesDocs = {
                 },
                 memory_id: {
                   type: 'string',
-                  description: 'Memory ID (required if session_id is not provided)',
+                  description:
+                    'Memory ID (required if session_id is not provided)',
                   example: '507f1f77bcf86cd799439011',
                 },
                 session_id: {
                   type: 'string',
-                  description: 'Session ID (required if memory_id is not provided)',
+                  description:
+                    'Session ID (required if memory_id is not provided)',
                   example: 'session-123',
                 },
               },
@@ -856,9 +932,12 @@ const memoriesDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Messages added successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Messages added successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -868,7 +947,7 @@ const memoriesDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -876,7 +955,7 @@ const memoriesDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -886,4 +965,3 @@ const memoriesDocs = {
 };
 
 export default memoriesDocs;
-

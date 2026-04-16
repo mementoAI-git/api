@@ -3,7 +3,8 @@ const authDocs = {
     get: {
       tags: ['Auth'],
       summary: 'Generate OAuth URL',
-      description: 'Generate OAuth authorization URL for the specified provider (google, facebook, apple)',
+      description:
+        'Generate OAuth authorization URL for the specified provider (google, facebook, apple)',
       parameters: [
         {
           name: 'provider',
@@ -25,14 +26,18 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'OAuth url generated successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'OAuth url generated successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
                       url: {
                         type: 'string',
-                        example: 'https://accounts.google.com/o/oauth2/auth?client_id=...',
+                        example:
+                          'https://accounts.google.com/o/oauth2/auth?client_id=...',
                       },
                     },
                   },
@@ -45,7 +50,7 @@ const authDocs = {
           description: 'Invalid provider',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -54,7 +59,8 @@ const authDocs = {
     post: {
       tags: ['Auth'],
       summary: 'OAuth Authorization',
-      description: 'Complete OAuth authorization flow using the authorization code from the provider',
+      description:
+        'Complete OAuth authorization flow using the authorization code from the provider',
       parameters: [
         {
           name: 'provider',
@@ -94,8 +100,11 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'User signin is successful' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'User signin is successful',
+                  },
                   data: {
                     type: 'object',
                     properties: {
@@ -118,7 +127,7 @@ const authDocs = {
           description: 'Invalid authorization code or account deleted',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -126,7 +135,7 @@ const authDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -137,7 +146,8 @@ const authDocs = {
     post: {
       tags: ['Auth'],
       summary: 'User Login',
-      description: 'Authenticate user with email and password. Returns JWT tokens for accessing protected endpoints.',
+      description:
+        'Authenticate user with email and password. Returns JWT tokens for accessing protected endpoints.',
       requestBody: {
         required: true,
         content: {
@@ -160,7 +170,8 @@ const authDocs = {
                 },
                 remember_for_30_days: {
                   type: 'boolean',
-                  description: 'If true, access token expires in 30 days instead of 7 days',
+                  description:
+                    'If true, access token expires in 30 days instead of 7 days',
                   default: false,
                   example: false,
                 },
@@ -177,8 +188,8 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Login successful' },
+                  status: {type: 'string', example: 'success'},
+                  message: {type: 'string', example: 'Login successful'},
                   data: {
                     type: 'object',
                     properties: {
@@ -198,12 +209,13 @@ const authDocs = {
           },
         },
         400: {
-          description: 'Invalid credentials, account deleted, or email not verified',
+          description:
+            'Invalid credentials, account deleted, or email not verified',
           content: {
             'application/json': {
               schema: {
                 allOf: [
-                  { $ref: '#/components/schemas/Error' },
+                  {$ref: '#/components/schemas/Error'},
                   {
                     type: 'object',
                     properties: {
@@ -231,7 +243,7 @@ const authDocs = {
           description: 'User not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -242,14 +254,21 @@ const authDocs = {
     post: {
       tags: ['Auth'],
       summary: 'User Registration',
-      description: 'Register a new user account. Requires a valid 6-digit invite code.',
+      description:
+        'Register a new user account. Requires a valid 6-digit invite code.',
       requestBody: {
         required: true,
         content: {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['email', 'password', 'first_name', 'last_name', 'invite_code'],
+              required: [
+                'email',
+                'password',
+                'first_name',
+                'last_name',
+                'invite_code',
+              ],
               properties: {
                 email: {
                   type: 'string',
@@ -260,7 +279,8 @@ const authDocs = {
                 password: {
                   type: 'string',
                   format: 'password',
-                  description: 'Strong password (must meet strength requirements)',
+                  description:
+                    'Strong password (must meet strength requirements)',
                   example: 'SecurePassword123!',
                 },
                 first_name: {
@@ -292,8 +312,8 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Registration successful' },
+                  status: {type: 'string', example: 'success'},
+                  message: {type: 'string', example: 'Registration successful'},
                   data: {
                     type: 'object',
                     properties: {
@@ -316,7 +336,7 @@ const authDocs = {
           description: 'Validation error or invalid invite code',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -327,7 +347,8 @@ const authDocs = {
     post: {
       tags: ['Auth'],
       summary: 'Send Verification/Reset Link',
-      description: 'Send email verification or password reset link to user email address',
+      description:
+        'Send email verification or password reset link to user email address',
       requestBody: {
         required: true,
         content: {
@@ -362,8 +383,8 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Link sent successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {type: 'string', example: 'Link sent successfully'},
                   data: {
                     type: 'object',
                     properties: {
@@ -388,7 +409,7 @@ const authDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -399,7 +420,8 @@ const authDocs = {
     post: {
       tags: ['Auth'],
       summary: 'Verify Email Address',
-      description: 'Verify user email address using the verification token sent via email',
+      description:
+        'Verify user email address using the verification token sent via email',
       requestBody: {
         required: true,
         content: {
@@ -427,8 +449,11 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Email verified successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Email verified successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
@@ -447,7 +472,7 @@ const authDocs = {
           description: 'Invalid or expired token',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -492,8 +517,11 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Password set successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Password set successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
@@ -512,7 +540,7 @@ const authDocs = {
           description: 'Invalid token or weak password',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -550,8 +578,11 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Token refreshed successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Token refreshed successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
@@ -574,7 +605,7 @@ const authDocs = {
           description: 'Invalid or expired refresh token',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -586,7 +617,7 @@ const authDocs = {
       tags: ['Auth'],
       summary: 'User Logout',
       description: 'Logout user and invalidate refresh token',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Logout successful',
@@ -595,8 +626,8 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Logout successful' },
+                  status: {type: 'string', example: 'success'},
+                  message: {type: 'string', example: 'Logout successful'},
                   data: {
                     type: 'object',
                     properties: {
@@ -615,7 +646,7 @@ const authDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -654,8 +685,11 @@ const authDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Invite code sent successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Invite code sent successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
@@ -674,7 +708,7 @@ const authDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -684,4 +718,3 @@ const authDocs = {
 };
 
 export default authDocs;
-

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { connectMongodb } from '../connection';
+import {connectMongodb} from '../connection';
 import Prompt from '../model/prompt';
 import logger from '../../../utils/logger';
 
@@ -18,10 +18,10 @@ async function seedPrompts() {
   await Prompt.insertMany(prompts);
 
   logger.info('Prompts seeded successfully!');
-  process.exit(0);
+  process.exit(0); // eslint-disable-line n/no-process-exit
 }
 
-seedPrompts().catch((err) => {
+seedPrompts().catch(err => {
   logger.error(err, 'Error seeding prompts');
-  process.exit(1);
-}); 
+  process.exit(1); // eslint-disable-line n/no-process-exit
+});

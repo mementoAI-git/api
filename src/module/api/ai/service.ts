@@ -1,57 +1,69 @@
-import { Response } from "express";
-import { FilterQuery } from "mongoose";
-import { createUserContent, GenerateContentResponse, Modality, PartListUnion } from "@google/genai";
-import Message, { IMessage } from "../../database/model/message";
-import gemini, { GEMINI_MODEL } from "../../../services/gemini";
-import { geminiAuthClient, GEMINI_LIVE_MODEL } from "../../../services/gemini";
-import ai from "../../../services/ai";
-import { extractJson, isEmpty } from "../../../utils/helpers";
-import { IPagination } from "../../../utils/interface";
-import { IPrompt, IStartMemory, ITranscribeAudio } from "./interface";
-import File, { ITranscriptionData } from "../../database/model/file"
-import { NotFoundException } from "../../../utils/service-error";
-import User from "../../database/model/user";
-import dayjs from "dayjs";
-import { prompts } from "../../../utils";
-import Memory from "../../database/model/memory";
+import {Response} from 'express';
+import {FilterQuery} from 'mongoose';
+import {
+  createUserContent,
+  GenerateContentResponse,
+  Modality,
+  PartListUnion,
+} from '@google/genai';
+import Message, {IMessage} from '../../database/model/message';
+import gemini, {GEMINI_MODEL} from '../../../services/gemini';
+import {geminiAuthClient, GEMINI_LIVE_MODEL} from '../../../services/gemini';
+import ai from '../../../services/ai';
+import {extractJson, isEmpty} from '../../../utils/helpers';
+import {IPagination} from '../../../utils/interface';
+import {IPrompt, IStartMemory, ITranscribeAudio} from './interface';
+import File, {ITranscriptionData} from '../../database/model/file';
+import {NotFoundException} from '../../../utils/service-error';
+import User from '../../database/model/user';
+import dayjs from 'dayjs';
+import {prompts} from '../../../utils';
+import Memory from '../../database/model/memory';
 import {
   triggerSummarization,
   createChatHistory,
   isSignificantMessage,
   processFile,
   processFiles,
-  updateMemoryTitle
-} from "./utils";
-import Prompt from "../../database/model/prompt";
-import { updateStreak } from "../user/service";
-import { addToInsightsBuffer } from "../../../services/queues/insights";
-import * as supermemory from "../../../services/supermemory";
+  updateMemoryTitle,
+} from './utils';
+import Prompt from '../../database/model/prompt';
+import {updateStreak} from '../user/service';
+import {addToInsightsBuffer} from '../../../services/queues/insights';
+import * as supermemory from '../../../services/supermemory';
 
-function getSessionTurnCount(messages: Array<{ role: string; created_at: string | Date }>): number {
+function getSessionTurnCount(
+  messages: Array<{role: string; created_at: string | Date}>,
+): number {
   const fourHoursAgo = dayjs().subtract(4, 'hour').toDate();
-  return messages.filter(m => m.role === 'user' && new Date(m.created_at) >= fourHoursAgo).length;
+  return messages.filter(
+    m => m.role === 'user' && new Date(m.created_at) >= fourHoursAgo,
+  ).length;
 }
 
-export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
-  const user = await User.findById(user_id)
+export async function prompt(
+  payload: IPrompt & {memory: string},
+  user_id: string,
+) {
+  const user = await User.findById(user_id);
   if (!user) {
-    throw new NotFoundException("User not found")
+    throw new NotFoundException('User not found');
   }
 
   let messages = await Message.find({
     user: user_id,
-    memory: payload.memory
+    memory: payload.memory,
   })
-    .sort({ created_at: -1 })
-    .limit(25)
+    .sort({created_at: -1})
+    .limit(25);
 
-  messages = messages.reverse()
+  messages = messages.reverse();
 
   const sessionTurnCount = getSessionTurnCount(messages);
 
-  let content: PartListUnion = [payload.text]
+  let content: PartListUnion = [payload.text];
 
-  let longTermContext = "";
+  let longTermContext = '';
   if (isSignificantMessage(payload.text)) {
     const context = await supermemory.getContextForUser(user_id, payload.text);
     longTermContext = context.formatedText;
@@ -62,44 +74,49 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
     payload.memory,
     null,
     longTermContext,
-    sessionTurnCount
+    sessionTurnCount,
   );
 
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
-    config: { systemInstruction },
-    history: createChatHistory(messages)
+    config: {systemInstruction},
+    history: createChatHistory(messages),
   });
 
   if (!isEmpty(payload?.attachments)) {
-    const result = await processFiles(payload.attachments)
-    content = [...content, ...result]
+    const result = await processFiles(payload.attachments);
+    content = [...content, ...result];
   }
 
-  const response = await chat.sendMessageStream({ message: content });
+  const response = await chat.sendMessageStream({message: content});
   console.log(response);
   await Message.create({
     user: user_id,
     memory: payload.memory,
     role: 'user',
     attatchments: payload?.attachments || [],
-    text: payload?.text
-  })
+    text: payload?.text,
+  });
 
-  return response
+  return response;
 }
 
-export async function handleStreaming(user: string, memory: string, payload: AsyncGenerator<GenerateContentResponse, any, any>, res: Response) {
-  let text = ""
-  let userMessage = "" // Store the user's message
+export async function handleStreaming(
+  user: string,
+  memory: string,
+  payload: AsyncGenerator<GenerateContentResponse, any, any>,
+  res: Response,
+) {
+  let text = '';
+  let userMessage = ''; // Store the user's message
 
   try {
     // Get the user's last message for analysis
     const lastUserMessage = await Message.findOne({
       user,
       memory,
-      role: 'user'
-    }).sort({ created_at: -1 });
+      role: 'user',
+    }).sort({created_at: -1});
 
     if (lastUserMessage) {
       userMessage = lastUserMessage.text;
@@ -119,13 +136,13 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
         text,
         user,
         memory,
-        role: "ai"
+        role: 'ai',
       });
 
       // Update message count and last_active for summarization tracking
       await Memory.findByIdAndUpdate(memory, {
-        $inc: { message_count: 2 },
-        $set: { last_active: dayjs().toDate() }
+        $inc: {message_count: 2},
+        $set: {last_active: dayjs().toDate()},
       });
 
       if (userMessage && isSignificantMessage(userMessage)) {
@@ -134,31 +151,34 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
         });
       }
 
-      triggerSummarization(memory)
+      void triggerSummarization(memory);
     }
     res.end();
   }
 }
 
-export async function getUserMessages({ limit, ...query }: IPagination & { next?: string }, user: string) {
-  const filter: FilterQuery<IMessage> = { user }
+export async function getUserMessages(
+  {limit, ...query}: IPagination & {next?: string},
+  user: string,
+) {
+  const filter: FilterQuery<IMessage> = {user};
   const fetch_limit = limit + 1;
 
   if (!isEmpty(query?.next)) {
-    const message = await Message.findById(query?.next)
+    const message = await Message.findById(query?.next);
     if (message) {
-      filter.created_at = { $lte: message.created_at };
+      filter.created_at = {$lte: message.created_at};
     }
   }
 
   const messages = await Message.find(filter)
-    .sort({ created_at: -1 })
+    .sort({created_at: -1})
     .populate({
-      path: "attatchments",
-      select: "-base64",
-      match: { provider: { $ne: "s3" } }
+      path: 'attatchments',
+      select: '-base64',
+      match: {provider: {$ne: 's3'}},
     })
-    .limit(fetch_limit)
+    .limit(fetch_limit);
 
   let next = null;
   let messagesToSend = messages;
@@ -168,25 +188,33 @@ export async function getUserMessages({ limit, ...query }: IPagination & { next?
     messagesToSend = messages.slice(0, limit);
   }
 
-  const data = { messages: messagesToSend.reverse(), next }
-  return { message: "User messages retrieved successfully", data }
+  const data = {messages: messagesToSend.reverse(), next};
+  return {message: 'User messages retrieved successfully', data};
 }
 
-export async function getUserMessagesByConversation(id: string, { limit, ...query }: IPagination & { next?: string }, user: string) {
-  const filter: FilterQuery<IMessage> = { user, memory: id }
+export async function getUserMessagesByConversation(
+  id: string,
+  {limit, ...query}: IPagination & {next?: string},
+  user: string,
+) {
+  const filter: FilterQuery<IMessage> = {user, memory: id};
   const fetch_limit = limit + 1;
 
   if (!isEmpty(query?.next)) {
-    const message = await Message.findById(query?.next)
+    const message = await Message.findById(query?.next);
     if (message) {
-      filter.created_at = { $lte: message.created_at };
+      filter.created_at = {$lte: message.created_at};
     }
   }
 
   const messages = await Message.find(filter)
-    .sort({ created_at: -1 })
-    .populate({ path: "attatchments", select: "-base64", match: { provider: { $ne: "s3" } } })
-    .limit(fetch_limit)
+    .sort({created_at: -1})
+    .populate({
+      path: 'attatchments',
+      select: '-base64',
+      match: {provider: {$ne: 's3'}},
+    })
+    .limit(fetch_limit);
 
   let next = null;
   let messagesToSend = messages;
@@ -196,56 +224,65 @@ export async function getUserMessagesByConversation(id: string, { limit, ...quer
     messagesToSend = messages.slice(0, limit);
   }
 
-  const data = { messages: messagesToSend.reverse(), next }
-  return { message: "User messages retrieved successfully", data }
+  const data = {messages: messagesToSend.reverse(), next};
+  return {message: 'User messages retrieved successfully', data};
 }
 
 export async function transcribeAudio(payload: ITranscribeAudio) {
-  const file = await File.findById(payload.file_id)
+  const file = await File.findById(payload.file_id);
   if (!file) {
-    throw new NotFoundException("File not found")
+    throw new NotFoundException('File not found');
   }
-  if (!file.type.startsWith("audio")) {
-    throw new NotFoundException("Invalid file type ")
+  if (!file.type.startsWith('audio')) {
+    throw new NotFoundException('Invalid file type ');
   }
 
   if (!isEmpty(file.transcription)) {
-    return { message: "Transcription successful", data: file.transcription }
+    return {message: 'Transcription successful', data: file.transcription};
   }
 
-  const prompt = prompts.createTranscriptionPrompt()
-  const processedFile = await processFile(file)
+  const prompt = prompts.createTranscriptionPrompt();
+  const processedFile = await processFile(file);
 
-  let contents = createUserContent([prompt, processedFile])
+  const contents = createUserContent([prompt, processedFile]);
 
-  const response = await gemini.models.generateContent({ model: GEMINI_MODEL, contents });
+  const response = await gemini.models.generateContent({
+    model: GEMINI_MODEL,
+    contents,
+  });
   const transcriptionData: ITranscriptionData = extractJson(response.text);
 
-  if (!transcriptionData.full_text || !Array.isArray(transcriptionData.segments)) {
-    await file.updateOne({ transcription: { full_text: response.text } })
+  if (
+    !transcriptionData.full_text ||
+    !Array.isArray(transcriptionData.segments)
+  ) {
+    await file.updateOne({transcription: {full_text: response.text}});
 
-    return { message: "Transcription successful", data: response.text }
+    return {message: 'Transcription successful', data: response.text};
   }
 
-  await file.updateOne({ transcription: transcriptionData })
-  return { message: "Transcription successful", data: transcriptionData }
+  await file.updateOne({transcription: transcriptionData});
+  return {message: 'Transcription successful', data: transcriptionData};
 }
 
-export async function startConversation(payload: IStartMemory, user_id: string) {
-  let prompt = null
-  const user = await User.findById(user_id)
+export async function startConversation(
+  payload: IStartMemory,
+  user_id: string,
+) {
+  let prompt = null;
+  const user = await User.findById(user_id);
   if (!user) {
-    throw new NotFoundException("User not found")
+    throw new NotFoundException('User not found');
   }
 
   if (!isEmpty(payload.prompt_id)) {
-    prompt = await Prompt.findById(payload.prompt_id)
+    prompt = await Prompt.findById(payload.prompt_id);
   }
 
   // Single-conversation: reuse existing primary conversation if it exists
-  let memory = null
+  let memory = null;
   if (user.primary_conversation_id) {
-    memory = await Memory.findById(user.primary_conversation_id)
+    memory = await Memory.findById(user.primary_conversation_id);
   }
 
   // Create the primary conversation if it doesn't exist yet
@@ -253,38 +290,43 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     memory = await Memory.create({
       title: null,
       user: user_id,
-      type: "conversation",
-      status: "save",
+      type: 'conversation',
+      status: 'save',
       message_count: 0,
-      last_active: dayjs().toDate()
-    })
-    await User.findByIdAndUpdate(user_id, { primary_conversation_id: memory.id })
+      last_active: dayjs().toDate(),
+    });
+    await User.findByIdAndUpdate(user_id, {primary_conversation_id: memory.id});
   }
 
   // Load recent message history for context
-  const recentMessages = await Message.find({ user: user_id, memory: memory.id })
-    .sort({ created_at: -1 })
-    .limit(25)
-  const history = recentMessages.reverse()
+  const recentMessages = await Message.find({user: user_id, memory: memory.id})
+    .sort({created_at: -1})
+    .limit(25);
+  const history = recentMessages.reverse();
 
   const sessionTurnCount = getSessionTurnCount(history);
-  const systemInstruction = await prompts.createSystemContextWithPrompt(user, prompt, memory.id, sessionTurnCount);
+  const systemInstruction = await prompts.createSystemContextWithPrompt(
+    user,
+    prompt,
+    memory.id,
+    sessionTurnCount,
+  );
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
-    config: { systemInstruction },
-    history: createChatHistory(history)
+    config: {systemInstruction},
+    history: createChatHistory(history),
   });
 
-  let content: PartListUnion = [payload.text]
+  let content: PartListUnion = [payload.text];
 
   if (!isEmpty(payload?.attachments)) {
-    const result = await processFiles(payload.attachments)
-    content = [...content, ...result]
+    const result = await processFiles(payload.attachments);
+    content = [...content, ...result];
   }
 
-  const response = await chat.sendMessage({ message: content });
+  const response = await chat.sendMessage({message: content});
 
-  const now = dayjs()
+  const now = dayjs();
   await Message.insertMany([
     {
       user: user_id,
@@ -292,43 +334,45 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
       role: 'user',
       attatchments: payload?.attachments || [],
       text: payload?.text,
-      created_at: now.toDate()
+      created_at: now.toDate(),
     },
     {
       user: user_id,
       memory: memory.id,
       role: 'ai',
       text: response.text,
-      created_at: now.add(1, "second").toDate()
-    }
-  ])
+      created_at: now.add(1, 'second').toDate(),
+    },
+  ]);
 
   await Memory.findByIdAndUpdate(memory.id, {
-    $inc: { message_count: 2 },
-    $set: { last_active: now.toDate() }
-  })
+    $inc: {message_count: 2},
+    $set: {last_active: now.toDate()},
+  });
 
   if (isEmpty(memory.title)) {
-    updateMemoryTitle(memory.id, payload.text, response.text)
+    void updateMemoryTitle(memory.id, payload.text, response.text);
   }
 
   if (isSignificantMessage(payload.text)) {
-    addToInsightsBuffer(user_id, memory.id, payload.text, response.text).catch(error => {
-      console.error('Error queueing insights extraction:', error);
-    });
+    addToInsightsBuffer(user_id, memory.id, payload.text, response.text).catch(
+      error => {
+        console.error('Error queueing insights extraction:', error);
+      },
+    );
   }
 
-  updateStreak(user_id)
+  void updateStreak(user_id);
 
   return {
-    data: { response: response.text, memory_id: memory.id },
-    message: "Conversation started successfully"
-  }
+    data: {response: response.text, memory_id: memory.id},
+    message: 'Conversation started successfully',
+  };
 }
 
 export async function createEphemeralToken() {
-  const expireTime = dayjs().add(30, "minute").toDate(); // 30 minutes from now
-  const newSessionExpireTime = dayjs().add(2, "minutes").toDate(); // 2 minute from now
+  const expireTime = dayjs().add(30, 'minute').toDate(); // 30 minutes from now
+  const newSessionExpireTime = dayjs().add(2, 'minutes').toDate(); // 2 minute from now
 
   const token = await geminiAuthClient.authTokens.create({
     config: {
@@ -339,42 +383,48 @@ export async function createEphemeralToken() {
         model: GEMINI_LIVE_MODEL,
         config: {
           sessionResumption: {},
-          responseModalities: [Modality.AUDIO]
-        }
+          responseModalities: [Modality.AUDIO],
+        },
       },
       httpOptions: {
-        apiVersion: 'v1alpha'
-      }
-    }
+        apiVersion: 'v1alpha',
+      },
+    },
   });
 
   return {
-    message: "Ephemeral token created successfully",
+    message: 'Ephemeral token created successfully',
     data: {
       token: token.name,
-      expiresAt: expireTime.toISOString()
-    }
+      expiresAt: expireTime.toISOString(),
+    },
   };
 }
 
-export async function autogenerateTags(payload: { title?: string; body?: string }) {
-  const title = (payload.title ?? "").trim();
-  const body = (payload.body ?? "").trim();
+export async function autogenerateTags(payload: {
+  title?: string;
+  body?: string;
+}) {
+  const title = (payload.title ?? '').trim();
+  const body = (payload.body ?? '').trim();
   const prompt = prompts.buildTagsPrompt();
 
   const response = await ai.generateText([
-    { role: "user", content: `${prompt}\n\nTITLE:\n${title || "(none)"}\n\nBODY:\n${body || "(none)"}` },
+    {
+      role: 'user',
+      content: `${prompt}\n\nTITLE:\n${title || '(none)'}\n\nBODY:\n${body || '(none)'}`,
+    },
   ]);
 
   const parsed = extractJson(response);
   const tags = Array.isArray(parsed?.tags) ? parsed.tags : [];
   const normalizedTags = tags
-    .filter((t): t is string => typeof t === "string")
-    .map((t) => t.trim().toLowerCase())
+    .filter((t): t is string => typeof t === 'string')
+    .map(t => t.trim().toLowerCase())
     .slice(0, 5);
 
   return {
-    data: { tags: normalizedTags },
-    message: "Tags generated successfully",
+    data: {tags: normalizedTags},
+    message: 'Tags generated successfully',
   };
 }

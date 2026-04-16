@@ -1,24 +1,23 @@
-import { NextFunction, Request, Response } from 'express';
-import { StatusCodes } from 'http-status-codes';
+import {NextFunction, Request, Response} from 'express';
+import {StatusCodes} from 'http-status-codes';
 import dayjs from 'dayjs';
-import { responsHandler } from '../utils/helpers';
-import { ServiceError } from '../utils/service-error';
+import {responsHandler} from '../utils/helpers';
+import {ServiceError} from '../utils/service-error';
 import logger from '../utils/logger';
 
 const errorHandler = (
   err: any,
   req: Request | any,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
-
   // If headers have already been sent, we can't send an error response
   if (res.headersSent) {
     logger.error(err, 'Error occurred after headers were sent');
     return;
   }
 
-  const { method, url } = req;
+  const {method, url} = req;
 
   const timestamp = dayjs().format('DD/MM/YY HH:mm:ss');
   const request = `[${timestamp}] ${method.toUpperCase()} ${url}`;
@@ -27,9 +26,9 @@ const errorHandler = (
   const path = stackLines?.[1]?.trim() || err;
   const message = stackLines?.[0]?.trim() || err;
 
-  const error_payload = { request, message, path, stackLines };
+  const error_payload = {request, message, path, stackLines};
 
-  logger.error(error_payload, 'Error occurred')
+  logger.error(error_payload, 'Error occurred');
 
   if (err instanceof ServiceError) {
     return responsHandler(res, err.statusCode, err?.message, err?.data);
@@ -42,7 +41,7 @@ const errorHandler = (
   //   });
   // }
 
-  logger.fatal(error_payload, 'Error occurred')
+  logger.fatal(error_payload, 'Error occurred');
   // mail.send({
   //   subject: 'Memento error',
   //   text: JSON.stringify(error_payload, null, 2),

@@ -1,15 +1,15 @@
 import Memory from '../../database/model/memory';
 import File from '../../database/model/file';
-import Prompt, { IPrompt } from '../../database/model/prompt';
-import { NotFoundException } from '../../../utils/service-error';
-import { IReplyPrompt } from './interface';
-import { isEmpty } from '../../../utils/helpers';
+import Prompt, {IPrompt} from '../../database/model/prompt';
+import {NotFoundException} from '../../../utils/service-error';
+import {IReplyPrompt} from './interface';
+import {isEmpty} from '../../../utils/helpers';
 import * as storage from '../../../services/storage';
 import User from '../../database/model/user';
 import ActivePrompt from '../../database/model/active-prompt';
 import dayjs from 'dayjs';
-import { IPagination } from '../../../utils/interface';
-import { updateStreak } from '../user/service';
+import {IPagination} from '../../../utils/interface';
+import {updateStreak} from '../user/service';
 
 export const getPrompts = async (user_id: string) => {
   const MAX_PROMPT = 2;
@@ -17,7 +17,7 @@ export const getPrompts = async (user_id: string) => {
   // Get all active prompts for this user
   const todayPrompts = await ActivePrompt.find({
     user: user_id,
-    created_at: { $gte: dayjs().subtract(1, 'day').startOf('day').toDate() },
+    created_at: {$gte: dayjs().subtract(1, 'day').startOf('day').toDate()},
   })
     .populate('prompt')
     .lean();
@@ -60,7 +60,7 @@ export const getPrompts = async (user_id: string) => {
 const getAnsweredPromptIds = async (user_id: string): Promise<string[]> => {
   const answeredMemories = await Memory.find({
     user: user_id,
-    prompt: { $exists: true, $ne: null },
+    prompt: {$exists: true, $ne: null},
   });
 
   return answeredMemories
@@ -79,16 +79,16 @@ const assignDailyPrompts = async (
 ): Promise<any[]> => {
   const MAX_PROMPT = 2;
 
-  await ActivePrompt.deleteMany({ user: user_id });
+  await ActivePrompt.deleteMany({user: user_id});
 
   // Get 2 new prompts excluding answered ones
   const availablePrompts = await Prompt.aggregate([
     {
       $match: {
-        _id: { $nin: [...answeredPromptIds, ...todayPrompts] },
+        _id: {$nin: [...answeredPromptIds, ...todayPrompts]},
       },
     },
-    { $sample: { size: MAX_PROMPT } },
+    {$sample: {size: MAX_PROMPT}},
   ]);
 
   if (availablePrompts.length === 0) {
@@ -106,20 +106,20 @@ const assignDailyPrompts = async (
   // Return populated active prompts
   const newActivePrompts = await ActivePrompt.find({
     user: user_id,
-    prompt: { $in: availablePrompts.map(p => p._id) },
+    prompt: {$in: availablePrompts.map(p => p._id)},
   })
     .populate('prompt')
-    .sort({ created_at: -1 })
+    .sort({created_at: -1})
     .limit(MAX_PROMPT);
 
   return newActivePrompts;
 };
 
 export const getUserPromptResponse = async (id: string, user_id: string) => {
-  let memory = await Memory.findOne({ user: user_id, prompt: id }).populate({
+  let memory = await Memory.findOne({user: user_id, prompt: id}).populate({
     path: 'attachments',
     select: '-base64',
-    match: { provider: { $ne: 's3' } },
+    match: {provider: {$ne: 's3'}},
   });
 
   if (!memory) {
@@ -135,7 +135,7 @@ export const getUserPromptResponse = async (id: string, user_id: string) => {
     });
   }
 
-  return { data: memory, message: 'User prompt response retrieved successfully' };
+  return {data: memory, message: 'User prompt response retrieved successfully'};
 };
 
 export const replyPrompt = async (
@@ -143,7 +143,7 @@ export const replyPrompt = async (
   user_id: string,
   files: Express.Multer.File[] | null = null,
 ) => {
-  const { prompt_id, body, tags = [], level = 1 } = payload;
+  const {prompt_id, body, tags = [], level = 1} = payload;
 
   const user = await User.findById(user_id);
   if (isEmpty(user)) {
@@ -167,7 +167,7 @@ export const replyPrompt = async (
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
 
-  let memory = await Memory.findOne({ user: user_id, prompt: prompt_id });
+  let memory = await Memory.findOne({user: user_id, prompt: prompt_id});
   if (!memory) {
     memory = await Memory.create({
       user: user_id,
@@ -185,9 +185,9 @@ export const replyPrompt = async (
         body: body || memory?.body,
         level,
         tags,
-        $addToSet: { attachments: { $each: attachments } },
+        $addToSet: {attachments: {$each: attachments}},
       },
-      { new: true },
+      {new: true},
     );
   }
 
@@ -196,13 +196,13 @@ export const replyPrompt = async (
     prompt: prompt_id,
   });
   if (activePrompt) {
-    await ActivePrompt.findByIdAndUpdate(activePrompt.id, { memory: memory.id });
+    await ActivePrompt.findByIdAndUpdate(activePrompt.id, {memory: memory.id});
   }
 
   // Update streak when user replies to a prompt
-  updateStreak(user_id);
+  void updateStreak(user_id);
 
-  return { data: memory, message: 'Response saved successfully' };
+  return {data: memory, message: 'Response saved successfully'};
 };
 
 export const getPromptsByCategory = async (
@@ -210,29 +210,29 @@ export const getPromptsByCategory = async (
   user_id: string,
   pagination: IPagination,
 ) => {
-  const { page, limit, ...query } = pagination;
+  const {page, limit, ...query} = pagination;
 
-  let queryFilter: any = { category };
+  const queryFilter: any = {category};
 
   if ('answered' in query) {
     const answeredMemories = await Memory.find({
       user: user_id,
-      prompt: { $exists: true, $ne: null },
+      prompt: {$exists: true, $ne: null},
     });
 
     const answeredPromptIds = answeredMemories.map(m => m.prompt);
 
     if (query?.answered === 'true') {
-      queryFilter._id = { $in: answeredPromptIds };
+      queryFilter._id = {$in: answeredPromptIds};
     } else {
-      queryFilter._id = { $nin: answeredPromptIds };
+      queryFilter._id = {$nin: answeredPromptIds};
     }
   }
 
   const prompts = await Prompt.paginate(queryFilter, {
     page,
     limit,
-    sort: { created_at: -1 },
+    sort: {created_at: -1},
   });
 
   return {
@@ -242,16 +242,16 @@ export const getPromptsByCategory = async (
 };
 
 export const getSuggestions = async (pagination: IPagination) => {
-  const { page, limit } = pagination;
+  const {page, limit} = pagination;
   const skip = (Math.max(1, page) - 1) * limit;
 
   const total = await Prompt.countDocuments({});
   const sampleSize = Math.min(total, skip + limit);
   const docs = await Prompt.aggregate([
-    { $sample: { size: sampleSize } },
-    { $skip: skip },
-    { $limit: limit },
-  ]).sort({ title: 1 });
+    {$sample: {size: sampleSize}},
+    {$skip: skip},
+    {$limit: limit},
+  ]).sort({title: 1});
 
   const data = {
     docs,
@@ -277,14 +277,14 @@ export const getOverviewPrompts = async (user_id: string) => {
 
   const answeredMemories = await Memory.find({
     user: user_id,
-    prompt: { $exists: true, $ne: null },
+    prompt: {$exists: true, $ne: null},
   });
 
   const answeredPromptIds = answeredMemories
     .map(m => m.prompt?.toString())
     .filter(Boolean) as string[];
 
-  const activePrompts = await ActivePrompt.find({ user: user_id });
+  const activePrompts = await ActivePrompt.find({user: user_id});
   const activePromptIds = activePrompts.map(ap =>
     typeof ap.prompt === 'string'
       ? ap.prompt
@@ -294,11 +294,11 @@ export const getOverviewPrompts = async (user_id: string) => {
   const availablePrompts = await Prompt.aggregate([
     {
       $match: {
-        _id: { $nin: [...answeredPromptIds, ...activePromptIds] },
+        _id: {$nin: [...answeredPromptIds, ...activePromptIds]},
       },
     },
-    { $sample: { size: limit * 3 } },
-  ]).sort({ title: 1 });
+    {$sample: {size: limit * 3}},
+  ]).sort({title: 1});
 
   // Group prompts by category and select one from each
   const categoryMap = new Map<string, any>();

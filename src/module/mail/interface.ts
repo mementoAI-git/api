@@ -1,4 +1,4 @@
-import { FeedbackType } from "../database/model/feedback";
+import {FeedbackType} from '../database/model/feedback';
 
 export interface INotifyTeamFeedback {
   type: FeedbackType;

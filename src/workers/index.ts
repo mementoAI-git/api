@@ -1,11 +1,11 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
-import { connectMongodb } from '../module/database/connection';
-import { getRedisConnection } from '../services/redis';
+import {connectMongodb} from '../module/database/connection';
+import {getRedisConnection} from '../services/redis';
 import startInsightsExtractionWorker from './insight';
 import startSummarizationWorker from './summarizarion';
 import startSystemWorker from './system';
-import { logger } from '../utils';
+import {logger} from '../utils';
 
 async function startWorkers() {
   await connectMongodb();
@@ -22,13 +22,12 @@ async function startWorkers() {
     await summarizationWorker.close();
     await systemWorker.close();
     await mongoose.disconnect();
-    process.exit(0);
+    process.exit(0); // eslint-disable-line n/no-process-exit
   });
 }
 
 // Start the workers
-startWorkers()
-  .catch((error) => {
-    console.error('Failed to start workers:', error);
-    process.exit(1);
-  });
+startWorkers().catch(error => {
+  console.error('Failed to start workers:', error);
+  process.exit(1); // eslint-disable-line n/no-process-exit
+});

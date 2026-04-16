@@ -1,5 +1,5 @@
 import redisClient from '../services/redis';
-import { parseJson } from './helpers';
+import {parseJson} from './helpers';
 import logger from './logger';
 import dayjs from 'dayjs';
 
@@ -20,7 +20,7 @@ export class BatchProgressTracker {
   private redisKey: string;
   private ttl: number;
 
-  constructor({ redisKey, ttl }: Constructor) {
+  constructor({redisKey, ttl}: Constructor) {
     this.redisKey = redisKey;
     this.ttl = ttl; // Default 24 hours
   }
@@ -37,12 +37,15 @@ export class BatchProgressTracker {
         status: 'running',
         total: 0,
         batch: 1,
-        cursor: null
+        cursor: null,
       };
 
       await redisClient.setEx(this.redisKey, this.ttl, JSON.stringify(payload));
     } catch (error) {
-      logger.error(error, `Error initializing batch progress for ${this.redisKey}`);
+      logger.error(
+        error,
+        `Error initializing batch progress for ${this.redisKey}`,
+      );
       throw error;
     }
   }
@@ -50,7 +53,7 @@ export class BatchProgressTracker {
   async updateProgress(
     cursor: string | null,
     processed: number,
-    batchNumber: number
+    batchNumber: number,
   ): Promise<void> {
     try {
       if (!redisClient.isOpen) {
@@ -62,7 +65,7 @@ export class BatchProgressTracker {
         ...current,
         total: current.total + processed,
         batch: batchNumber,
-        ...(cursor ? { cursor } : {})
+        ...(cursor ? {cursor} : {}),
       };
 
       await redisClient.setEx(this.redisKey, this.ttl, JSON.stringify(updated));
@@ -81,7 +84,7 @@ export class BatchProgressTracker {
       cursor: null,
       batch: 0,
       started_at: null,
-      status: null
+      status: null,
     };
 
     try {
@@ -100,7 +103,7 @@ export class BatchProgressTracker {
         cursor: parsed.cursor || null,
         batch: parseInt(parsed.batch?.toString() || '0'),
         started_at: parsed.started_at || null,
-        status: parsed.status || null
+        status: parsed.status || null,
       };
     } catch (error) {
       logger.error(error, `Error getting batch progress for ${this.redisKey}`);
@@ -129,12 +132,15 @@ export class BatchProgressTracker {
       const current = await this.getProgress();
       const updated: BatchProgress = {
         ...current,
-        status: 'completed'
+        status: 'completed',
       };
 
       await redisClient.setEx(this.redisKey, this.ttl, JSON.stringify(updated));
     } catch (error) {
-      logger.error(error, `Error marking batch as completed for ${this.redisKey}`);
+      logger.error(
+        error,
+        `Error marking batch as completed for ${this.redisKey}`,
+      );
       throw error;
     }
   }
@@ -148,7 +154,7 @@ export class BatchProgressTracker {
       const current = await this.getProgress();
       const updated: BatchProgress = {
         ...current,
-        status: 'failed'
+        status: 'failed',
       };
 
       await redisClient.setEx(this.redisKey, this.ttl, JSON.stringify(updated));
@@ -158,7 +164,7 @@ export class BatchProgressTracker {
     }
   }
 
-  async isRunning(maxHours: number = 2): Promise<boolean> {
+  async isRunning(maxHours = 2): Promise<boolean> {
     const progress = await this.getProgress();
 
     if (progress.status !== 'running' || !progress.started_at) {
@@ -172,4 +178,3 @@ export class BatchProgressTracker {
     return now.diff(startedAt, 'hours') < maxHours;
   }
 }
-

@@ -1,19 +1,19 @@
-import { Queue } from 'bullmq';
-import { getRedisConnection } from '../../redis';
+import {Queue} from 'bullmq';
+import {getRedisConnection} from '../../redis';
 import redisClient from '../../redis';
-import { parseJson } from '../../../utils/helpers';
+import {parseJson} from '../../../utils/helpers';
 
 // Types
 export interface InsightsJobData {
   user_id: string;
   memory_id: string;
-  exchanges?: Array<{ user: string; ai: string }>;
+  exchanges?: Array<{user: string; ai: string}>;
 }
 
 interface ExchangeBuffer {
   user_id: string;
   memory_id: string;
-  exchanges: Array<{ user: string; ai: string }>;
+  exchanges: Array<{user: string; ai: string}>;
   lastUpdated: number;
 }
 
@@ -21,7 +21,7 @@ const connection = getRedisConnection();
 
 // Insights extraction queue
 export const insightQueue = connection
-  ? new Queue('insights-extraction', { connection })
+  ? new Queue('insights-extraction', {connection})
   : null;
 
 // Redis keys
@@ -46,9 +46,9 @@ async function queueInsightsExtraction(data: InsightsJobData): Promise<void> {
 
   await insightQueue.add('extract-insights', data, {
     attempts: 3,
-    backoff: { type: 'exponential', delay: 1000 },
+    backoff: {type: 'exponential', delay: 1000},
     removeOnComplete: 100,
-    removeOnFail: 50
+    removeOnFail: 50,
   });
 }
 
@@ -63,7 +63,7 @@ async function flushInsightsBuffer(buffer: ExchangeBuffer): Promise<void> {
     await queueInsightsExtraction({
       user_id: buffer.user_id,
       memory_id: buffer.memory_id,
-      exchanges: [...buffer.exchanges]
+      exchanges: [...buffer.exchanges],
     });
 
     // Clear the buffer
@@ -77,7 +77,7 @@ export async function addToInsightsBuffer(
   userId: string,
   memoryId: string,
   userMessage: string,
-  aiResponse: string
+  aiResponse: string,
 ): Promise<void> {
   const key = getBufferKey(userId, memoryId);
 
@@ -98,12 +98,12 @@ export async function addToInsightsBuffer(
         user_id: userId,
         memory_id: memoryId,
         exchanges: [],
-        lastUpdated: Date.now()
+        lastUpdated: Date.now(),
       };
     }
 
     // Add new exchange
-    buffer.exchanges.push({ user: userMessage, ai: aiResponse });
+    buffer.exchanges.push({user: userMessage, ai: aiResponse});
     buffer.lastUpdated = Date.now();
 
     // Save back to Redis with TTL (1 hour)
@@ -118,16 +118,21 @@ export async function addToInsightsBuffer(
   }
 }
 
-export async function queueStoryInsights(userId: string, memoryId: string): Promise<void> {
+export async function queueStoryInsights(
+  userId: string,
+  memoryId: string,
+): Promise<void> {
   if (!insightQueue) {
-    console.warn('Insights queue not available, skipping story insights extraction...');
+    console.warn(
+      'Insights queue not available, skipping story insights extraction...',
+    );
     return;
   }
 
   try {
     await queueInsightsExtraction({
       user_id: userId,
-      memory_id: memoryId
+      memory_id: memoryId,
     });
   } catch (error) {
     console.error('Error queueing story insights extraction:', error);

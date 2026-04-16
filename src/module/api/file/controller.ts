@@ -1,13 +1,18 @@
-import { NextFunction, Response, Request } from "express"
-import { IRequest } from "../../../utils/interface"
-import * as service from "./service"
-import * as storage from "../../../services/storage"
-import File from "../../database/model/file"
-import { getFiles, responsHandler, getPagination, validateRequest } from "../../../utils/helpers"
-import { StatusCodes } from "http-status-codes"
-import dayjs from "dayjs"
-import { pipeline } from 'stream/promises';
-import logger from "../../../utils/logger"
+import {NextFunction, Response, Request} from 'express';
+import {IRequest} from '../../../utils/interface';
+import * as service from './service';
+import * as storage from '../../../services/storage';
+import File from '../../database/model/file';
+import {
+  getFiles,
+  responsHandler,
+  getPagination,
+  validateRequest,
+} from '../../../utils/helpers';
+import {StatusCodes} from 'http-status-codes';
+import dayjs from 'dayjs';
+import {pipeline} from 'stream/promises';
+import logger from '../../../utils/logger';
 
 export async function uploadFile(
   req: IRequest,
@@ -16,8 +21,14 @@ export async function uploadFile(
 ) {
   try {
     const files = getFiles(req, true);
-    const clientDuration = req.body?.duration ? parseFloat(req.body.duration) : undefined;
-    const { message, data } = await service.uploadFile(files, req.auth.id, clientDuration);
+    const clientDuration = req.body?.duration
+      ? parseFloat(req.body.duration)
+      : undefined;
+    const {message, data} = await service.uploadFile(
+      files,
+      req.auth.id,
+      clientDuration,
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -91,7 +102,7 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
         parseInt(metadata.size, 10),
         range,
       );
-      const { start, end, buffer } = data;
+      const {start, end, buffer} = data;
       res.writeHead(206, {
         'Content-Range': `bytes ${start}-${end}/${metadata.size}`,
         'Content-Length': end - start + 1,
@@ -122,7 +133,7 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
       metadata.type?.startsWith('video/');
 
     if (isMedia) {
-      const file = await File.findActiveOne({ name });
+      const file = await File.findActiveOne({name});
       if (!file) throw new Error('File not found');
 
       res.setHeader('Content-Length', metadata.size);
@@ -135,15 +146,15 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
         file.provider ?? 's3',
       );
       if (!fileResponse.Body) throw new Error('File content not found');
-      await safeStreamToResponse(fileResponse.Body as NodeJS.ReadableStream, res);
+      await safeStreamToResponse(
+        fileResponse.Body as NodeJS.ReadableStream,
+        res,
+      );
       return;
     }
 
     // ── Non-media files: buffered path (supports Redis cache) ────────────────
-    const data = await service.getFileBuffer(
-      name,
-      parseInt(metadata.size, 10),
-    );
+    const data = await service.getFileBuffer(name, parseInt(metadata.size, 10));
     res.setHeader('Content-Length', metadata.size);
     res.setHeader('Accept-Ranges', 'bytes');
     res.status(200);
@@ -169,7 +180,7 @@ export async function removeFile(
   next: NextFunction,
 ) {
   try {
-    const { message, data } = await service.removeFile(
+    const {message, data} = await service.removeFile(
       String(req.params.name),
       req.auth.id,
     );
@@ -186,7 +197,7 @@ export async function getUserFiles(
 ) {
   try {
     validateRequest(req);
-    const { message, data } = await service.getFiles(
+    const {message, data} = await service.getFiles(
       getPagination(req),
       req.auth.id,
     );

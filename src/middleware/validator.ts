@@ -1,5 +1,5 @@
-import z from "zod";
-import { Request, Response, NextFunction } from "express"
+import z from 'zod';
+import {Request, Response, NextFunction} from 'express';
 
 export default function validate(schema: z.ZodType<any>) {
   return async (req: Request, res: Response, next: NextFunction) => {
