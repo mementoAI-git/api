@@ -142,8 +142,11 @@ jobs:
           yarn install --production --frozen-lockfile --ignore-scripts
 
           # Restart if running, or start if stopped/missing (auto-sleep may have stopped them)
-          pm2 restart memento-backend-dev --update-env 2>/dev/null \
-            || MEMENTO_ENV=dev pm2 start ecosystem.config.js
+          if pm2 describe memento-backend-dev > /dev/null 2>&1; then
+            pm2 restart memento-backend-dev --update-env
+          else
+            MEMENTO_ENV=dev pm2 start ecosystem.config.js
+          fi
           pm2 restart memento-backend-dev-worker --update-env 2>/dev/null || true
           REMOTE
 
