@@ -3,10 +3,10 @@
  * Run: npx ts-node src/scripts/configure-supermemory.ts
  * Requires SUPERMEMORY_API_KEY in .env.
  */
-import { SUPERMEMORY_API_KEY } from "../utils/config";
-import logger from "../utils/logger";
+import {SUPERMEMORY_API_KEY} from '../utils/config';
+import logger from '../utils/logger';
 
-const SETTINGS_URL = "https://api.supermemory.ai/v3/settings";
+const SETTINGS_URL = 'https://api.supermemory.ai/v3/settings';
 
 const FILTER_PROMPT = `Memento is a personal reflection and memory app. Users have an AI companion to explore memories, thoughts, and dreams; write and reflect on stories; and create time capsules for loved ones. The long-term goal is to build a digital clone of each user so others can interact with it.
 
@@ -14,16 +14,18 @@ containerTag identifies one user's memory space. In production it is the Memento
 
 async function configureSupermemory(): Promise<void> {
   if (!SUPERMEMORY_API_KEY) {
-    logger.warn("SUPERMEMORY_API_KEY is not set. Skipping Supermemory settings configuration.");
-    process.exit(0);
+    logger.warn(
+      'SUPERMEMORY_API_KEY is not set. Skipping Supermemory settings configuration.',
+    );
+    process.exit(0); // eslint-disable-line n/no-process-exit
   }
 
   try {
     const res = await fetch(SETTINGS_URL, {
-      method: "PATCH",
+      method: 'PATCH',
       headers: {
-        "Content-Type": "application/json",
-        "x-supermemory-api-key": SUPERMEMORY_API_KEY,
+        'Content-Type': 'application/json',
+        'x-supermemory-api-key': SUPERMEMORY_API_KEY,
       },
       body: JSON.stringify({
         shouldLLMFilter: true,
@@ -33,14 +35,16 @@ async function configureSupermemory(): Promise<void> {
 
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`Supermemory settings PATCH failed: ${res.status} ${body}`);
+      throw new Error(
+        `Supermemory settings PATCH failed: ${res.status} ${body}`,
+      );
     }
 
-    logger.info("Supermemory settings configured successfully.");
+    logger.info('Supermemory settings configured successfully.');
   } catch (error) {
-    logger.error({ error }, "Failed to configure Supermemory settings");
-    process.exit(1);
+    logger.error({error}, 'Failed to configure Supermemory settings');
+    process.exit(1); // eslint-disable-line n/no-process-exit
   }
 }
 
-configureSupermemory();
+void configureSupermemory();

@@ -1,4 +1,4 @@
-import { StatusCodes } from 'http-status-codes';
+import {StatusCodes} from 'http-status-codes';
 
 export class ServiceError extends Error {
   statusCode: number;
@@ -26,7 +26,7 @@ export class ServiceError extends Error {
 }
 
 export class BadRequestException extends ServiceError {
-  constructor(message: string = "Bad request", data?: any) {
+  constructor(message = 'Bad request', data?: any) {
     super(message, StatusCodes.BAD_REQUEST, data, 'failed');
   }
 }
@@ -38,7 +38,7 @@ export class UnauthorizedException extends ServiceError {
 }
 
 export class InternalServerErrorException extends ServiceError {
-  constructor(message: string = "Internal server error", data?: any) {
+  constructor(message = 'Internal server error', data?: any) {
     super(message, StatusCodes.INTERNAL_SERVER_ERROR, data, 'failed');
   }
 }
@@ -50,31 +50,34 @@ export class ExpectationFailedException extends ServiceError {
 }
 
 export class ServiceUnavailableException extends ServiceError {
-  constructor(message: string = "Service unavilable", data?: any) {
+  constructor(message = 'Service unavilable', data?: any) {
     super(message, StatusCodes.SERVICE_UNAVAILABLE, data, 'failed');
   }
 }
 
 export class NotFoundException extends ServiceError {
-  constructor(message: string = "Not found", data?: any) {
+  constructor(message = 'Not found', data?: any) {
     super(message, StatusCodes.NOT_FOUND, data, 'failed');
   }
 }
 
 export class TooManyRequestsException extends ServiceError {
-  constructor(message: string = "Too many request", data?: any) {
+  constructor(message = 'Too many request', data?: any) {
     super(message, StatusCodes.TOO_MANY_REQUESTS, data, 'failed');
   }
 }
 
 export class ActionNotAllowed extends ServiceError {
-  constructor(message: string = "Action not allowed", data?: any) {
+  constructor(message = 'Action not allowed', data?: any) {
     super(message, StatusCodes.FORBIDDEN, data, 'failed');
   }
 }
 
 export class ForbiddenException extends ServiceError {
-  constructor(message: string = "Storage limit exceeded", data?: { used?: number; limit?: number }) {
+  constructor(
+    message = 'Storage limit exceeded',
+    data?: {used?: number; limit?: number},
+  ) {
     super(message, StatusCodes.FORBIDDEN, data, 'failed');
   }
 }
@@ -86,7 +89,7 @@ export class UnprocessableContent extends ServiceError {
 }
 
 export class SessionTimeout extends ServiceError {
-  constructor(message: string = 'Session expired', data?: any) {
+  constructor(message = 'Session expired', data?: any) {
     super(message, 440, data, 'failed');
   }
 }

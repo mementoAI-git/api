@@ -1,9 +1,6 @@
-import Supermemory from "supermemory";
-import {
-  IS_PRODUCTION,
-  SUPERMEMORY_API_KEY
-} from "../../utils/config";
-import logger from "../../utils/logger";
+import Supermemory from 'supermemory';
+import {IS_PRODUCTION, SUPERMEMORY_API_KEY} from '../../utils/config';
+import logger from '../../utils/logger';
 
 export function getContainerTag(userId: string): string {
   const id = String(userId);
@@ -25,9 +22,9 @@ function getClient(): Supermemory | null {
   }
   if (!client) {
     try {
-      client = new Supermemory({ apiKey: SUPERMEMORY_API_KEY });
+      client = new Supermemory({apiKey: SUPERMEMORY_API_KEY});
     } catch (err) {
-      logger.warn({ err }, "Supermemory client init failed");
+      logger.warn({err}, 'Supermemory client init failed');
       return null;
     }
   }
@@ -36,13 +33,18 @@ function getClient(): Supermemory | null {
 
 export async function getContextForUser(
   userId: string,
-  userMessage: string
+  userMessage: string,
 ): Promise<SupermemoryContext> {
-  const empty = { static: [] as string[], dynamic: [] as string[], result: "", formatedText: "" };
+  const empty = {
+    static: [] as string[],
+    dynamic: [] as string[],
+    result: '',
+    formatedText: '',
+  };
 
   const c = getClient();
   if (!c) {
-    return { ...empty };
+    return {...empty};
   }
 
   const containerTag = getContainerTag(userId);
@@ -53,27 +55,39 @@ export async function getContextForUser(
       q: userMessage,
     });
 
-    const staticFacts = Array.isArray(apiResult.profile?.static) ? apiResult.profile.static : [];
-    const dynamicContext = Array.isArray(apiResult.profile?.dynamic) ? apiResult.profile.dynamic : [];
+    const staticFacts = Array.isArray(apiResult.profile?.static)
+      ? apiResult.profile.static
+      : [];
+    const dynamicContext = Array.isArray(apiResult.profile?.dynamic)
+      ? apiResult.profile.dynamic
+      : [];
     const results = apiResult.searchResults?.results ?? [];
     const resultText = Array.isArray(results)
       ? results
-        .map((r: { memory?: string; chunk?: string }) => r?.memory ?? r?.chunk ?? "")
-        .filter(Boolean)
-        .join("\n")
-      : "";
+          .map(
+            (r: {memory?: string; chunk?: string}) =>
+              r?.memory ?? r?.chunk ?? '',
+          )
+          .filter(Boolean)
+          .join('\n')
+      : '';
 
     const parts: string[] = [];
     if (staticFacts.length) {
-      parts.push("Static facts:\n" + staticFacts.map((s) => `- ${s}`).join("\n"));
+      parts.push('Static facts:\n' + staticFacts.map(s => `- ${s}`).join('\n'));
     }
     if (dynamicContext.length) {
-      parts.push("Recent context:\n" + dynamicContext.map((s) => `- ${s}`).join("\n"));
+      parts.push(
+        'Recent context:\n' + dynamicContext.map(s => `- ${s}`).join('\n'),
+      );
     }
     if (resultText.trim()) {
-      parts.push("Relevant memories:\n" + resultText.trim());
+      parts.push('Relevant memories:\n' + resultText.trim());
     }
-    const formatedText = parts.length === 0 ? "" : "\n\nLONG-TERM USER CONTEXT:\n" + parts.join("\n\n");
+    const formatedText =
+      parts.length === 0
+        ? ''
+        : '\n\nLONG-TERM USER CONTEXT:\n' + parts.join('\n\n');
 
     const result: SupermemoryContext = {
       static: staticFacts,
@@ -84,8 +98,8 @@ export async function getContextForUser(
 
     return result;
   } catch (err) {
-    logger.warn({ err, userId: containerTag }, "Supermemory profile failed");
-    return { ...empty };
+    logger.warn({err, userId: containerTag}, 'Supermemory profile failed');
+    return {...empty};
   }
 }
 
@@ -93,7 +107,10 @@ export async function getContextForUser(
  * Store host-approved insight text in Supermemory. No-op when disabled or content empty.
  * Throws on API failure when the client is configured (caller can avoid deleting pending rows).
  */
-export async function addApprovedMemory(userId: string, content: string): Promise<void> {
+export async function addApprovedMemory(
+  userId: string,
+  content: string,
+): Promise<void> {
   const c = getClient();
   if (!c) {
     return;
@@ -106,9 +123,12 @@ export async function addApprovedMemory(userId: string, content: string): Promis
   const containerTag = getContainerTag(userId);
 
   try {
-    await c.add({ content: trimmed, containerTag });
+    await c.add({content: trimmed, containerTag});
   } catch (err) {
-    logger.warn({ err, userId: containerTag }, "Supermemory add approved memory failed");
+    logger.warn(
+      {err, userId: containerTag},
+      'Supermemory add approved memory failed',
+    );
     throw err;
   }
 }

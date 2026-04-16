@@ -1,10 +1,10 @@
 export interface IPrompt {
-  text: string
-  attachments?: string[]
+  text: string;
+  attachments?: string[];
 }
 
 export interface ITranscribeAudio {
-  file_id?: string
+  file_id?: string;
 }
 
 export interface IUserInsights {
@@ -26,7 +26,7 @@ export interface IConversationAnalysis {
 }
 
 export interface IStartMemory {
-  text: string
-  prompt_id?: string
-  attachments?: string[]
+  text: string;
+  prompt_id?: string;
+  attachments?: string[];
 }

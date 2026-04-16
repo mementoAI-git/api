@@ -1,5 +1,5 @@
-import dayjs from "dayjs";
-import User from "../../module/database/model/user";
+import dayjs from 'dayjs';
+import User from '../../module/database/model/user';
 
 async function resetStreak() {
   const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
@@ -7,13 +7,13 @@ async function resetStreak() {
   const result = await User.updateMany(
     {
       $or: [
-        { last_task_date: { $lt: yesterday } },
-        { last_task_date: null },
-        { last_task_date: { $exists: false } },
+        {last_task_date: {$lt: yesterday}},
+        {last_task_date: null},
+        {last_task_date: {$exists: false}},
       ],
     },
     {
-      $set: { streak: 0 },
+      $set: {streak: 0},
     },
   );
 

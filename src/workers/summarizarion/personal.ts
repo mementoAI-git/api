@@ -1,31 +1,30 @@
-import { createUserContent } from "@google/genai";
-import gemini, { GEMINI_MODEL } from "../../services/gemini";
-import Persona, { IPersona } from "../../module/database/model/persona";
-import { prompts } from "../../utils";
-import { queuePersonaBatchSummarization } from "../../services/queues/summarization";
-import { Types } from "mongoose";
-import { BatchProgressTracker, logger, extractJson } from "../../utils";
+import ai from '../../services/ai';
+import Persona, {IPersona} from '../../module/database/model/persona';
+import {prompts} from '../../utils';
+import {queuePersonaBatchSummarization} from '../../services/queues/summarization';
+import {Types} from 'mongoose';
+import {BatchProgressTracker, logger, extractJson} from '../../utils';
 
-type SummarizableField = 'important_notes' | 'key_preferences' | 'goals_and_aspirations';
+type SummarizableField =
+  | 'important_notes'
+  | 'key_preferences'
+  | 'goals_and_aspirations';
 
-async function processSection(section: SummarizableField, items: string[]): Promise<string[]> {
+async function processSection(
+  section: SummarizableField,
+  items: string[],
+): Promise<string[]> {
   try {
-    const prompt = prompts.buildTopicSummarizationPrompt(
-      items,
-      section
-    );
+    const prompt = prompts.buildTopicSummarizationPrompt(items, section);
 
-    const contents = createUserContent([
-      prompt,
-      { text: `Items to consolidate:\n${items.join('\n')}` }
+    const response = await ai.generateText([
+      {
+        role: 'user',
+        content: `${prompt}\n\nItems to consolidate:\n${items.join('\n')}`,
+      },
     ]);
 
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents
-    });
-
-    const result = extractJson(response.text);
+    const result = extractJson(response);
     return result?.summarized_items || [];
   } catch (error) {
     logger.error(error, `Error summarizing ${section} items`);
@@ -33,7 +32,10 @@ async function processSection(section: SummarizableField, items: string[]): Prom
   }
 }
 
-function shouldSummarizeField(field: SummarizableField, persona: IPersona): boolean {
+function shouldSummarizeField(
+  field: SummarizableField,
+  persona: IPersona,
+): boolean {
   const fieldArray = persona[field];
   if (!fieldArray || fieldArray.length === 0) {
     return false;
@@ -51,16 +53,14 @@ function shouldSummarizeField(field: SummarizableField, persona: IPersona): bool
   return !lastSummarized || lastUpdate > lastSummarized;
 }
 
-export async function summarizePersona(
-  persona: IPersona,
-): Promise<void> {
+export async function summarizePersona(persona: IPersona): Promise<void> {
   try {
     const updateData: Partial<IPersona> = {};
     const now = new Date();
     const fieldsToProcess: SummarizableField[] = [
       'important_notes',
       'key_preferences',
-      'goals_and_aspirations'
+      'goals_and_aspirations',
     ];
     let hasUpdates = false;
 
@@ -71,7 +71,7 @@ export async function summarizePersona(
         if (fieldArray && fieldArray.length > 0) {
           const summarizedItems = await processSection(
             field,
-            fieldArray.slice(-100) // Take last 100 items
+            fieldArray.slice(-100), // Take last 100 items
           );
 
           if (summarizedItems && Array.isArray(summarizedItems)) {
@@ -92,20 +92,23 @@ export async function summarizePersona(
       logger.info(`Successfully summarized persona ${persona._id}`);
     }
   } catch (error) {
-    logger.error(error, `Error summarizing persona topics for persona ${persona._id}`);
+    logger.error(
+      error,
+      `Error summarizing persona topics for persona ${persona._id}`,
+    );
     throw error;
   }
 }
 
 const tracker = new BatchProgressTracker({
   redisKey: 'persona:summarization:',
-  ttl: 86400
+  ttl: 86400,
 });
 
 export async function summarizeAllPersonas(
   cursor?: string,
-  batchSize: number = 50,
-  batchNumber: number = 1
+  batchSize = 50,
+  batchNumber = 1,
 ): Promise<void> {
   try {
     if (batchNumber === 1 && !cursor) {
@@ -119,49 +122,70 @@ export async function summarizeAllPersonas(
         {
           $or: [
             {
-              'last_update.important_notes': { $exists: true, $ne: null },
+              'last_update.important_notes': {$exists: true, $ne: null},
               $or: [
-                { 'last_summarized.important_notes': { $exists: false } },
-                { 'last_summarized.important_notes': null },
-                { $expr: { $gt: ['$last_update.important_notes', '$last_summarized.important_notes'] } }
-              ]
+                {'last_summarized.important_notes': {$exists: false}},
+                {'last_summarized.important_notes': null},
+                {
+                  $expr: {
+                    $gt: [
+                      '$last_update.important_notes',
+                      '$last_summarized.important_notes',
+                    ],
+                  },
+                },
+              ],
             },
             {
-              'last_update.key_preferences': { $exists: true, $ne: null },
+              'last_update.key_preferences': {$exists: true, $ne: null},
               $or: [
-                { 'last_summarized.key_preferences': { $exists: false } },
-                { 'last_summarized.key_preferences': null },
-                { $expr: { $gt: ['$last_update.key_preferences', '$last_summarized.key_preferences'] } }
-              ]
+                {'last_summarized.key_preferences': {$exists: false}},
+                {'last_summarized.key_preferences': null},
+                {
+                  $expr: {
+                    $gt: [
+                      '$last_update.key_preferences',
+                      '$last_summarized.key_preferences',
+                    ],
+                  },
+                },
+              ],
             },
             {
-              'last_update.goals_and_aspirations': { $exists: true, $ne: null },
+              'last_update.goals_and_aspirations': {$exists: true, $ne: null},
               $or: [
-                { 'last_summarized.goals_and_aspirations': { $exists: false } },
-                { 'last_summarized.goals_and_aspirations': null },
-                { $expr: { $gt: ['$last_update.goals_and_aspirations', '$last_summarized.goals_and_aspirations'] } }
-              ]
-            }
-          ]
+                {'last_summarized.goals_and_aspirations': {$exists: false}},
+                {'last_summarized.goals_and_aspirations': null},
+                {
+                  $expr: {
+                    $gt: [
+                      '$last_update.goals_and_aspirations',
+                      '$last_summarized.goals_and_aspirations',
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
         },
         // Fallback: Personas with data but never summarized (backward compatibility)
         {
           last_summarized_at: null,
           $or: [
-            { important_notes: { $exists: true, $ne: [], $not: { $size: 0 } } },
-            { key_preferences: { $exists: true, $ne: [], $not: { $size: 0 } } },
-            { goals_and_aspirations: { $exists: true, $ne: [], $not: { $size: 0 } } }
-          ]
-        }
-      ]
+            {important_notes: {$exists: true, $ne: [], $not: {$size: 0}}},
+            {key_preferences: {$exists: true, $ne: [], $not: {$size: 0}}},
+            {goals_and_aspirations: {$exists: true, $ne: [], $not: {$size: 0}}},
+          ],
+        },
+      ],
     };
 
     if (cursor && Types.ObjectId.isValid(cursor)) {
-      query._id = { $gt: new Types.ObjectId(cursor) };
+      query._id = {$gt: new Types.ObjectId(cursor)};
     }
 
     const personas = await Persona.find(query)
-      .sort({ _id: 1 })
+      .sort({_id: 1})
       .limit(batchSize + 1);
 
     const hasMore = personas.length > batchSize;
@@ -177,7 +201,10 @@ export async function summarizeAllPersonas(
         processedCount++;
         lastProcessedId = persona._id?.toString() || null;
       } catch (error) {
-        logger.error(error, `Error processing persona ${persona._id}, continuing with next`);
+        logger.error(
+          error,
+          `Error processing persona ${persona._id}, continuing with next`,
+        );
       }
     }
 
@@ -186,7 +213,11 @@ export async function summarizeAllPersonas(
 
     // Queue next batch if more personas exist
     if (hasMore && lastProcessedId) {
-      await queuePersonaBatchSummarization(lastProcessedId, batchSize, batchNumber + 1);
+      await queuePersonaBatchSummarization(
+        lastProcessedId,
+        batchSize,
+        batchNumber + 1,
+      );
     } else {
       await tracker.markCompleted();
       logger.info('Persona summarization completed. All batches processed.');
@@ -197,4 +228,3 @@ export async function summarizeAllPersonas(
     throw error;
   }
 }
-

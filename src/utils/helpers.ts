@@ -1,29 +1,26 @@
-import { Response, Request } from 'express';
-import { check, validationResult } from 'express-validator';
+import {Response, Request} from 'express';
+import {check, validationResult} from 'express-validator';
 import bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
-import { ec } from 'elliptic';
+import {ec} from 'elliptic';
 import {
   SessionTimeout,
   UnauthorizedException,
   UnprocessableContent,
 } from './service-error';
-import { JWT_SECRET } from './config';
-import { IPagination } from './interface';
+import {JWT_SECRET} from './config';
+import {IPagination} from './interface';
 import dayjs from 'dayjs';
-import { FilterQuery } from 'mongoose';
-import { writeFile, unlink } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { getAudioDurationInSeconds } from 'get-audio-duration';
+import {FilterQuery} from 'mongoose';
+import {writeFile, unlink} from 'fs/promises';
+import {join} from 'path';
+import {tmpdir} from 'os';
+import {getAudioDurationInSeconds} from 'get-audio-duration';
 import mongoose from '../module/database/connection';
-import { SENSITIVE_FIELDS, SUPPORTED_FILE_TYPES } from './constant';
-import { ClientSession } from 'mongoose';
+import {SENSITIVE_FIELDS, SUPPORTED_FILE_TYPES} from './constant';
+import {ClientSession} from 'mongoose';
 
-export const random = (
-  len: number = 6,
-  type: 'number' | 'alphanumeric' = 'number',
-) => {
+export const random = (len = 6, type: 'number' | 'alphanumeric' = 'number') => {
   if (type === 'number') {
     return Math.floor(
       Math.random() * (10 ** len - 1) + 10 ** (len - 1),
@@ -63,7 +60,7 @@ export const isEmpty = (mixedVar: any) => {
   return false;
 };
 
-export const getStringSize = (str: string, format: string = 'base64') => {
+export const getStringSize = (str: string, format = 'base64') => {
   if (format === 'base64') {
     const padding = str.endsWith('==') ? 2 : str.endsWith('=') ? 1 : 0;
     return str.length * (3 / 4) - padding;
@@ -130,12 +127,12 @@ export const getFiles = (
 };
 
 export const getPagination = (req: Request): IPagination => {
-  let { limit = 25, page = 1 } = req.query;
+  let {limit = 25, page = 1} = req.query;
 
   limit = Math.max(Number(limit), 1);
   page = Math.max(Number(page), 1);
 
-  return { ...req.query, limit, page };
+  return {...req.query, limit, page};
 };
 
 export const hashPassword = async (password: string) => {
@@ -150,35 +147,35 @@ export const generateKeys = () => {
   const private_key = key.getPrivate('hex');
   const public_key = key.getPublic('hex');
 
-  return { private_key, public_key };
+  return {private_key, public_key};
 };
 
 export const createAccessToken = (
   id: string,
   expires_in = 24 * 60 * 60 * 1000,
 ) => {
-  const access_token = jwt.sign({ id }, String(JWT_SECRET), {
+  const access_token = jwt.sign({id}, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
     expiresIn: expires_in,
   });
 
   const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
-  return { access_token, expires_at };
+  return {access_token, expires_at};
 };
 
 export const createRefreshToken = (
   id: string,
   expires_in = 30 * 24 * 60 * 60 * 1000,
 ) => {
-  const refresh_token = jwt.sign({ id, type: 'refresh' }, String(JWT_SECRET), {
+  const refresh_token = jwt.sign({id, type: 'refresh'}, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
     expiresIn: expires_in,
   });
 
   const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
-  return { refresh_token, expires_at };
+  return {refresh_token, expires_at};
 };
 
 export const createTokenPair = (
@@ -241,11 +238,10 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
     if (!allowed.includes(queries[i][0])) continue;
     if (queries[i][0] === 'search' && !isEmpty(queries[i][1])) {
       const search_filters: any[] = fields.map(key => ({
-        [key]: { $regex: new RegExp(`${queries[i][1]}`), $options: 'i' },
+        [key]: {$regex: new RegExp(`${queries[i][1]}`), $options: 'i'},
       }));
-      proccessed.push({ $or: search_filters });
-    }
-    else proccessed.push({ [queries[i][0]]: queries[i][1] });
+      proccessed.push({$or: search_filters});
+    } else proccessed.push({[queries[i][0]]: queries[i][1]});
   }
 
   return proccessed;
@@ -258,7 +254,7 @@ export const getTimeBasedGreeting = (): string => {
   return 'Good evening';
 };
 
-export const emptyPaginatedList = ({ limit, page }) => {
+export const emptyPaginatedList = ({limit, page}) => {
   return {
     docs: [],
     totalDocs: 0,
@@ -353,7 +349,7 @@ export const parseJson = (text: string) => {
   } catch (error) {
     return null;
   }
-}
+};
 
 export const sanitizeData = (data: any): any => {
   if (!data || typeof data !== 'object') {
@@ -369,7 +365,9 @@ export const sanitizeData = (data: any): any => {
     const lowerKey = key.toLowerCase();
 
     // Check if this field should be censored (case-insensitive)
-    if (SENSITIVE_FIELDS.some(field => lowerKey.includes(field.toLowerCase()))) {
+    if (
+      SENSITIVE_FIELDS.some(field => lowerKey.includes(field.toLowerCase()))
+    ) {
       sanitized[key] = 'XXX';
     } else if (typeof value === 'object' && value !== null) {
       // Recursively sanitize nested objects
@@ -382,18 +380,20 @@ export const sanitizeData = (data: any): any => {
   return sanitized;
 };
 
-export async function withTransaction<T>(callback: (session: ClientSession) => Promise<T>): Promise<T> {
-  const session = await mongoose.startSession()
-  session.startTransaction()
+export async function withTransaction<T>(
+  callback: (session: ClientSession) => Promise<T>,
+): Promise<T> {
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
   try {
-    const result = await callback(session)
-    await session.commitTransaction()
-    return result
+    const result = await callback(session);
+    await session.commitTransaction();
+    return result;
   } catch (error) {
-    await session.abortTransaction()
-    throw error
+    await session.abortTransaction();
+    throw error;
   } finally {
-    await session.endSession()
+    await session.endSession();
   }
 }

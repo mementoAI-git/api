@@ -1,32 +1,35 @@
-import { model, Schema } from "mongoose"
-import { IPrompt } from "./prompt"
+import {model, Schema} from 'mongoose';
+import {IPrompt} from './prompt';
 
 interface IActivePrompt {
-  prompt: string | IPrompt
-  memory: string
-  user: string
-  created_at: string
-  updated_at: string
+  prompt: string | IPrompt;
+  memory: string;
+  user: string;
+  created_at: string;
+  updated_at: string;
 }
 
-const activePrompt = new Schema<IActivePrompt>({
-  prompt: {
-    type: String,
-    ref: "prompt",
-    index: true
+const activePrompt = new Schema<IActivePrompt>(
+  {
+    prompt: {
+      type: String,
+      ref: 'prompt',
+      index: true,
+    },
+    memory: String,
+    user: {
+      type: String,
+      ref: 'user',
+      index: true,
+    },
   },
-  memory: String,
-  user: {
-    type: String,
-    ref: "user",
-    index: true
-  }
-}, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  }
-})
+  {
+    timestamps: {
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+  },
+);
 
 const ActivePrompt = model<IActivePrompt>('activeprompt', activePrompt);
 export default ActivePrompt;

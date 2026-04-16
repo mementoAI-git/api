@@ -1,0 +1,172 @@
+# ──────────────────────────────────────────────────────────────
+# Backend — Deploy to Development
+# Triggers on every push to the dev branch.
+# Lints, builds, rsyncs the artifact, installs prod deps on the
+# server, and does a zero-downtime PM2 reload with health check.
+# ──────────────────────────────────────────────────────────────
+name: "Backend: Deploy Dev"
+
+on:
+  push:
+    branches: ["dev"]
+
+# Cancel any in-progress dev deploy when a newer commit lands.
+concurrency:
+  group: backend-deploy-dev
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Lint ────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run linter
+        run: yarn lint
+
+  # ── 2. Build ───────────────────────────────────────────────
+  build:
+    name: Build
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build TypeScript
+        run: yarn build
+
+      # Verify the build produced output before uploading.
+      - name: Verify build output
+        run: |
+          if [ ! -d "build" ] || [ -z "$(ls -A build)" ]; then
+            echo "::error::Build directory is empty or missing"
+            exit 1
+          fi
+          echo "Build output OK — $(find build -type f | wc -l) files"
+
+      # Upload build/, package.json, and yarn.lock so the deploy
+      # job can rsync everything the server needs.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dev-${{ github.sha }}
+          retention-days: 2
+          path: |
+            build/
+            package.json
+            yarn.lock
+            ecosystem.config.js
+
+  # ── 3. Deploy ──────────────────────────────────────────────
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment: development
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-dev-${{ github.sha }}
+
+      # Write SSH key and known_hosts to disk for rsync + ssh.
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      # Backup the current deployment on the server before overwriting.
+      - name: Backup current deployment
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} \
+            'DEPLOY_DIR=/opt/memento/backend-dev && \
+             BACKUP_DIR=/opt/memento/backups/backend-dev && \
+             mkdir -p "$BACKUP_DIR" && \
+             if [ -d "$DEPLOY_DIR/build" ]; then \
+               cp -a "$DEPLOY_DIR/build" "$BACKUP_DIR/build-$(date +%Y%m%d-%H%M%S)"; \
+             fi && \
+             ls -dt "$BACKUP_DIR"/build-* 2>/dev/null | tail -n +4 | xargs rm -rf'
+
+      # Rsync the build artifact + dependency files to the server.
+      # This is the SINGLE source of truth — no git pull on the server.
+      - name: Rsync to server
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }}" \
+            ./build/ \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:/opt/memento/backend-dev/build/
+
+          rsync -az \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }}" \
+            ./package.json ./yarn.lock ./ecosystem.config.js \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:/opt/memento/backend-dev/
+
+      # Install production dependencies on the server, then
+      # zero-downtime reload the PM2 processes.
+      - name: Install deps and reload PM2
+        run: |
+          ssh -T -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} 'bash -s' << 'REMOTE'
+          set -e
+          cd /opt/memento/backend-dev
+
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+          yarn install --production --frozen-lockfile --ignore-scripts
+
+          # Restart if running, or start if stopped/missing (auto-sleep may have stopped them)
+          if pm2 describe memento-backend-dev > /dev/null 2>&1; then
+            pm2 restart memento-backend-dev --update-env
+          else
+            MEMENTO_ENV=dev pm2 start ecosystem.config.js
+          fi
+          pm2 restart memento-backend-dev-worker --update-env 2>/dev/null || true
+          REMOTE
+
+      # Wait for the app to come up, then hit the health endpoint.
+      - name: Health check
+        run: |
+          ssh -T -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
+            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} \
+            'echo "Waiting for app to start..." && \
+             for i in $(seq 1 15); do \
+               if curl -sf http://localhost:3001/health > /dev/null 2>&1; then \
+                 echo "Health check passed on attempt $i"; \
+                 exit 0; \
+               fi; \
+               sleep 2; \
+             done; \
+             echo "::error::Health check failed after 30 seconds"; \
+             exit 1'
+
+      # Always clean up SSH credentials, even if the deploy fails.
+      - name: Cleanup SSH credentials
+        if: always()
+        run: rm -rf ~/.ssh/deploy_key ~/.ssh/known_hosts

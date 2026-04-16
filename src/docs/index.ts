@@ -1,7 +1,7 @@
-import { Application } from 'express';
+import {Application} from 'express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
-import { BACKEND_URL } from '../utils/config';
+import {BACKEND_URL} from '../utils/config';
 import authDocs from './auth.docs';
 import usersDocs from './users.docs';
 import beneficiariesDocs from './beneficiaries.docs';
@@ -19,7 +19,8 @@ const options: swaggerJsdoc.Options = {
     info: {
       title: 'Memento API',
       version: '1.0.0',
-      description: 'API documentation for Memento - A memory and conversation management platform',
+      description:
+        'API documentation for Memento - A memory and conversation management platform',
       contact: {
         name: 'Memento API Support',
         email: 'support@mymemento.io',
@@ -89,17 +90,20 @@ const options: swaggerJsdoc.Options = {
       },
     },
     tags: [
-      { name: 'Auth', description: 'Authentication and authorization endpoints' },
-      { name: 'Users', description: 'User management endpoints' },
-      { name: 'Beneficiaries', description: 'Beneficiary management endpoints' },
-      { name: 'Groups', description: 'Group management – create groups and add beneficiaries' },
-      { name: 'Capsules', description: 'Time capsule management endpoints' },
-      { name: 'Memories', description: 'Memory management endpoints' },
-      { name: 'AI', description: 'AI conversation and interaction endpoints' },
-      { name: 'Prompts', description: 'Prompt management endpoints' },
-      { name: 'Files', description: 'File upload and management endpoints' },
-      { name: 'Activities', description: 'User activity tracking endpoints' },
-      { name: 'Health', description: 'Health check endpoints' },
+      {name: 'Auth', description: 'Authentication and authorization endpoints'},
+      {name: 'Users', description: 'User management endpoints'},
+      {name: 'Beneficiaries', description: 'Beneficiary management endpoints'},
+      {
+        name: 'Groups',
+        description: 'Group management – create groups and add beneficiaries',
+      },
+      {name: 'Capsules', description: 'Time capsule management endpoints'},
+      {name: 'Memories', description: 'Memory management endpoints'},
+      {name: 'AI', description: 'AI conversation and interaction endpoints'},
+      {name: 'Prompts', description: 'Prompt management endpoints'},
+      {name: 'Files', description: 'File upload and management endpoints'},
+      {name: 'Activities', description: 'User activity tracking endpoints'},
+      {name: 'Health', description: 'Health check endpoints'},
     ],
     paths: {
       '/health': {
@@ -115,21 +119,25 @@ const options: swaggerJsdoc.Options = {
                   schema: {
                     type: 'object',
                     properties: {
-                      status: { type: 'string', example: 'success' },
-                      message: { type: 'string', example: 'OK' },
+                      status: {type: 'string', example: 'success'},
+                      message: {type: 'string', example: 'OK'},
                       data: {
                         type: 'object',
                         properties: {
-                          uptime: { type: 'number', example: 3600.5, description: 'Uptime in seconds' },
+                          uptime: {
+                            type: 'number',
+                            example: 3600.5,
+                            description: 'Uptime in seconds',
+                          },
                           responsetime: {
                             type: 'array',
-                            items: { type: 'number' },
+                            items: {type: 'number'},
                             description: 'High resolution time tuple',
                             example: [1234, 567890000],
                           },
-                          message: { type: 'string', example: 'OK' },
-                          status: { type: 'number', example: 200 },
-                          timestamp: { type: 'number', example: 1704067200000 },
+                          message: {type: 'string', example: 'OK'},
+                          status: {type: 'number', example: 200},
+                          timestamp: {type: 'number', example: 1704067200000},
                         },
                       },
                     },
@@ -158,11 +166,14 @@ const options: swaggerJsdoc.Options = {
 const swaggerSpec = swaggerJsdoc(options);
 
 const setupSwagger = (app: Application): void => {
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-    customCss: '.swagger-ui .topbar { display: none }',
-    customSiteTitle: 'Memento API Documentation',
-  }));
+  app.use(
+    '/docs',
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec, {
+      customCss: '.swagger-ui .topbar { display: none }',
+      customSiteTitle: 'Memento API Documentation',
+    }),
+  );
 };
 
 export default setupSwagger;
-

@@ -1,29 +1,34 @@
 import logger from '../utils/logger';
-import { IRequest } from '../utils/interface';
+import {IRequest} from '../utils/interface';
 import pinoHttpLogger from 'pino-http';
 import pino from 'pino';
-import { isEmpty, sanitizeData } from '../utils/helpers';
+import {isEmpty, sanitizeData} from '../utils/helpers';
 
 const ignorePaths = ['/health', '/favicon.ico', '/metrics'];
 
 export const httpLogger = pinoHttpLogger({
   logger,
   autoLogging: {
-    ignore: (req) => {
-      return req.url.startsWith("/docs") ||
-        req.url.startsWith("/queues") ||
-        req.url.startsWith("/assets") ||
-        ignorePaths.includes(req.url || '');
+    ignore: req => {
+      return (
+        req.url.startsWith('/docs') ||
+        req.url.startsWith('/queues') ||
+        req.url.startsWith('/assets') ||
+        ignorePaths.includes(req.url || '')
+      );
     },
   },
   wrapSerializers: false,
   serializers: {
     req: (req: IRequest) => {
-      const forwardedFor = req.headers['x-forwarded-for']
-      const ip = req.ip
-        || (typeof forwardedFor === 'string' ? forwardedFor.split(',')[0].trim() : undefined)
-        || req.headers['x-real-ip'] as string
-        || 'unknown'
+      const forwardedFor = req.headers['x-forwarded-for'];
+      const ip =
+        req.ip ||
+        (typeof forwardedFor === 'string'
+          ? forwardedFor.split(',')[0].trim()
+          : undefined) ||
+        (req.headers['x-real-ip'] as string) ||
+        'unknown';
 
       const requestData: Record<string, any> = {
         method: req.method,
@@ -56,6 +61,6 @@ export const httpLogger = pinoHttpLogger({
     if (res.statusCode >= 300) return 'warn';
     return 'info';
   },
-})
+});
 
 export default httpLogger;

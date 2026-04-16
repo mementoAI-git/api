@@ -1,4 +1,4 @@
-import { Document, model, Schema } from "mongoose";
+import {Document, model, Schema} from 'mongoose';
 
 export interface IBookmark extends Document {
   user: string;
@@ -7,25 +7,28 @@ export interface IBookmark extends Document {
   updated_at: Date;
 }
 
-const bookmark = new Schema({
-  user: {
-    type: String,
-    ref: "user",
-    required: true,
-    index: true,
+const bookmark = new Schema(
+  {
+    user: {
+      type: String,
+      ref: 'user',
+      required: true,
+      index: true,
+    },
+    memory: {
+      type: String,
+      ref: 'memory',
+      required: true,
+      index: true,
+    },
   },
-  memory: {
-    type: String,
-    ref: "memory",
-    required: true,
-    index: true,
-  }
-}, {
-  timestamps: {
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  }
-})
+  {
+    timestamps: {
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+  },
+);
 
-const Bookmark = model<IBookmark>("bookmark", bookmark);
+const Bookmark = model<IBookmark>('bookmark', bookmark);
 export default Bookmark;

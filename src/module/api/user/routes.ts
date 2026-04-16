@@ -1,4 +1,4 @@
-import { RequestHandler, Router, type IRouter } from 'express';
+import {RequestHandler, Router, type IRouter} from 'express';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
 import * as dto from './dto';
@@ -7,7 +7,7 @@ import validate from '../../../middleware/validator';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
 
 const router: IRouter = Router();
-router.use(gaurd)
+router.use(gaurd);
 
 router.get('/profile', ctrl.getProfile);
 router.get('/onboarding-details', ctrl.getOnboardingDetails);

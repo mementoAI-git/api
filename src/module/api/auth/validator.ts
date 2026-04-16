@@ -1,80 +1,91 @@
-import { body, param } from "express-validator";
-import { OAUTH_PROVIDERS } from "../../../utils/constant";
+import {body, param} from 'express-validator';
+import {OAUTH_PROVIDERS} from '../../../utils/constant';
 
-const providerValidator = param("provider")
-  .notEmpty().withMessage("Provider is required")
+const providerValidator = param('provider')
+  .notEmpty()
+  .withMessage('Provider is required')
   .isIn(Object.keys(OAUTH_PROVIDERS))
-  .withMessage("Provider is not supported")
+  .withMessage('Provider is not supported');
 
-export const emailValidator = body("email")
-  .notEmpty().withMessage("Email address is required")
-  .isEmail().withMessage("Invalid email address")
-  .toLowerCase()
+export const emailValidator = body('email')
+  .notEmpty()
+  .withMessage('Email address is required')
+  .isEmail()
+  .withMessage('Invalid email address')
+  .toLowerCase();
 
 export default {
   generateOauthUrl: providerValidator,
   authorization: [
     providerValidator,
-    body("code").notEmpty().withMessage("Authorization code is required")
+    body('code').notEmpty().withMessage('Authorization code is required'),
   ],
   login: [
     emailValidator,
-    body("password")
-      .notEmpty().withMessage("Password is required"),
-    body("remember_for_30_days")
-      .optional()
-      .default(false)
-      .toBoolean()
+    body('password').notEmpty().withMessage('Password is required'),
+    body('remember_for_30_days').optional().default(false).toBoolean(),
   ],
   register: [
     emailValidator,
-    body("first_name")
-      .notEmpty().withMessage("First name is required"),
-    body("last_name")
-      .notEmpty().withMessage("Last name is required"),
-    body("password")
-      .notEmpty().withMessage("Password is required")
-      .isStrongPassword().withMessage("Password must be strong"),
+    body('first_name').notEmpty().withMessage('First name is required'),
+    body('last_name').notEmpty().withMessage('Last name is required'),
+    body('password')
+      .notEmpty()
+      .withMessage('Password is required')
+      .isStrongPassword()
+      .withMessage('Password must be strong'),
   ],
   sendLink: [
     emailValidator,
-    body("type")
-      .notEmpty().withMessage("Link type is required")
-      .default("reset")
-      .isIn(["reset", "verify"]).withMessage("Invalid request type")
+    body('type')
+      .notEmpty()
+      .withMessage('Link type is required')
+      .default('reset')
+      .isIn(['reset', 'verify'])
+      .withMessage('Invalid request type'),
   ],
-  verifyEmail:
-    body("token")
-      .notEmpty().withMessage("Verification code is required")
-      .isUUID().withMessage("Invalid token")
-  ,
+  verifyEmail: body('token')
+    .notEmpty()
+    .withMessage('Verification code is required')
+    .isUUID()
+    .withMessage('Invalid token'),
   setPassword: [
-    body("token")
-      .notEmpty().withMessage("Verification code is required")
-      .isUUID().withMessage("Invalid token"),
-    body("password")
-      .notEmpty().withMessage("Password is required")
-      .isStrongPassword().withMessage("Password must be strong"),
+    body('token')
+      .notEmpty()
+      .withMessage('Verification code is required')
+      .isUUID()
+      .withMessage('Invalid token'),
+    body('password')
+      .notEmpty()
+      .withMessage('Password is required')
+      .isStrongPassword()
+      .withMessage('Password must be strong'),
   ],
   refreshToken: [
-    body("refresh_token")
-      .notEmpty().withMessage("Refresh token is required")
+    body('refresh_token').notEmpty().withMessage('Refresh token is required'),
   ],
-  sendInviteCode: body("email")
-    .optional({ nullable: true })
+  sendInviteCode: body('email')
+    .optional({nullable: true})
     .default(null)
-    .isEmail().withMessage("Invalid email address")
+    .isEmail()
+    .withMessage('Invalid email address')
     .toLowerCase(),
   verify2FALogin: [
-    body("two_fa_token").notEmpty().withMessage("2FA session token is required"),
-    body("code").notEmpty().withMessage("2FA code is required").isLength({ min: 6, max: 6 }).withMessage("Code must be 6 digits"),
+    body('two_fa_token')
+      .notEmpty()
+      .withMessage('2FA session token is required'),
+    body('code')
+      .notEmpty()
+      .withMessage('2FA code is required')
+      .isLength({min: 6, max: 6})
+      .withMessage('Code must be 6 digits'),
   ],
   completePasskeyRegistration: [
-    body("response").notEmpty().withMessage("WebAuthn response is required"),
-    body("device_name").optional().isString(),
+    body('response').notEmpty().withMessage('WebAuthn response is required'),
+    body('device_name').optional().isString(),
   ],
   completePasskeyLogin: [
-    body("challenge_id").notEmpty().withMessage("Challenge ID is required"),
-    body("response").notEmpty().withMessage("WebAuthn response is required"),
+    body('challenge_id').notEmpty().withMessage('Challenge ID is required'),
+    body('response').notEmpty().withMessage('WebAuthn response is required'),
   ],
-}
+};

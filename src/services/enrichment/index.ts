@@ -2,7 +2,7 @@ import dayjs from 'dayjs';
 import Memory from '../../module/database/model/memory';
 import Persona from '../../module/database/model/persona';
 import PendingInsight from '../../module/database/model/pending-insight';
-import { NotFoundException } from '../../utils/service-error';
+import {NotFoundException} from '../../utils/service-error';
 
 // ---------------------------------------------------------------------------
 // CANONICAL ENRICHMENT CATEGORIES (10 life dimensions)
@@ -25,19 +25,19 @@ export type EnrichmentCategory = (typeof ENRICHMENT_CATEGORIES)[number];
 
 // Deferred categories — unlocked after enough active usage
 const DEFERRED_CATEGORIES: Record<string, number> = {
-  lessons_wisdom: 14,   // unlock after 2 weeks
-  hopes_legacy: 21,     // unlock after 3 weeks
+  lessons_wisdom: 14, // unlock after 2 weeks
+  hopes_legacy: 21, // unlock after 3 weeks
 };
 
 // Decay settings
-const DECAY_IDLE_DAYS = 14;      // start decaying after 14 days idle
-const DECAY_RATE_PER_WEEK = 2;   // lose 2% per week per category
-const SCORE_FLOOR = 5;           // overall score never below 5%
-const ACTIVITY_PAUSE_DAYS = 7;   // any activity within 7 days pauses decay
+const DECAY_IDLE_DAYS = 14; // start decaying after 14 days idle
+const DECAY_RATE_PER_WEEK = 2; // lose 2% per week per category
+const SCORE_FLOOR = 5; // overall score never below 5%
+const ACTIVITY_PAUSE_DAYS = 7; // any activity within 7 days pauses decay
 
 // Weights for different content sources
 const CONVERSATION_WEIGHT = 0.9; // AI-derived content weighted slightly lower
-const EXPLICIT_WEIGHT = 1.0;     // user-authored content full weight
+const EXPLICIT_WEIGHT = 1.0; // user-authored content full weight
 
 // ---------------------------------------------------------------------------
 // TYPES
@@ -46,17 +46,17 @@ const EXPLICIT_WEIGHT = 1.0;     // user-authored content full weight
 export interface CategoryScore {
   key: EnrichmentCategory;
   label: string;
-  score: number;         // 0–100
-  weight: number;        // priority weight (from onboarding)
-  itemCount: number;     // how many items tagged to this category
-  unlocked: boolean;     // whether this category is active
+  score: number; // 0–100
+  weight: number; // priority weight (from onboarding)
+  itemCount: number; // how many items tagged to this category
+  unlocked: boolean; // whether this category is active
 }
 
 export interface EnrichmentResult {
-  enrichment_score: number;              // 0–100 overall
+  enrichment_score: number; // 0–100 overall
   category_scores: CategoryScore[];
-  lowest_category: string | null;        // key of lowest non-deferred active category
-  beneficiary_access_unlocked: boolean;  // true if score ever reached 20%
+  lowest_category: string | null; // key of lowest non-deferred active category
+  beneficiary_access_unlocked: boolean; // true if score ever reached 20%
 }
 
 // Friendly labels for each category (exported for prompts / tooling)
@@ -75,15 +75,23 @@ export const CATEGORY_LABELS: Record<EnrichmentCategory, string> = {
 
 // Deep-dive nudge questions — one compelling question per category
 export const CATEGORY_NUDGES: Record<EnrichmentCategory, string> = {
-  identity_self: "What's something about yourself that most people don't know but you wish they did?",
-  relationships_people: 'Who has had the biggest influence on who you are today, and in what way?',
+  identity_self:
+    "What's something about yourself that most people don't know but you wish they did?",
+  relationships_people:
+    'Who has had the biggest influence on who you are today, and in what way?',
   work_purpose: 'What kind of work makes you lose track of time?',
-  memories_experiences: "What's a moment from your past that you find yourself returning to often?",
-  beliefs_worldview: "Is there a belief you hold now that you didn't have 10 years ago?",
-  passions_interests: "What's something you're into that you rarely get to talk about?",
-  heritage_roots: "What's something about where you come from that shaped who you are?",
-  lessons_wisdom: "What's the hardest lesson you've had to learn — and what changed after you learned it?",
-  hopes_legacy: 'What do you want to still be true about your life 20 years from now?',
+  memories_experiences:
+    "What's a moment from your past that you find yourself returning to often?",
+  beliefs_worldview:
+    "Is there a belief you hold now that you didn't have 10 years ago?",
+  passions_interests:
+    "What's something you're into that you rarely get to talk about?",
+  heritage_roots:
+    "What's something about where you come from that shaped who you are?",
+  lessons_wisdom:
+    "What's the hardest lesson you've had to learn — and what changed after you learned it?",
+  hopes_legacy:
+    'What do you want to still be true about your life 20 years from now?',
   everyday_life: 'What does a really good day look like for you?',
 };
 
@@ -102,12 +110,36 @@ export const CATEGORY_STARTERS: Record<EnrichmentCategory, string> = {
 };
 
 // Enrichment milestones
-export const MILESTONES: Array<{ threshold: number; label: string; description: string }> = [
-  { threshold: 20, label: 'Memory Keeper', description: "You've begun sharing your story." },
-  { threshold: 40, label: 'Life Chronicler', description: 'Your story is taking shape.' },
-  { threshold: 60, label: 'Story Weaver', description: 'A rich picture of your life is emerging.' },
-  { threshold: 80, label: 'Heritage Guardian', description: 'Your story is becoming truly full.' },
-  { threshold: 100, label: 'Living Legacy', description: 'Your story is complete and vivid.' },
+export const MILESTONES: Array<{
+  threshold: number;
+  label: string;
+  description: string;
+}> = [
+  {
+    threshold: 20,
+    label: 'Memory Keeper',
+    description: "You've begun sharing your story.",
+  },
+  {
+    threshold: 40,
+    label: 'Life Chronicler',
+    description: 'Your story is taking shape.',
+  },
+  {
+    threshold: 60,
+    label: 'Story Weaver',
+    description: 'A rich picture of your life is emerging.',
+  },
+  {
+    threshold: 80,
+    label: 'Heritage Guardian',
+    description: 'Your story is becoming truly full.',
+  },
+  {
+    threshold: 100,
+    label: 'Living Legacy',
+    description: 'Your story is complete and vivid.',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -147,17 +179,27 @@ export interface ConversationEnrichment {
 // MAIN COMPUTATION
 // ---------------------------------------------------------------------------
 
-export async function computeEnrichmentScore(userId: string): Promise<EnrichmentResult> {
+export async function computeEnrichmentScore(
+  userId: string,
+): Promise<EnrichmentResult> {
   // 1. Fetch all relevant data in parallel
   const [persona, conversations, stories, pendingInsights] = await Promise.all([
-    Persona.findOne({ user: userId }).lean(),
-    Memory.find({ user: userId, type: 'conversation', status: { $nin: ['draft', 'deleted'] } })
+    Persona.findOne({user: userId}).lean(),
+    Memory.find({
+      user: userId,
+      type: 'conversation',
+      status: {$nin: ['draft', 'deleted']},
+    })
       .select('dimensions summary created_at')
       .lean(),
-    Memory.find({ user: userId, type: 'story', status: { $in: ['save', 'queued', 'on_chain'] } })
+    Memory.find({
+      user: userId,
+      type: 'story',
+      status: {$in: ['save', 'queued', 'on_chain']},
+    })
       .select('dimensions tags created_at')
       .lean(),
-    PendingInsight.countDocuments({ user: userId }),
+    PendingInsight.countDocuments({user: userId}),
   ]);
 
   // 2. Determine user account age (for deferred unlock logic)
@@ -170,9 +212,12 @@ export async function computeEnrichmentScore(userId: string): Promise<Enrichment
   const priorityDimensions: string[] = (persona as any)?.current_priority || [];
 
   // 4. Count items per category
-  const categoryCounts: Record<string, { explicit: number; derived: number; lastActivity: Date | null }> = {};
+  const categoryCounts: Record<
+    string,
+    {explicit: number; derived: number; lastActivity: Date | null}
+  > = {};
   for (const cat of ENRICHMENT_CATEGORIES) {
-    categoryCounts[cat] = { explicit: 0, derived: 0, lastActivity: null };
+    categoryCounts[cat] = {explicit: 0, derived: 0, lastActivity: null};
   }
 
   // Count conversation dimensions (AI-derived)
@@ -182,7 +227,11 @@ export async function computeEnrichmentScore(userId: string): Promise<Enrichment
       if (categoryCounts[dim]) {
         categoryCounts[dim].derived += 1;
         const convDate = conv.created_at ? new Date(conv.created_at) : null;
-        if (convDate && (!categoryCounts[dim].lastActivity || convDate > categoryCounts[dim].lastActivity)) {
+        if (
+          convDate &&
+          (!categoryCounts[dim].lastActivity ||
+            convDate > categoryCounts[dim].lastActivity)
+        ) {
           categoryCounts[dim].lastActivity = convDate;
         }
       }
@@ -196,7 +245,11 @@ export async function computeEnrichmentScore(userId: string): Promise<Enrichment
       if (categoryCounts[dim]) {
         categoryCounts[dim].explicit += 1;
         const storyDate = story.created_at ? new Date(story.created_at) : null;
-        if (storyDate && (!categoryCounts[dim].lastActivity || storyDate > categoryCounts[dim].lastActivity)) {
+        if (
+          storyDate &&
+          (!categoryCounts[dim].lastActivity ||
+            storyDate > categoryCounts[dim].lastActivity)
+        ) {
           categoryCounts[dim].lastActivity = storyDate;
         }
       }
@@ -205,13 +258,16 @@ export async function computeEnrichmentScore(userId: string): Promise<Enrichment
 
   // 5. Add base points from persona richness (notes, preferences, goals, etc.)
   const personaFields = [
-    { field: 'important_notes', cats: ['identity_self', 'relationships_people'] },
-    { field: 'key_preferences', cats: ['everyday_life', 'passions_interests'] },
-    { field: 'goals_and_aspirations', cats: ['work_purpose', 'hopes_legacy'] },
-    { field: 'emotional_state_trends', cats: ['identity_self', 'beliefs_worldview'] },
+    {field: 'important_notes', cats: ['identity_self', 'relationships_people']},
+    {field: 'key_preferences', cats: ['everyday_life', 'passions_interests']},
+    {field: 'goals_and_aspirations', cats: ['work_purpose', 'hopes_legacy']},
+    {
+      field: 'emotional_state_trends',
+      cats: ['identity_self', 'beliefs_worldview'],
+    },
   ];
 
-  for (const { field, cats } of personaFields) {
+  for (const {field, cats} of personaFields) {
     const items = (persona as any)?.[field];
     if (Array.isArray(items) && items.length > 0) {
       for (const cat of cats) {
@@ -236,7 +292,8 @@ export async function computeEnrichmentScore(userId: string): Promise<Enrichment
     const weight = priorityDimensions.includes(cat) ? 1.5 : 1.0;
 
     // Raw score based on item counts (logarithmic curve so it's always growable)
-    const weightedItems = (counts.explicit * EXPLICIT_WEIGHT) + (counts.derived * CONVERSATION_WEIGHT);
+    const weightedItems =
+      counts.explicit * EXPLICIT_WEIGHT + counts.derived * CONVERSATION_WEIGHT;
     let rawScore = Math.min(100, Math.round(Math.log2(weightedItems + 1) * 20));
 
     // Apply decay if inactive
@@ -267,14 +324,20 @@ export async function computeEnrichmentScore(userId: string): Promise<Enrichment
   }
 
   // 7. Compute overall enrichment score (weighted average with floor)
-  const rawOverall = totalWeight > 0 ? Math.round(totalWeightedScore / totalWeight) : 0;
+  const rawOverall =
+    totalWeight > 0 ? Math.round(totalWeightedScore / totalWeight) : 0;
   const enrichment_score = Math.max(SCORE_FLOOR, rawOverall);
 
   // 8. Find lowest non-deferred, unlocked category for nudge suggestions
-  const activeCats = categoryScores.filter(c => c.unlocked && !DEFERRED_CATEGORIES[c.key]);
-  const lowest = activeCats.length > 0
-    ? activeCats.reduce((prev, curr) => curr.score < prev.score ? curr : prev)
-    : null;
+  const activeCats = categoryScores.filter(
+    c => c.unlocked && !DEFERRED_CATEGORIES[c.key],
+  );
+  const lowest =
+    activeCats.length > 0
+      ? activeCats.reduce((prev, curr) =>
+          curr.score < prev.score ? curr : prev,
+        )
+      : null;
 
   // 9. Beneficiary access: unlocked forever once score hits 20%
   const beneficiary_access_unlocked = enrichment_score >= 20;
@@ -293,7 +356,8 @@ export async function computeEnrichmentScore(userId: string): Promise<Enrichment
 
 export function getMilestone(score: number): MilestoneInfo {
   const reached = MILESTONES.filter(m => score >= m.threshold);
-  const current = reached.length > 0 ? reached[reached.length - 1] : MILESTONES[0];
+  const current =
+    reached.length > 0 ? reached[reached.length - 1] : MILESTONES[0];
   const nextIndex = MILESTONES.indexOf(current) + 1;
   const next = nextIndex < MILESTONES.length ? MILESTONES[nextIndex] : null;
 
@@ -323,7 +387,9 @@ export function getMilestone(score: number): MilestoneInfo {
 // NUDGE + JUMP PILLS
 // ---------------------------------------------------------------------------
 
-export function getNudge(lowestCategoryKey: string | null): NudgeQuestion | null {
+export function getNudge(
+  lowestCategoryKey: string | null,
+): NudgeQuestion | null {
   if (!lowestCategoryKey) return null;
   const key = lowestCategoryKey as EnrichmentCategory;
   if (!CATEGORY_NUDGES[key]) return null;
@@ -377,7 +443,7 @@ export async function getConversationEnrichment(
     _id: memoryId,
     user: userId,
     type: 'conversation',
-    status: { $nin: ['draft', 'deleted'] },
+    status: {$nin: ['draft', 'deleted']},
   })
     .select('dimensions message_count last_active')
     .lean();
@@ -387,7 +453,8 @@ export async function getConversationEnrichment(
   }
 
   const dimensions = ((memory.dimensions as string[]) || []).filter(
-    (d): d is EnrichmentCategory => ENRICHMENT_CATEGORIES.includes(d as EnrichmentCategory),
+    (d): d is EnrichmentCategory =>
+      ENRICHMENT_CATEGORIES.includes(d as EnrichmentCategory),
   );
 
   const categoryLabels: Partial<Record<EnrichmentCategory, string>> = {};
@@ -400,6 +467,8 @@ export async function getConversationEnrichment(
     dimensions,
     category_labels: categoryLabels,
     message_count: (memory.message_count as number) || 0,
-    last_active: memory.last_active ? new Date(memory.last_active as Date).toISOString() : null,
+    last_active: memory.last_active
+      ? new Date(memory.last_active as Date).toISOString()
+      : null,
   };
 }

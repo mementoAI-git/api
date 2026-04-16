@@ -1,17 +1,23 @@
-import { RedisConnection } from "../../services/redis";
-import { Worker } from "bullmq";
-import { extractBatchInsights, extractOpenThreads, extractConversationDimensions } from "./persona";
-import { extractStoryInsights } from "./story";
-import { PERSONA_INSIGHT_FIELDS } from "../../utils";
-import PendingInsight, { PendingInsightSource } from "../../module/database/model/pending-insight";
-import Persona from "../../module/database/model/persona";
-import Memory from "../../module/database/model/memory";
+import {RedisConnection} from '../../services/redis';
+import {Worker} from 'bullmq';
+import {
+  extractBatchInsights,
+  extractOpenThreads,
+  extractConversationDimensions,
+} from './persona';
+import {extractStoryInsights} from './story';
+import {PERSONA_INSIGHT_FIELDS} from '../../utils';
+import PendingInsight, {
+  PendingInsightSource,
+} from '../../module/database/model/pending-insight';
+import Persona from '../../module/database/model/persona';
+import Memory from '../../module/database/model/memory';
 
 async function savePendingInsights(
   insights: Record<string, unknown>,
   userId: string,
   memoryId: string,
-  source: PendingInsightSource
+  source: PendingInsightSource,
 ): Promise<void> {
   const docs: Array<{
     user: string;
@@ -27,7 +33,13 @@ async function savePendingInsights(
     for (const item of items) {
       const text = typeof item === 'string' ? item.trim() : '';
       if (text) {
-        docs.push({ user: userId, memory: memoryId, source, field, content: text });
+        docs.push({
+          user: userId,
+          memory: memoryId,
+          source,
+          field,
+          content: text,
+        });
       }
     }
   }
@@ -37,11 +49,13 @@ async function savePendingInsights(
   }
 }
 
-export default function startInsightsExtractionWorker(connection: RedisConnection) {
+export default function startInsightsExtractionWorker(
+  connection: RedisConnection,
+) {
   return new Worker(
     'insights-extraction',
-    async (job) => {
-      const { user_id, memory_id, exchanges } = job.data;
+    async job => {
+      const {user_id, memory_id, exchanges} = job.data;
 
       const isStory = !exchanges || exchanges.length === 0;
       const source: PendingInsightSource = isStory ? 'story' : 'conversation';
@@ -58,31 +72,31 @@ export default function startInsightsExtractionWorker(connection: RedisConnectio
         try {
           const [threads, dims] = await Promise.all([
             extractOpenThreads(user_id, exchanges),
-            extractConversationDimensions(exchanges)
+            extractConversationDimensions(exchanges),
           ]);
 
           if (threads) {
             await Persona.findOneAndUpdate(
-              { user: user_id },
-              { $set: { open_threads: threads } },
-              { upsert: true }
+              {user: user_id},
+              {$set: {open_threads: threads}},
+              {upsert: true},
             );
           }
 
           if (dims && dims.length > 0) {
             await Memory.findByIdAndUpdate(memory_id, {
-              $addToSet: { dimensions: { $each: dims } }
+              $addToSet: {dimensions: {$each: dims}},
             });
           }
         } catch (err) {
-          console.error("Error running parallel insight extractions:", err);
+          console.error('Error running parallel insight extractions:', err);
         }
       }
     },
     {
       connection,
       concurrency: 2,
-      limiter: { max: 10, duration: 60000 }
-    }
+      limiter: {max: 10, duration: 60000},
+    },
   );
 }

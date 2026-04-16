@@ -1,7 +1,6 @@
-import { v4 as uuid } from 'uuid';
+import {v4 as uuid} from 'uuid';
 import redis from './redis';
-import { random } from '../utils/helpers';
-
+import {random} from '../utils/helpers';
 
 export type OtpType = 'verify' | 'reset' | 'invite' | 'delete-account';
 export type OtpFormat = 'numeric' | 'uuid';
@@ -13,10 +12,10 @@ interface OtpTypeConfig {
 }
 
 const OTP_CONFIG: Record<OtpType, OtpTypeConfig> = {
-  verify: { ttl: 10 * 60, format: 'uuid' },
-  reset: { ttl: 10 * 60, format: 'uuid' },
-  invite: { ttl: 5 * 24 * 60 * 60, format: 'numeric', length: 6 },
-  'delete-account': { ttl: 10 * 60, format: 'numeric', length: 6 },
+  verify: {ttl: 10 * 60, format: 'uuid'},
+  reset: {ttl: 10 * 60, format: 'uuid'},
+  invite: {ttl: 5 * 24 * 60 * 60, format: 'numeric', length: 6},
+  'delete-account': {ttl: 10 * 60, format: 'numeric', length: 6},
 };
 
 const OTP_PREFIX = 'otp:';
@@ -73,7 +72,7 @@ class OtpService {
       createdAt: new Date().toISOString(),
     };
 
-    await redis.set(key, JSON.stringify(data), { EX: config.ttl });
+    await redis.set(key, JSON.stringify(data), {EX: config.ttl});
 
     return code;
   }
@@ -89,17 +88,17 @@ class OtpService {
     const dataStr = await redis.get(key);
 
     if (!dataStr) {
-      return { valid: false };
+      return {valid: false};
     }
 
     const data: OtpData = JSON.parse(dataStr.toString());
 
     // Check if already used - return success but flag it
     if (data.used) {
-      return { valid: true, email: data.email, alreadyUsed: true };
+      return {valid: true, email: data.email, alreadyUsed: true};
     }
 
-    return { valid: true, email: data.email, alreadyUsed: false };
+    return {valid: true, email: data.email, alreadyUsed: false};
   }
 
   /**
@@ -120,7 +119,7 @@ class OtpService {
     data.used = true;
 
     // Update with KEEPTTL to preserve the original expiration
-    await redis.set(key, JSON.stringify(data), { KEEPTTL: true });
+    await redis.set(key, JSON.stringify(data), {KEEPTTL: true});
   }
 
   /**
@@ -144,7 +143,7 @@ class OtpService {
     let cursor = '0';
 
     do {
-      const result = await redis.scan(cursor, { MATCH: pattern, COUNT: 100 });
+      const result = await redis.scan(cursor, {MATCH: pattern, COUNT: 100});
       cursor = result.cursor.toString();
 
       for (const key of result.keys) {

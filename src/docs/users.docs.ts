@@ -3,8 +3,8 @@ const usersDocs = {
     get: {
       tags: ['Users'],
       summary: 'Get User Profile',
-      description: 'Retrieve the authenticated user\'s profile information',
-      security: [{ bearerAuth: [] }],
+      description: "Retrieve the authenticated user's profile information",
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Profile retrieved successfully',
@@ -13,33 +13,50 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Profile retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Profile retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                      email: { type: 'string', example: 'user@example.com' },
-                      first_name: { type: 'string', example: 'John' },
-                      last_name: { type: 'string', example: 'Doe' },
-                      nickname: { type: 'string', example: 'Johnny' },
-                      gender: { type: 'string', example: 'male' },
-                      phone_number: { type: 'string', example: '+1234567890' },
-                      dob: { type: 'string', format: 'date', example: '1990-01-01' },
-                      country: { type: 'string', example: 'USA' },
-                      onbaorded: { type: 'boolean', example: true },
-                      verified: { type: 'boolean', example: true },
-                      picture: { type: 'string', example: 'profile.jpg' },
-                      picture_url: { type: 'string', example: 'https://example.com/profile.jpg' },
-                      last_seen: { type: 'string', example: '2024-01-01' },
-                      streak: { type: 'number', example: 5 },
-                      bg_music: { type: 'string', nullable: true, example: null },
-                      chat_voice: { type: 'string', nullable: true, example: null },
-                      newsletter_subscriber: { type: 'boolean', example: false },
+                      _id: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439011',
+                      },
+                      email: {type: 'string', example: 'user@example.com'},
+                      first_name: {type: 'string', example: 'John'},
+                      last_name: {type: 'string', example: 'Doe'},
+                      nickname: {type: 'string', example: 'Johnny'},
+                      gender: {type: 'string', example: 'male'},
+                      phone_number: {type: 'string', example: '+1234567890'},
+                      dob: {
+                        type: 'string',
+                        format: 'date',
+                        example: '1990-01-01',
+                      },
+                      country: {type: 'string', example: 'USA'},
+                      onbaorded: {type: 'boolean', example: true},
+                      verified: {type: 'boolean', example: true},
+                      picture: {type: 'string', example: 'profile.jpg'},
+                      picture_url: {
+                        type: 'string',
+                        example: 'https://example.com/profile.jpg',
+                      },
+                      last_seen: {type: 'string', example: '2024-01-01'},
+                      streak: {type: 'number', example: 5},
+                      bg_music: {type: 'string', nullable: true, example: null},
+                      chat_voice: {
+                        type: 'string',
+                        nullable: true,
+                        example: null,
+                      },
+                      newsletter_subscriber: {type: 'boolean', example: false},
                       two_factor: {
                         type: 'object',
                         properties: {
-                          enabled: { type: 'boolean', example: false },
+                          enabled: {type: 'boolean', example: false},
                         },
                       },
                       preferences: {
@@ -47,17 +64,28 @@ const usersDocs = {
                         properties: {
                           communication_style: {
                             type: 'string',
-                            enum: ['formal', 'casual', 'friendly', 'professional'],
+                            enum: [
+                              'formal',
+                              'casual',
+                              'friendly',
+                              'professional',
+                            ],
                             example: 'friendly',
                           },
                           topics_of_interest: {
                             type: 'array',
-                            items: { type: 'string' },
+                            items: {type: 'string'},
                             example: ['technology', 'music'],
                           },
                           conversation_tone: {
                             type: 'string',
-                            enum: ['upbeat', 'warm', 'calm', 'analytical', 'creative'],
+                            enum: [
+                              'upbeat',
+                              'warm',
+                              'calm',
+                              'analytical',
+                              'creative',
+                            ],
                             example: 'warm',
                           },
                           response_length: {
@@ -67,7 +95,11 @@ const usersDocs = {
                           },
                         },
                       },
-                      created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                      created_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        example: '2024-01-01T00:00:00.000Z',
+                      },
                     },
                   },
                 },
@@ -79,7 +111,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -88,8 +120,8 @@ const usersDocs = {
     put: {
       tags: ['Users'],
       summary: 'Update User Profile',
-      description: 'Update the authenticated user\'s profile information',
-      security: [{ bearerAuth: [] }],
+      description: "Update the authenticated user's profile information",
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -97,15 +129,15 @@ const usersDocs = {
             schema: {
               type: 'object',
               properties: {
-                first_name: { type: 'string', example: 'John' },
-                last_name: { type: 'string', example: 'Doe' },
-                nickname: { type: 'string', example: 'Johnny' },
-                gender: { type: 'string', example: 'male' },
-                phone_number: { type: 'string', example: '+1234567890' },
-                dob: { type: 'string', format: 'date', example: '1990-01-01' },
-                country: { type: 'string', example: 'USA' },
-                bg_music: { type: 'string', nullable: true, example: null },
-                chat_voice: { type: 'string', nullable: true, example: null },
+                first_name: {type: 'string', example: 'John'},
+                last_name: {type: 'string', example: 'Doe'},
+                nickname: {type: 'string', example: 'Johnny'},
+                gender: {type: 'string', example: 'male'},
+                phone_number: {type: 'string', example: '+1234567890'},
+                dob: {type: 'string', format: 'date', example: '1990-01-01'},
+                country: {type: 'string', example: 'USA'},
+                bg_music: {type: 'string', nullable: true, example: null},
+                chat_voice: {type: 'string', nullable: true, example: null},
               },
             },
           },
@@ -119,9 +151,12 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Profile updated successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Profile updated successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -131,7 +166,7 @@ const usersDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -139,7 +174,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -150,8 +185,9 @@ const usersDocs = {
     post: {
       tags: ['Users'],
       summary: 'Change Password',
-      description: 'Change user password. Requires old password for verification.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Change user password. Requires old password for verification.',
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -185,12 +221,15 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Password changed successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Password changed successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      success: { type: 'boolean', example: true },
+                      success: {type: 'boolean', example: true},
                     },
                   },
                 },
@@ -202,7 +241,7 @@ const usersDocs = {
           description: 'Invalid old password or weak new password',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -210,7 +249,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -221,8 +260,9 @@ const usersDocs = {
     put: {
       tags: ['Users'],
       summary: 'Update User Context',
-      description: 'Update user context information including preferences, notes, and goals',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Update user context information including preferences, notes, and goals',
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -232,13 +272,13 @@ const usersDocs = {
               properties: {
                 important_notes: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Array of important notes',
                   example: ['Note 1', 'Note 2'],
                 },
                 key_preferences: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Array of key preferences',
                   example: ['Preference 1'],
                 },
@@ -249,13 +289,13 @@ const usersDocs = {
                 },
                 emotional_state_trends: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Array of emotional state trends',
                   example: ['positive', 'calm'],
                 },
                 goals_and_aspirations: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Array of goals and aspirations',
                   example: ['Learn new skills', 'Travel more'],
                 },
@@ -263,7 +303,8 @@ const usersDocs = {
                   type: 'string',
                   maxLength: 500,
                   description: 'User self-description',
-                  example: 'I am a software developer passionate about technology',
+                  example:
+                    'I am a software developer passionate about technology',
                 },
                 current_priority: {
                   type: 'string',
@@ -273,7 +314,7 @@ const usersDocs = {
                 },
                 join_reasons: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Reasons for joining',
                   example: ['Memory preservation', 'Family connections'],
                 },
@@ -290,9 +331,12 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Context updated successfully' },
-                  data: { type: 'object' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Context updated successfully',
+                  },
+                  data: {type: 'object'},
                 },
               },
             },
@@ -302,7 +346,7 @@ const usersDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -310,7 +354,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -322,7 +366,7 @@ const usersDocs = {
       tags: ['Users'],
       summary: 'Update User Streak',
       description: 'Update user daily streak counter',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Streak updated successfully',
@@ -331,12 +375,15 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Streak updated successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Streak updated successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      streak: { type: 'number', example: 6 },
+                      streak: {type: 'number', example: 6},
                     },
                   },
                 },
@@ -348,7 +395,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -360,7 +407,7 @@ const usersDocs = {
       tags: ['Users'],
       summary: 'Upload Profile Picture',
       description: 'Upload a new profile picture for the user',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -387,13 +434,19 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Picture uploaded successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Picture uploaded successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      picture: { type: 'string', example: 'profile.jpg' },
-                      picture_url: { type: 'string', example: 'https://example.com/profile.jpg' },
+                      picture: {type: 'string', example: 'profile.jpg'},
+                      picture_url: {
+                        type: 'string',
+                        example: 'https://example.com/profile.jpg',
+                      },
                     },
                   },
                 },
@@ -405,7 +458,7 @@ const usersDocs = {
           description: 'Invalid file or validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -413,7 +466,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -424,8 +477,9 @@ const usersDocs = {
     get: {
       tags: ['Users'],
       summary: 'Setup 2FA',
-      description: 'Generate QR code and secret for two-factor authentication setup',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Generate QR code and secret for two-factor authentication setup',
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: '2FA setup data generated successfully',
@@ -434,15 +488,19 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: '2FA setup data generated successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: '2FA setup data generated successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
                       qr_code: {
                         type: 'string',
                         description: 'Base64 encoded QR code image',
-                        example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',
+                        example:
+                          'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',
                       },
                       secret: {
                         type: 'string',
@@ -460,7 +518,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -472,7 +530,7 @@ const usersDocs = {
       tags: ['Users'],
       summary: 'Verify and Enable 2FA',
       description: 'Verify TOTP token and enable two-factor authentication',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -499,12 +557,15 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: '2FA enabled successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: '2FA enabled successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      enabled: { type: 'boolean', example: true },
+                      enabled: {type: 'boolean', example: true},
                     },
                   },
                 },
@@ -516,7 +577,7 @@ const usersDocs = {
           description: 'Invalid token',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -524,7 +585,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -536,7 +597,7 @@ const usersDocs = {
       tags: ['Users'],
       summary: 'Disable 2FA',
       description: 'Disable two-factor authentication for the user',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: '2FA disabled successfully',
@@ -545,12 +606,15 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: '2FA disabled successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: '2FA disabled successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      enabled: { type: 'boolean', example: false },
+                      enabled: {type: 'boolean', example: false},
                     },
                   },
                 },
@@ -562,7 +626,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -574,7 +638,7 @@ const usersDocs = {
       tags: ['Users'],
       summary: 'Complete Onboarding',
       description: 'Complete user onboarding process',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -602,7 +666,7 @@ const usersDocs = {
                 },
                 join_reasons: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Reasons for joining',
                   example: ['Memory preservation', 'Family connections'],
                 },
@@ -619,12 +683,15 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Onboarding completed successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Onboarding completed successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      onbaorded: { type: 'boolean', example: true },
+                      onbaorded: {type: 'boolean', example: true},
                     },
                   },
                 },
@@ -636,7 +703,7 @@ const usersDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -644,7 +711,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -656,7 +723,7 @@ const usersDocs = {
       tags: ['Users'],
       summary: 'Delete User Account',
       description: 'Soft delete user account',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Account deleted successfully',
@@ -665,12 +732,15 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Account deleted successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Account deleted successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      deleted: { type: 'boolean', example: true },
+                      deleted: {type: 'boolean', example: true},
                     },
                   },
                 },
@@ -682,7 +752,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -693,8 +763,9 @@ const usersDocs = {
     get: {
       tags: ['Users'],
       summary: 'Get User Statistics',
-      description: 'Retrieve user statistics including memories, conversations, and activity counts',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Retrieve user statistics including memories, conversations, and activity counts',
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Statistics retrieved successfully',
@@ -703,15 +774,18 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Statistics retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Statistics retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      total_memories: { type: 'number', example: 50 },
-                      total_conversations: { type: 'number', example: 30 },
-                      total_capsules: { type: 'number', example: 10 },
-                      streak: { type: 'number', example: 5 },
+                      total_memories: {type: 'number', example: 50},
+                      total_conversations: {type: 'number', example: 30},
+                      total_capsules: {type: 'number', example: 10},
+                      streak: {type: 'number', example: 5},
                     },
                   },
                 },
@@ -723,7 +797,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -735,8 +809,9 @@ const usersDocs = {
     post: {
       tags: ['Users'],
       summary: 'Migrate User Context to Persona',
-      description: 'Migrate existing user context data from User model to Persona model. This is a one-time migration endpoint that should be removed after migration is complete.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Migrate existing user context data from User model to Persona model. This is a one-time migration endpoint that should be removed after migration is complete.',
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Migration completed successfully',
@@ -745,22 +820,22 @@ const usersDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Migration completed' },
+                  status: {type: 'string', example: 'success'},
+                  message: {type: 'string', example: 'Migration completed'},
                   data: {
                     type: 'object',
                     properties: {
-                      totalUsersWithContext: { type: 'number', example: 100 },
-                      migrated: { type: 'number', example: 95 },
-                      skipped: { type: 'number', example: 5 },
-                      errors: { type: 'number', example: 0 },
+                      totalUsersWithContext: {type: 'number', example: 100},
+                      migrated: {type: 'number', example: 95},
+                      skipped: {type: 'number', example: 5},
+                      errors: {type: 'number', example: 0},
                       errorDetails: {
                         type: 'array',
                         items: {
                           type: 'object',
                           properties: {
-                            user_id: { type: 'string' },
-                            error: { type: 'string' },
+                            user_id: {type: 'string'},
+                            error: {type: 'string'},
                           },
                         },
                       },
@@ -775,7 +850,7 @@ const usersDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -785,4 +860,3 @@ const usersDocs = {
 };
 
 export default usersDocs;
-

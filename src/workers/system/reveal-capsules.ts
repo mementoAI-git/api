@@ -1,12 +1,15 @@
-import dayjs from "dayjs";
-import Capsule from "../../module/database/model/capsule";
-import mail from "../../module/mail";
-import { scheduleCapsuleDelivery, systemQueue } from "../../services/queues/system";
-import { FRONTEND_URL } from "../../utils/config";
-import logger from "../../utils/logger";
-import { concatStrings } from "../../utils";
-import { IUser } from "../../module/database/model/user";
-import { IBeneficiary } from "../../module/database/model/beneficiary";
+import dayjs from 'dayjs';
+import Capsule from '../../module/database/model/capsule';
+import mail from '../../module/mail';
+import {
+  scheduleCapsuleDelivery,
+  systemQueue,
+} from '../../services/queues/system';
+import {FRONTEND_URL} from '../../utils/config';
+import logger from '../../utils/logger';
+import {concatStrings} from '../../utils';
+import {IUser} from '../../module/database/model/user';
+import {IBeneficiary} from '../../module/database/model/beneficiary';
 
 /**
  * Handler for scheduleCapsuleReveals job (runs daily at midnight).
@@ -15,20 +18,23 @@ import { IBeneficiary } from "../../module/database/model/beneficiary";
  */
 export async function scheduleCapsuleReveals(): Promise<void> {
   if (!systemQueue) {
-    logger.error("System queue not available for scheduleCapsuleReveals");
+    logger.error('System queue not available for scheduleCapsuleReveals');
     return;
   }
 
-  const endOfToday = dayjs().endOf("day").toDate();
+  const endOfToday = dayjs().endOf('day').toDate();
 
   // Capsules scheduled for today + overdue (schedule_date < startOfToday)
   const capsules = await Capsule.find({
-    status: "scheduled",
-    schedule_date: { $lte: endOfToday },
+    status: 'scheduled',
+    schedule_date: {$lte: endOfToday},
   }).lean();
 
   for (const capsule of capsules) {
-    await scheduleCapsuleDelivery(capsule._id.toString(), capsule.schedule_date);
+    await scheduleCapsuleDelivery(
+      capsule._id.toString(),
+      capsule.schedule_date,
+    );
   }
 
   logger.debug(`Scheduled ${capsules.length} capsule(s) for reveal`);
@@ -38,21 +44,26 @@ export async function scheduleCapsuleReveals(): Promise<void> {
  * Handler for revealCapsules job.
  * Creates CapsuleReveal, sends emails to recipients, updates capsule status.
  */
-export async function revealCapsules(job: { data: { capsuleId: string } }): Promise<void> {
-  const { capsuleId } = job.data;
+export async function revealCapsules(job: {
+  data: {capsuleId: string};
+}): Promise<void> {
+  const {capsuleId} = job.data;
 
   const capsule = await Capsule.findById(capsuleId)
-    .populate("user", "first_name last_name fullname _id")
-    .populate("recipients", "email name user");
+    .populate('user', 'first_name last_name fullname _id')
+    .populate('recipients', 'email name user');
 
-  console.log(capsule)
+  console.log(capsule);
   if (!capsule) {
-    logger.warn({ capsuleId }, "Capsule not found for reveal");
+    logger.warn({capsuleId}, 'Capsule not found for reveal');
     return;
   }
 
-  if (capsule.status !== "scheduled") {
-    logger.debug({ capsuleId, status: capsule.status }, "Capsule already processed");
+  if (capsule.status !== 'scheduled') {
+    logger.debug(
+      {capsuleId, status: capsule.status},
+      'Capsule already processed',
+    );
     return;
   }
 
@@ -60,21 +71,25 @@ export async function revealCapsules(job: { data: { capsuleId: string } }): Prom
     const benefactor = capsule.user as IUser;
     const benefactorName =
       benefactor?.fullname ||
-      concatStrings(benefactor?.first_name, benefactor?.last_name, " ").trim() ||
-      "Someone";
+      concatStrings(
+        benefactor?.first_name,
+        benefactor?.last_name,
+        ' ',
+      ).trim() ||
+      'Someone';
 
     const benefactorUserId = benefactor?._id;
 
-    const attachmentIds = capsule.attachments || []
-    const memoryIds = capsule.memories || []
+    const attachmentIds = capsule.attachments || [];
+    const memoryIds = capsule.memories || [];
 
     const recipients = capsule.recipients as unknown as IBeneficiary[];
     for (const recipient of recipients) {
       const recipientUserId = recipient.user ? String(recipient.user) : null;
       if (!recipientUserId) {
         logger.debug(
-          { email: recipient.email },
-          "Skipping recipient without user (invite not accepted)"
+          {email: recipient.email},
+          'Skipping recipient without user (invite not accepted)',
         );
         continue;
       }
@@ -83,7 +98,7 @@ export async function revealCapsules(job: { data: { capsuleId: string } }): Prom
         user: recipientUserId,
         benefactor: benefactorUserId,
         source: capsuleId,
-        status: "received",
+        status: 'received',
         title: capsule.title,
         body: capsule.body,
         attachments: attachmentIds,
@@ -94,17 +109,17 @@ export async function revealCapsules(job: { data: { capsuleId: string } }): Prom
       const url = `${FRONTEND_URL}/timecapsule/${created._id}`;
       await mail.sendCapsuleReveal({
         email: recipient.email,
-        name: recipient.name || "",
+        name: recipient.name || '',
         url,
         benefactorName,
       });
     }
 
-    await Capsule.findByIdAndUpdate(capsuleId, { status: "delivered" });
-    logger.info({ capsuleId }, "Capsule revealed and delivered successfully");
+    await Capsule.findByIdAndUpdate(capsuleId, {status: 'delivered'});
+    logger.info({capsuleId}, 'Capsule revealed and delivered successfully');
   } catch (error) {
-    logger.error({ error, capsuleId }, "Failed to reveal capsule");
-    await Capsule.findByIdAndUpdate(capsuleId, { status: "failed" });
+    logger.error({error, capsuleId}, 'Failed to reveal capsule');
+    await Capsule.findByIdAndUpdate(capsuleId, {status: 'failed'});
     throw error;
   }
 }

@@ -3,8 +3,9 @@ const aiDocs = {
     post: {
       tags: ['AI'],
       summary: 'Send AI Prompt',
-      description: 'Send a prompt to the AI and receive a streaming response. The response is streamed in real-time.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Send a prompt to the AI and receive a streaming response. The response is streamed in real-time.',
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -25,7 +26,7 @@ const aiDocs = {
                 },
                 attachments: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Array of file IDs to include in the prompt',
                   example: ['507f1f77bcf86cd799439012'],
                 },
@@ -41,7 +42,8 @@ const aiDocs = {
             'text/event-stream': {
               schema: {
                 type: 'string',
-                description: 'Server-Sent Events stream containing AI response chunks',
+                description:
+                  'Server-Sent Events stream containing AI response chunks',
               },
             },
           },
@@ -50,7 +52,7 @@ const aiDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -58,7 +60,7 @@ const aiDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -71,7 +73,7 @@ const aiDocs = {
       summary: 'Auto-generate tags for a story',
       description:
         'Generate suggested tags from a story title and/or body using AI. Use this for the "Autogenerate" tags button before creating a memory.',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -86,8 +88,10 @@ const aiDocs = {
                 },
                 body: {
                   type: 'string',
-                  description: 'Story body/content (optional if title is provided)',
-                  example: 'Spent the weekend with family, kayaking and grilling...',
+                  description:
+                    'Story body/content (optional if title is provided)',
+                  example:
+                    'Spent the weekend with family, kayaking and grilling...',
                 },
               },
             },
@@ -102,15 +106,24 @@ const aiDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Tags generated successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Tags generated successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
                       tags: {
                         type: 'array',
-                        items: { type: 'string' },
-                        example: ['family', 'weekend', 'kayaking', 'outdoors', 'lake'],
+                        items: {type: 'string'},
+                        example: [
+                          'family',
+                          'weekend',
+                          'kayaking',
+                          'outdoors',
+                          'lake',
+                        ],
                       },
                     },
                   },
@@ -120,10 +133,11 @@ const aiDocs = {
           },
         },
         400: {
-          description: 'Validation error (e.g. neither title nor body provided)',
+          description:
+            'Validation error (e.g. neither title nor body provided)',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -131,7 +145,7 @@ const aiDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -142,8 +156,9 @@ const aiDocs = {
     post: {
       tags: ['AI'],
       summary: 'Greet User (Deprecated)',
-      description: 'Send a greeting message to the AI. This endpoint is deprecated.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Send a greeting message to the AI. This endpoint is deprecated.',
+      security: [{bearerAuth: []}],
       responses: {
         200: {
           description: 'Streaming response (text/event-stream)',
@@ -160,7 +175,7 @@ const aiDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -171,19 +186,20 @@ const aiDocs = {
     get: {
       tags: ['AI'],
       summary: 'Get User Messages (Deprecated)',
-      description: 'Get paginated list of user messages. This endpoint is deprecated.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Get paginated list of user messages. This endpoint is deprecated.',
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'page',
           in: 'query',
-          schema: { type: 'number', default: 1 },
+          schema: {type: 'number', default: 1},
           description: 'Page number',
         },
         {
           name: 'limit',
           in: 'query',
-          schema: { type: 'number', default: 10 },
+          schema: {type: 'number', default: 10},
           description: 'Items per page',
         },
       ],
@@ -195,18 +211,21 @@ const aiDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Messages retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Messages retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      docs: { type: 'array', items: { type: 'object' } },
-                      totalDocs: { type: 'number', example: 100 },
-                      limit: { type: 'number', example: 10 },
-                      page: { type: 'number', example: 1 },
-                      totalPages: { type: 'number', example: 10 },
-                      hasNextPage: { type: 'boolean', example: true },
-                      hasPrevPage: { type: 'boolean', example: false },
+                      docs: {type: 'array', items: {type: 'object'}},
+                      totalDocs: {type: 'number', example: 100},
+                      limit: {type: 'number', example: 10},
+                      page: {type: 'number', example: 1},
+                      totalPages: {type: 'number', example: 10},
+                      hasNextPage: {type: 'boolean', example: true},
+                      hasPrevPage: {type: 'boolean', example: false},
                     },
                   },
                 },
@@ -218,7 +237,7 @@ const aiDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -230,25 +249,25 @@ const aiDocs = {
       tags: ['AI'],
       summary: 'Get Messages by Conversation ID',
       description: 'Get paginated list of messages for a specific conversation',
-      security: [{ bearerAuth: [] }],
+      security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
           description: 'Conversation/Memory ID',
-          schema: { type: 'string', example: '507f1f77bcf86cd799439011' },
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
         },
         {
           name: 'page',
           in: 'query',
-          schema: { type: 'number', default: 1 },
+          schema: {type: 'number', default: 1},
           description: 'Page number',
         },
         {
           name: 'limit',
           in: 'query',
-          schema: { type: 'number', default: 10 },
+          schema: {type: 'number', default: 10},
           description: 'Items per page',
         },
       ],
@@ -260,8 +279,11 @@ const aiDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Messages retrieved successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Messages retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
@@ -270,23 +292,47 @@ const aiDocs = {
                         items: {
                           type: 'object',
                           properties: {
-                            _id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                            user: { type: 'string', example: '507f1f77bcf86cd799439012' },
-                            text: { type: 'string', example: 'Hello, how are you?' },
-                            role: { type: 'string', enum: ['user', 'ai'], example: 'user' },
-                            memory: { type: 'string', example: '507f1f77bcf86cd799439013' },
-                            is_voice: { type: 'boolean', example: false },
-                            duration: { type: 'number', nullable: true, example: null },
-                            created_at: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
+                            _id: {
+                              type: 'string',
+                              example: '507f1f77bcf86cd799439011',
+                            },
+                            user: {
+                              type: 'string',
+                              example: '507f1f77bcf86cd799439012',
+                            },
+                            text: {
+                              type: 'string',
+                              example: 'Hello, how are you?',
+                            },
+                            role: {
+                              type: 'string',
+                              enum: ['user', 'ai'],
+                              example: 'user',
+                            },
+                            memory: {
+                              type: 'string',
+                              example: '507f1f77bcf86cd799439013',
+                            },
+                            is_voice: {type: 'boolean', example: false},
+                            duration: {
+                              type: 'number',
+                              nullable: true,
+                              example: null,
+                            },
+                            created_at: {
+                              type: 'string',
+                              format: 'date-time',
+                              example: '2024-01-01T00:00:00.000Z',
+                            },
                           },
                         },
                       },
-                      totalDocs: { type: 'number', example: 50 },
-                      limit: { type: 'number', example: 10 },
-                      page: { type: 'number', example: 1 },
-                      totalPages: { type: 'number', example: 5 },
-                      hasNextPage: { type: 'boolean', example: true },
-                      hasPrevPage: { type: 'boolean', example: false },
+                      totalDocs: {type: 'number', example: 50},
+                      limit: {type: 'number', example: 10},
+                      page: {type: 'number', example: 1},
+                      totalPages: {type: 'number', example: 5},
+                      hasNextPage: {type: 'boolean', example: true},
+                      hasPrevPage: {type: 'boolean', example: false},
                     },
                   },
                 },
@@ -298,7 +344,7 @@ const aiDocs = {
           description: 'Invalid conversation ID',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -306,7 +352,7 @@ const aiDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -314,7 +360,7 @@ const aiDocs = {
           description: 'Conversation not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -325,8 +371,9 @@ const aiDocs = {
     post: {
       tags: ['AI'],
       summary: 'Start New Conversation',
-      description: 'Start a new conversation with the AI. Creates a new memory and returns conversation details.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Start a new conversation with the AI. Creates a new memory and returns conversation details.',
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -347,7 +394,7 @@ const aiDocs = {
                 },
                 attachments: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {type: 'string'},
                   description: 'Array of file IDs to include',
                   example: ['507f1f77bcf86cd799439012'],
                 },
@@ -364,13 +411,19 @@ const aiDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Conversation started successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Conversation started successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
-                      memory_id: { type: 'string', example: '507f1f77bcf86cd799439011' },
-                      session_id: { type: 'string', example: 'session-123' },
+                      memory_id: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439011',
+                      },
+                      session_id: {type: 'string', example: 'session-123'},
                     },
                   },
                 },
@@ -382,7 +435,7 @@ const aiDocs = {
           description: 'Validation error',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -390,7 +443,7 @@ const aiDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -401,8 +454,9 @@ const aiDocs = {
     post: {
       tags: ['AI'],
       summary: 'Transcribe Audio',
-      description: 'Transcribe audio file to text. Requires a file_id of an uploaded audio file.',
-      security: [{ bearerAuth: [] }],
+      description:
+        'Transcribe audio file to text. Requires a file_id of an uploaded audio file.',
+      security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
@@ -428,17 +482,24 @@ const aiDocs = {
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', example: 'success' },
-                  message: { type: 'string', example: 'Audio transcribed successfully' },
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Audio transcribed successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
                       transcription: {
                         type: 'string',
                         description: 'Transcribed text',
-                        example: 'Hello, this is the transcribed text from the audio file.',
+                        example:
+                          'Hello, this is the transcribed text from the audio file.',
                       },
-                      file_id: { type: 'string', example: '507f1f77bcf86cd799439011' },
+                      file_id: {
+                        type: 'string',
+                        example: '507f1f77bcf86cd799439011',
+                      },
                     },
                   },
                 },
@@ -450,7 +511,7 @@ const aiDocs = {
           description: 'Invalid file ID or file is not an audio file',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -458,7 +519,7 @@ const aiDocs = {
           description: 'Unauthorized',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -466,7 +527,7 @@ const aiDocs = {
           description: 'File not found',
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Error' },
+              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -476,4 +537,3 @@ const aiDocs = {
 };
 
 export default aiDocs;
-

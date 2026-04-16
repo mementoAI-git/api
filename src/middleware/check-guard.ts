@@ -1,7 +1,11 @@
-import { NextFunction, Request, Response } from 'express';
-import { verifyAccessToken } from '../utils/helpers';
+import {NextFunction, Request, Response} from 'express';
+import {verifyAccessToken} from '../utils/helpers';
 
-export default function checkGuard(req: Request | any, res: Response, next: NextFunction) {
+export default function checkGuard(
+  req: Request | any,
+  res: Response,
+  next: NextFunction,
+) {
   const token = req.header('authorization');
   if (token && token.startsWith('Bearer ')) {
     try {
@@ -13,4 +17,4 @@ export default function checkGuard(req: Request | any, res: Response, next: Next
     req.auth = null;
   }
   next();
-} 
+}

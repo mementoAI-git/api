@@ -1,5 +1,5 @@
 import PendingInsight from '../../module/database/model/pending-insight';
-import { PERSONA_INSIGHT_FIELDS } from '../constant';
+import {PERSONA_INSIGHT_FIELDS} from '../constant';
 
 const FIELD_LABELS: Record<(typeof PERSONA_INSIGHT_FIELDS)[number], string> = {
   important_notes: 'Important notes',
@@ -10,9 +10,11 @@ const FIELD_LABELS: Record<(typeof PERSONA_INSIGHT_FIELDS)[number], string> = {
 
 const PENDING_CONTEXT_LIMIT = 20;
 
-export async function buildPendingInsightsPromptSection(userId: string): Promise<string> {
-  const rows = await PendingInsight.find({ user: userId })
-    .sort({ created_at: 1 })
+export async function buildPendingInsightsPromptSection(
+  userId: string,
+): Promise<string> {
+  const rows = await PendingInsight.find({user: userId})
+    .sort({created_at: 1})
     .limit(PENDING_CONTEXT_LIMIT)
     .select('field content')
     .lean();
@@ -20,7 +22,9 @@ export async function buildPendingInsightsPromptSection(userId: string): Promise
   if (!rows.length) return '';
 
   // Group by field
-  const byField: Partial<Record<(typeof PERSONA_INSIGHT_FIELDS)[number], string[]>> = {};
+  const byField: Partial<
+    Record<(typeof PERSONA_INSIGHT_FIELDS)[number], string[]>
+  > = {};
   for (const row of rows) {
     const field = row.field as (typeof PERSONA_INSIGHT_FIELDS)[number];
     if (!byField[field]) byField[field] = [];

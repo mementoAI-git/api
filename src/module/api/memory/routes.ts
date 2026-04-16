@@ -1,4 +1,4 @@
-import { RequestHandler, Router, type IRouter } from 'express';
+import {RequestHandler, Router, type IRouter} from 'express';
 import valid from './validator';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
