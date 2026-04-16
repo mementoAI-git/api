@@ -4,6 +4,7 @@ import { createUserContent, GenerateContentResponse, Modality, PartListUnion } f
 import Message, { IMessage } from "../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../services/gemini";
 import { geminiAuthClient, GEMINI_LIVE_MODEL } from "../../../services/gemini";
+import ai from "../../../services/ai";
 import { extractJson, isEmpty } from "../../../utils/helpers";
 import { IPagination } from "../../../utils/interface";
 import { IPrompt, IStartMemory, ITranscribeAudio } from "./interface";
@@ -360,17 +361,12 @@ export async function autogenerateTags(payload: { title?: string; body?: string 
   const title = (payload.title ?? "").trim();
   const body = (payload.body ?? "").trim();
   const prompt = prompts.buildTagsPrompt();
-  const contents = createUserContent([
-    prompt,
-    { text: `TITLE:\n${title || "(none)"}\n\nBODY:\n${body || "(none)"}` },
+
+  const response = await ai.generateText([
+    { role: "user", content: `${prompt}\n\nTITLE:\n${title || "(none)"}\n\nBODY:\n${body || "(none)"}` },
   ]);
 
-  const response = await gemini.models.generateContent({
-    model: GEMINI_MODEL,
-    contents,
-  });
-
-  const parsed = extractJson(response.text);
+  const parsed = extractJson(response);
   const tags = Array.isArray(parsed?.tags) ? parsed.tags : [];
   const normalizedTags = tags
     .filter((t): t is string => typeof t === "string")

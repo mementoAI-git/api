@@ -1,6 +1,5 @@
-import { createUserContent } from "@google/genai";
 import { prompts } from "../../utils";
-import gemini, { GEMINI_MODEL } from "../../services/gemini";
+import ai from "../../services/ai";
 import { extractJson } from "../../utils/helpers";
 import Memory from "../../module/database/model/memory";
 import Message from "../../module/database/model/message";
@@ -22,23 +21,17 @@ export async function summarizeConversation(memoryId: string): Promise<void> {
       return;
     }
 
-    // Format messages into conversation text
     const conversationText = messages
       .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.text}`)
       .join('\n\n');
 
     const prompt = prompts.buildSummarizationPrompt();
-    const contents = createUserContent([
-      prompt,
-      { text: conversationText }
+
+    const response = await ai.generateText([
+      { role: "user", content: `${prompt}\n\n${conversationText}` }
     ]);
 
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents
-    });
-
-    const result = extractJson(response.text);
+    const result = extractJson(response);
     if (result) {
       await Memory.findByIdAndUpdate(memoryId, {
         summary: result?.summary || '',

@@ -10,7 +10,7 @@ export const geminiAuthClient = new GoogleGenAI({
 });
 
 
-export const GEMINI_MODEL = "gemini-2.0-flash";
+export const GEMINI_MODEL = "gemini-2.5-flash";
 export const GEMINI_LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-09-2025";
 
 export default gemini;

@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import { createPartFromUri, createUserContent, PartListUnion } from "@google/genai";
 import { IMessage } from "../../../database/model/message";
 import gemini, { GEMINI_MODEL } from "../../../../services/gemini";
+import ai from "../../../../services/ai";
 import File, { IFile } from "../../../database/model/file"
 import { TEMP_PATH } from "../../../../utils/config";
 import dayjs from "dayjs";
@@ -79,12 +80,11 @@ export async function generateConversationTitle(userMessage: string, aiResponse:
   const prompt = prompts.createTitlePrompt(userMessage, aiResponse);
 
   try {
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: createUserContent([prompt])
-    });
+    const responseText = await ai.generateText([
+      { role: "user", content: prompt }
+    ]);
 
-    let title = response.text.trim();
+    let title = responseText.trim();
 
     // Clean up the response to ensure it's just the title
     title = title.replace(/^["']|["']$/g, ''); // Remove quotes

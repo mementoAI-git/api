@@ -1,6 +1,5 @@
-import { createUserContent } from "@google/genai";
 import { logger, prompts } from "../../utils";
-import gemini, { GEMINI_MODEL } from "../../services/gemini";
+import ai from "../../services/ai";
 import { extractJson } from "../../utils/helpers";
 import Persona, { IPersona } from "../../module/database/model/persona";
 
@@ -14,22 +13,15 @@ export async function extractBatchInsights(
     const persona = await Persona.findOne({ user: user_id });
     const prompt = prompts.buildInsightsPrompt(persona || {} as IPersona);
 
-    // Format all exchanges into a single conversation text
     const conversationText = exchanges
       .map((ex, i) => `--- Exchange ${i + 1} ---\nUser: ${ex.user}\nAI: ${ex.ai}`)
       .join('\n\n');
 
-    const contents = createUserContent([
-      prompt,
-      { text: conversationText }
+    const response = await ai.generateText([
+      { role: "user", content: `${prompt}\n\n${conversationText}` }
     ]);
 
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents
-    });
-
-    const insights = extractJson(response.text)
+    const insights = extractJson(response);
 
     return insights;
   } catch (error) {
@@ -54,17 +46,11 @@ export async function extractOpenThreads(
       .map((ex, i) => `--- Exchange ${i + 1} ---\nUser: ${ex.user}\nAI: ${ex.ai}`)
       .join('\n\n');
 
-    const contents = createUserContent([
-      prompt,
-      { text: conversationText }
+    const response = await ai.generateText([
+      { role: "user", content: `${prompt}\n\n${conversationText}` }
     ]);
 
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents
-    });
-
-    const parsed = extractJson(response.text);
+    const parsed = extractJson(response);
     return Array.isArray(parsed?.open_threads)
       ? parsed.open_threads.filter((t: any) => typeof t === 'string').slice(0, 8)
       : undefined;
@@ -87,17 +73,11 @@ export async function extractConversationDimensions(
       .map((ex, i) => `--- Exchange ${i + 1} ---\nUser: ${ex.user}\nAI: ${ex.ai}`)
       .join('\n\n');
 
-    const contents = createUserContent([
-      prompt,
-      { text: conversationText }
+    const response = await ai.generateText([
+      { role: "user", content: `${prompt}\n\n${conversationText}` }
     ]);
 
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents
-    });
-
-    const parsed = extractJson(response.text);
+    const parsed = extractJson(response);
     return Array.isArray(parsed?.dimensions)
       ? parsed.dimensions.filter((t: any) => typeof t === 'string').slice(0, 3)
       : undefined;

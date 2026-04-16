@@ -77,6 +77,7 @@ jobs:
             build/
             package.json
             yarn.lock
+            ecosystem.config.js
 
   # ── 3. Deploy ──────────────────────────────────────────────
   deploy:
@@ -123,7 +124,7 @@ jobs:
 
           rsync -az \
             -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }}" \
-            ./package.json ./yarn.lock \
+            ./package.json ./yarn.lock ./ecosystem.config.js \
             ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:/opt/memento/backend-dev/
 
       # Install production dependencies on the server, then
@@ -140,8 +141,10 @@ jobs:
 
           yarn install --production --frozen-lockfile --ignore-scripts
 
-          pm2 reload memento-backend-dev --update-env
-          pm2 reload memento-backend-dev-worker --update-env
+          # Restart if running, or start if stopped/missing (auto-sleep may have stopped them)
+          pm2 restart memento-backend-dev --update-env 2>/dev/null \
+            || MEMENTO_ENV=dev pm2 start ecosystem.config.js
+          pm2 restart memento-backend-dev-worker --update-env 2>/dev/null || true
           REMOTE
 
       # Wait for the app to come up, then hit the health endpoint.

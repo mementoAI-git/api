@@ -1,13 +1,17 @@
 # ──────────────────────────────────────────────────────────────
 # Backend — Deploy to Production
-# Triggers on push to main. Requires manual approval via the
-# "production" GitHub environment before deploying.
+# Manual trigger only - requires typing "DEPLOY" to confirm
+# Works on GitHub Free + private repos
 # ──────────────────────────────────────────────────────────────
 name: "Backend: Deploy Prod"
 
 on:
-  push:
-    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "DEPLOY" to confirm production deployment'
+        required: true
+        type: string
 
 # Queue production deploys — never cancel one mid-flight.
 concurrency:
@@ -19,6 +23,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    if: github.event.inputs.confirmation == 'DEPLOY'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -73,15 +78,13 @@ jobs:
             build/
             package.json
             yarn.lock
+            ecosystem.config.js
 
-  # ── 3. Deploy (requires manual approval) ───────────────────
+  # ── 3. Deploy ──────────────────────────────────────────────
   deploy:
     name: Deploy
     needs: build
     runs-on: ubuntu-latest
-    # ⚠️  Requires a "production" environment configured in GitHub
-    #     with required reviewers for manual approval.
-    environment: production
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -117,7 +120,7 @@ jobs:
 
           rsync -az \
             -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }}" \
-            ./package.json ./yarn.lock \
+            ./package.json ./yarn.lock ./ecosystem.config.js \
             ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:/opt/memento/backend-prod/
 
       - name: Install deps and reload PM2

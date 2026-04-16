@@ -1,5 +1,4 @@
-import { createUserContent } from "@google/genai";
-import gemini, { GEMINI_MODEL } from "../../services/gemini";
+import ai from "../../services/ai";
 import Persona, { IPersona } from "../../module/database/model/persona";
 import { prompts } from "../../utils";
 import { queuePersonaBatchSummarization } from "../../services/queues/summarization";
@@ -15,17 +14,11 @@ async function processSection(section: SummarizableField, items: string[]): Prom
       section
     );
 
-    const contents = createUserContent([
-      prompt,
-      { text: `Items to consolidate:\n${items.join('\n')}` }
+    const response = await ai.generateText([
+      { role: "user", content: `${prompt}\n\nItems to consolidate:\n${items.join('\n')}` }
     ]);
 
-    const response = await gemini.models.generateContent({
-      model: GEMINI_MODEL,
-      contents
-    });
-
-    const result = extractJson(response.text);
+    const result = extractJson(response);
     return result?.summarized_items || [];
   } catch (error) {
     logger.error(error, `Error summarizing ${section} items`);
