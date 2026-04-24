@@ -13,7 +13,11 @@ router.get('/profile', ctrl.getProfile);
 router.get('/onboarding-details', ctrl.getOnboardingDetails);
 router.post('/onboarding/skip', ctrl.skipOnboarding);
 router.post('/onboarding', validate(dto.onboardingSchema), ctrl.onboarding);
-router.post('/onboarding/chat/prompt', validate(dto.onboardingChatPromptSchema), ctrl.onboardingChatPrompt);
+router.post(
+  '/onboarding/chat/prompt',
+  validate(dto.onboardingChatPromptSchema),
+  ctrl.onboardingChatPrompt,
+);
 router.post('/change-password', valid.setPassword, ctrl.setPassword);
 router.put('/profile', ctrl.updateProfile);
 router.get('/persona', ctrl.getPersona);

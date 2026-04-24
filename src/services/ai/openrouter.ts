@@ -1,14 +1,14 @@
-import axios from "axios";
-import { Readable } from "stream";
+import axios from 'axios';
+import {Readable} from 'stream';
 import {
   OPENROUTER_API_KEY,
   OPENROUTER_APP_NAME,
   OPENROUTER_BASE_URL,
-  OPENROUTER_SITE_URL
-} from "../../utils/config";
-import { AiTask, getTaskRouting } from "./model-routing";
+  OPENROUTER_SITE_URL,
+} from '../../utils/config';
+import {AiTask, getTaskRouting} from './model-routing';
 
-type ChatRole = "system" | "user" | "assistant";
+type ChatRole = 'system' | 'user' | 'assistant';
 const OPENROUTER_COOLDOWN_MS = 30_000;
 const taskCooldownUntil: Partial<Record<AiTask, number>> = {};
 
@@ -36,33 +36,33 @@ function isConfigured() {
 function getHeaders() {
   return {
     Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-    "Content-Type": "application/json",
-    "HTTP-Referer": OPENROUTER_SITE_URL,
-    "X-Title": OPENROUTER_APP_NAME
+    'Content-Type': 'application/json',
+    'HTTP-Referer': OPENROUTER_SITE_URL,
+    'X-Title': OPENROUTER_APP_NAME,
   };
 }
 
 function getMessageText(data: any) {
-  return data?.choices?.[0]?.message?.content || "";
+  return data?.choices?.[0]?.message?.content || '';
 }
 
 function getAxiosErrorDetails(error: unknown) {
   if (!axios.isAxiosError(error)) {
     return {
-      message: (error as Error)?.message || "Unknown error"
+      message: (error as Error)?.message || 'Unknown error',
     };
   }
 
   return {
     message: error.message,
     status: error.response?.status,
-    responseData: error.response?.data
+    responseData: error.response?.data,
   };
 }
 
 function getRetryDelayMs(error: unknown): number | null {
   if (!axios.isAxiosError(error)) return null;
-  const retryAfterHeader = error.response?.headers?.["retry-after"];
+  const retryAfterHeader = error.response?.headers?.['retry-after'];
   if (!retryAfterHeader) return null;
 
   const asNumber = Number(retryAfterHeader);
@@ -90,7 +90,8 @@ function isTaskCoolingDown(task: AiTask): boolean {
 
 function openTaskCooldown(task: AiTask, error: unknown) {
   const retryDelay = getRetryDelayMs(error);
-  const cooldownMs = retryDelay && retryDelay > 0 ? retryDelay : OPENROUTER_COOLDOWN_MS;
+  const cooldownMs =
+    retryDelay && retryDelay > 0 ? retryDelay : OPENROUTER_COOLDOWN_MS;
   taskCooldownUntil[task] = Date.now() + cooldownMs;
 }
 
@@ -105,12 +106,12 @@ async function generateWithModel(params: {
     {
       model: params.model,
       messages: params.messages,
-      temperature: params.temperature ?? 0.7
+      temperature: params.temperature ?? 0.7,
     },
     {
       headers: getHeaders(),
-      timeout: params.timeoutMs
-    }
+      timeout: params.timeoutMs,
+    },
   );
 
   return {
@@ -118,8 +119,8 @@ async function generateWithModel(params: {
     tokenUsage: {
       prompt_tokens: response.data?.usage?.prompt_tokens,
       completion_tokens: response.data?.usage?.completion_tokens,
-      total_tokens: response.data?.usage?.total_tokens
-    }
+      total_tokens: response.data?.usage?.total_tokens,
+    },
   };
 }
 
@@ -140,14 +141,14 @@ export async function generateTextWithFallback(params: {
       model: route.primaryModel,
       messages: params.messages,
       temperature: params.temperature,
-      timeoutMs: route.timeoutMs
+      timeoutMs: route.timeoutMs,
     });
     return {
       text: primary.text,
       effectiveModel: route.primaryModel,
       usedFallback: false,
       durationMs: Date.now() - start,
-      tokenUsage: primary.tokenUsage
+      tokenUsage: primary.tokenUsage,
     };
   } catch (primaryError) {
     try {
@@ -155,31 +156,31 @@ export async function generateTextWithFallback(params: {
         model: route.fallbackModel,
         messages: params.messages,
         temperature: params.temperature,
-        timeoutMs: route.timeoutMs
+        timeoutMs: route.timeoutMs,
       });
-      console.error("OpenRouter primary model failed, fallback used:", {
+      console.error('OpenRouter primary model failed, fallback used:', {
         task: params.task,
         primaryModel: route.primaryModel,
         fallbackModel: route.fallbackModel,
-        primaryError: getAxiosErrorDetails(primaryError)
+        primaryError: getAxiosErrorDetails(primaryError),
       });
       return {
         text: fallback.text,
         effectiveModel: route.fallbackModel,
         usedFallback: true,
         durationMs: Date.now() - start,
-        tokenUsage: fallback.tokenUsage
+        tokenUsage: fallback.tokenUsage,
       };
     } catch (fallbackError) {
       if (shouldOpenCircuit(primaryError) || shouldOpenCircuit(fallbackError)) {
         openTaskCooldown(params.task, fallbackError);
       }
-      console.error("OpenRouter primary and fallback both failed:", {
+      console.error('OpenRouter primary and fallback both failed:', {
         task: params.task,
         primaryModel: route.primaryModel,
         fallbackModel: route.fallbackModel,
         primaryError: getAxiosErrorDetails(primaryError),
-        fallbackError: getAxiosErrorDetails(fallbackError)
+        fallbackError: getAxiosErrorDetails(fallbackError),
       });
       throw fallbackError;
     }
@@ -198,38 +199,38 @@ async function streamWithModel(params: {
       model: params.model,
       messages: params.messages,
       temperature: params.temperature ?? 0.7,
-      stream: true
+      stream: true,
     },
     {
       headers: getHeaders(),
-      responseType: "stream",
-      timeout: params.timeoutMs
-    }
+      responseType: 'stream',
+      timeout: params.timeoutMs,
+    },
   );
 
   return response.data as Readable;
 }
 
 async function* parseSseStream(stream: Readable) {
-  let buffer = "";
+  let buffer = '';
 
   for await (const chunk of stream) {
     buffer += chunk.toString();
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
+      if (!trimmed.startsWith('data:')) continue;
 
-      const raw = trimmed.replace(/^data:\s*/, "");
-      if (raw === "[DONE]") return;
+      const raw = trimmed.replace(/^data:\s*/, '');
+      if (raw === '[DONE]') return;
 
       try {
         const payload = JSON.parse(raw);
         const token = payload?.choices?.[0]?.delta?.content;
-        if (typeof token === "string" && token.length > 0) {
-          yield { text: token };
+        if (typeof token === 'string' && token.length > 0) {
+          yield {text: token};
         }
       } catch (error) {
         // Ignore non-JSON events.
@@ -243,7 +244,7 @@ export async function streamTextWithFallback(params: {
   messages: OpenRouterMessage[];
   temperature?: number;
 }): Promise<{
-  stream: AsyncGenerator<{ text?: string }, void, unknown>;
+  stream: AsyncGenerator<{text?: string}, void, unknown>;
   effectiveModel: string;
   usedFallback: boolean;
   streamConnectMs: number;
@@ -260,13 +261,13 @@ export async function streamTextWithFallback(params: {
       model: route.primaryModel,
       messages: params.messages,
       temperature: params.temperature,
-      timeoutMs: route.timeoutMs
+      timeoutMs: route.timeoutMs,
     });
     return {
       stream: parseSseStream(primaryStream),
       effectiveModel: route.primaryModel,
       usedFallback: false,
-      streamConnectMs: Date.now() - start
+      streamConnectMs: Date.now() - start,
     };
   } catch (primaryError) {
     try {
@@ -274,30 +275,30 @@ export async function streamTextWithFallback(params: {
         model: route.fallbackModel,
         messages: params.messages,
         temperature: params.temperature,
-        timeoutMs: route.timeoutMs
+        timeoutMs: route.timeoutMs,
       });
-      console.error("OpenRouter primary stream failed, fallback used:", {
+      console.error('OpenRouter primary stream failed, fallback used:', {
         task: params.task,
         primaryModel: route.primaryModel,
         fallbackModel: route.fallbackModel,
-        primaryError: getAxiosErrorDetails(primaryError)
+        primaryError: getAxiosErrorDetails(primaryError),
       });
       return {
         stream: parseSseStream(fallbackStream),
         effectiveModel: route.fallbackModel,
         usedFallback: true,
-        streamConnectMs: Date.now() - start
+        streamConnectMs: Date.now() - start,
       };
     } catch (fallbackError) {
       if (shouldOpenCircuit(primaryError) || shouldOpenCircuit(fallbackError)) {
         openTaskCooldown(params.task, fallbackError);
       }
-      console.error("OpenRouter primary and fallback streams both failed:", {
+      console.error('OpenRouter primary and fallback streams both failed:', {
         task: params.task,
         primaryModel: route.primaryModel,
         fallbackModel: route.fallbackModel,
         primaryError: getAxiosErrorDetails(primaryError),
-        fallbackError: getAxiosErrorDetails(fallbackError)
+        fallbackError: getAxiosErrorDetails(fallbackError),
       });
       throw fallbackError;
     }
@@ -305,5 +306,5 @@ export async function streamTextWithFallback(params: {
 }
 
 export const openRouterClient = {
-  isConfigured
+  isConfigured,
 };

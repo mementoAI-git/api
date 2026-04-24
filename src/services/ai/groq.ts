@@ -1,13 +1,13 @@
-import axios from "axios";
-import { Readable } from "stream";
+import axios from 'axios';
+import {Readable} from 'stream';
 import {
   GROQ_API_KEY,
   GROQ_BASE_URL,
   GROQ_MODEL_CHAT_PRIMARY,
-  GROQ_MODEL_CHAT_FALLBACK
-} from "../../utils/config";
+  GROQ_MODEL_CHAT_FALLBACK,
+} from '../../utils/config';
 
-type ChatRole = "system" | "user" | "assistant";
+type ChatRole = 'system' | 'user' | 'assistant';
 
 export interface GroqMessage {
   role: ChatRole;
@@ -21,7 +21,7 @@ function isConfigured() {
 function getHeaders() {
   return {
     Authorization: `Bearer ${GROQ_API_KEY}`,
-    "Content-Type": "application/json"
+    'Content-Type': 'application/json',
   };
 }
 
@@ -37,13 +37,13 @@ async function streamWithModel(params: {
       model: params.model,
       messages: params.messages,
       temperature: params.temperature ?? 0.7,
-      stream: true
+      stream: true,
     },
     {
       headers: getHeaders(),
-      responseType: "stream",
-      timeout: params.timeoutMs
-    }
+      responseType: 'stream',
+      timeout: params.timeoutMs,
+    },
   );
 
   return response.data as Readable;
@@ -60,42 +60,42 @@ async function generateWithModel(params: {
     {
       model: params.model,
       messages: params.messages,
-      temperature: params.temperature ?? 0.7
+      temperature: params.temperature ?? 0.7,
     },
     {
       headers: getHeaders(),
-      timeout: params.timeoutMs
-    }
+      timeout: params.timeoutMs,
+    },
   );
 
   return {
-    text: response.data?.choices?.[0]?.message?.content || "",
+    text: response.data?.choices?.[0]?.message?.content || '',
     tokenUsage: {
       prompt_tokens: response.data?.usage?.prompt_tokens,
       completion_tokens: response.data?.usage?.completion_tokens,
-      total_tokens: response.data?.usage?.total_tokens
-    }
+      total_tokens: response.data?.usage?.total_tokens,
+    },
   };
 }
 
 async function* parseSseStream(stream: Readable) {
-  let buffer = "";
+  let buffer = '';
   for await (const chunk of stream) {
     buffer += chunk.toString();
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed.startsWith("data:")) continue;
-      const raw = trimmed.replace(/^data:\s*/, "");
-      if (raw === "[DONE]") return;
+      if (!trimmed.startsWith('data:')) continue;
+      const raw = trimmed.replace(/^data:\s*/, '');
+      if (raw === '[DONE]') return;
 
       try {
         const payload = JSON.parse(raw);
         const token = payload?.choices?.[0]?.delta?.content;
-        if (typeof token === "string" && token.length > 0) {
-          yield { text: token };
+        if (typeof token === 'string' && token.length > 0) {
+          yield {text: token};
         }
       } catch (_error) {
         // Ignore malformed intermediary chunks.
@@ -119,17 +119,25 @@ export async function streamTextWithGroqFallback(params: {
       model: primaryModel,
       messages: params.messages,
       temperature: params.temperature,
-      timeoutMs
+      timeoutMs,
     });
-    return { stream: parseSseStream(primary), effectiveModel: primaryModel, usedFallback: false };
+    return {
+      stream: parseSseStream(primary),
+      effectiveModel: primaryModel,
+      usedFallback: false,
+    };
   } catch (_primaryError) {
     const fallback = await streamWithModel({
       model: fallbackModel,
       messages: params.messages,
       temperature: params.temperature,
-      timeoutMs
+      timeoutMs,
     });
-    return { stream: parseSseStream(fallback), effectiveModel: fallbackModel, usedFallback: true };
+    return {
+      stream: parseSseStream(fallback),
+      effectiveModel: fallbackModel,
+      usedFallback: true,
+    };
   }
 }
 
@@ -148,30 +156,30 @@ export async function generateTextWithGroqFallback(params: {
       model: primaryModel,
       messages: params.messages,
       temperature: params.temperature,
-      timeoutMs
+      timeoutMs,
     });
     return {
       text: primary.text,
       effectiveModel: primaryModel,
       usedFallback: false,
-      tokenUsage: primary.tokenUsage
+      tokenUsage: primary.tokenUsage,
     };
   } catch (_primaryError) {
     const fallback = await generateWithModel({
       model: fallbackModel,
       messages: params.messages,
       temperature: params.temperature,
-      timeoutMs
+      timeoutMs,
     });
     return {
       text: fallback.text,
       effectiveModel: fallbackModel,
       usedFallback: true,
-      tokenUsage: fallback.tokenUsage
+      tokenUsage: fallback.tokenUsage,
     };
   }
 }
 
 export const groqClient = {
-  isConfigured
+  isConfigured,
 };

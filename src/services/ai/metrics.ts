@@ -1,4 +1,4 @@
-import AiMetric from "../../module/database/model/ai-metric";
+import AiMetric from '../../module/database/model/ai-metric';
 
 export interface AiTokenUsage {
   prompt_tokens?: number;
@@ -28,14 +28,14 @@ export interface AiMetricPayload {
 }
 
 export async function recordAiMetric(payload: AiMetricPayload) {
-  console.log("AI metric", payload);
+  console.log('AI metric', payload);
   try {
     await AiMetric.create(payload);
   } catch (error) {
     // Never fail request flow on metrics persistence.
-    console.error("Failed to persist AI metric", {
+    console.error('Failed to persist AI metric', {
       event: payload.event,
-      error: (error as Error)?.message
+      error: (error as Error)?.message,
     });
   }
 }

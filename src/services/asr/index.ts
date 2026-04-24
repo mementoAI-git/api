@@ -4,14 +4,22 @@ import {
   ASR_GEMINI_PRIMARY_MODEL,
   ASR_PROVIDER,
   ASR_SHADOW_ENABLED,
-  ASR_SHADOW_PROVIDER
-} from "../../utils/config";
-import { GeminiAsrProvider } from "./gemini-provider";
-import { AsrProvider, AsrRouterResult, AsrShadowResult, AsrTranscriptionInput } from "./types";
+  ASR_SHADOW_PROVIDER,
+} from '../../utils/config';
+import {GeminiAsrProvider} from './gemini-provider';
+import {
+  AsrProvider,
+  AsrRouterResult,
+  AsrShadowResult,
+  AsrTranscriptionInput,
+} from './types';
 
 const providerRegistry: Record<string, AsrProvider> = {
-  gemini: new GeminiAsrProvider("gemini", ASR_GEMINI_PRIMARY_MODEL),
-  gemini_fallback: new GeminiAsrProvider("gemini_fallback", ASR_GEMINI_FALLBACK_MODEL),
+  gemini: new GeminiAsrProvider('gemini', ASR_GEMINI_PRIMARY_MODEL),
+  gemini_fallback: new GeminiAsrProvider(
+    'gemini_fallback',
+    ASR_GEMINI_FALLBACK_MODEL,
+  ),
 };
 
 function resolveProvider() {
@@ -22,7 +30,9 @@ function resolveProvider() {
   return provider;
 }
 
-export async function transcribeWithConfiguredAsr(input: AsrTranscriptionInput) {
+export async function transcribeWithConfiguredAsr(
+  input: AsrTranscriptionInput,
+) {
   const primary = resolveProvider();
   const fallback = providerRegistry[ASR_FALLBACK_PROVIDER];
 
@@ -30,7 +40,7 @@ export async function transcribeWithConfiguredAsr(input: AsrTranscriptionInput) 
     const primaryResult = await primary.transcribe(input);
     return {
       ...primaryResult,
-      usedFallback: false
+      usedFallback: false,
     } as AsrRouterResult;
   } catch (primaryError) {
     if (!fallback || fallback.providerId === primary.providerId) {
@@ -39,7 +49,7 @@ export async function transcribeWithConfiguredAsr(input: AsrTranscriptionInput) 
     const fallbackResult = await fallback.transcribe(input);
     return {
       ...fallbackResult,
-      usedFallback: true
+      usedFallback: true,
     } as AsrRouterResult;
   }
 }
@@ -49,7 +59,7 @@ export function shouldRunAsrShadow() {
 }
 
 export async function transcribeWithShadowProvider(
-  input: AsrTranscriptionInput
+  input: AsrTranscriptionInput,
 ): Promise<AsrShadowResult | null> {
   if (!shouldRunAsrShadow()) return null;
   const shadowProvider = providerRegistry[ASR_SHADOW_PROVIDER];
@@ -58,6 +68,6 @@ export async function transcribeWithShadowProvider(
   const result = await shadowProvider.transcribe(input);
   return {
     ...result,
-    durationMs: Date.now() - start
+    durationMs: Date.now() - start,
   };
 }

@@ -1,4 +1,4 @@
-import { ITranscriptionData } from "../../module/database/model/file";
+import {ITranscriptionData} from '../../module/database/model/file';
 
 export interface AsrTranscriptionInput {
   transcriptionPrompt: string;
@@ -6,7 +6,7 @@ export interface AsrTranscriptionInput {
 }
 
 export interface AsrTranscriptionResult {
-  data: ITranscriptionData | { full_text: string };
+  data: ITranscriptionData | {full_text: string};
   provider: string;
   model: string;
   tokenUsage?: {

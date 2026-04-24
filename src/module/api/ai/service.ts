@@ -1,38 +1,55 @@
-import { Response } from "express";
-import { FilterQuery } from "mongoose";
-import { createUserContent, Modality, PartListUnion } from "@google/genai";
-import axios from "axios";
-import { z } from "zod";
-import Message, { IMessage } from "../../database/model/message";
-import gemini, { GEMINI_MODEL } from "../../../services/gemini";
-import { geminiAuthClient, GEMINI_LIVE_MODEL } from "../../../services/gemini";
-import { extractJson, isEmpty } from "../../../utils/helpers";
-import { IPagination } from "../../../utils/interface";
-import { IPrompt, IStartMemory, ITranscribeAudio } from "./interface";
-import File, { ITranscriptionData } from "../../database/model/file"
-import { NotFoundException } from "../../../utils/service-error";
-import User from "../../database/model/user";
-import dayjs from "dayjs";
-import { prompts } from "../../../utils";
-import Memory from "../../database/model/memory";
+import {Response} from 'express';
+import {FilterQuery} from 'mongoose';
+import {createUserContent, Modality, PartListUnion} from '@google/genai';
+import axios from 'axios';
+import {z} from 'zod';
+import Message, {IMessage} from '../../database/model/message';
+import gemini, {GEMINI_MODEL} from '../../../services/gemini';
+import {geminiAuthClient, GEMINI_LIVE_MODEL} from '../../../services/gemini';
+import {extractJson, isEmpty} from '../../../utils/helpers';
+import {IPagination} from '../../../utils/interface';
+import {IPrompt, IStartMemory, ITranscribeAudio} from './interface';
+import File, {ITranscriptionData} from '../../database/model/file';
+import {NotFoundException} from '../../../utils/service-error';
+import User from '../../database/model/user';
+import dayjs from 'dayjs';
+import {prompts} from '../../../utils';
+import Memory from '../../database/model/memory';
 import {
   triggerSummarization,
   createChatHistory,
   isSignificantMessage,
   processFile,
   processFiles,
-  updateMemoryTitle
-} from "./utils";
-import Prompt from "../../database/model/prompt";
-import AiMetric from "../../database/model/ai-metric";
-import { updateStreak } from "../user/service";
-import { addToInsightsBuffer } from "../../../services/queues/insights";
-import * as supermemory from "../../../services/supermemory";
-import { openRouterClient, OpenRouterMessage, streamTextWithFallback, generateTextWithFallback } from "../../../services/ai/openrouter";
-import { groqClient, GroqMessage, streamTextWithGroqFallback, generateTextWithGroqFallback } from "../../../services/ai/groq";
-import { recordAiMetric } from "../../../services/ai/metrics";
-import { shouldRunAsrShadow, transcribeWithConfiguredAsr, transcribeWithShadowProvider } from "../../../services/asr";
-import { getPromptRegistrySnapshot, getPromptVersion } from "../../../utils/ai-prompt/registry";
+  updateMemoryTitle,
+} from './utils';
+import Prompt from '../../database/model/prompt';
+import AiMetric from '../../database/model/ai-metric';
+import {updateStreak} from '../user/service';
+import {addToInsightsBuffer} from '../../../services/queues/insights';
+import * as supermemory from '../../../services/supermemory';
+import {
+  openRouterClient,
+  OpenRouterMessage,
+  streamTextWithFallback,
+  generateTextWithFallback,
+} from '../../../services/ai/openrouter';
+import {
+  groqClient,
+  GroqMessage,
+  streamTextWithGroqFallback,
+  generateTextWithGroqFallback,
+} from '../../../services/ai/groq';
+import {recordAiMetric} from '../../../services/ai/metrics';
+import {
+  shouldRunAsrShadow,
+  transcribeWithConfiguredAsr,
+  transcribeWithShadowProvider,
+} from '../../../services/asr';
+import {
+  getPromptRegistrySnapshot,
+  getPromptVersion,
+} from '../../../utils/ai-prompt/registry';
 import {
   AI_SLO_ERROR_RATE_MAX,
   AI_SLO_FALLBACK_RATE_MAX,
@@ -46,15 +63,15 @@ import {
   ELEVENLABS_API_KEY,
   ELEVENLABS_BASE_URL,
   ELEVENLABS_TTS_MODEL_ID,
-  OPENROUTER_CRITICAL_ENABLED
-} from "../../../utils/config";
+  OPENROUTER_CRITICAL_ENABLED,
+} from '../../../utils/config';
 
 const USER_BACKOFF_WINDOW_MS = 30_000;
 const userChatBackoffUntil = new Map<string, number>();
 
 function isProviderRateLimited(error: unknown) {
-  const msg = String((error as Error)?.message || "");
-  return msg.includes("429") || msg.includes("402");
+  const msg = String((error as Error)?.message || '');
+  return msg.includes('429') || msg.includes('402');
 }
 
 function getUserBackoffRemainingMs(userId: string) {
@@ -68,127 +85,131 @@ function setUserBackoffWindow(userId: string) {
 }
 
 const tagsOutputSchema = z.object({
-  tags: z.array(z.string()).default([])
+  tags: z.array(z.string()).default([]),
 });
 
 const GEMINI_LIVE_VOICE_CATALOG = [
   {
-    id: "kore",
-    title: "Kore",
-    subtitle: "warm",
-    gender: "female",
-    voiceName: "Kore",
-    platform: "Gemini",
-    client: "Google",
-    style: "warm",
-    imageUrl: "https://api.dicebear.com/9.x/glass/svg?seed=clara"
+    id: 'kore',
+    title: 'Kore',
+    subtitle: 'warm',
+    gender: 'female',
+    voiceName: 'Kore',
+    platform: 'Gemini',
+    client: 'Google',
+    style: 'warm',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=clara',
   },
   {
-    id: "fenrir",
-    title: "Fenrir",
-    subtitle: "grounded",
-    gender: "male",
-    voiceName: "Fenrir",
-    platform: "Gemini",
-    client: "Google",
-    style: "grounded",
-    imageUrl: "https://api.dicebear.com/9.x/glass/svg?seed=vince"
+    id: 'fenrir',
+    title: 'Fenrir',
+    subtitle: 'grounded',
+    gender: 'male',
+    voiceName: 'Fenrir',
+    platform: 'Gemini',
+    client: 'Google',
+    style: 'grounded',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=vince',
   },
   {
-    id: "aoede",
-    title: "Aoede",
-    subtitle: "bright",
-    gender: "female",
-    voiceName: "Aoede",
-    platform: "Gemini",
-    client: "Google",
-    style: "bright",
-    imageUrl: "https://api.dicebear.com/9.x/glass/svg?seed=skye"
+    id: 'aoede',
+    title: 'Aoede',
+    subtitle: 'bright',
+    gender: 'female',
+    voiceName: 'Aoede',
+    platform: 'Gemini',
+    client: 'Google',
+    style: 'bright',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=skye',
   },
   {
-    id: "enceladus",
-    title: "Enceladus",
-    subtitle: "steady",
-    gender: "male",
-    voiceName: "Enceladus",
-    platform: "Gemini",
-    client: "Google",
-    style: "steady",
-    imageUrl: "https://api.dicebear.com/9.x/glass/svg?seed=theo"
+    id: 'enceladus',
+    title: 'Enceladus',
+    subtitle: 'steady',
+    gender: 'male',
+    voiceName: 'Enceladus',
+    platform: 'Gemini',
+    client: 'Google',
+    style: 'steady',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=theo',
   },
   {
-    id: "leda",
-    title: "Leda",
-    subtitle: "clear",
-    gender: "female",
-    voiceName: "Leda",
-    platform: "Gemini",
-    client: "Google",
-    style: "clear",
-    imageUrl: "https://api.dicebear.com/9.x/glass/svg?seed=iris"
+    id: 'leda',
+    title: 'Leda',
+    subtitle: 'clear',
+    gender: 'female',
+    voiceName: 'Leda',
+    platform: 'Gemini',
+    client: 'Google',
+    style: 'clear',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=iris',
   },
   {
-    id: "puck",
-    title: "Puck",
-    subtitle: "energetic",
-    gender: "male",
-    voiceName: "Puck",
-    platform: "Gemini",
-    client: "Google",
-    style: "energetic",
-    imageUrl: "https://api.dicebear.com/9.x/glass/svg?seed=marcus"
-  }
+    id: 'puck',
+    title: 'Puck',
+    subtitle: 'energetic',
+    gender: 'male',
+    voiceName: 'Puck',
+    platform: 'Gemini',
+    client: 'Google',
+    style: 'energetic',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=marcus',
+  },
 ] as const;
 
-type VoiceProvider = "gemini" | "elevenlabs";
+type VoiceProvider = 'gemini' | 'elevenlabs';
 
-const DEFAULT_VOICE_PREVIEW_TEXT = "This is a short voice preview for Memento.";
-const ELEVENLABS_DEFAULT_AGENT_ID = "agent_1701kpzx5njhfxp991evy221ybnj";
-const ELEVENLABS_DEFAULT_AGENT_BRANCH_ID = "agtbrch_0401kpzx5qmbf76rx7zbsrety678";
-const ELEVENLABS_DEFAULT_AGENT_TALK_TO_URL =
-  `https://elevenlabs.io/app/talk-to?agent_id=${ELEVENLABS_DEFAULT_AGENT_ID}&branch_id=${ELEVENLABS_DEFAULT_AGENT_BRANCH_ID}`;
+const DEFAULT_VOICE_PREVIEW_TEXT = 'This is a short voice preview for Memento.';
+const ELEVENLABS_DEFAULT_AGENT_ID = 'agent_1701kpzx5njhfxp991evy221ybnj';
+const ELEVENLABS_DEFAULT_AGENT_BRANCH_ID =
+  'agtbrch_0401kpzx5qmbf76rx7zbsrety678';
+const ELEVENLABS_DEFAULT_AGENT_TALK_TO_URL = `https://elevenlabs.io/app/talk-to?agent_id=${ELEVENLABS_DEFAULT_AGENT_ID}&branch_id=${ELEVENLABS_DEFAULT_AGENT_BRANCH_ID}`;
 
 const ELEVENLABS_DEFAULT_AGENT_ENTRY = {
   id: ELEVENLABS_DEFAULT_AGENT_ID,
-  title: "Memento Agent",
-  subtitle: "conversational",
-  gender: "unknown",
+  title: 'Memento Agent',
+  subtitle: 'conversational',
+  gender: 'unknown',
   voiceName: ELEVENLABS_DEFAULT_AGENT_ID,
-  platform: "ElevenLabs",
-  client: "ElevenLabs",
-  style: "conversational",
+  platform: 'ElevenLabs',
+  client: 'ElevenLabs',
+  style: 'conversational',
   talkToUrl: ELEVENLABS_DEFAULT_AGENT_TALK_TO_URL,
-  imageUrl: undefined
+  imageUrl: undefined,
 } as const;
 
 function resolveVoiceProvider(input?: string): VoiceProvider {
-  if (input === "elevenlabs") return "elevenlabs";
-  return "gemini";
+  if (input === 'elevenlabs') return 'elevenlabs';
+  return 'gemini';
 }
 
-function mapElevenLabsGender(labels: Record<string, string> | undefined): string {
-  const gender = (labels?.gender || "").toLowerCase();
-  if (gender.includes("male")) return "male";
-  if (gender.includes("female")) return "female";
-  return "unknown";
+function mapElevenLabsGender(
+  labels: Record<string, string> | undefined,
+): string {
+  const gender = (labels?.gender || '').toLowerCase();
+  if (gender.includes('male')) return 'male';
+  if (gender.includes('female')) return 'female';
+  return 'unknown';
 }
 
-function mapElevenLabsStyle(labels: Record<string, string> | undefined): string {
+function mapElevenLabsStyle(
+  labels: Record<string, string> | undefined,
+): string {
   const styleCandidates = [
     labels?.descriptive,
     labels?.age,
     labels?.use_case,
-    labels?.accent
-  ].filter((v): v is string => typeof v === "string" && v.trim().length > 0);
-  return styleCandidates[0] || "natural";
+    labels?.accent,
+  ].filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+  return styleCandidates[0] || 'natural';
 }
 
 async function getElevenLabsVoices() {
   if (!ELEVENLABS_API_KEY) {
     return {
-      provider: "elevenlabs",
+      provider: 'elevenlabs',
       configured: false,
-      voices: [ELEVENLABS_DEFAULT_AGENT_ENTRY]
+      voices: [ELEVENLABS_DEFAULT_AGENT_ENTRY],
     };
   }
 
@@ -196,66 +217,78 @@ async function getElevenLabsVoices() {
   try {
     const response = await axios.get(`${ELEVENLABS_BASE_URL}/voices`, {
       headers: {
-        "xi-api-key": ELEVENLABS_API_KEY
+        'xi-api-key': ELEVENLABS_API_KEY,
       },
-      timeout: 15_000
+      timeout: 15_000,
     });
     data = response.data;
   } catch (error) {
-    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-    console.warn("ElevenLabs voices unavailable", {
+    const status = axios.isAxiosError(error)
+      ? error.response?.status
+      : undefined;
+    console.warn('ElevenLabs voices unavailable', {
       status,
-      reason: status === 401 ? "unauthorized_api_key" : "request_failed"
+      reason: status === 401 ? 'unauthorized_api_key' : 'request_failed',
     });
     return {
-      provider: "elevenlabs",
+      provider: 'elevenlabs',
       configured: false,
-      voices: [ELEVENLABS_DEFAULT_AGENT_ENTRY]
+      voices: [ELEVENLABS_DEFAULT_AGENT_ENTRY],
     };
   }
 
-  const raw = Array.isArray((data as { voices?: unknown[] })?.voices) ? (data as { voices: any[] }).voices : [];
-  const voices = raw.map((voice) => {
-    const labels = (voice?.labels || {}) as Record<string, string>;
-    const gender = mapElevenLabsGender(labels);
-    const style = mapElevenLabsStyle(labels);
-    return {
-      id: String(voice?.voice_id || voice?.name || "elevenlabs-voice"),
-      title: String(voice?.name || "ElevenLabs Voice"),
-      subtitle: style,
-      gender,
-      voiceName: String(voice?.voice_id || ""),
-      platform: "ElevenLabs",
-      client: "ElevenLabs",
-      style,
-      imageUrl: undefined
-    };
-  }).filter((v) => Boolean(v.voiceName));
+  const raw = Array.isArray((data as {voices?: unknown[]})?.voices)
+    ? (data as {voices: any[]}).voices
+    : [];
+  const voices = raw
+    .map(voice => {
+      const labels = (voice?.labels || {}) as Record<string, string>;
+      const gender = mapElevenLabsGender(labels);
+      const style = mapElevenLabsStyle(labels);
+      return {
+        id: String(voice?.voice_id || voice?.name || 'elevenlabs-voice'),
+        title: String(voice?.name || 'ElevenLabs Voice'),
+        subtitle: style,
+        gender,
+        voiceName: String(voice?.voice_id || ''),
+        platform: 'ElevenLabs',
+        client: 'ElevenLabs',
+        style,
+        imageUrl: undefined,
+      };
+    })
+    .filter(v => Boolean(v.voiceName));
 
   return {
-    provider: "elevenlabs",
+    provider: 'elevenlabs',
     configured: true,
-    voices: [ELEVENLABS_DEFAULT_AGENT_ENTRY, ...voices]
+    voices: [ELEVENLABS_DEFAULT_AGENT_ENTRY, ...voices],
   };
 }
 
 function getTranscriptionSummaryShape(data: unknown) {
   const asObj = (data || {}) as Record<string, unknown>;
-  const fullText = typeof asObj.full_text === "string" ? asObj.full_text : "";
+  const fullText = typeof asObj.full_text === 'string' ? asObj.full_text : '';
   const segments = Array.isArray(asObj.segments) ? asObj.segments : [];
   return {
     textLength: fullText.length,
-    segmentCount: segments.length
+    segmentCount: segments.length,
   };
 }
 
-function getSessionTurnCount(messages: Array<{ role: string; created_at: string | Date }>): number {
+function getSessionTurnCount(
+  messages: Array<{role: string; created_at: string | Date}>,
+): number {
   const fourHoursAgo = dayjs().subtract(4, 'hour').toDate();
-  return messages.filter(m => m.role === 'user' && new Date(m.created_at) >= fourHoursAgo).length;
+  return messages.filter(
+    m => m.role === 'user' && new Date(m.created_at) >= fourHoursAgo,
+  ).length;
 }
 
-async function* createSafeFallbackStream(message: string): AsyncGenerator<{ text?: string }, any, any> {
-  yield { text: message };
+async function* createSafeFallbackStream(
+  message: string,
+): AsyncGenerator<{text?: string}, any, any> {
+  yield {text: message};
 }
 
 const GROQ_MAX_CONTEXT_CHARS = 22000;
@@ -263,7 +296,7 @@ const GROQ_SYSTEM_PROMPT_CAP_CHARS = 5000;
 const GROQ_RECENT_HISTORY_TURNS = 8;
 
 function compactText(text: string, maxChars: number) {
-  if (!text) return "";
+  if (!text) return '';
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}...`;
 }
@@ -274,89 +307,104 @@ function buildGroqBoundedMessages(params: {
   userText: string;
 }): GroqMessage[] {
   const history = params.history || [];
-  const older = history.slice(0, Math.max(0, history.length - GROQ_RECENT_HISTORY_TURNS));
+  const older = history.slice(
+    0,
+    Math.max(0, history.length - GROQ_RECENT_HISTORY_TURNS),
+  );
   const recent = history.slice(-GROQ_RECENT_HISTORY_TURNS);
 
-  let summaryMessage = "";
+  let summaryMessage = '';
   if (older.length > 0) {
     const olderSnippet = older
       .slice(-6)
-      .map((m) => `${m.role}: ${compactText(m.content, 260)}`)
-      .join("\n");
+      .map(m => `${m.role}: ${compactText(m.content, 260)}`)
+      .join('\n');
     summaryMessage = `Summary of earlier conversation turns (compressed to fit model limits):\n${olderSnippet}`;
   }
 
-  let boundedSystem = compactText(params.systemInstruction, GROQ_SYSTEM_PROMPT_CAP_CHARS);
+  let boundedSystem = compactText(
+    params.systemInstruction,
+    GROQ_SYSTEM_PROMPT_CAP_CHARS,
+  );
   const assembled = [
     boundedSystem,
     summaryMessage,
-    ...recent.map((m) => `${m.role}: ${m.content}`),
-    `user: ${params.userText}`
-  ].join("\n\n");
+    ...recent.map(m => `${m.role}: ${m.content}`),
+    `user: ${params.userText}`,
+  ].join('\n\n');
 
   if (assembled.length > GROQ_MAX_CONTEXT_CHARS) {
     // If still too large, trim system prompt further and keep only the most recent messages.
-    boundedSystem = compactText(boundedSystem, Math.floor(GROQ_SYSTEM_PROMPT_CAP_CHARS * 0.6));
+    boundedSystem = compactText(
+      boundedSystem,
+      Math.floor(GROQ_SYSTEM_PROMPT_CAP_CHARS * 0.6),
+    );
   }
 
-  const result: GroqMessage[] = [{ role: "system", content: boundedSystem }];
+  const result: GroqMessage[] = [{role: 'system', content: boundedSystem}];
   if (summaryMessage) {
-    result.push({ role: "assistant", content: summaryMessage });
+    result.push({role: 'assistant', content: summaryMessage});
   }
   result.push(...recent);
-  result.push({ role: "user", content: params.userText });
+  result.push({role: 'user', content: params.userText});
   return result;
 }
 
 function getGroqModelsForPrompt(userText: string) {
-  if (GROQ_FAST_MODE_ENABLED && (userText || "").trim().length <= GROQ_FAST_MODE_MAX_INPUT_CHARS) {
+  if (
+    GROQ_FAST_MODE_ENABLED &&
+    (userText || '').trim().length <= GROQ_FAST_MODE_MAX_INPUT_CHARS
+  ) {
     return {
       primaryModel: GROQ_MODEL_CHAT_FAST_PRIMARY,
       fallbackModel: GROQ_MODEL_CHAT_FAST_FALLBACK,
-      fastMode: true
+      fastMode: true,
     };
   }
   return {
     primaryModel: GROQ_MODEL_CHAT_PRIMARY,
     fallbackModel: GROQ_MODEL_CHAT_FALLBACK,
-    fastMode: false
+    fastMode: false,
   };
 }
 
-export async function prompt(payload: IPrompt & { memory: string }, user_id: string) {
+export async function prompt(
+  payload: IPrompt & {memory: string},
+  user_id: string,
+) {
   const requestStart = Date.now();
   const userBackoffRemaining = getUserBackoffRemainingMs(user_id);
   if (userBackoffRemaining > 0) {
     void recordAiMetric({
-      event: "user_backoff_short_circuit",
-      task: "chat_primary",
-      endpoint: "/ai/prompt",
+      event: 'user_backoff_short_circuit',
+      task: 'chat_primary',
+      endpoint: '/ai/prompt',
       user: user_id,
-      metadata: { remainingMs: userBackoffRemaining }
+      metadata: {remainingMs: userBackoffRemaining},
     });
     return createSafeFallbackStream(
-      "I am recovering from temporary AI capacity limits. Please retry in a few seconds."
+      'I am recovering from temporary AI capacity limits. Please retry in a few seconds.',
     );
   }
-  const user = await User.findById(user_id)
+  const user = await User.findById(user_id);
   if (!user) {
-    throw new NotFoundException("User not found")
+    throw new NotFoundException('User not found');
   }
 
   let messages = await Message.find({
     user: user_id,
-    memory: payload.memory
+    memory: payload.memory,
   })
-    .sort({ created_at: -1 })
-    .limit(25)
+    .sort({created_at: -1})
+    .limit(25);
 
-  messages = messages.reverse()
+  messages = messages.reverse();
 
   const sessionTurnCount = getSessionTurnCount(messages);
 
-  let content: PartListUnion = [payload.text]
+  let content: PartListUnion = [payload.text];
 
-  let longTermContext = "";
+  let longTermContext = '';
   if (isSignificantMessage(payload.text)) {
     const context = await supermemory.getContextForUser(user_id, payload.text);
     longTermContext = context.formatedText;
@@ -367,200 +415,203 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
     payload.memory,
     null,
     longTermContext,
-    sessionTurnCount
+    sessionTurnCount,
   );
-  const chatPrimaryPromptVersion = getPromptVersion("chat_primary");
+  const chatPrimaryPromptVersion = getPromptVersion('chat_primary');
   void recordAiMetric({
-    event: "prompt_version_used",
-    task: "chat_primary",
-    endpoint: "/ai/prompt",
+    event: 'prompt_version_used',
+    task: 'chat_primary',
+    endpoint: '/ai/prompt',
     user: user_id,
-    prompt_version: chatPrimaryPromptVersion
+    prompt_version: chatPrimaryPromptVersion,
   });
 
   if (!isEmpty(payload?.attachments)) {
     const chat = gemini.chats.create({
       model: GEMINI_MODEL,
-      config: { systemInstruction },
-      history: createChatHistory(messages)
+      config: {systemInstruction},
+      history: createChatHistory(messages),
     });
 
-    const result = await processFiles(payload.attachments)
-    content = [...content, ...result]
-    const response = await chat.sendMessageStream({ message: content });
+    const result = await processFiles(payload.attachments);
+    content = [...content, ...result];
+    const response = await chat.sendMessageStream({message: content});
     await Message.create({
       user: user_id,
       memory: payload.memory,
       role: 'user',
       attatchments: payload?.attachments || [],
-      text: payload?.text
-    })
-    return response
+      text: payload?.text,
+    });
+    return response;
   }
 
   if (groqClient.isConfigured()) {
     try {
-      const history = createChatHistory(messages).map((message) => ({
-        role: message.role === "model" ? "assistant" : "user",
-        content: message.parts?.[0]?.text || ""
+      const history = createChatHistory(messages).map(message => ({
+        role: message.role === 'model' ? 'assistant' : 'user',
+        content: message.parts?.[0]?.text || '',
       })) as GroqMessage[];
 
       const chatMessages = buildGroqBoundedMessages({
         systemInstruction,
         history,
-        userText: payload.text
+        userText: payload.text,
       });
       const groqModels = getGroqModelsForPrompt(payload.text);
 
-      const { stream, effectiveModel, usedFallback } = await streamTextWithGroqFallback({
-        messages: chatMessages,
-        temperature: 0.7,
-        timeoutMs: 15_000,
-        primaryModel: groqModels.primaryModel,
-        fallbackModel: groqModels.fallbackModel
-      });
+      const {stream, effectiveModel, usedFallback} =
+        await streamTextWithGroqFallback({
+          messages: chatMessages,
+          temperature: 0.7,
+          timeoutMs: 15_000,
+          primaryModel: groqModels.primaryModel,
+          fallbackModel: groqModels.fallbackModel,
+        });
 
-      console.log("AI routing", {
-        task: "chat_primary",
-        provider: "groq",
+      console.log('AI routing', {
+        task: 'chat_primary',
+        provider: 'groq',
         effectiveModel,
         usedFallback,
         fastMode: groqModels.fastMode,
-        streamConnectMs: Date.now() - requestStart
+        streamConnectMs: Date.now() - requestStart,
       });
       void recordAiMetric({
-        event: "ai_route",
-        task: "chat_primary",
-        endpoint: "/ai/prompt",
-        provider: "groq",
+        event: 'ai_route',
+        task: 'chat_primary',
+        endpoint: '/ai/prompt',
+        provider: 'groq',
         model: effectiveModel,
         user: user_id,
         memory: payload.memory,
         used_fallback: usedFallback,
         stream_connect_ms: Date.now() - requestStart,
-        fast_mode: groqModels.fastMode
+        fast_mode: groqModels.fastMode,
       });
       await Message.create({
         user: user_id,
         memory: payload.memory,
         role: 'user',
         attatchments: payload?.attachments || [],
-        text: payload?.text
+        text: payload?.text,
       });
       return stream;
     } catch (error) {
       if (isProviderRateLimited(error)) setUserBackoffWindow(user_id);
-      console.error("AI routing fallback", {
-        task: "chat_primary",
-        from: "groq",
-        to: "gemini",
-        reason: (error as Error)?.message
+      console.error('AI routing fallback', {
+        task: 'chat_primary',
+        from: 'groq',
+        to: 'gemini',
+        reason: (error as Error)?.message,
       });
     }
   }
 
   const chat = gemini.chats.create({
     model: GEMINI_MODEL,
-    config: { systemInstruction },
-    history: createChatHistory(messages)
+    config: {systemInstruction},
+    history: createChatHistory(messages),
   });
   try {
-    const response = await chat.sendMessageStream({ message: content });
-    console.log("AI routing", {
-      task: "chat_primary",
-      provider: "gemini",
-      reason: "attachments_or_no_openrouter",
-      streamConnectMs: Date.now() - requestStart
+    const response = await chat.sendMessageStream({message: content});
+    console.log('AI routing', {
+      task: 'chat_primary',
+      provider: 'gemini',
+      reason: 'attachments_or_no_openrouter',
+      streamConnectMs: Date.now() - requestStart,
     });
     void recordAiMetric({
-      event: "ai_route",
-      task: "chat_primary",
-      endpoint: "/ai/prompt",
-      provider: "gemini",
+      event: 'ai_route',
+      task: 'chat_primary',
+      endpoint: '/ai/prompt',
+      provider: 'gemini',
       model: GEMINI_MODEL,
       user: user_id,
       memory: payload.memory,
       stream_connect_ms: Date.now() - requestStart,
-      metadata: { reason: "groq_failed_or_not_configured_or_attachments" }
+      metadata: {reason: 'groq_failed_or_not_configured_or_attachments'},
     });
     await Message.create({
       user: user_id,
       memory: payload.memory,
       role: 'user',
       attatchments: payload?.attachments || [],
-      text: payload?.text
-    })
+      text: payload?.text,
+    });
 
-    return response
+    return response;
   } catch (geminiError) {
     if (isProviderRateLimited(geminiError)) setUserBackoffWindow(user_id);
-    console.error("AI routing fallback", {
-      task: "chat_primary",
-      from: "gemini",
-      to: "openrouter",
-      reason: (geminiError as Error)?.message
+    console.error('AI routing fallback', {
+      task: 'chat_primary',
+      from: 'gemini',
+      to: 'openrouter',
+      reason: (geminiError as Error)?.message,
     });
 
     if (OPENROUTER_CRITICAL_ENABLED && openRouterClient.isConfigured()) {
-      const history = createChatHistory(messages).map((message) => ({
-        role: message.role === "model" ? "assistant" : "user",
-        content: message.parts?.[0]?.text || ""
+      const history = createChatHistory(messages).map(message => ({
+        role: message.role === 'model' ? 'assistant' : 'user',
+        content: message.parts?.[0]?.text || '',
       })) as OpenRouterMessage[];
 
       const chatMessages: OpenRouterMessage[] = [
-        { role: "system", content: systemInstruction },
+        {role: 'system', content: systemInstruction},
         ...history,
-        { role: "user", content: payload.text }
+        {role: 'user', content: payload.text},
       ];
 
       try {
-        const { stream, effectiveModel, usedFallback } = await streamTextWithFallback({
-          task: "chat_primary",
-          messages: chatMessages,
-          temperature: 0.7
-        });
+        const {stream, effectiveModel, usedFallback} =
+          await streamTextWithFallback({
+            task: 'chat_primary',
+            messages: chatMessages,
+            temperature: 0.7,
+          });
 
-        console.log("AI routing", {
-          task: "chat_primary",
-          provider: "openrouter",
+        console.log('AI routing', {
+          task: 'chat_primary',
+          provider: 'openrouter',
           effectiveModel,
           usedFallback,
-          streamConnectMs: Date.now() - requestStart
+          streamConnectMs: Date.now() - requestStart,
         });
         void recordAiMetric({
-          event: "ai_route",
-          task: "chat_primary",
-          endpoint: "/ai/prompt",
-          provider: "openrouter",
+          event: 'ai_route',
+          task: 'chat_primary',
+          endpoint: '/ai/prompt',
+          provider: 'openrouter',
           model: effectiveModel,
           user: user_id,
           memory: payload.memory,
           used_fallback: usedFallback,
-          stream_connect_ms: Date.now() - requestStart
+          stream_connect_ms: Date.now() - requestStart,
         });
         await Message.create({
           user: user_id,
           memory: payload.memory,
           role: 'user',
           attatchments: payload?.attachments || [],
-          text: payload?.text
-        })
+          text: payload?.text,
+        });
         return stream;
       } catch (openrouterError) {
-        if (isProviderRateLimited(openrouterError)) setUserBackoffWindow(user_id);
-        console.error("AI routing exhausted", {
-          task: "chat_primary",
-          provider: "openrouter",
-          reason: (openrouterError as Error)?.message
+        if (isProviderRateLimited(openrouterError))
+          setUserBackoffWindow(user_id);
+        console.error('AI routing exhausted', {
+          task: 'chat_primary',
+          provider: 'openrouter',
+          reason: (openrouterError as Error)?.message,
         });
         void recordAiMetric({
-          event: "ai_route_error",
-          task: "chat_primary",
-          endpoint: "/ai/prompt",
-          provider: "openrouter",
+          event: 'ai_route_error',
+          task: 'chat_primary',
+          endpoint: '/ai/prompt',
+          provider: 'openrouter',
           user: user_id,
           memory: payload.memory,
-          error_message: (openrouterError as Error)?.message
+          error_message: (openrouterError as Error)?.message,
         });
       }
     }
@@ -570,26 +621,31 @@ export async function prompt(payload: IPrompt & { memory: string }, user_id: str
       memory: payload.memory,
       role: 'user',
       attatchments: payload?.attachments || [],
-      text: payload?.text
+      text: payload?.text,
     });
 
     return createSafeFallbackStream(
-      "I am hitting temporary capacity limits right now. Please try again in about a minute."
+      'I am hitting temporary capacity limits right now. Please try again in about a minute.',
     );
   }
 }
 
-export async function handleStreaming(user: string, memory: string, payload: AsyncGenerator<{ text?: string }, any, any>, res: Response) {
-  let text = ""
-  let userMessage = "" // Store the user's message
+export async function handleStreaming(
+  user: string,
+  memory: string,
+  payload: AsyncGenerator<{text?: string}, any, any>,
+  res: Response,
+) {
+  let text = '';
+  let userMessage = ''; // Store the user's message
 
   try {
     // Get the user's last message for analysis
     const lastUserMessage = await Message.findOne({
       user,
       memory,
-      role: 'user'
-    }).sort({ created_at: -1 });
+      role: 'user',
+    }).sort({created_at: -1});
 
     if (lastUserMessage) {
       userMessage = lastUserMessage.text;
@@ -609,13 +665,13 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
         text,
         user,
         memory,
-        role: "ai"
+        role: 'ai',
       });
 
       // Update message count and last_active for summarization tracking
       await Memory.findByIdAndUpdate(memory, {
-        $inc: { message_count: 2 },
-        $set: { last_active: dayjs().toDate() }
+        $inc: {message_count: 2},
+        $set: {last_active: dayjs().toDate()},
       });
 
       if (userMessage && isSignificantMessage(userMessage)) {
@@ -624,31 +680,34 @@ export async function handleStreaming(user: string, memory: string, payload: Asy
         });
       }
 
-      triggerSummarization(memory)
+      void triggerSummarization(memory);
     }
     res.end();
   }
 }
 
-export async function getUserMessages({ limit, ...query }: IPagination & { next?: string }, user: string) {
-  const filter: FilterQuery<IMessage> = { user }
+export async function getUserMessages(
+  {limit, ...query}: IPagination & {next?: string},
+  user: string,
+) {
+  const filter: FilterQuery<IMessage> = {user};
   const fetch_limit = limit + 1;
 
   if (!isEmpty(query?.next)) {
-    const message = await Message.findById(query?.next)
+    const message = await Message.findById(query?.next);
     if (message) {
-      filter.created_at = { $lte: message.created_at };
+      filter.created_at = {$lte: message.created_at};
     }
   }
 
   const messages = await Message.find(filter)
-    .sort({ created_at: -1 })
+    .sort({created_at: -1})
     .populate({
-      path: "attatchments",
-      select: "-base64",
-      match: { provider: { $ne: "s3" } }
+      path: 'attatchments',
+      select: '-base64',
+      match: {provider: {$ne: 's3'}},
     })
-    .limit(fetch_limit)
+    .limit(fetch_limit);
 
   let next = null;
   let messagesToSend = messages;
@@ -658,25 +717,33 @@ export async function getUserMessages({ limit, ...query }: IPagination & { next?
     messagesToSend = messages.slice(0, limit);
   }
 
-  const data = { messages: messagesToSend.reverse(), next }
-  return { message: "User messages retrieved successfully", data }
+  const data = {messages: messagesToSend.reverse(), next};
+  return {message: 'User messages retrieved successfully', data};
 }
 
-export async function getUserMessagesByConversation(id: string, { limit, ...query }: IPagination & { next?: string }, user: string) {
-  const filter: FilterQuery<IMessage> = { user, memory: id }
+export async function getUserMessagesByConversation(
+  id: string,
+  {limit, ...query}: IPagination & {next?: string},
+  user: string,
+) {
+  const filter: FilterQuery<IMessage> = {user, memory: id};
   const fetch_limit = limit + 1;
 
   if (!isEmpty(query?.next)) {
-    const message = await Message.findById(query?.next)
+    const message = await Message.findById(query?.next);
     if (message) {
-      filter.created_at = { $lte: message.created_at };
+      filter.created_at = {$lte: message.created_at};
     }
   }
 
   const messages = await Message.find(filter)
-    .sort({ created_at: -1 })
-    .populate({ path: "attatchments", select: "-base64", match: { provider: { $ne: "s3" } } })
-    .limit(fetch_limit)
+    .sort({created_at: -1})
+    .populate({
+      path: 'attatchments',
+      select: '-base64',
+      match: {provider: {$ne: 's3'}},
+    })
+    .limit(fetch_limit);
 
   let next = null;
   let messagesToSend = messages;
@@ -686,47 +753,47 @@ export async function getUserMessagesByConversation(id: string, { limit, ...quer
     messagesToSend = messages.slice(0, limit);
   }
 
-  const data = { messages: messagesToSend.reverse(), next }
-  return { message: "User messages retrieved successfully", data }
+  const data = {messages: messagesToSend.reverse(), next};
+  return {message: 'User messages retrieved successfully', data};
 }
 
 export async function transcribeAudio(payload: ITranscribeAudio) {
-  const file = await File.findById(payload.file_id)
+  const file = await File.findById(payload.file_id);
   if (!file) {
-    throw new NotFoundException("File not found")
+    throw new NotFoundException('File not found');
   }
-  if (!file.type.startsWith("audio")) {
-    throw new NotFoundException("Invalid file type ")
+  if (!file.type.startsWith('audio')) {
+    throw new NotFoundException('Invalid file type ');
   }
 
   if (!isEmpty(file.transcription)) {
-    return { message: "Transcription successful", data: file.transcription }
+    return {message: 'Transcription successful', data: file.transcription};
   }
 
-  const prompt = prompts.createTranscriptionPrompt()
-  const transcriptionPromptVersion = getPromptVersion("transcription");
+  const prompt = prompts.createTranscriptionPrompt();
+  const transcriptionPromptVersion = getPromptVersion('transcription');
   void recordAiMetric({
-    event: "prompt_version_used",
-    task: "transcription",
-    endpoint: "/ai/transcribe-audio",
-    prompt_version: transcriptionPromptVersion
+    event: 'prompt_version_used',
+    task: 'transcription',
+    endpoint: '/ai/transcribe-audio',
+    prompt_version: transcriptionPromptVersion,
   });
-  const processedFile = await processFile(file)
+  const processedFile = await processFile(file);
 
   const result = await transcribeWithConfiguredAsr({
     transcriptionPrompt: prompt,
-    processedFilePart: processedFile
+    processedFilePart: processedFile,
   });
   void recordAiMetric({
-    event: "ai_route",
-    task: "transcription",
-    endpoint: "/ai/transcribe-audio",
+    event: 'ai_route',
+    task: 'transcription',
+    endpoint: '/ai/transcribe-audio',
     provider: result.provider,
     model: result.model,
     used_fallback: result.usedFallback,
     fallback_count: result.usedFallback ? 1 : 0,
     token_usage: result.tokenUsage,
-    metadata: { architecture: "phase1_asr_abstraction_with_fallback" }
+    metadata: {architecture: 'phase1_asr_abstraction_with_fallback'},
   });
 
   if (shouldRunAsrShadow()) {
@@ -734,15 +801,15 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
       try {
         const shadow = await transcribeWithShadowProvider({
           transcriptionPrompt: prompt,
-          processedFilePart: processedFile
+          processedFilePart: processedFile,
         });
         if (!shadow) return;
         const primaryShape = getTranscriptionSummaryShape(result.data);
         const shadowShape = getTranscriptionSummaryShape(shadow.data);
         void recordAiMetric({
-          event: "asr_shadow_compare",
-          task: "transcription",
-          endpoint: "/ai/transcribe-audio",
+          event: 'asr_shadow_compare',
+          task: 'transcription',
+          endpoint: '/ai/transcribe-audio',
           provider: shadow.provider,
           model: shadow.model,
           duration_ms: shadow.durationMs,
@@ -755,50 +822,54 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
             primarySegmentCount: primaryShape.segmentCount,
             shadowSegmentCount: shadowShape.segmentCount,
             textLengthDelta: shadowShape.textLength - primaryShape.textLength,
-            segmentCountDelta: shadowShape.segmentCount - primaryShape.segmentCount
-          }
+            segmentCountDelta:
+              shadowShape.segmentCount - primaryShape.segmentCount,
+          },
         });
       } catch (shadowError) {
         void recordAiMetric({
-          event: "asr_shadow_error",
-          task: "transcription",
-          endpoint: "/ai/transcribe-audio",
-          error_message: (shadowError as Error)?.message
+          event: 'asr_shadow_error',
+          task: 'transcription',
+          endpoint: '/ai/transcribe-audio',
+          error_message: (shadowError as Error)?.message,
         });
       }
     })();
   }
 
-  await file.updateOne({ transcription: result.data })
-  return { message: "Transcription successful", data: result.data }
+  await file.updateOne({transcription: result.data});
+  return {message: 'Transcription successful', data: result.data};
 }
 
-export async function startConversation(payload: IStartMemory, user_id: string) {
+export async function startConversation(
+  payload: IStartMemory,
+  user_id: string,
+) {
   const requestStart = Date.now();
   const userBackoffRemaining = getUserBackoffRemainingMs(user_id);
   if (userBackoffRemaining > 0) {
     void recordAiMetric({
-      event: "user_backoff_active",
-      task: "chat_bootstrap",
-      endpoint: "/ai/conversation/new",
+      event: 'user_backoff_active',
+      task: 'chat_bootstrap',
+      endpoint: '/ai/conversation/new',
       user: user_id,
-      metadata: { remainingMs: userBackoffRemaining }
+      metadata: {remainingMs: userBackoffRemaining},
     });
   }
-  let prompt = null
-  const user = await User.findById(user_id)
+  let prompt = null;
+  const user = await User.findById(user_id);
   if (!user) {
-    throw new NotFoundException("User not found")
+    throw new NotFoundException('User not found');
   }
 
   if (!isEmpty(payload.prompt_id)) {
-    prompt = await Prompt.findById(payload.prompt_id)
+    prompt = await Prompt.findById(payload.prompt_id);
   }
 
   // Single-conversation: reuse existing primary conversation if it exists
-  let memory = null
+  let memory = null;
   if (user.primary_conversation_id) {
-    memory = await Memory.findById(user.primary_conversation_id)
+    memory = await Memory.findById(user.primary_conversation_id);
   }
 
   // Create the primary conversation if it doesn't exist yet
@@ -806,42 +877,47 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     memory = await Memory.create({
       title: null,
       user: user_id,
-      type: "conversation",
-      status: "save",
+      type: 'conversation',
+      status: 'save',
       message_count: 0,
-      last_active: dayjs().toDate()
-    })
-    await User.findByIdAndUpdate(user_id, { primary_conversation_id: memory.id })
+      last_active: dayjs().toDate(),
+    });
+    await User.findByIdAndUpdate(user_id, {primary_conversation_id: memory.id});
   }
 
   // Load recent message history for context
-  const recentMessages = await Message.find({ user: user_id, memory: memory.id })
-    .sort({ created_at: -1 })
-    .limit(25)
-  const history = recentMessages.reverse()
+  const recentMessages = await Message.find({user: user_id, memory: memory.id})
+    .sort({created_at: -1})
+    .limit(25);
+  const history = recentMessages.reverse();
 
   const sessionTurnCount = getSessionTurnCount(history);
-  const systemInstruction = await prompts.createSystemContextWithPrompt(user, prompt, memory.id, sessionTurnCount);
-  const chatBootstrapPromptVersion = getPromptVersion("chat_bootstrap");
+  const systemInstruction = await prompts.createSystemContextWithPrompt(
+    user,
+    prompt,
+    memory.id,
+    sessionTurnCount,
+  );
+  const chatBootstrapPromptVersion = getPromptVersion('chat_bootstrap');
   void recordAiMetric({
-    event: "prompt_version_used",
-    task: "chat_bootstrap",
-    endpoint: "/ai/conversation/new",
+    event: 'prompt_version_used',
+    task: 'chat_bootstrap',
+    endpoint: '/ai/conversation/new',
     user: user_id,
-    prompt_version: chatBootstrapPromptVersion
+    prompt_version: chatBootstrapPromptVersion,
   });
-  let content: PartListUnion = [payload.text]
+  let content: PartListUnion = [payload.text];
 
   if (!isEmpty(payload?.attachments)) {
     const chat = gemini.chats.create({
       model: GEMINI_MODEL,
-      config: { systemInstruction },
-      history: createChatHistory(history)
+      config: {systemInstruction},
+      history: createChatHistory(history),
     });
-    const result = await processFiles(payload.attachments)
-    content = [...content, ...result]
-    const response = await chat.sendMessage({ message: content });
-    const now = dayjs()
+    const result = await processFiles(payload.attachments);
+    content = [...content, ...result];
+    const response = await chat.sendMessage({message: content});
+    const now = dayjs();
     await Message.insertMany([
       {
         user: user_id,
@@ -849,109 +925,115 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
         role: 'user',
         attatchments: payload?.attachments || [],
         text: payload?.text,
-        created_at: now.toDate()
+        created_at: now.toDate(),
       },
       {
         user: user_id,
         memory: memory.id,
         role: 'ai',
         text: response.text,
-        created_at: now.add(1, "second").toDate()
-      }
-    ])
+        created_at: now.add(1, 'second').toDate(),
+      },
+    ]);
     await Memory.findByIdAndUpdate(memory.id, {
-      $inc: { message_count: 2 },
-      $set: { last_active: now.toDate() }
-    })
+      $inc: {message_count: 2},
+      $set: {last_active: now.toDate()},
+    });
     if (isEmpty(memory.title)) {
-      updateMemoryTitle(memory.id, payload.text, response.text)
+      void updateMemoryTitle(memory.id, payload.text, response.text);
     }
     if (isSignificantMessage(payload.text)) {
-      addToInsightsBuffer(user_id, memory.id, payload.text, response.text).catch(error => {
+      addToInsightsBuffer(
+        user_id,
+        memory.id,
+        payload.text,
+        response.text,
+      ).catch(error => {
         console.error('Error queueing insights extraction:', error);
       });
     }
-    updateStreak(user_id)
+    void updateStreak(user_id);
     return {
-      data: { response: response.text, memory_id: memory.id },
-      message: "Conversation started successfully"
-    }
+      data: {response: response.text, memory_id: memory.id},
+      message: 'Conversation started successfully',
+    };
   }
 
-  let responseText = "";
+  let responseText = '';
   if (groqClient.isConfigured()) {
-    const historyMessages = createChatHistory(history).map((message) => ({
-      role: message.role === "model" ? "assistant" : "user",
-      content: message.parts?.[0]?.text || ""
+    const historyMessages = createChatHistory(history).map(message => ({
+      role: message.role === 'model' ? 'assistant' : 'user',
+      content: message.parts?.[0]?.text || '',
     })) as GroqMessage[];
 
     const chatMessages = buildGroqBoundedMessages({
       systemInstruction,
       history: historyMessages,
-      userText: payload.text
+      userText: payload.text,
     });
     const groqModels = getGroqModelsForPrompt(payload.text);
 
     try {
-      const { text, effectiveModel, usedFallback, tokenUsage } = await generateTextWithGroqFallback({
-        messages: chatMessages,
-        temperature: 0.7,
-        timeoutMs: 15_000,
-        primaryModel: groqModels.primaryModel,
-        fallbackModel: groqModels.fallbackModel
-      });
+      const {text, effectiveModel, usedFallback, tokenUsage} =
+        await generateTextWithGroqFallback({
+          messages: chatMessages,
+          temperature: 0.7,
+          timeoutMs: 15_000,
+          primaryModel: groqModels.primaryModel,
+          fallbackModel: groqModels.fallbackModel,
+        });
       responseText = text;
-      console.log("AI routing", {
-        task: "chat_bootstrap",
-        provider: "groq",
+      console.log('AI routing', {
+        task: 'chat_bootstrap',
+        provider: 'groq',
         effectiveModel,
         usedFallback,
         fastMode: groqModels.fastMode,
-        durationMs: Date.now() - requestStart
+        durationMs: Date.now() - requestStart,
       });
       void recordAiMetric({
-        event: "ai_route",
-        task: "chat_bootstrap",
-        endpoint: "/ai/conversation/new",
-        provider: "groq",
+        event: 'ai_route',
+        task: 'chat_bootstrap',
+        endpoint: '/ai/conversation/new',
+        provider: 'groq',
         model: effectiveModel,
         user: user_id,
         memory: String(memory.id),
         used_fallback: usedFallback,
         duration_ms: Date.now() - requestStart,
         fast_mode: groqModels.fastMode,
-        token_usage: tokenUsage
+        token_usage: tokenUsage,
       });
     } catch (error) {
       if (isProviderRateLimited(error)) setUserBackoffWindow(user_id);
-      console.error("AI routing fallback", {
-        task: "chat_bootstrap",
-        from: "groq",
-        to: "gemini",
-        reason: (error as Error)?.message
+      console.error('AI routing fallback', {
+        task: 'chat_bootstrap',
+        from: 'groq',
+        to: 'gemini',
+        reason: (error as Error)?.message,
       });
     }
   }
   if (isEmpty(responseText)) {
     const chat = gemini.chats.create({
       model: GEMINI_MODEL,
-      config: { systemInstruction },
-      history: createChatHistory(history)
+      config: {systemInstruction},
+      history: createChatHistory(history),
     });
     try {
-      const response = await chat.sendMessage({ message: content });
+      const response = await chat.sendMessage({message: content});
       responseText = response.text;
-      console.log("AI routing", {
-        task: "chat_bootstrap",
-        provider: "gemini",
-        reason: "groq_failed_or_not_configured",
-        durationMs: Date.now() - requestStart
+      console.log('AI routing', {
+        task: 'chat_bootstrap',
+        provider: 'gemini',
+        reason: 'groq_failed_or_not_configured',
+        durationMs: Date.now() - requestStart,
       });
       void recordAiMetric({
-        event: "ai_route",
-        task: "chat_bootstrap",
-        endpoint: "/ai/conversation/new",
-        provider: "gemini",
+        event: 'ai_route',
+        task: 'chat_bootstrap',
+        endpoint: '/ai/conversation/new',
+        provider: 'gemini',
         model: GEMINI_MODEL,
         user: user_id,
         memory: String(memory.id),
@@ -959,54 +1041,59 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
         token_usage: {
           prompt_tokens: response.usageMetadata?.promptTokenCount,
           completion_tokens: response.usageMetadata?.candidatesTokenCount,
-          total_tokens: response.usageMetadata?.totalTokenCount
-        }
+          total_tokens: response.usageMetadata?.totalTokenCount,
+        },
       });
     } catch (error) {
       if (isProviderRateLimited(error)) setUserBackoffWindow(user_id);
-      console.error("AI routing fallback", {
-        task: "chat_bootstrap",
-        from: "gemini",
-        to: "openrouter",
-        reason: (error as Error)?.message
+      console.error('AI routing fallback', {
+        task: 'chat_bootstrap',
+        from: 'gemini',
+        to: 'openrouter',
+        reason: (error as Error)?.message,
       });
     }
   }
-  if (isEmpty(responseText) && OPENROUTER_CRITICAL_ENABLED && openRouterClient.isConfigured()) {
-    const historyMessages = createChatHistory(history).map((message) => ({
-      role: message.role === "model" ? "assistant" : "user",
-      content: message.parts?.[0]?.text || ""
+  if (
+    isEmpty(responseText) &&
+    OPENROUTER_CRITICAL_ENABLED &&
+    openRouterClient.isConfigured()
+  ) {
+    const historyMessages = createChatHistory(history).map(message => ({
+      role: message.role === 'model' ? 'assistant' : 'user',
+      content: message.parts?.[0]?.text || '',
     })) as OpenRouterMessage[];
     const chatMessages: OpenRouterMessage[] = [
-      { role: "system", content: systemInstruction },
+      {role: 'system', content: systemInstruction},
       ...historyMessages,
-      { role: "user", content: payload.text }
+      {role: 'user', content: payload.text},
     ];
     try {
-      const { text, effectiveModel, usedFallback, tokenUsage } = await generateTextWithFallback({
-        task: "chat_bootstrap",
-        messages: chatMessages,
-        temperature: 0.7
-      });
+      const {text, effectiveModel, usedFallback, tokenUsage} =
+        await generateTextWithFallback({
+          task: 'chat_bootstrap',
+          messages: chatMessages,
+          temperature: 0.7,
+        });
       responseText = text;
-      console.log("AI routing", {
-        task: "chat_bootstrap",
-        provider: "openrouter",
+      console.log('AI routing', {
+        task: 'chat_bootstrap',
+        provider: 'openrouter',
         effectiveModel,
         usedFallback,
-        durationMs: Date.now() - requestStart
+        durationMs: Date.now() - requestStart,
       });
       void recordAiMetric({
-        event: "ai_route",
-        task: "chat_bootstrap",
-        endpoint: "/ai/conversation/new",
-        provider: "openrouter",
+        event: 'ai_route',
+        task: 'chat_bootstrap',
+        endpoint: '/ai/conversation/new',
+        provider: 'openrouter',
         model: effectiveModel,
         user: user_id,
         memory: String(memory.id),
         used_fallback: usedFallback,
         duration_ms: Date.now() - requestStart,
-        token_usage: tokenUsage
+        token_usage: tokenUsage,
       });
     } catch (error) {
       if (isProviderRateLimited(error)) setUserBackoffWindow(user_id);
@@ -1014,7 +1101,7 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
     }
   }
 
-  const now = dayjs()
+  const now = dayjs();
   await Message.insertMany([
     {
       user: user_id,
@@ -1022,43 +1109,45 @@ export async function startConversation(payload: IStartMemory, user_id: string) 
       role: 'user',
       attatchments: payload?.attachments || [],
       text: payload?.text,
-      created_at: now.toDate()
+      created_at: now.toDate(),
     },
     {
       user: user_id,
       memory: memory.id,
       role: 'ai',
       text: responseText,
-      created_at: now.add(1, "second").toDate()
-    }
-  ])
+      created_at: now.add(1, 'second').toDate(),
+    },
+  ]);
 
   await Memory.findByIdAndUpdate(memory.id, {
-    $inc: { message_count: 2 },
-    $set: { last_active: now.toDate() }
-  })
+    $inc: {message_count: 2},
+    $set: {last_active: now.toDate()},
+  });
 
   if (isEmpty(memory.title)) {
-    updateMemoryTitle(memory.id, payload.text, responseText)
+    void updateMemoryTitle(memory.id, payload.text, responseText);
   }
 
   if (isSignificantMessage(payload.text)) {
-    addToInsightsBuffer(user_id, memory.id, payload.text, responseText).catch(error => {
-      console.error('Error queueing insights extraction:', error);
-    });
+    addToInsightsBuffer(user_id, memory.id, payload.text, responseText).catch(
+      error => {
+        console.error('Error queueing insights extraction:', error);
+      },
+    );
   }
 
-  updateStreak(user_id)
+  void updateStreak(user_id);
 
   return {
-    data: { response: responseText, memory_id: memory.id },
-    message: "Conversation started successfully"
-  }
+    data: {response: responseText, memory_id: memory.id},
+    message: 'Conversation started successfully',
+  };
 }
 
 export async function createEphemeralToken() {
-  const expireTime = dayjs().add(30, "minute").toDate(); // 30 minutes from now
-  const newSessionExpireTime = dayjs().add(2, "minutes").toDate(); // 2 minute from now
+  const expireTime = dayjs().add(30, 'minute').toDate(); // 30 minutes from now
+  const newSessionExpireTime = dayjs().add(2, 'minutes').toDate(); // 2 minute from now
 
   const token = await geminiAuthClient.authTokens.create({
     config: {
@@ -1069,68 +1158,75 @@ export async function createEphemeralToken() {
         model: GEMINI_LIVE_MODEL,
         config: {
           sessionResumption: {},
-          responseModalities: [Modality.AUDIO]
-        }
+          responseModalities: [Modality.AUDIO],
+        },
       },
       httpOptions: {
-        apiVersion: 'v1alpha'
-      }
-    }
+        apiVersion: 'v1alpha',
+      },
+    },
   });
 
   return {
-    message: "Ephemeral token created successfully",
+    message: 'Ephemeral token created successfully',
     data: {
       token: token.name,
-      expiresAt: expireTime.toISOString()
-    }
+      expiresAt: expireTime.toISOString(),
+    },
   };
 }
 
-export async function autogenerateTags(payload: { title?: string; body?: string }) {
+export async function autogenerateTags(payload: {
+  title?: string;
+  body?: string;
+}) {
   const requestStart = Date.now();
-  const title = (payload.title ?? "").trim();
-  const body = (payload.body ?? "").trim();
+  const title = (payload.title ?? '').trim();
+  const body = (payload.body ?? '').trim();
   const prompt = prompts.buildTagsPrompt();
-  const tagsPromptVersion = getPromptVersion("tags_generate");
+  const tagsPromptVersion = getPromptVersion('tags_generate');
   void recordAiMetric({
-    event: "prompt_version_used",
-    task: "tags_generate",
-    endpoint: "/ai/generate-tags",
-    prompt_version: tagsPromptVersion
+    event: 'prompt_version_used',
+    task: 'tags_generate',
+    endpoint: '/ai/generate-tags',
+    prompt_version: tagsPromptVersion,
   });
   const contents = createUserContent([
     prompt,
-    { text: `TITLE:\n${title || "(none)"}\n\nBODY:\n${body || "(none)"}` },
+    {text: `TITLE:\n${title || '(none)'}\n\nBODY:\n${body || '(none)'}`},
   ]);
 
-  let rawText = "";
+  let rawText = '';
   if (openRouterClient.isConfigured()) {
-    const { text, effectiveModel, usedFallback, tokenUsage } = await generateTextWithFallback({
-      task: "tags_generate",
-      messages: [
-        { role: "system", content: prompt },
-        { role: "user", content: `TITLE:\n${title || "(none)"}\n\nBODY:\n${body || "(none)"}` }
-      ],
-      temperature: 0.2
-    });
+    const {text, effectiveModel, usedFallback, tokenUsage} =
+      await generateTextWithFallback({
+        task: 'tags_generate',
+        messages: [
+          {role: 'system', content: prompt},
+          {
+            role: 'user',
+            content: `TITLE:\n${title || '(none)'}\n\nBODY:\n${body || '(none)'}`,
+          },
+        ],
+        temperature: 0.2,
+      });
     rawText = text;
-    console.log("AI routing", {
-      task: "tags_generate",
-      provider: "openrouter",
+    console.log('AI routing', {
+      task: 'tags_generate',
+      provider: 'openrouter',
       effectiveModel,
       usedFallback,
-      durationMs: Date.now() - requestStart
+      durationMs: Date.now() - requestStart,
     });
     void recordAiMetric({
-      event: "ai_route",
-      task: "tags_generate",
-      endpoint: "/ai/generate-tags",
-      provider: "openrouter",
+      event: 'ai_route',
+      task: 'tags_generate',
+      endpoint: '/ai/generate-tags',
+      provider: 'openrouter',
       model: effectiveModel,
       used_fallback: usedFallback,
       duration_ms: Date.now() - requestStart,
-      token_usage: tokenUsage
+      token_usage: tokenUsage,
     });
   } else {
     const response = await gemini.models.generateContent({
@@ -1138,25 +1234,25 @@ export async function autogenerateTags(payload: { title?: string; body?: string 
       contents,
     });
     rawText = response.text;
-    console.log("AI routing", {
-      task: "tags_generate",
-      provider: "gemini",
-      reason: "no_openrouter",
-      durationMs: Date.now() - requestStart
+    console.log('AI routing', {
+      task: 'tags_generate',
+      provider: 'gemini',
+      reason: 'no_openrouter',
+      durationMs: Date.now() - requestStart,
     });
     void recordAiMetric({
-      event: "ai_route",
-      task: "tags_generate",
-      endpoint: "/ai/generate-tags",
-      provider: "gemini",
+      event: 'ai_route',
+      task: 'tags_generate',
+      endpoint: '/ai/generate-tags',
+      provider: 'gemini',
       model: GEMINI_MODEL,
       duration_ms: Date.now() - requestStart,
       token_usage: {
         prompt_tokens: response.usageMetadata?.promptTokenCount,
         completion_tokens: response.usageMetadata?.candidatesTokenCount,
-        total_tokens: response.usageMetadata?.totalTokenCount
+        total_tokens: response.usageMetadata?.totalTokenCount,
       },
-      metadata: { reason: "no_openrouter" }
+      metadata: {reason: 'no_openrouter'},
     });
   }
 
@@ -1164,183 +1260,215 @@ export async function autogenerateTags(payload: { title?: string; body?: string 
   const validated = tagsOutputSchema.safeParse(parsed);
   const tags = validated.success ? validated.data.tags : [];
   const normalizedTags = tags
-    .filter((t): t is string => typeof t === "string")
-    .map((t) => t.trim().toLowerCase())
+    .filter((t): t is string => typeof t === 'string')
+    .map(t => t.trim().toLowerCase())
     .slice(0, 5);
 
   return {
-    data: { tags: normalizedTags },
-    message: "Tags generated successfully",
+    data: {tags: normalizedTags},
+    message: 'Tags generated successfully',
   };
 }
 
 export async function getAvailableVoices(providerInput?: string) {
   const provider = resolveVoiceProvider(providerInput);
-  if (provider === "elevenlabs") {
+  if (provider === 'elevenlabs') {
     const elevenlabs = await getElevenLabsVoices();
     return {
-      message: "Voices retrieved successfully",
-      data: elevenlabs
+      message: 'Voices retrieved successfully',
+      data: elevenlabs,
     };
   }
 
   return {
-    message: "Voices retrieved successfully",
+    message: 'Voices retrieved successfully',
     data: {
-      provider: "gemini",
+      provider: 'gemini',
       configured: true,
-      voices: GEMINI_LIVE_VOICE_CATALOG
-    }
+      voices: GEMINI_LIVE_VOICE_CATALOG,
+    },
   };
 }
 
-export async function getVoicePreview(payload: { provider?: string; voice_id: string; text?: string }) {
+export async function getVoicePreview(payload: {
+  provider?: string;
+  voice_id: string;
+  text?: string;
+}) {
   const provider = resolveVoiceProvider(payload.provider);
-  if (provider !== "elevenlabs") {
+  if (provider !== 'elevenlabs') {
     return {
-      message: "Use Gemini client preview for this provider",
-      data: { provider: "gemini", unsupported: true }
+      message: 'Use Gemini client preview for this provider',
+      data: {provider: 'gemini', unsupported: true},
     };
   }
 
   if (!ELEVENLABS_API_KEY) {
     return {
-      message: "ElevenLabs is not configured",
-      data: { provider: "elevenlabs", configured: false }
+      message: 'ElevenLabs is not configured',
+      data: {provider: 'elevenlabs', configured: false},
     };
   }
 
-  const text = (payload.text || DEFAULT_VOICE_PREVIEW_TEXT).trim().slice(0, 240) || DEFAULT_VOICE_PREVIEW_TEXT;
+  const text =
+    (payload.text || DEFAULT_VOICE_PREVIEW_TEXT).trim().slice(0, 240) ||
+    DEFAULT_VOICE_PREVIEW_TEXT;
 
   const response = await axios.post(
     `${ELEVENLABS_BASE_URL}/text-to-speech/${encodeURIComponent(payload.voice_id)}`,
     {
       text,
-      model_id: ELEVENLABS_TTS_MODEL_ID
+      model_id: ELEVENLABS_TTS_MODEL_ID,
     },
     {
       headers: {
-        "xi-api-key": ELEVENLABS_API_KEY,
-        "Content-Type": "application/json",
-        Accept: "audio/mpeg"
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'audio/mpeg',
       },
-      responseType: "arraybuffer",
-      timeout: 20_000
-    }
+      responseType: 'arraybuffer',
+      timeout: 20_000,
+    },
   );
 
-  const audioBase64 = Buffer.from(response.data).toString("base64");
+  const audioBase64 = Buffer.from(response.data).toString('base64');
 
   return {
-    message: "Voice preview generated successfully",
+    message: 'Voice preview generated successfully',
     data: {
-      provider: "elevenlabs",
-      mimeType: "audio/mpeg",
-      audioBase64
-    }
+      provider: 'elevenlabs',
+      mimeType: 'audio/mpeg',
+      audioBase64,
+    },
   };
 }
 
 export async function getAiMetricsOverview(hours = 24) {
-  const safeHours = Number.isFinite(hours) ? Math.min(Math.max(hours, 1), 168) : 24;
-  const since = dayjs().subtract(safeHours, "hour").toDate();
+  const safeHours = Number.isFinite(hours)
+    ? Math.min(Math.max(hours, 1), 168)
+    : 24;
+  const since = dayjs().subtract(safeHours, 'hour').toDate();
 
-  const [totals, providerAgg, taskAgg, routeLatencySamples] = await Promise.all([
-    AiMetric.aggregate([
-      { $match: { created_at: { $gte: since } } },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          errors: {
-            $sum: {
-              $cond: [{ $in: ["$event", ["ai_route_error"]] }, 1, 0]
-            }
+  const [totals, providerAgg, taskAgg, routeLatencySamples] = await Promise.all(
+    [
+      AiMetric.aggregate([
+        {$match: {created_at: {$gte: since}}},
+        {
+          $group: {
+            _id: null,
+            total: {$sum: 1},
+            errors: {
+              $sum: {
+                $cond: [{$in: ['$event', ['ai_route_error']]}, 1, 0],
+              },
+            },
+            fallbacks: {
+              $sum: {
+                $cond: [{$eq: ['$used_fallback', true]}, 1, 0],
+              },
+            },
           },
-          fallbacks: {
-            $sum: {
-              $cond: [{ $eq: ["$used_fallback", true] }, 1, 0]
-            }
-          }
-        }
-      }
-    ]),
-    AiMetric.aggregate([
-      { $match: { created_at: { $gte: since }, event: "ai_route" } },
-      {
-        $group: {
-          _id: "$provider",
-          count: { $sum: 1 },
-          avgDurationMs: { $avg: "$duration_ms" },
-          avgStreamConnectMs: { $avg: "$stream_connect_ms" },
-          fallbackCount: {
-            $sum: {
-              $cond: [{ $eq: ["$used_fallback", true] }, 1, 0]
-            }
+        },
+      ]),
+      AiMetric.aggregate([
+        {$match: {created_at: {$gte: since}, event: 'ai_route'}},
+        {
+          $group: {
+            _id: '$provider',
+            count: {$sum: 1},
+            avgDurationMs: {$avg: '$duration_ms'},
+            avgStreamConnectMs: {$avg: '$stream_connect_ms'},
+            fallbackCount: {
+              $sum: {
+                $cond: [{$eq: ['$used_fallback', true]}, 1, 0],
+              },
+            },
+            totalTokens: {$sum: {$ifNull: ['$token_usage.total_tokens', 0]}},
           },
-          totalTokens: { $sum: { $ifNull: ["$token_usage.total_tokens", 0] } },
-        }
-      },
-      { $sort: { count: -1 } }
-    ]),
-    AiMetric.aggregate([
-      { $match: { created_at: { $gte: since }, event: "ai_route" } },
-      {
-        $group: {
-          _id: "$task",
-          count: { $sum: 1 },
-          avgDurationMs: { $avg: "$duration_ms" },
-          fallbackCount: {
-            $sum: {
-              $cond: [{ $eq: ["$used_fallback", true] }, 1, 0]
-            }
+        },
+        {$sort: {count: -1}},
+      ]),
+      AiMetric.aggregate([
+        {$match: {created_at: {$gte: since}, event: 'ai_route'}},
+        {
+          $group: {
+            _id: '$task',
+            count: {$sum: 1},
+            avgDurationMs: {$avg: '$duration_ms'},
+            fallbackCount: {
+              $sum: {
+                $cond: [{$eq: ['$used_fallback', true]}, 1, 0],
+              },
+            },
           },
-        }
-      },
-      { $sort: { count: -1 } }
-    ]),
-    AiMetric.aggregate([
-      { $match: { created_at: { $gte: since }, event: "ai_route", duration_ms: { $ne: null } } },
-      { $project: { duration_ms: 1 } },
-      { $sort: { duration_ms: 1 } }
-    ])
-  ]);
+        },
+        {$sort: {count: -1}},
+      ]),
+      AiMetric.aggregate([
+        {
+          $match: {
+            created_at: {$gte: since},
+            event: 'ai_route',
+            duration_ms: {$ne: null},
+          },
+        },
+        {$project: {duration_ms: 1}},
+        {$sort: {duration_ms: 1}},
+      ]),
+    ],
+  );
 
   const total = totals?.[0]?.total || 0;
   const errors = totals?.[0]?.errors || 0;
   const fallbacks = totals?.[0]?.fallbacks || 0;
-  const sortedDurations = routeLatencySamples.map((x) => Number(x.duration_ms || 0)).filter((n) => n > 0);
-  const p95DurationMs = sortedDurations.length > 0
-    ? sortedDurations[Math.min(sortedDurations.length - 1, Math.floor(sortedDurations.length * 0.95))]
-    : null;
+  const sortedDurations = routeLatencySamples
+    .map(x => Number(x.duration_ms || 0))
+    .filter(n => n > 0);
+  const p95DurationMs =
+    sortedDurations.length > 0
+      ? sortedDurations[
+          Math.min(
+            sortedDurations.length - 1,
+            Math.floor(sortedDurations.length * 0.95),
+          )
+        ]
+      : null;
   const errorRate = total > 0 ? Number((errors / total).toFixed(4)) : 0;
   const fallbackRate = total > 0 ? Number((fallbacks / total).toFixed(4)) : 0;
 
-  const alerts: Array<{ severity: "info" | "warning" | "critical"; key: string; message: string }> = [];
+  const alerts: Array<{
+    severity: 'info' | 'warning' | 'critical';
+    key: string;
+    message: string;
+  }> = [];
   if (errorRate > AI_SLO_ERROR_RATE_MAX) {
     alerts.push({
-      severity: "critical",
-      key: "error_rate_slo_breach",
-      message: `Error rate ${errorRate} exceeded SLO ${AI_SLO_ERROR_RATE_MAX}.`
+      severity: 'critical',
+      key: 'error_rate_slo_breach',
+      message: `Error rate ${errorRate} exceeded SLO ${AI_SLO_ERROR_RATE_MAX}.`,
     });
   }
   if (fallbackRate > AI_SLO_FALLBACK_RATE_MAX) {
     alerts.push({
-      severity: "warning",
-      key: "fallback_rate_slo_breach",
-      message: `Fallback rate ${fallbackRate} exceeded SLO ${AI_SLO_FALLBACK_RATE_MAX}.`
+      severity: 'warning',
+      key: 'fallback_rate_slo_breach',
+      message: `Fallback rate ${fallbackRate} exceeded SLO ${AI_SLO_FALLBACK_RATE_MAX}.`,
     });
   }
-  if (p95DurationMs != null && p95DurationMs > AI_SLO_P95_LATENCY_MS_MAX) {
+  if (
+    p95DurationMs !== null &&
+    p95DurationMs !== undefined &&
+    p95DurationMs > AI_SLO_P95_LATENCY_MS_MAX
+  ) {
     alerts.push({
-      severity: "warning",
-      key: "latency_p95_slo_breach",
-      message: `p95 latency ${p95DurationMs}ms exceeded SLO ${AI_SLO_P95_LATENCY_MS_MAX}ms.`
+      severity: 'warning',
+      key: 'latency_p95_slo_breach',
+      message: `p95 latency ${p95DurationMs}ms exceeded SLO ${AI_SLO_P95_LATENCY_MS_MAX}ms.`,
     });
   }
 
   return {
-    message: "AI metrics overview retrieved successfully",
+    message: 'AI metrics overview retrieved successfully',
     data: {
       window_hours: safeHours,
       since: since.toISOString(),
@@ -1358,82 +1486,90 @@ export async function getAiMetricsOverview(hours = 24) {
         p95_latency_ms_max: AI_SLO_P95_LATENCY_MS_MAX,
       },
       alerts,
-      provider_breakdown: providerAgg.map((item) => ({
-        provider: item._id || "unknown",
+      provider_breakdown: providerAgg.map(item => ({
+        provider: item._id || 'unknown',
         requests: item.count || 0,
-        avg_duration_ms: item.avgDurationMs ? Number(item.avgDurationMs.toFixed(2)) : null,
-        avg_stream_connect_ms: item.avgStreamConnectMs ? Number(item.avgStreamConnectMs.toFixed(2)) : null,
+        avg_duration_ms: item.avgDurationMs
+          ? Number(item.avgDurationMs.toFixed(2))
+          : null,
+        avg_stream_connect_ms: item.avgStreamConnectMs
+          ? Number(item.avgStreamConnectMs.toFixed(2))
+          : null,
         fallback_count: item.fallbackCount || 0,
         token_usage_total: item.totalTokens || 0,
       })),
-      task_breakdown: taskAgg.map((item) => ({
-        task: item._id || "unknown",
+      task_breakdown: taskAgg.map(item => ({
+        task: item._id || 'unknown',
         requests: item.count || 0,
-        avg_duration_ms: item.avgDurationMs ? Number(item.avgDurationMs.toFixed(2)) : null,
+        avg_duration_ms: item.avgDurationMs
+          ? Number(item.avgDurationMs.toFixed(2))
+          : null,
         fallback_count: item.fallbackCount || 0,
       })),
-    }
+    },
   };
 }
 
 export async function getAiMetricsTimeseries(hours = 24, intervalMinutes = 60) {
-  const safeHours = Number.isFinite(hours) ? Math.min(Math.max(hours, 1), 168) : 24;
+  const safeHours = Number.isFinite(hours)
+    ? Math.min(Math.max(hours, 1), 168)
+    : 24;
   const safeIntervalMinutes = Number.isFinite(intervalMinutes)
     ? Math.min(Math.max(intervalMinutes, 5), 60)
     : 60;
-  const since = dayjs().subtract(safeHours, "hour").toDate();
+  const since = dayjs().subtract(safeHours, 'hour').toDate();
   const intervalMs = safeIntervalMinutes * 60 * 1000;
   const intervalSeconds = safeIntervalMinutes * 60;
 
   const bucketExpr = {
     $subtract: [
-      { $toLong: "$created_at" },
-      { $mod: [{ $toLong: "$created_at" }, intervalMs] }
-    ]
+      {$toLong: '$created_at'},
+      {$mod: [{$toLong: '$created_at'}, intervalMs]},
+    ],
   };
 
   const [usageSeries, errorSeries, providerSeries] = await Promise.all([
     AiMetric.aggregate([
-      { $match: { created_at: { $gte: since }, event: "ai_route" } },
+      {$match: {created_at: {$gte: since}, event: 'ai_route'}},
       {
         $group: {
           _id: bucketExpr,
-          requests: { $sum: 1 },
+          requests: {$sum: 1},
           fallbackCount: {
             $sum: {
-              $cond: [{ $eq: ["$used_fallback", true] }, 1, 0]
-            }
+              $cond: [{$eq: ['$used_fallback', true]}, 1, 0],
+            },
           },
-          avgDurationMs: { $avg: "$duration_ms" },
-          avgStreamConnectMs: { $avg: "$stream_connect_ms" },
-          totalTokens: { $sum: { $ifNull: ["$token_usage.total_tokens", 0] } },
-        }
+          avgDurationMs: {$avg: '$duration_ms'},
+          avgStreamConnectMs: {$avg: '$stream_connect_ms'},
+          totalTokens: {$sum: {$ifNull: ['$token_usage.total_tokens', 0]}},
+        },
       },
-      { $sort: { _id: 1 } }
+      {$sort: {_id: 1}},
     ]),
     AiMetric.aggregate([
-      { $match: { created_at: { $gte: since }, event: "ai_route_error" } },
+      {$match: {created_at: {$gte: since}, event: 'ai_route_error'}},
       {
         $group: {
           _id: bucketExpr,
-          errors: { $sum: 1 }
-        }
+          errors: {$sum: 1},
+        },
       },
-      { $sort: { _id: 1 } }
+      {$sort: {_id: 1}},
     ]),
     AiMetric.aggregate([
-      { $match: { created_at: { $gte: since }, event: "ai_route" } },
+      {$match: {created_at: {$gte: since}, event: 'ai_route'}},
       {
         $group: {
           _id: {
             bucket: bucketExpr,
-            provider: "$provider"
+            provider: '$provider',
           },
-          requests: { $sum: 1 }
-        }
+          requests: {$sum: 1},
+        },
       },
-      { $sort: { "_id.bucket": 1, "_id.provider": 1 } }
-    ])
+      {$sort: {'_id.bucket': 1, '_id.provider': 1}},
+    ]),
   ]);
 
   const errorsByBucket = new Map<number, number>();
@@ -1441,22 +1577,27 @@ export async function getAiMetricsTimeseries(hours = 24, intervalMinutes = 60) {
     errorsByBucket.set(item._id, item.errors || 0);
   }
 
-  const providerByBucket = new Map<number, Array<{ provider: string; requests: number }>>();
+  const providerByBucket = new Map<
+    number,
+    Array<{provider: string; requests: number}>
+  >();
   for (const item of providerSeries) {
     const bucket = item?._id?.bucket;
-    const provider = item?._id?.provider || "unknown";
+    const provider = item?._id?.provider || 'unknown';
     if (!providerByBucket.has(bucket)) providerByBucket.set(bucket, []);
-    providerByBucket.get(bucket)!.push({ provider, requests: item.requests || 0 });
+    providerByBucket
+      .get(bucket)!
+      .push({provider, requests: item.requests || 0});
   }
 
   return {
-    message: "AI metrics time-series retrieved successfully",
+    message: 'AI metrics time-series retrieved successfully',
     data: {
       window_hours: safeHours,
       interval_minutes: safeIntervalMinutes,
       interval_seconds: intervalSeconds,
       since: since.toISOString(),
-      points: usageSeries.map((item) => {
+      points: usageSeries.map(item => {
         const requests = item.requests || 0;
         const fallbacks = item.fallbackCount || 0;
         const errors = errorsByBucket.get(item._id) || 0;
@@ -1465,29 +1606,34 @@ export async function getAiMetricsTimeseries(hours = 24, intervalMinutes = 60) {
           requests,
           errors,
           fallbacks,
-          fallback_rate: requests > 0 ? Number((fallbacks / requests).toFixed(4)) : 0,
+          fallback_rate:
+            requests > 0 ? Number((fallbacks / requests).toFixed(4)) : 0,
           error_rate: requests > 0 ? Number((errors / requests).toFixed(4)) : 0,
-          avg_duration_ms: item.avgDurationMs ? Number(item.avgDurationMs.toFixed(2)) : null,
-          avg_stream_connect_ms: item.avgStreamConnectMs ? Number(item.avgStreamConnectMs.toFixed(2)) : null,
+          avg_duration_ms: item.avgDurationMs
+            ? Number(item.avgDurationMs.toFixed(2))
+            : null,
+          avg_stream_connect_ms: item.avgStreamConnectMs
+            ? Number(item.avgStreamConnectMs.toFixed(2))
+            : null,
           token_usage_total: item.totalTokens || 0,
-          provider_mix: providerByBucket.get(item._id) || []
+          provider_mix: providerByBucket.get(item._id) || [],
         };
-      })
-    }
+      }),
+    },
   };
 }
 
 export async function getAiPromptGovernanceStatus() {
   const snapshot = getPromptRegistrySnapshot();
   return {
-    message: "AI prompt governance status retrieved successfully",
+    message: 'AI prompt governance status retrieved successfully',
     data: {
       registry: snapshot,
       review_policy: {
         require_pr_review: true,
         require_versioned_prompt_id: true,
-        rollback_supported_via_env_overrides: true
-      }
-    }
+        rollback_supported_via_env_overrides: true,
+      },
+    },
   };
 }
