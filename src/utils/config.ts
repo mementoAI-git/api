@@ -76,11 +76,9 @@ export const PROMPT_VERSION_OVERRIDES: Record<string, string> = {
 };
 
 // Multi-provider AI router (all optional — only providers with keys are registered)
-export const GROQ_API_KEY = process.env.GROQ_API_KEY;
 export const CEREBRAS_API_KEY = process.env.CEREBRAS_API_KEY;
 export const NVIDIA_NIM_API_KEY = process.env.NVIDIA_NIM_API_KEY;
 export const SAMBANOVA_API_KEY = process.env.SAMBANOVA_API_KEY;
-export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 export const CLOUDFLARE_AI_API_KEY = process.env.CLOUDFLARE_AI_API_KEY;
 export const CLOUDFLARE_AI_ACCOUNT_ID = process.env.CLOUDFLARE_AI_ACCOUNT_ID;
 
