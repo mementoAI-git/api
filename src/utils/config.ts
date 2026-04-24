@@ -5,7 +5,11 @@ export const JWT_SECRET = process.env.JWT_SECRET;
 
 export const NODE_ENV = process.env.NODE_ENV || 'development';
 export const IS_PRODUCTION = NODE_ENV === 'production';
+export const IS_DEV_ENV = ["development", "dev", "local"].includes(NODE_ENV.toLowerCase());
 export const PORT = process.env.PORT || 5000;
+export const AI_SLO_ERROR_RATE_MAX = Number(process.env.AI_SLO_ERROR_RATE_MAX || 0.03);
+export const AI_SLO_FALLBACK_RATE_MAX = Number(process.env.AI_SLO_FALLBACK_RATE_MAX || 0.25);
+export const AI_SLO_P95_LATENCY_MS_MAX = Number(process.env.AI_SLO_P95_LATENCY_MS_MAX || 6000);
 
 export const MONGODB_URL = process.env.MONGODB_URL;
 export const REDIS_URL = process.env.REDIS_URL;
@@ -30,7 +34,46 @@ export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const BACKEND_URL = process.env.BACKEND_URL;
 
+export const GEMINI_API_KEY_ALT = process.env.GEMINI_API_KEY_ALT;
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+export const GEMINI_API_KEY_EFFECTIVE = GEMINI_API_KEY_ALT || GEMINI_API_KEY;
+export const VOICE_PROVIDER_DEFAULT = (process.env.VOICE_PROVIDER_DEFAULT || "gemini").toLowerCase();
+export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+export const ELEVENLABS_BASE_URL = process.env.ELEVENLABS_BASE_URL || "https://api.elevenlabs.io/v1";
+export const ELEVENLABS_TTS_MODEL_ID = process.env.ELEVENLABS_TTS_MODEL_ID || "eleven_multilingual_v2";
+export const ASR_PROVIDER = (process.env.ASR_PROVIDER || "gemini").toLowerCase();
+export const ASR_FALLBACK_PROVIDER = (process.env.ASR_FALLBACK_PROVIDER || "gemini_fallback").toLowerCase();
+export const ASR_GEMINI_PRIMARY_MODEL = process.env.ASR_GEMINI_PRIMARY_MODEL || "gemini-2.0-flash";
+export const ASR_GEMINI_FALLBACK_MODEL = process.env.ASR_GEMINI_FALLBACK_MODEL || ASR_GEMINI_PRIMARY_MODEL;
+export const ASR_SHADOW_ENABLED = process.env.ASR_SHADOW_ENABLED === "true";
+export const ASR_SHADOW_PROVIDER = (process.env.ASR_SHADOW_PROVIDER || "").toLowerCase();
+export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+export const OPENROUTER_BASE_URL = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+export const OPENROUTER_APP_NAME = process.env.OPENROUTER_APP_NAME || "Memento API";
+export const OPENROUTER_SITE_URL = process.env.OPENROUTER_SITE_URL || FRONTEND_URL || "http://localhost:5173";
+export const OPENROUTER_CRITICAL_ENABLED = process.env.OPENROUTER_CRITICAL_ENABLED !== "false";
+export const GROQ_API_KEY = process.env.GROQ_API_KEY;
+export const GROQ_BASE_URL = process.env.GROQ_BASE_URL || "https://api.groq.com/openai/v1";
+export const GROQ_MODEL_CHAT_PRIMARY = process.env.GROQ_MODEL_CHAT_PRIMARY || "llama-3.3-70b-versatile";
+export const GROQ_MODEL_CHAT_FALLBACK = process.env.GROQ_MODEL_CHAT_FALLBACK || "llama-3.1-8b-instant";
+export const GROQ_FAST_MODE_ENABLED = process.env.GROQ_FAST_MODE_ENABLED !== "false";
+export const GROQ_FAST_MODE_MAX_INPUT_CHARS = Number(process.env.GROQ_FAST_MODE_MAX_INPUT_CHARS || 320);
+export const GROQ_MODEL_CHAT_FAST_PRIMARY = process.env.GROQ_MODEL_CHAT_FAST_PRIMARY || "llama-3.1-8b-instant";
+export const GROQ_MODEL_CHAT_FAST_FALLBACK = process.env.GROQ_MODEL_CHAT_FAST_FALLBACK || GROQ_MODEL_CHAT_PRIMARY;
+
+export const OR_MODEL_CHAT_PRIMARY = process.env.OR_MODEL_CHAT_PRIMARY || "google/gemma-4-26b-a4b-it";
+export const OR_MODEL_CHAT_FALLBACK = process.env.OR_MODEL_CHAT_FALLBACK || "google/gemma-4-26b-a4b-it:free";
+export const OR_MODEL_TAGS_PRIMARY = process.env.OR_MODEL_TAGS_PRIMARY || "google/gemma-4-26b-a4b-it:free";
+export const OR_MODEL_TAGS_FALLBACK = process.env.OR_MODEL_TAGS_FALLBACK || "google/gemma-4-26b-a4b-it";
+export const OR_MODEL_TRANSCRIPTION_PRIMARY = process.env.OR_MODEL_TRANSCRIPTION_PRIMARY || "";
+export const OR_MODEL_TRANSCRIPTION_FALLBACK = process.env.OR_MODEL_TRANSCRIPTION_FALLBACK || "";
+export const PROMPT_VERSION_OVERRIDES: Record<string, string> = {
+  chat_primary: process.env.PROMPT_VERSION_CHAT_PRIMARY || "",
+  chat_bootstrap: process.env.PROMPT_VERSION_CHAT_BOOTSTRAP || "",
+  onboarding_chat: process.env.PROMPT_VERSION_ONBOARDING_CHAT || "",
+  tags_generate: process.env.PROMPT_VERSION_TAGS_GENERATE || "",
+  transcription: process.env.PROMPT_VERSION_TRANSCRIPTION || "",
+};
 
 // Multi-provider AI router (all optional — only providers with keys are registered)
 export const GROQ_API_KEY = process.env.GROQ_API_KEY;
