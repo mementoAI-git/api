@@ -31,6 +31,19 @@ const errorHandler = (
   logger.error(error_payload, 'Error occurred');
 
   if (err instanceof ServiceError) {
+    if (
+      err.statusCode === StatusCodes.PAYMENT_REQUIRED &&
+      err?.data &&
+      typeof err.data === 'object'
+    ) {
+      const gateData = err.data as Record<string, unknown>;
+      return res.status(err.statusCode).json({
+        status: err.statusCode,
+        message: err.message,
+        ...gateData,
+        data: gateData,
+      });
+    }
     return responsHandler(res, err.statusCode, err?.message, err?.data);
   }
 

@@ -13,6 +13,8 @@ import {StatusCodes} from 'http-status-codes';
 import dayjs from 'dayjs';
 import {pipeline} from 'stream/promises';
 import logger from '../../../utils/logger';
+import {DEFAULT_STORAGE_PROVIDER} from '../../../utils/constant';
+import {assertAccess} from '../billing/service';
 
 export async function uploadFile(
   req: IRequest,
@@ -21,6 +23,8 @@ export async function uploadFile(
 ) {
   try {
     const files = getFiles(req, true);
+    const additionalBytes = files.reduce((total, file) => total + file.size, 0);
+    await assertAccess(req.auth.id, 'storage', {additionalBytes});
     const clientDuration = req.body?.duration
       ? parseFloat(req.body.duration)
       : undefined;
@@ -143,7 +147,8 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
       const fileResponse = await storage.getFile(
         file.name,
         undefined,
-        file.provider ?? 's3',
+        file.provider ?? DEFAULT_STORAGE_PROVIDER,
+        file.type,
       );
       if (!fileResponse.Body) throw new Error('File content not found');
       await safeStreamToResponse(

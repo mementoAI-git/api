@@ -7,9 +7,11 @@ import {
 } from '../../../utils/helpers';
 import * as service from './service';
 import {IRequest} from '../../../utils/interface';
+import {assertAccess} from '../billing/service';
 
 export async function create(req: IRequest, res: Response, next: NextFunction) {
   try {
+    await assertAccess(req.auth.id, 'beneficiaries');
     const {message, data} = await service.create(req.body, req.auth.id);
     return responsHandler(res, StatusCodes.CREATED, message, data);
   } catch (error) {

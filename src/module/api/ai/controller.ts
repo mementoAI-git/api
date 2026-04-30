@@ -3,6 +3,7 @@ import {getPagination, responsHandler} from '../../../utils/helpers';
 import * as service from './service';
 import {IRequest} from '../../../utils/interface';
 import {StatusCodes} from 'http-status-codes';
+import {assertAccess} from '../billing/service';
 
 export async function autogenerateTags(
   req: IRequest,
@@ -100,6 +101,7 @@ export async function getEphemeralToken(
   next: NextFunction,
 ) {
   try {
+    await assertAccess(req.auth.id, 'voice_mode');
     const {message, data} = await service.createEphemeralToken();
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

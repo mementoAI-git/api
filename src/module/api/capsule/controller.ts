@@ -7,6 +7,7 @@ import {
 } from '../../../utils/helpers';
 import * as service from './service';
 import {StatusCodes} from 'http-status-codes';
+import {assertAccess} from '../billing/service';
 
 export async function createCapsule(
   req: IRequest,
@@ -15,6 +16,9 @@ export async function createCapsule(
 ) {
   try {
     validateRequest(req);
+    await assertAccess(req.auth.id, 'time_capsule_window', {
+      deliveryDate: req.body?.schedule_date,
+    });
     const {message, data} = await service.createCapsule(req.body, req.auth.id);
     return responsHandler(res, StatusCodes.CREATED, message, data);
   } catch (error) {

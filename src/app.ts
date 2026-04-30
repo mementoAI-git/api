@@ -26,7 +26,14 @@ export function createServer(): Application {
   );
 
   app.use(express.urlencoded({extended: false}));
-  app.use(express.json({limit: '100mb'}));
+  app.use(
+    express.json({
+      limit: '100mb',
+      verify: (req: express.Request | any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use('/assets', express.static(path.join(process.cwd(), 'public')));
 
   app.use(httpLogger);

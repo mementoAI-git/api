@@ -10,7 +10,10 @@ import {IPagination} from '../../../utils/interface';
 import redis from '../../../services/redis';
 import {createHash} from 'crypto';
 import {Readable} from 'stream';
-import {STORAGE_PROVIDERS} from '../../../utils/constant';
+import {
+  DEFAULT_STORAGE_PROVIDER,
+  STORAGE_PROVIDERS,
+} from '../../../utils/constant';
 
 export async function uploadFile(
   payload: Express.Multer.File[],
@@ -48,7 +51,11 @@ export async function removeFile(name: string, user_id: string) {
   if (isBackedUp) {
     await File.updateOne({name}, {$set: {deleted: true}});
   } else {
-    await storage.deleteFile(file.name, file.provider ?? STORAGE_PROVIDERS.gcs);
+    await storage.deleteFile(
+      file.name,
+      file.provider ?? DEFAULT_STORAGE_PROVIDER,
+      file.type,
+    );
     await File.deleteOne({name});
   }
 
@@ -68,7 +75,8 @@ export async function getFileMetadata(name: string) {
 
   const result = await storage.getFileMetadata(
     file.name,
-    file.provider ?? STORAGE_PROVIDERS.gcs,
+    file.provider ?? DEFAULT_STORAGE_PROVIDER,
+    file.type,
   );
 
   const hash = createHash('md5');
@@ -116,7 +124,8 @@ export async function getFileBuffer(
   const fileResponse = await storage.getFile(
     file.name,
     rangeHeader,
-    file.provider ?? 's3',
+    file.provider ?? DEFAULT_STORAGE_PROVIDER,
+    file.type,
   );
 
   if (!fileResponse.Body) {

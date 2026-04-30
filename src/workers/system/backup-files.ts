@@ -48,24 +48,41 @@ async function uploadToCloudinary(file: IFile): Promise<void> {
   await File.updateOne({name: file.name}, {$set: {backup_at: new Date()}});
 }
 
+function cloudinaryPublicIdForBackup(fileName: string): string {
+  return fileName.includes('/') ? fileName : `memento/${fileName}`;
+}
+
 async function deleteFromCloudinary(file: IFile): Promise<void> {
-  await cloudinary.uploader.destroy(file.name, {
+  const publicId = cloudinaryPublicIdForBackup(file.name);
+  await cloudinary.uploader.destroy(publicId, {
     resource_type: getResourceType(file.type || ''),
   });
-  await File.deleteOne({name: file.name, deleted: true});
+  await File.deleteOne({name: file.name});
+}
+
+function isLegacyGcsRow(file: {provider?: string}): boolean {
+  return file.provider === 'gcs' || file.provider === undefined;
 }
 
 /**
- * Backs up GCS files to Cloudinary. Only processes files that have never been backed up
- * (backup_at is null or missing) and are not deleted. Also removes from Cloudinary
- * any files that were soft-deleted (deleted: true and backup_at set).
+ * Copies legacy GCS objects into Cloudinary (sets backup_at). Skips native Cloudinary rows.
+ * Also removes Cloudinary objects for soft-deleted files that were previously backed up.
  */
 export default async function backupFiles() {
   const files = await File.find({
     provider: {$ne: 's3'},
-    $or: [{backup_at: {$exists: false}}, {backup_at: null}, {deleted: true}],
+    $or: [
+      {
+        $and: [
+          {$or: [{provider: 'gcs'}, {provider: {$exists: false}}]},
+          {$or: [{backup_at: {$exists: false}}, {backup_at: null}]},
+          {deleted: {$ne: true}},
+        ],
+      },
+      {deleted: true, backup_at: {$exists: true, $ne: null}},
+    ],
   })
-    .select('_id name type backup_at deleted')
+    .select('_id name type provider backup_at deleted')
     .sort({_id: 1})
     .limit(50)
     .lean();
@@ -77,13 +94,13 @@ export default async function backupFiles() {
 
   for (const file of files) {
     try {
-      if (!file?.backup_at) {
-        await uploadToCloudinary(file);
+      if (!file?.backup_at && !file?.deleted && isLegacyGcsRow(file)) {
+        await uploadToCloudinary(file as IFile);
         backedUp++;
       }
 
-      if (file?.deleted) {
-        await deleteFromCloudinary(file);
+      if (file?.deleted && file.backup_at) {
+        await deleteFromCloudinary(file as IFile);
         deleted++;
       }
     } catch (err) {
@@ -99,7 +116,7 @@ export default async function backupFiles() {
 
   logger.info(
     {backedUp, failed, deleted, total: files.length},
-    'GCS to Cloudinary backup completed',
+    'Legacy GCS → Cloudinary backup pass completed',
   );
   return {
     backedUp,

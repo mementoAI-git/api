@@ -4,6 +4,7 @@ import {UnauthorizedException} from '../../../utils/service-error';
 import type {ITallyWebhookPayload, ITallySubmissionData} from './interface';
 import * as authService from '../auth/service';
 import {compareStrings} from '../../../utils';
+import {verifyPolarWebhookSignature} from '../billing/providers/polar';
 
 export function verifyTallySignature(
   rawBody: ITallyWebhookPayload,
@@ -88,4 +89,11 @@ export async function processTallySubmission(
     message: 'Early access invite sent',
     data: {email: submission.email, inviteSent: true},
   };
+}
+
+export function verifyPolarSignature(
+  rawBody: Buffer,
+  signature: string | undefined,
+): void {
+  verifyPolarWebhookSignature(rawBody, signature);
 }

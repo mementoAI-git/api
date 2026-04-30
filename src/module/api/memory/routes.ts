@@ -3,6 +3,7 @@ import valid from './validator';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
+import {requireFeature} from '../../../middleware/feature-gate';
 
 const router: IRouter = Router();
 
@@ -10,6 +11,7 @@ router.get('/stats', gaurd, ctrl.memoryStats);
 router.post(
   '/',
   gaurd,
+  requireFeature('memory.create'),
   fileUploadMiddleWare.array('file', 5) as RequestHandler,
   valid.createMemory,
   ctrl.createMemory,
@@ -26,8 +28,20 @@ router.get('/', gaurd, ctrl.getMemories);
 router.get('/prompt/:id', gaurd, ctrl.getMemoryByPrompt);
 router.get('/:id/enrichment', gaurd, ctrl.getConversationEnrichment);
 router.get('/:id', gaurd, ctrl.getMemory);
-router.put('/:id', gaurd, valid.updateMemory, ctrl.updateMemory);
-router.delete('/:id', gaurd, valid.deleteMemory, ctrl.deleteMemory);
+router.put(
+  '/:id',
+  gaurd,
+  requireFeature('memory.edit'),
+  valid.updateMemory,
+  ctrl.updateMemory,
+);
+router.delete(
+  '/:id',
+  gaurd,
+  requireFeature('memory.delete'),
+  valid.deleteMemory,
+  ctrl.deleteMemory,
+);
 router.post('/:id/restore', gaurd, ctrl.restoreMemory);
 router.post('/:id/bookmark', gaurd, ctrl.bookmark);
 router.delete('/:id/bookmark', gaurd, ctrl.unbookmark);

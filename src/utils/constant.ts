@@ -21,12 +21,21 @@ export const SUPPORTED_FILE_TYPES = [
   'video/quicktime',
   'video/x-msvideo',
   'audio/webm',
+  'audio/mp4', // Safari / MediaRecorder fallback, voice memos
+  'audio/m4a', // some clients label M4A this way
+  'audio/x-m4a',
   'audio/mpeg', // .mp3
   'audio/wav', // .wav
+  'audio/x-wav',
+  'audio/wave',
+  'audio/opus',
   'audio/ogg', // .ogg
   'audio/aac', // .aac
   'audio/flac', // .flac
   'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
   'audio/mpeg',
   'audio/mp3',
   'audio/mpeg3',
@@ -113,7 +122,7 @@ export const STORAGE_PROVIDERS = {
   cloudinary: 'cloudinary',
 } as const;
 
-export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.gcs;
+export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.cloudinary;
 
 export const FREE_STORAGE_LIMIT_BYTES = 5 * 1024 ** 3; // 5 GB
 

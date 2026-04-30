@@ -1,11 +1,7 @@
-import {
-  uploadToGCS,
-  getFileFromGCS,
-  getFileMetadataFromGCS,
-  deleteFileFromGCS,
-} from './gcs';
+import {getFileFromGCS, getFileMetadataFromGCS, deleteFileFromGCS} from './gcs';
 import {getFileFromS3, getFileMetadataFromS3, deleteFileFromS3} from './s3';
-import {reconstructFileName, getMediaDuration} from '../../utils/helpers';
+import * as cloudinaryStorage from './cloudinary';
+import {getMediaDuration, resolveUploadMime} from '../../utils/helpers';
 import type {IFile} from '../../module/database/model/file';
 import type {StorageFileMetadata, StorageGetFileResponse} from './types';
 import type {FileStorageProvider} from '../../module/database/model/file';
@@ -23,24 +19,24 @@ export async function uploadFile(
   user: string,
   clientDuration?: number,
 ): Promise<Partial<IFile>> {
-  const fileName = reconstructFileName(file.originalname);
-
-  const uploadResult = await uploadToGCS(fileName, file.buffer, file.mimetype, {
-    originalName: file.originalname,
-    userId: user,
-    uploadedAt: new Date().toISOString(),
-  });
-
+  const mimetype = resolveUploadMime(file);
   const base64 = file.buffer.toString('base64');
-  const detectedDuration = await getMediaDuration(base64, file.mimetype);
+  const detectedDuration = await getMediaDuration(base64, mimetype);
   // Use client-supplied duration if server-side detection fails (e.g. WebM from MediaRecorder)
   const duration = detectedDuration ?? clientDuration;
 
+  const result = await cloudinaryStorage.uploadFile(
+    file.buffer,
+    mimetype,
+    file.size,
+    {originalName: file.originalname},
+  );
+
   return {
-    name: uploadResult?.key,
+    name: result.name,
     user,
-    size: file.size,
-    type: file.mimetype,
+    size: result.size,
+    type: result.type,
     duration,
     provider: DEFAULT_STORAGE_PROVIDER,
   };
@@ -52,9 +48,16 @@ export async function uploadFile(
 export async function getFileMetadata(
   key: string,
   provider: FileStorageProvider = DEFAULT_STORAGE_PROVIDER,
+  mimeType?: string,
 ): Promise<StorageFileMetadata> {
   if (provider === 'gcs') {
     return getFileMetadataFromGCS(key);
+  }
+  if (provider === 'cloudinary') {
+    if (!mimeType) {
+      throw new Error('mimeType is required for Cloudinary file metadata');
+    }
+    return cloudinaryStorage.getFileMetadataFromCloudinary(key, mimeType);
   }
   return getFileMetadataFromS3(key);
 }
@@ -66,9 +69,17 @@ export async function getFile(
   key: string,
   range?: string,
   provider: FileStorageProvider = DEFAULT_STORAGE_PROVIDER,
+  mimeType?: string,
 ): Promise<StorageGetFileResponse> {
   if (provider === 'gcs') {
     return getFileFromGCS(key, range);
+  }
+  if (provider === 'cloudinary') {
+    if (!mimeType) {
+      throw new Error('mimeType is required for Cloudinary file fetch');
+    }
+    const resourceType = cloudinaryStorage.getResourceType(mimeType);
+    return cloudinaryStorage.getFileStream(key, resourceType, range);
   }
   const result = await getFileFromS3(key, range);
   return {
@@ -84,9 +95,19 @@ export async function getFile(
 export async function deleteFile(
   key: string,
   provider: FileStorageProvider = DEFAULT_STORAGE_PROVIDER,
+  mimeType?: string,
 ): Promise<void> {
   if (provider === 'gcs') {
     return deleteFileFromGCS(key);
+  }
+  if (provider === 'cloudinary') {
+    if (!mimeType) {
+      throw new Error('mimeType is required for Cloudinary delete');
+    }
+    return cloudinaryStorage.deleteFile(
+      key,
+      cloudinaryStorage.getResourceType(mimeType),
+    );
   }
   return deleteFileFromS3(key);
 }

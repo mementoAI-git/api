@@ -130,26 +130,39 @@ export const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 export const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 export const AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
 
+/** Optional: legacy GCS reads / backup worker only (uploads use Cloudinary). */
 export const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
 export const GCS_PROJECT_ID = process.env.GCS_PROJECT_ID;
-export const GCS_KEY_FILENAME = process.env.GCS_KEY_FILENAME; // optional; uses ADC if not set
-/** When true, GCS is not used (e.g. billing disabled). All uploads go to Cloudinary. */
-export const GCS_DISABLED = process.env.GCS_DISABLED === 'true';
+export const GCS_KEY_FILENAME = process.env.GCS_KEY_FILENAME;
 
 export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
-/** When true, image uploads go to Cloudinary instead of GCS. Ignored when GCS_DISABLED is true. */
-export const CLOUDINARY_UPLOAD_IMAGES =
-  process.env.CLOUDINARY_UPLOAD_IMAGES === 'true';
-
 export const SUPERMEMORY_API_KEY = process.env.SUPERMEMORY_API_KEY;
 
 export const TALLY_WEBHOOK_SECRET = process.env.TALLY_WEBHOOK_SECRET;
+export const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
+export const POLAR_WEBHOOK_SECRET = process.env.POLAR_WEBHOOK_SECRET;
+export const POLAR_BASE_URL =
+  process.env.POLAR_BASE_URL || 'https://api.polar.sh/v1';
+export const POLAR_PRODUCT_PRO_MONTHLY = process.env.POLAR_PRODUCT_PRO_MONTHLY;
+export const POLAR_PRODUCT_PRO_ANNUAL = process.env.POLAR_PRODUCT_PRO_ANNUAL;
+export const POLAR_PRODUCT_LEGACY_MONTHLY =
+  process.env.POLAR_PRODUCT_LEGACY_MONTHLY;
+export const POLAR_PRODUCT_LEGACY_ANNUAL =
+  process.env.POLAR_PRODUCT_LEGACY_ANNUAL;
+export const POLAR_PRODUCT_LEGACY_LIFETIME =
+  process.env.POLAR_PRODUCT_LEGACY_LIFETIME;
 
 export const DISCORD_FEEDBACK_WEBHOOK_URL =
   process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+export const FEATURE_FLAG_ENVIRONMENT =
+  process.env.FEATURE_FLAG_ENVIRONMENT || NODE_ENV;
+export const FEATURE_FLAGS_ADMIN_EMAILS =
+  process.env.FEATURE_FLAGS_ADMIN_EMAILS?.split(',')
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean) || [];
 // WebAuthn / Passkeys
 export const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 export const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Memento';

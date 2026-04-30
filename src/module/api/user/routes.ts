@@ -5,6 +5,7 @@ import * as dto from './dto';
 import valid from './validator';
 import validate from '../../../middleware/validator';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
+import {requireFeature} from '../../../middleware/feature-gate';
 
 const router: IRouter = Router();
 router.use(gaurd);
@@ -15,6 +16,7 @@ router.post('/onboarding/skip', ctrl.skipOnboarding);
 router.post('/onboarding', validate(dto.onboardingSchema), ctrl.onboarding);
 router.post(
   '/onboarding/chat/prompt',
+  requireFeature('onboarding.chat'),
   validate(dto.onboardingChatPromptSchema),
   ctrl.onboardingChatPrompt,
 );
