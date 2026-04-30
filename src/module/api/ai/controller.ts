@@ -21,11 +21,15 @@ export async function autogenerateTags(
 export async function prompt(req: IRequest, res: Response, next: NextFunction) {
   try {
     const response = await service.prompt(req.body, req.auth.id);
+    if (response.modelLabel) {
+      res.setHeader('x-ai-model', response.modelLabel);
+    }
     return await service.handleStreaming(
       req.auth.id,
       req.body.memory,
-      response,
+      response.stream,
       res,
+      response.modelLabel,
     );
   } catch (error) {
     next(error);

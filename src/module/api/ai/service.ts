@@ -382,9 +382,12 @@ export async function prompt(
       user: user_id,
       metadata: {remainingMs: userBackoffRemaining},
     });
-    return createSafeFallbackStream(
-      'I am recovering from temporary AI capacity limits. Please retry in a few seconds.',
-    );
+    return {
+      stream: createSafeFallbackStream(
+        'I am recovering from temporary AI capacity limits. Please retry in a few seconds.',
+      ),
+      modelLabel: 'fallback:backoff',
+    };
   }
   const user = await User.findById(user_id);
   if (!user) {
@@ -443,7 +446,7 @@ export async function prompt(
       attatchments: payload?.attachments || [],
       text: payload?.text,
     });
-    return response;
+    return {stream: response, modelLabel: `gemini:${GEMINI_MODEL}`};
   }
 
   if (groqClient.isConfigured()) {
@@ -496,7 +499,7 @@ export async function prompt(
         attatchments: payload?.attachments || [],
         text: payload?.text,
       });
-      return stream;
+      return {stream, modelLabel: `groq:${effectiveModel}`};
     } catch (error) {
       if (isProviderRateLimited(error)) setUserBackoffWindow(user_id);
       console.error('AI routing fallback', {
@@ -540,7 +543,7 @@ export async function prompt(
       text: payload?.text,
     });
 
-    return response;
+    return {stream: response, modelLabel: `gemini:${GEMINI_MODEL}`};
   } catch (geminiError) {
     if (isProviderRateLimited(geminiError)) setUserBackoffWindow(user_id);
     console.error('AI routing fallback', {
@@ -595,7 +598,7 @@ export async function prompt(
           attatchments: payload?.attachments || [],
           text: payload?.text,
         });
-        return stream;
+        return {stream, modelLabel: `openrouter:${effectiveModel}`};
       } catch (openrouterError) {
         if (isProviderRateLimited(openrouterError))
           setUserBackoffWindow(user_id);
@@ -624,9 +627,12 @@ export async function prompt(
       text: payload?.text,
     });
 
-    return createSafeFallbackStream(
-      'I am hitting temporary capacity limits right now. Please try again in about a minute.',
-    );
+    return {
+      stream: createSafeFallbackStream(
+        'I am hitting temporary capacity limits right now. Please try again in about a minute.',
+      ),
+      modelLabel: 'fallback:capacity',
+    };
   }
 }
 
@@ -635,6 +641,7 @@ export async function handleStreaming(
   memory: string,
   payload: AsyncGenerator<{text?: string}, any, any>,
   res: Response,
+  modelLabel?: string,
 ) {
   let text = '';
   let userMessage = ''; // Store the user's message
@@ -666,6 +673,7 @@ export async function handleStreaming(
         user,
         memory,
         role: 'ai',
+        ai_model: modelLabel || 'unknown',
       });
 
       // Update message count and last_active for summarization tracking
