@@ -65,8 +65,6 @@ jobs:
             exit 1
           fi
           echo "Build output OK — $(find build -type f | wc -l) files"
-        with:
-          name: backend-dev-${{ github.sha }}
 
       # Write SSH key and known_hosts to disk for rsync + ssh.
       - name: Setup SSH
