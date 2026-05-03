@@ -28,6 +28,12 @@ import Qr from 'qrcode';
 import {z} from 'zod';
 import mail from '../../mail';
 import {OnboardingBody} from './dto';
+import ai from '../../../services/ai';
+import {gatherMemoryInsightsSummaryContext} from '../../../utils/ai-prompt';
+import {
+  buildMemoryInsightsSummaryRequest,
+  normalizeMemoryInsightsSummaryOutput,
+} from '../../../utils/ai-prompt/memory-insights-summary-prompt';
 import {OnboardingChatPromptBody} from './dto';
 import gemini, {GEMINI_MODEL} from '../../../services/gemini';
 import {
@@ -111,6 +117,66 @@ export async function getPersona(user_id: string) {
   return {
     message: 'Persona retrieved successfully',
     data: persona,
+  };
+}
+
+export type MemoryInsightsSummaryDto = {
+  summary: string | null;
+  generated_at: string | null;
+  cached: boolean;
+};
+
+export async function getMemoryInsightsSummary(
+  user_id: string,
+  refresh: boolean,
+): Promise<{message: string; data: MemoryInsightsSummaryDto}> {
+  const persona = await Persona.findOne({user: user_id}).lean();
+
+  // Generate once and persist; only regenerate when explicitly requested (refresh=true).
+  if (!refresh && persona?.memory_insights_summary?.trim()) {
+    return {
+      message: 'Memory insights summary retrieved',
+      data: {
+        summary: persona.memory_insights_summary.trim(),
+        generated_at: persona.memory_insights_summary_at
+          ? new Date(persona.memory_insights_summary_at).toISOString()
+          : null,
+        cached: true,
+      },
+    };
+  }
+
+  const {pack, hasSignal} = await gatherMemoryInsightsSummaryContext(user_id);
+
+  if (!hasSignal) {
+    return {
+      message: 'Not enough context for a summary yet',
+      data: {
+        summary: null,
+        generated_at: null,
+        cached: false,
+      },
+    };
+  }
+
+  const prompt = buildMemoryInsightsSummaryRequest(pack);
+  const raw = await ai.generateText([{role: 'user', content: prompt}]);
+  const summary = normalizeMemoryInsightsSummaryOutput(raw);
+
+  if (persona?._id) {
+    await Persona.findByIdAndUpdate(persona._id, {
+      memory_insights_summary: summary,
+      memory_insights_summary_at: new Date(),
+    });
+  }
+
+  return {
+    message: 'Memory insights summary generated',
+    data: {
+      summary,
+      generated_at: new Date().toISOString(),
+      cached: false,
+    },
   };
 }
 
@@ -429,11 +495,11 @@ export async function getUserStats(user_id: string) {
     prompt: {$exists: true, $ne: null},
   });
 
-  // Count uploaded stories (memories with type "story" and status "save" or higher)
+  // Stories visible on /stories (non-draft, non-deleted), aligned with GET /memories/stories
   const stories_count = await Memory.countDocuments({
     user: user_id,
     type: 'story',
-    status: {$in: ['save', 'queued', 'on_chain']},
+    status: {$nin: ['draft', 'deleted']},
   });
 
   const pending_insights_count = await PendingInsight.countDocuments({
@@ -464,11 +530,31 @@ export async function getUserStats(user_id: string) {
   );
   const jumpPills = getJumpPills(gapDimensions, priorityDimensions);
 
+  const quickCapturePending = await Memory.find({
+    user: user_id,
+    capture_source: 'quick',
+    enrichment_status: 'pending',
+    status: {$nin: ['draft', 'deleted']},
+  })
+    .sort({created_at: -1})
+    .select('_id')
+    .limit(1)
+    .lean();
+
+  const quick_capture_pending_count = await Memory.countDocuments({
+    user: user_id,
+    capture_source: 'quick',
+    enrichment_status: 'pending',
+    status: {$nin: ['draft', 'deleted']},
+  });
+
   const stats = {
     streak_count,
     reflections_count,
     stories_count,
     pending_insights_count,
+    quick_capture_pending_count,
+    quick_capture_latest_id: quickCapturePending[0]?._id?.toString?.() ?? null,
     enrichment_score: enrichment.enrichment_score,
     category_scores: enrichment.category_scores,
     lowest_category: enrichment.lowest_category,

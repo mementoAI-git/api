@@ -16,6 +16,14 @@ router.post(
   valid.createMemory,
   ctrl.createMemory,
 );
+router.post(
+  '/quick-capture',
+  gaurd,
+  requireFeature('memory.create'),
+  fileUploadMiddleWare.array('file', 5) as RequestHandler,
+  valid.quickCapture,
+  ctrl.quickCaptureMemory,
+);
 router.delete(
   '/remove-file/:id',
   gaurd,

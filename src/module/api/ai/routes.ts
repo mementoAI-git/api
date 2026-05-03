@@ -43,6 +43,13 @@ router.post(
 );
 
 router.post(
+  '/generate-story-title',
+  gaurd,
+  validate(dto.generateStoryTitleSchema),
+  ctrl.autogenerateStoryTitle,
+);
+
+router.post(
   '/conversation/new',
   gaurd,
   valid.startConversation,

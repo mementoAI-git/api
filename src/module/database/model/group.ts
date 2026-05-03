@@ -5,6 +5,8 @@ export interface IGroup {
   id?: string;
   name: string;
   description?: string;
+  /** Display color index 0–6 (optional) */
+  color?: number;
   user: string;
   members: string[];
   created_at: string;
@@ -35,6 +37,11 @@ const group = new Schema<IGroup>(
         ref: 'beneficiary',
       },
     ],
+    color: {
+      type: Number,
+      min: 0,
+      max: 6,
+    },
   },
   {
     timestamps: {

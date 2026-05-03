@@ -19,6 +19,9 @@ export interface IPersona {
   last_summarized_at?: Date;
   last_update?: Record<string, Date>; // Per-field update timestamps
   last_summarized?: Record<string, Date>; // Per-field summarization timestamps
+  /** AI-written Memory Insights modal summary (cached). */
+  memory_insights_summary?: string;
+  memory_insights_summary_at?: Date;
   created_at: string;
   updated_at: string;
 }
@@ -55,6 +58,8 @@ const persona = new Schema<IPersona>(
       of: Date,
       default: {},
     },
+    memory_insights_summary: String,
+    memory_insights_summary_at: Date,
   },
   {
     timestamps: {

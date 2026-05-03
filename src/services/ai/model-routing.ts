@@ -10,7 +10,9 @@ export type AiTask =
   | 'chat_bootstrap'
   | 'onboarding_chat'
   | 'tags_generate'
-  | 'title_generate';
+  | 'title_generate'
+  | 'quick_capture_enrich'
+  | 'daily_prompt_generate';
 
 export interface TaskRouting {
   primaryModel: string;
@@ -43,6 +45,16 @@ const TASK_ROUTING: Record<AiTask, TaskRouting> = {
     primaryModel: OR_MODEL_TAGS_PRIMARY,
     fallbackModel: OR_MODEL_TAGS_FALLBACK,
     timeoutMs: 15_000,
+  },
+  quick_capture_enrich: {
+    primaryModel: OR_MODEL_TAGS_PRIMARY,
+    fallbackModel: OR_MODEL_TAGS_FALLBACK,
+    timeoutMs: 25_000,
+  },
+  daily_prompt_generate: {
+    primaryModel: OR_MODEL_TAGS_PRIMARY,
+    fallbackModel: OR_MODEL_TAGS_FALLBACK,
+    timeoutMs: 3000,
   },
 };
 

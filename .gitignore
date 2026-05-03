@@ -12,4 +12,5 @@ google-storage.json
 docs
 yarn.lock
 .claude
+.cursor
 .env.prod

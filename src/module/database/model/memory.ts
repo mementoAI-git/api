@@ -14,6 +14,11 @@ export interface IMemory {
   refrence: string;
   status: string | 'draft' | 'save' | 'queued' | 'on_chain' | 'deleted';
   prompt?: string;
+  /** AI daily prompt text when there is no Prompt catalog document */
+  prompt_text?: string;
+  prompt_type?: 'static' | 'ai-generated';
+  /** YYYY-MM-DD (user local) for daily reflection + chat context */
+  reflection_day_key?: string;
   session_id?: string;
   last_opened: string;
   created_at: string;
@@ -27,6 +32,12 @@ export interface IMemory {
   message_count?: number; // Track message count for summarization triggers
   last_active?: Date; // Track last activity for inactivity-based summarization
   dimensions?: string[]; // Dimensions discussed in this conversation
+  /** Deliberate vs Quick Capture flow */
+  capture_source?: 'standard' | 'quick';
+  /** AI enrichment for Quick Capture (title/tags/category) */
+  enrichment_status?: 'pending' | 'complete' | 'failed';
+  /** Display / enrichment category (e.g. life dimension label) */
+  category?: string;
 }
 
 const memory = new Schema<IMemory>(
@@ -67,6 +78,12 @@ const memory = new Schema<IMemory>(
     ],
     refrence: String,
     prompt: String,
+    prompt_text: String,
+    prompt_type: {
+      type: String,
+      enum: ['static', 'ai-generated'],
+    },
+    reflection_day_key: String,
     session_id: String,
     last_opened: Date,
     summary: {
@@ -87,6 +104,19 @@ const memory = new Schema<IMemory>(
       default: null,
     },
     dimensions: [String],
+    capture_source: {
+      type: String,
+      enum: ['standard', 'quick'],
+      default: 'standard',
+    },
+    enrichment_status: {
+      type: String,
+      enum: ['pending', 'complete', 'failed'],
+    },
+    category: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: {

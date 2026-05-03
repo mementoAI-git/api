@@ -8,6 +8,8 @@ export interface IBeneficiary {
   relationship: string;
   status: string; // pending accepted rejected
   level: number;
+  /** Display color index 0–6 (optional; clients may hash id when unset) */
+  color?: number;
   user: string;
   benefactor: string;
   accepted_at: string;
@@ -37,6 +39,11 @@ const beneficiary = new Schema<IBeneficiary>(
     level: {
       type: Number,
       default: 1,
+    },
+    color: {
+      type: Number,
+      min: 0,
+      max: 6,
     },
     accepted_at: Date,
     due_at: Date,

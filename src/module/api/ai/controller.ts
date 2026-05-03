@@ -18,6 +18,19 @@ export async function autogenerateTags(
   }
 }
 
+export async function autogenerateStoryTitle(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.autogenerateStoryTitle(req.body);
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function prompt(req: IRequest, res: Response, next: NextFunction) {
   try {
     const response = await service.prompt(req.body, req.auth.id);

@@ -57,6 +57,25 @@ export async function createMemory(
   }
 }
 
+export async function quickCaptureMemory(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const files = getFiles(req);
+    const {message, data} = await service.quickCaptureMemory(
+      req.body,
+      req.auth.id,
+      files,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getMemories(
   req: IRequest,
   res: Response,

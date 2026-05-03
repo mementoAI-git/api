@@ -11,6 +11,7 @@ export async function create(payload: CreateGroupBody, user_id: string) {
     description: payload.description?.trim() ?? '',
     user: user_id,
     members: [],
+    ...(payload.color !== undefined ? {color: payload.color} : {}),
   });
   return {message: 'Group created successfully', data};
 }
@@ -61,6 +62,9 @@ export async function update(
   }
   if (payload.description !== undefined) {
     group.description = payload.description.trim();
+  }
+  if (payload.color !== undefined) {
+    group.color = payload.color;
   }
 
   await group.save();

@@ -39,6 +39,7 @@ export async function uploadFile(
     type: result.type,
     duration,
     provider: DEFAULT_STORAGE_PROVIDER,
+    backup_url: result.url,
   };
 }
 

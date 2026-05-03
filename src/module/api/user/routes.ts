@@ -22,6 +22,7 @@ router.post(
 );
 router.post('/change-password', valid.setPassword, ctrl.setPassword);
 router.put('/profile', ctrl.updateProfile);
+router.get('/persona/memory-insights-summary', ctrl.getMemoryInsightsSummary);
 router.get('/persona', ctrl.getPersona);
 router.put('/persona', valid.updateContext, ctrl.updateContext);
 router.post(

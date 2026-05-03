@@ -40,6 +40,23 @@ export const generateTagsSchema = z.object({
     ),
 });
 
+// Suggest a title from story text and/or a draft title (add-memory flow)
+export const generateStoryTitleSchema = z.object({
+  body: z
+    .strictObject({
+      title: z.string().trim().optional(),
+      body: z.string().trim().optional(),
+    })
+    .refine(
+      data => {
+        const title = (data.title ?? '').trim();
+        const bodyText = (data.body ?? '').trim();
+        return title.length > 0 || bodyText.length > 0;
+      },
+      {message: 'Add some story text or a title to suggest from'},
+    ),
+});
+
 // Get messages by conversation (path param)
 export const getMessagesByConversationSchema = z.object({
   params: z.strictObject({
@@ -92,6 +109,9 @@ export type StartConversationBody = z.infer<
   typeof startConversationSchema
 >['body'];
 export type GenerateTagsBody = z.infer<typeof generateTagsSchema>['body'];
+export type GenerateStoryTitleBody = z.infer<
+  typeof generateStoryTitleSchema
+>['body'];
 export type GetMessagesByConversationParams = z.infer<
   typeof getMessagesByConversationSchema
 >['params'];

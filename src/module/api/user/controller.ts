@@ -135,6 +135,23 @@ export async function getPersona(
   }
 }
 
+export async function getMemoryInsightsSummary(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const refresh = req.query?.refresh === '1' || req.query?.refresh === 'true';
+    const {message, data} = await service.getMemoryInsightsSummary(
+      req.auth.id,
+      refresh,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateContext(
   req: IRequest,
   res: Response,

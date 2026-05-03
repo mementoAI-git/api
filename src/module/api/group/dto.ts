@@ -18,11 +18,14 @@ const descriptionSchema = z
   .optional()
   .default('');
 
+const colorSchema = z.number().int().min(0).max(6).optional();
+
 // Create group
 export const createGroupSchema = z.object({
   body: z.strictObject({
     name: nameSchema,
     description: descriptionSchema,
+    color: colorSchema,
   }),
 });
 
@@ -42,10 +45,17 @@ export const updateGroupSchema = z.object({
     .strictObject({
       name: nameSchema.optional(),
       description: descriptionSchema.optional(),
+      color: colorSchema,
     })
-    .refine(data => data.name !== undefined || data.description !== undefined, {
-      message: 'At least one of name or description is required',
-    }),
+    .refine(
+      data =>
+        data.name !== undefined ||
+        data.description !== undefined ||
+        data.color !== undefined,
+      {
+        message: 'At least one of name, description, or color is required',
+      },
+    ),
 });
 
 // Delete group (path param)

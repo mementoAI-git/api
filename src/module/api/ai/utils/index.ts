@@ -12,8 +12,9 @@ import {TEMP_PATH} from '../../../../utils/config';
 import dayjs from 'dayjs';
 import {isEmpty, prompts} from '../../../../utils';
 import Memory, {IMemory} from '../../../database/model/memory';
-import {getFileFromS3} from '../../../../services/storage/s3';
+import * as storage from '../../../../services/storage';
 import {Readable} from 'stream';
+import {DEFAULT_STORAGE_PROVIDER} from '../../../../utils/constant';
 import {queueSummarization} from '../../../../services/queues';
 import {
   openRouterClient,
@@ -33,16 +34,19 @@ export async function processFiles(file_ids: string[]) {
 export async function processFile(file: IFile) {
   let file_path = null;
   try {
-    // Fetch file from S3
-    const s3Response = await getFileFromS3(file.name);
+    const fileResponse = await storage.getFile(
+      file.name,
+      undefined,
+      file.provider ?? DEFAULT_STORAGE_PROVIDER,
+      file.type,
+    );
 
-    if (!s3Response.Body) {
-      throw new Error('File content not found in S3');
+    if (!fileResponse.Body) {
+      throw new Error('File content not found in storage');
     }
 
-    // Convert S3 stream to buffer
     const chunks: Uint8Array[] = [];
-    const stream = s3Response.Body as Readable;
+    const stream = fileResponse.Body as Readable;
 
     for await (const chunk of stream) {
       chunks.push(chunk);

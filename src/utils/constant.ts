@@ -126,7 +126,7 @@ export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.cloudinary;
 
 export const FREE_STORAGE_LIMIT_BYTES = 5 * 1024 ** 3; // 5 GB
 
-/** Predefined tags for story/memory auto-generation. Only these may be returned by the AI. */
+/** Predefined tags for story/memory auto-generation (modal + quick-capture enrichment). Only these; AI returns 2–3. */
 export const PREDEFINED_STORY_TAGS = [
   'family',
   'friends',
