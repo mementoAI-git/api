@@ -21,6 +21,7 @@ import {track} from '../activity/service';
 import {
   filterGenerator,
   MEMORY_STATUS,
+  MEMORY_VISIBILITY,
   emptyPaginatedList,
   isEmpty,
   STORAGE_PROVIDERS,
@@ -39,6 +40,34 @@ import * as storage from '../../../services/storage';
 import {getConversationEnrichment} from '../../../services/enrichment';
 
 export {getConversationEnrichment};
+
+function shareIdsFromMemoryDoc(field: unknown): string[] {
+  if (!Array.isArray(field) || field.length === 0) return [];
+  const out: string[] = [];
+  for (const x of field) {
+    if (typeof x === 'string') {
+      out.push(x);
+    } else if (x && typeof x === 'object' && '_id' in x) {
+      const raw = (x as {_id: unknown})._id;
+      if (raw) out.push(String(raw));
+    }
+  }
+  return out;
+}
+
+/** Specific shares always imply private visibility; everyone only when explicit and no shares. */
+function normalizeMemoryVisibility(
+  requested: unknown,
+  hasSpecificShares: boolean,
+): 'private' | 'everyone' {
+  if (hasSpecificShares) {
+    return MEMORY_VISIBILITY.PRIVATE;
+  }
+  const v = typeof requested === 'string' ? requested.toLowerCase().trim() : '';
+  return v === MEMORY_VISIBILITY.EVERYONE
+    ? MEMORY_VISIBILITY.EVERYONE
+    : MEMORY_VISIBILITY.PRIVATE;
+}
 
 export async function memoryStats(user_id: string) {
   const memory_count = await Memory.countDocuments({
@@ -109,6 +138,7 @@ export async function createMemory(
     level = 1,
     groups: groupIds = [],
     beneficiaries: beneficiaryIds = [],
+    visibility: visibilityRaw,
   } = payload;
   const user = await User.findById(user_id);
   if (!user) {
@@ -142,6 +172,13 @@ export async function createMemory(
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
 
+  const hasSpecificShares =
+    !isEmpty(validGroupIds) || !isEmpty(validBeneficiaryIds);
+  const visibility = normalizeMemoryVisibility(
+    visibilityRaw,
+    hasSpecificShares,
+  );
+
   const memory = await Memory.create({
     title,
     user: user_id,
@@ -150,6 +187,7 @@ export async function createMemory(
     status,
     tags,
     attachments,
+    visibility,
     ...(!isEmpty(validGroupIds) && {groups: validGroupIds}),
     ...(!isEmpty(validBeneficiaryIds) && {beneficiaries: validBeneficiaryIds}),
     ...(status === MEMORY_STATUS.SAVE &&
@@ -203,6 +241,13 @@ export async function quickCaptureMemory(
   const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException('User not found');
+  }
+
+  if (
+    payload.visibility !== undefined &&
+    String(payload.visibility).toLowerCase() !== MEMORY_VISIBILITY.PRIVATE
+  ) {
+    throw new BadRequestException('Quick capture stories are private only.');
   }
 
   const promptType = payload.prompt_type;
@@ -311,6 +356,7 @@ export async function quickCaptureMemory(
     type: 'story',
     capture_source: 'quick',
     enrichment_status: 'pending',
+    visibility: MEMORY_VISIBILITY.PRIVATE,
     ...promptFields,
     ...(!isEmpty(validBeneficiaryIds) && {beneficiaries: validBeneficiaryIds}),
   });
@@ -542,6 +588,7 @@ export async function updateMemory(
     level,
     groups: groupIds,
     beneficiaries: beneficiaryIds,
+    visibility: visibilityRaw,
   } = payload;
   const memory = await Memory.findOne({_id, user: user_id});
   if (!memory) {
@@ -584,6 +631,32 @@ export async function updateMemory(
   }
   if (beneficiaryIds !== undefined) {
     setPayload.beneficiaries = resolvedBeneficiaryIds;
+  }
+
+  const effectiveGroupIds =
+    resolvedGroupIds !== undefined
+      ? resolvedGroupIds
+      : shareIdsFromMemoryDoc(memory.get('groups'));
+  const effectiveBenIds =
+    resolvedBeneficiaryIds !== undefined
+      ? resolvedBeneficiaryIds
+      : shareIdsFromMemoryDoc(memory.get('beneficiaries'));
+  const hasSpecificShares =
+    !isEmpty(effectiveGroupIds) || !isEmpty(effectiveBenIds);
+
+  const shouldNormalizeVisibility =
+    visibilityRaw !== undefined ||
+    groupIds !== undefined ||
+    beneficiaryIds !== undefined;
+  if (shouldNormalizeVisibility) {
+    const requested =
+      visibilityRaw !== undefined
+        ? visibilityRaw
+        : (memory.visibility ?? MEMORY_VISIBILITY.PRIVATE);
+    setPayload.visibility = normalizeMemoryVisibility(
+      requested,
+      hasSpecificShares,
+    );
   }
 
   const updatedMemory = await Memory.findByIdAndUpdate(
