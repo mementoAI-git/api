@@ -152,6 +152,10 @@ export async function createMemory(
     attachments,
     ...(!isEmpty(validGroupIds) && {groups: validGroupIds}),
     ...(!isEmpty(validBeneficiaryIds) && {beneficiaries: validBeneficiaryIds}),
+    ...(status === MEMORY_STATUS.SAVE &&
+      body &&
+      body.trim().length > 0 &&
+      tags.length === 0 && {enrichment_status: 'pending'}),
   });
 
   // Track activity
@@ -171,6 +175,12 @@ export async function createMemory(
   if (isStory && status === 'save' && body && body.trim().length > 0) {
     void queueStoryInsights(user_id, memory.id);
     void queueSummarization(memory.id, 'story');
+    if ((memory.tags?.length || 0) === 0) {
+      void queueQuickCaptureEnrichment({
+        user_id,
+        memory_id: memory.id,
+      });
+    }
   }
 
   void updateStreak(user_id);
@@ -595,6 +605,19 @@ export async function updateMemory(
   if (hasChanges && updatedMemory?.status === MEMORY_STATUS.SAVE) {
     void queueStoryInsights(user_id, updatedMemory.id);
     void queueSummarization(updatedMemory.id, 'story');
+    if (
+      (updatedMemory.tags?.length || 0) === 0 &&
+      updatedMemory.body &&
+      updatedMemory.body.trim().length > 0
+    ) {
+      await Memory.findByIdAndUpdate(updatedMemory.id, {
+        enrichment_status: 'pending',
+      });
+      void queueQuickCaptureEnrichment({
+        user_id,
+        memory_id: updatedMemory.id,
+      });
+    }
   }
 
   await track(
