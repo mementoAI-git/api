@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import dayjs from 'dayjs';
 import User, {IUser} from '../../database/model/user';
-import Persona, {IPersona} from '../../database/model/persona';
+import Persona from '../../database/model/persona';
 import Memory from '../../database/model/memory';
 import Message from '../../database/model/message';
 import {
@@ -36,19 +36,11 @@ import {
 } from '../../../utils/ai-prompt/memory-insights-summary-prompt';
 import {OnboardingChatPromptBody} from './dto';
 import gemini, {GEMINI_MODEL} from '../../../services/gemini';
-import {
-  openRouterClient,
-  streamTextWithFallback,
-  OpenRouterMessage,
-} from '../../../services/ai/openrouter';
-import {
-  groqClient,
-  GroqMessage,
-  streamTextWithGroqFallback,
-} from '../../../services/ai/groq';
+import type {OpenRouterMessage} from '../../../services/ai/openrouter';
 import {recordAiMetric} from '../../../services/ai/metrics';
+import {streamCriticalChatResponse} from '../../../services/ai/critical-chat-stream';
+import type {GroqMessage} from '../../../services/ai/groq';
 import {getPromptVersion} from '../../../utils/ai-prompt/registry';
-import {OPENROUTER_CRITICAL_ENABLED} from '../../../utils/config';
 import {
   computeEnrichmentScore,
   getMilestone,
@@ -727,46 +719,6 @@ function buildOnboardingSystemPrompt(nickname: string) {
   ].join(' ');
 }
 
-const GROQ_ONBOARDING_MAX_CONTEXT_CHARS = 18000;
-const GROQ_ONBOARDING_RECENT_TURNS = 10;
-
-function compactText(text: string, maxChars: number) {
-  if (!text) return '';
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, maxChars)}...`;
-}
-
-function buildGroqOnboardingMessages(messages: GroqMessage[]) {
-  const older = messages.slice(
-    0,
-    Math.max(0, messages.length - GROQ_ONBOARDING_RECENT_TURNS),
-  );
-  const recent = messages.slice(-GROQ_ONBOARDING_RECENT_TURNS);
-
-  if (older.length === 0) return recent;
-
-  const summary = older
-    .slice(-6)
-    .map(m => `${m.role}: ${compactText(m.content, 200)}`)
-    .join('\n');
-
-  const summaryMsg: GroqMessage = {
-    role: 'assistant',
-    content: compactText(
-      `Compressed context from earlier onboarding turns:\n${summary}`,
-      1200,
-    ),
-  };
-
-  const assembled = [summaryMsg.content, ...recent.map(m => m.content)].join(
-    '\n',
-  );
-  if (assembled.length > GROQ_ONBOARDING_MAX_CONTEXT_CHARS) {
-    return recent.slice(-6);
-  }
-  return [summaryMsg, ...recent];
-}
-
 function buildOnboardingTrailer(
   messageCount: number,
   latestUserMessage: string,
@@ -862,49 +814,36 @@ export async function streamOnboardingChatPrompt(
     prompt_version: ONBOARDING_PROMPT_VERSION,
   });
   const shouldBootstrap = Boolean(payload.bootstrap && transcript.length === 0);
-  const modelMessages: OpenRouterMessage[] = shouldBootstrap
-    ? [
-        {role: 'system', content: systemPrompt},
-        {
-          role: 'user',
-          content: `Start the onboarding chat with a warm opener for ${payload.nickname || 'the host'}.`,
-        },
-      ]
-    : [{role: 'system', content: systemPrompt}, ...historyMessages];
 
-  let stream: AsyncGenerator<{text?: string}, void, unknown>;
-  let provider = 'groq';
-  let effectiveModel = '';
-  let usedFallback = false;
-  let streamConnectMs = 0;
+  const bootstrapUserLine = `Start the onboarding chat with a warm opener for ${payload.nickname || 'the host'}.`;
 
-  try {
-    const groqMessages = buildGroqOnboardingMessages(
-      modelMessages as GroqMessage[],
-    );
-    const groqResult = await streamTextWithGroqFallback({
-      messages: groqMessages,
-      temperature: 0.7,
-      timeoutMs: 15_000,
-    });
-    provider = 'groq';
-    stream = groqResult.stream;
-    effectiveModel = groqResult.effectiveModel;
-    usedFallback = groqResult.usedFallback;
-    streamConnectMs = Date.now() - requestStart;
-    void recordAiMetric({
-      event: 'ai_route',
-      task: 'onboarding_chat',
-      endpoint: '/users/onboarding/chat/prompt',
-      provider: 'groq',
-      model: effectiveModel,
-      user: user_id,
-      memory: String(memory.id),
-      used_fallback: usedFallback,
-      stream_connect_ms: streamConnectMs,
-    });
-  } catch (error) {
-    try {
+  const lines = transcript.filter(
+    m => m.role === 'user' || m.role === 'assistant',
+  );
+  const lastLine = lines[lines.length - 1];
+  const priorLines = shouldBootstrap ? [] : lines.slice(0, -1);
+  const latestUserText = shouldBootstrap
+    ? bootstrapUserLine
+    : lastLine?.role === 'user'
+      ? (lastLine.content || '').trim()
+      : latestUserMessage || 'Continue the onboarding conversation naturally.';
+
+  const groqHistory: GroqMessage[] = priorLines.map(m => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: m.content,
+  }));
+
+  const routing = await streamCriticalChatResponse({
+    userId: user_id,
+    requestStart,
+    userTextForGroqRouting: latestUserText,
+    systemInstruction: systemPrompt,
+    groqHistory,
+    latestUserText,
+    task: 'onboarding_chat',
+    metricsEndpoint: '/users/onboarding/chat/prompt',
+    memoryIdForMetrics: String(memory.id),
+    createGeminiStream: async () => {
       const chat = gemini.chats.create({
         model: GEMINI_MODEL,
         config: {systemInstruction: systemPrompt},
@@ -912,74 +851,29 @@ export async function streamOnboardingChatPrompt(
           transcript as Array<{role: 'user' | 'assistant'; content: string}>,
         ),
       });
-
       const latestPrompt = shouldBootstrap
-        ? `Start the onboarding chat with a warm opener for ${payload.nickname || 'the host'}.`
+        ? bootstrapUserLine
         : latestUserMessage ||
           'Continue the onboarding conversation naturally.';
-      const geminiResult = await chat.sendMessageStream({
+      return chat.sendMessageStream({
         message: latestPrompt,
       });
-
-      provider = 'gemini';
-      stream = geminiResult as AsyncGenerator<{text?: string}, void, unknown>;
-      effectiveModel = GEMINI_MODEL;
-      usedFallback = true;
-      streamConnectMs = Date.now() - requestStart;
-      void recordAiMetric({
-        event: 'ai_route',
-        task: 'onboarding_chat',
-        endpoint: '/users/onboarding/chat/prompt',
-        provider: 'gemini',
-        model: GEMINI_MODEL,
-        user: user_id,
-        memory: String(memory.id),
-        used_fallback: true,
-        stream_connect_ms: streamConnectMs,
-      });
-    } catch (geminiError) {
-      if (!OPENROUTER_CRITICAL_ENABLED || !openRouterClient.isConfigured()) {
-        throw geminiError;
-      }
-
-      const openrouterResult = await streamTextWithFallback({
-        task: 'onboarding_chat',
-        messages: modelMessages,
-        temperature: 0.7,
-      });
-      provider = 'openrouter';
-      stream = openrouterResult.stream;
-      effectiveModel = openrouterResult.effectiveModel;
-      usedFallback = openrouterResult.usedFallback;
-      streamConnectMs = openrouterResult.streamConnectMs;
-      void recordAiMetric({
-        event: 'ai_route',
-        task: 'onboarding_chat',
-        endpoint: '/users/onboarding/chat/prompt',
-        provider: 'openrouter',
-        model: effectiveModel,
-        user: user_id,
-        memory: String(memory.id),
-        used_fallback: usedFallback,
-        stream_connect_ms: streamConnectMs,
-      });
-    }
-  }
-
-  console.log('AI routing', {
-    task: 'onboarding_chat',
-    provider,
-    effectiveModel,
-    usedFallback,
-    streamConnectMs,
-    requestSetupMs: Date.now() - requestStart,
+    },
+    buildOpenRouterMessages: () =>
+      shouldBootstrap
+        ? [
+            {role: 'system', content: systemPrompt},
+            {role: 'user', content: bootstrapUserLine},
+          ]
+        : [{role: 'system', content: systemPrompt}, ...historyMessages],
   });
 
   return {
-    stream,
+    stream: routing.stream,
     memoryId: String(memory.id),
     latestUserMessage,
     trailer: buildOnboardingTrailer(messageCount, latestUserMessage),
+    skipPersistence: routing.recordUserMessageInDb === false,
   };
 }
 

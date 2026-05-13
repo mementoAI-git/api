@@ -237,10 +237,12 @@ export async function onboardingChatPrompt(
 ) {
   try {
     const requestStart = Date.now();
-    const {stream, memoryId, latestUserMessage, trailer} =
+    const {stream, memoryId, latestUserMessage, trailer, skipPersistence} =
       await service.streamOnboardingChatPrompt(req.body, req.auth!.id);
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    /** Avoid reverse-proxy buffering so the browser receives incremental chunks */
+    res.setHeader('X-Accel-Buffering', 'no');
     let assistantText = '';
 
     try {
@@ -257,12 +259,14 @@ export async function onboardingChatPrompt(
       });
       res.write('I hit a temporary issue. Please try again.');
     } finally {
-      await service.persistOnboardingChatTurn(
-        req.auth!.id,
-        memoryId,
-        latestUserMessage,
-        assistantText,
-      );
+      if (!skipPersistence) {
+        await service.persistOnboardingChatTurn(
+          req.auth!.id,
+          memoryId,
+          latestUserMessage,
+          assistantText,
+        );
+      }
       res.write(`\n__MEMENTO_ONBOARDING__${JSON.stringify(trailer)}`);
       res.end();
       console.log('Onboarding stream complete', {
