@@ -9,6 +9,8 @@ export interface ICreateMemoryPayload {
   groups?: string[];
   /** Beneficiary IDs who have access. */
   beneficiaries?: string[];
+  /** Explicit visibility; omitted or invalid defaults to private. */
+  visibility?: 'private' | 'everyone';
 }
 
 export interface IAddMessageToMemory {
@@ -41,4 +43,6 @@ export interface IQuickCapturePayload {
   prompt_type?: 'static' | 'ai-generated';
   /** YYYY-MM-DD (user local) from dashboard */
   reflection_day_key?: string;
+  /** Only `private` allowed; reject others in service. */
+  visibility?: string;
 }

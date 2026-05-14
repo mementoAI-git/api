@@ -109,6 +109,12 @@ export const MEMORY_STATUS = {
   DELETED: 'deleted',
 };
 
+/** Story visibility: explicit `everyone` requires client flag; default is private. */
+export const MEMORY_VISIBILITY = {
+  PRIVATE: 'private',
+  EVERYONE: 'everyone',
+} as const;
+
 export const PERSONA_INSIGHT_FIELDS = [
   'important_notes',
   'key_preferences',

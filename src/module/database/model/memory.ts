@@ -38,6 +38,8 @@ export interface IMemory {
   enrichment_status?: 'pending' | 'complete' | 'failed';
   /** Display / enrichment category (e.g. life dimension label) */
   category?: string;
+  /** Who can discover the story; default private. `everyone` must be sent explicitly. */
+  visibility?: 'private' | 'everyone';
 }
 
 const memory = new Schema<IMemory>(
@@ -116,6 +118,11 @@ const memory = new Schema<IMemory>(
     category: {
       type: String,
       default: null,
+    },
+    visibility: {
+      type: String,
+      enum: ['private', 'everyone'],
+      default: 'private',
     },
   },
   {

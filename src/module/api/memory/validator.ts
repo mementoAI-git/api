@@ -78,6 +78,10 @@ export default {
       .optional()
       .matches(/^\d{4}-\d{2}-\d{2}$/)
       .withMessage('reflection_day_key must be YYYY-MM-DD'),
+    body('visibility')
+      .optional()
+      .isIn(['private'])
+      .withMessage("visibility must be 'private' for quick capture"),
   ],
   createMemory: [
     body('title')
@@ -116,6 +120,10 @@ export default {
       .optional()
       .isString()
       .withMessage('Each tag must be a string'),
+    body('visibility')
+      .optional()
+      .isIn(['private', 'everyone'])
+      .withMessage("visibility must be 'private' or 'everyone'"),
   ],
   updateMemory: [
     param('id')
@@ -158,6 +166,10 @@ export default {
       .toInt(),
     body('title').optional().isString().withMessage('Title must be a string'),
     body('body').optional().isString().withMessage('Body must be a string'),
+    body('visibility')
+      .optional()
+      .isIn(['private', 'everyone'])
+      .withMessage("visibility must be 'private' or 'everyone'"),
   ],
   removeFileFromMemory: [
     param('id')

@@ -17,6 +17,7 @@ import {
   normalizeForDedupe,
   setCachedAiPrompt,
 } from './daily-ai-prompt';
+import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
 
 dayjs.extend(utc);
 
@@ -323,6 +324,23 @@ export const replyPrompt = async (
   });
   if (activePrompt) {
     await ActivePrompt.findByIdAndUpdate(activePrompt.id, {memory: memory.id});
+  }
+
+  const hasBody = Boolean(
+    memory?.body && String(memory.body).trim().length > 0,
+  );
+  const hasNoTags = (memory?.tags?.length || 0) === 0;
+  const isSaved = memory?.status && memory.status !== 'draft';
+  const isStory = !memory?.type || memory.type === 'story';
+
+  if (isSaved && isStory && hasBody && hasNoTags) {
+    await Memory.findByIdAndUpdate(memory.id, {
+      enrichment_status: 'pending',
+    });
+    void queueQuickCaptureEnrichment({
+      user_id,
+      memory_id: memory.id,
+    });
   }
 
   void updateStreak(user_id);
