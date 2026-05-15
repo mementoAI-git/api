@@ -1,0 +1,11 @@
+---
+description: Keep validators, DTOs, and API contracts aligned
+alwaysApply: true
+---
+
+# Validation and Contracts
+
+- Validate request input at the route boundary.
+- Keep `validator.ts`, `dto.ts`, controller expectations, and service inputs aligned.
+- When changing request or response shapes, update the contract explicitly instead of letting shapes drift implicitly.
+- Prefer small, predictable API contract changes over hidden field additions or removals.
