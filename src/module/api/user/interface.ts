@@ -12,6 +12,16 @@ export interface ICompleteOnboardingPayload {
   current_priority?: string[];
   dob?: string;
   join_reasons?: string[];
+  stepReached?: number;
+  lifeSituation?: string;
+  lifeSituationDetail?: string;
+  personalityTraits?: string[];
+  memoryTreasures?: string[];
+  chronotype?: string;
+  sharingIntent?: string;
+  motivationType?: string;
+  motivationDetail?: string;
+  skippedDeepPersonalization?: boolean;
 }
 
 export interface IUpdateContext {
