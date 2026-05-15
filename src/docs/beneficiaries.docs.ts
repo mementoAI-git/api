@@ -522,6 +522,105 @@ const beneficiariesDocs = {
       },
     },
   },
+  '/beneficiaries/invite/resend': {
+    post: {
+      tags: ['Beneficiaries'],
+      summary: 'Resend Invitation',
+      description: 'Resend invitation email to a beneficiary',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['beneficiary_id'],
+              properties: {beneficiary_id: {type: 'string'}},
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Invitation resent',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  message: {type: 'string'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/beneficiaries/invite/accept': {
+    post: {
+      tags: ['Beneficiaries'],
+      summary: 'Accept Invitation',
+      description: 'Accept a beneficiary invitation using a token',
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['token'],
+              properties: {token: {type: 'string'}},
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Invitation accepted',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/beneficiaries/invite/{id}': {
+    get: {
+      tags: ['Beneficiaries'],
+      summary: 'Get Invite Details',
+      description: 'Retrieve details of an invitation by its token/id',
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Invite details retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'object'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
 };
 
 export default beneficiariesDocs;

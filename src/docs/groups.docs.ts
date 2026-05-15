@@ -510,6 +510,176 @@ const groupsDocs = {
       },
     },
   },
+  '/groups/search': {
+    get: {
+      tags: ['Groups'],
+      summary: 'Search Groups',
+      description: 'Search for groups by name or metadata',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'query',
+          in: 'query',
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Search results',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'array', items: {type: 'object'}},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/groups/{id}': {
+    get: {
+      tags: ['Groups'],
+      summary: 'Get Group Details',
+      description: 'Retrieve details of a specific group and its members',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Group details retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'object'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    put: {
+      tags: ['Groups'],
+      summary: 'Update Group',
+      description: 'Update group metadata or name',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {name: {type: 'string'}},
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Group updated',
+        },
+      },
+    },
+    delete: {
+      tags: ['Groups'],
+      summary: 'Delete Group',
+      description: 'Permanently delete a group',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Group deleted',
+        },
+      },
+    },
+  },
+  '/groups/{id}/members': {
+    post: {
+      tags: ['Groups'],
+      summary: 'Add Members to Group',
+      description: 'Add one or more beneficiaries to a group',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['beneficiary_ids'],
+              properties: {beneficiary_ids: {type: 'array', items: {type: 'string'}}},
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Members added',
+        },
+      },
+    },
+  },
+  '/groups/{id}/members/{beneficiaryId}': {
+    delete: {
+      tags: ['Groups'],
+      summary: 'Remove Member from Group',
+      description: 'Remove a specific beneficiary from a group',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+        {
+          name: 'beneficiaryId',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Member removed',
+        },
+      },
+    },
+  },
 };
 
 export default groupsDocs;

@@ -534,6 +534,129 @@ const aiDocs = {
       },
     },
   },
+  '/ai/generate-story-title': {
+    post: {
+      tags: ['AI'],
+      summary: 'Auto-generate story title',
+      description: 'Generate a catchy title for a story/memory from its body content.',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['body'],
+              properties: {
+                body: {type: 'string', example: 'The story content...'},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Title generated successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'object', properties: {title: {type: 'string'}}},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/ai/ephemeral-token': {
+    get: {
+      tags: ['AI'],
+      summary: 'Get Live Ephemeral Token',
+      description: 'Get an ephemeral token for real-time AI interactions (e.g., LiveKit/WebRTC).',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Token retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'object', properties: {token: {type: 'string'}}},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/ai/voices': {
+    get: {
+      tags: ['AI'],
+      summary: 'Get Available Voices',
+      description: 'List available AI voices for text-to-speech.',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Voices retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'array', items: {type: 'object'}},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/ai/voice-preview': {
+    post: {
+      tags: ['AI'],
+      summary: 'Get Voice Preview',
+      description: 'Generate a short audio preview of a specific voice.',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['voice_id', 'text'],
+              properties: {
+                voice_id: {type: 'string'},
+                text: {type: 'string'},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Preview generated',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'object', properties: {url: {type: 'string'}}},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
 };
 
 export default aiDocs;
