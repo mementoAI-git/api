@@ -619,10 +619,10 @@ const usersDocs = {
                   example: 'I am a software developer',
                 },
                 current_priority: {
-                  type: 'string',
-                  maxLength: 200,
-                  description: 'Current priority',
-                  example: 'Learning new technologies',
+                  type: 'array',
+                  items: {type: 'string'},
+                  description: 'Current priorities',
+                  example: ['Learning new technologies', 'Writing memories'],
                 },
                 dob: {
                   type: 'string',
@@ -804,8 +804,14 @@ const usersDocs = {
             schema: {
               type: 'object',
               properties: {
-                self_description: {type: 'string'},
                 important_notes: {type: 'array', items: {type: 'string'}},
+                key_preferences: {type: 'array', items: {type: 'string'}},
+                conversation_history_summary: {type: 'string'},
+                emotional_state_trends: {type: 'array', items: {type: 'string'}},
+                goals_and_aspirations: {type: 'array', items: {type: 'string'}},
+                self_description: {type: 'string', maxLength: 500},
+                current_priority: {type: 'array', items: {type: 'string'}},
+                join_reasons: {type: 'array', items: {type: 'string'}},
               },
             },
           },
