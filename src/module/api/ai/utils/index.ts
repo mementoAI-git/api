@@ -81,10 +81,18 @@ export async function processFile(file: IFile) {
 }
 
 export function createChatHistory(messages: IMessage[]) {
-  return messages.map(m => ({
-    role: m.role === 'ai' ? 'model' : 'user',
-    parts: [{text: m.text}],
-  }));
+  return messages
+    .map(m => {
+      let text = m.text || '';
+      if (!text && !isEmpty(m.attatchments)) {
+        text = '[Attached files]';
+      }
+      return {
+        role: m.role === 'ai' ? 'model' : 'user',
+        parts: [{text}],
+      };
+    })
+    .filter(h => h.parts[0].text.trim().length > 0);
 }
 
 export async function generateConversationTitle(

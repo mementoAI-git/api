@@ -13,7 +13,7 @@ export default async function summarizeStory(memoryId: string): Promise<void> {
     const {text, processedImages, hasAttachments, hasTranscription} =
       await buildMemoryContent(memory);
 
-    const prompt = prompts.buildSummarizationPrompt(
+    const prompt = prompts.buildStorySummarizationPrompt(
       hasAttachments,
       hasTranscription,
     );

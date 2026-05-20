@@ -60,7 +60,7 @@ export const ASR_FALLBACK_PROVIDER = (
   process.env.ASR_FALLBACK_PROVIDER || 'gemini_fallback'
 ).toLowerCase();
 export const ASR_GEMINI_PRIMARY_MODEL =
-  process.env.ASR_GEMINI_PRIMARY_MODEL || 'gemini-2.0-flash';
+  process.env.ASR_GEMINI_PRIMARY_MODEL || 'gemini-2.5-flash';
 export const ASR_GEMINI_FALLBACK_MODEL =
   process.env.ASR_GEMINI_FALLBACK_MODEL || ASR_GEMINI_PRIMARY_MODEL;
 export const ASR_SHADOW_ENABLED = process.env.ASR_SHADOW_ENABLED === 'true';

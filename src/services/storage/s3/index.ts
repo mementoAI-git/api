@@ -97,7 +97,7 @@ export async function uploadToS3(
   let location = '';
   if (target === 'primary') {
     location = CLOUDFLARE_R2_ACCOUNT_ID
-      ? `https://${bucket}.r2.cloudflarestorage.com/${key}`
+      ? `https://${CLOUDFLARE_R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket}/${key}`
       : `https://${bucket}.s3.${AWS_REGION}.amazonaws.com/${key}`;
   } else {
     location = `${HETZNER_ENDPOINT || 'https://s3.amazonaws.com'}/${bucket}/${key}`;
