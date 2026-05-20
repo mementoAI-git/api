@@ -411,51 +411,6 @@ const filesDocs = {
       },
     },
   },
-  '/files/{name}': {
-    get: {
-      tags: ['Files'],
-      summary: 'Get File by Name',
-      description: 'Retrieve a file by its unique name/identifier',
-      parameters: [
-        {
-          name: 'name',
-          in: 'path',
-          required: true,
-          schema: {type: 'string'},
-        },
-      ],
-      responses: {
-        200: {
-          description: 'File found',
-        },
-        404: {
-          description: 'File not found',
-        },
-      },
-    },
-    delete: {
-      tags: ['Files'],
-      summary: 'Delete File',
-      description: 'Permanently delete an uploaded file',
-      security: [{bearerAuth: []}],
-      parameters: [
-        {
-          name: 'name',
-          in: 'path',
-          required: true,
-          schema: {type: 'string'},
-        },
-      ],
-      responses: {
-        200: {
-          description: 'File deleted',
-        },
-        404: {
-          description: 'File not found',
-        },
-      },
-    },
-  },
 };
 
 export default filesDocs;
