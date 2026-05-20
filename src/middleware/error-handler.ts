@@ -24,10 +24,36 @@ const errorHandler = (
 
   const stackLines = err?.stack?.split('\n');
   const path = stackLines?.[1]?.trim() || err;
-  const message = stackLines?.[0]?.trim() || err;
+  
+  // Extract a clean message, falling back to err.code or stack if err.message is generic/empty
+  let message = err?.message || stackLines?.[0]?.trim() || String(err);
+  if (message === 'Error' && err?.code) {
+    message = `${err.code}: File upload error`;
+  }
 
   const error_payload = {request, message, path, stackLines};
 
+  // Intercept and cleanly handle Multer/upload limit errors
+  const isMulterError =
+    err?.name === 'MulterError' ||
+    err?.code?.startsWith('LIMIT_') ||
+    err?.code === 'MISSING_FIELD_NAME' ||
+    (err && 'storageErrors' in err);
+
+  if (isMulterError) {
+    const statusCode = err.code === 'LIMIT_FILE_SIZE'
+      ? StatusCodes.REQUEST_TOO_LONG // 413 Payload Too Large
+      : StatusCodes.BAD_REQUEST;      // 400 Bad Request
+      
+    const msg = (err.message && err.message !== 'Error')
+      ? err.message
+      : (err.code === 'LIMIT_FILE_SIZE' ? 'File too large' : 'File upload limit exceeded');
+
+    logger.warn(error_payload, 'Multer file upload limit exceeded');
+    return responsHandler(res, statusCode, msg);
+  }
+
+  // Log actual unexpected/internal errors as ERROR
   logger.error(error_payload, 'Error occurred');
 
   if (err instanceof ServiceError) {
