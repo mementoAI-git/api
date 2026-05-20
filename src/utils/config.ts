@@ -125,10 +125,19 @@ export const SUPPORT_MAILS = process.env.SUPPORT_MAILS?.split(',') || [];
 
 export const TEMP_PATH = process.env.TEMP_PATH ?? os.tmpdir();
 
-export const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+export const CLOUDFLARE_R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID;
+export const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID;
+export const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+export const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME;
+export const AWS_REGION = process.env.AWS_REGION || 'auto';
 export const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 export const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 export const AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
+
+export const HETZNER_ENDPOINT = process.env.HETZNER_ENDPOINT;
+export const HETZNER_ACCESS_KEY_ID = process.env.HETZNER_ACCESS_KEY_ID;
+export const HETZNER_SECRET_ACCESS_KEY = process.env.HETZNER_SECRET_ACCESS_KEY;
+export const HETZNER_BUCKET_NAME = process.env.HETZNER_BUCKET_NAME;
 
 /** Optional: legacy GCS reads / backup worker only (uploads use Cloudinary). */
 export const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
