@@ -4,6 +4,7 @@ import {BACKEND_URL, CLOUDINARY_CLOUD_NAME} from '../../../utils/config';
 import {
   DEFAULT_STORAGE_PROVIDER,
   STORAGE_PROVIDERS,
+  EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils/constant';
 
 export interface ITranscriptionSegment {
@@ -114,7 +115,7 @@ file.statics.findActiveOne = function (
       $and: [
         {
           deleted: {$ne: true},
-          provider: {$ne: STORAGE_PROVIDERS.s3},
+          provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
         },
         filter,
       ],

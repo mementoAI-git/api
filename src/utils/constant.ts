@@ -128,7 +128,12 @@ export const STORAGE_PROVIDERS = {
   cloudinary: 'cloudinary',
 } as const;
 
-export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.cloudinary;
+export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.s3;
+
+export const EXCLUDED_STORAGE_PROVIDER =
+  DEFAULT_STORAGE_PROVIDER === STORAGE_PROVIDERS.s3
+    ? STORAGE_PROVIDERS.gcs
+    : STORAGE_PROVIDERS.s3;
 
 export const FREE_STORAGE_LIMIT_BYTES = 5 * 1024 ** 3; // 5 GB
 

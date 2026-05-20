@@ -27,6 +27,7 @@ import {
   STORAGE_PROVIDERS,
   formatBytes,
   FREE_STORAGE_LIMIT_BYTES,
+  EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils';
 import Prompt from '../../database/model/prompt';
 import {updateStreak} from '../user/service';
@@ -101,7 +102,7 @@ export async function memoryStats(user_id: string) {
   const media_count = await File.countDocuments({
     user: user_id,
     deleted: false,
-    provider: {$ne: STORAGE_PROVIDERS.s3},
+    provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
   });
 
   const user = await User.findById(user_id).select('storage_limit').lean();
@@ -424,7 +425,7 @@ async function paginateMemories(
       {
         path: 'attachments',
         select: '-base64',
-        match: {provider: {$ne: 's3'}},
+        match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
       },
       {path: 'prompt', select: 'title'},
       {path: 'groups', select: 'name description'},
@@ -530,7 +531,7 @@ export async function getMemory(_id: string, user_id: string = null) {
     .populate({
       path: 'attachments',
       select: '-base64',
-      match: {provider: {$ne: 's3'}},
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     })
     .populate({path: 'groups', select: 'name description'})
     .populate({path: 'beneficiaries', select: 'name email relationship'});

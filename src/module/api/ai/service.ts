@@ -18,6 +18,7 @@ import User from '../../database/model/user';
 import dayjs from 'dayjs';
 import {prompts} from '../../../utils';
 import Memory from '../../database/model/memory';
+import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
 import {
   triggerSummarization,
   createChatHistory,
@@ -472,7 +473,7 @@ export async function getUserMessages(
     .populate({
       path: 'attatchments',
       select: '-base64',
-      match: {provider: {$ne: 's3'}},
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     })
     .limit(fetch_limit);
 
@@ -508,7 +509,7 @@ export async function getUserMessagesByConversation(
     .populate({
       path: 'attatchments',
       select: '-base64',
-      match: {provider: {$ne: 's3'}},
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     })
     .limit(fetch_limit);
 
