@@ -538,7 +538,8 @@ const aiDocs = {
     post: {
       tags: ['AI'],
       summary: 'Auto-generate story title',
-      description: 'Generate a catchy title for a story/memory from its body content.',
+      description:
+        'Generate a catchy title for a story/memory from its body content.',
       security: [{bearerAuth: []}],
       requestBody: {
         content: {
@@ -575,7 +576,8 @@ const aiDocs = {
     get: {
       tags: ['AI'],
       summary: 'Get Live Ephemeral Token',
-      description: 'Get an ephemeral token for real-time AI interactions (e.g., LiveKit/WebRTC).',
+      description:
+        'Get an ephemeral token for real-time AI interactions (e.g., LiveKit/WebRTC).',
       security: [{bearerAuth: []}],
       responses: {
         200: {

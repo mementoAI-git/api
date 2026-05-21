@@ -420,7 +420,8 @@ const promptsDocs = {
     get: {
       tags: ['Prompts'],
       summary: 'Get Suggestions Overview',
-      description: 'Get an overview of prompt suggestions grouped by category or theme',
+      description:
+        'Get an overview of prompt suggestions grouped by category or theme',
       security: [{bearerAuth: []}],
       responses: {
         200: {

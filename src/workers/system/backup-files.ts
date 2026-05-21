@@ -78,7 +78,7 @@ async function backupToHetzner(file: IFile): Promise<void> {
     throw new Error('File not found on R2 primary storage');
   }
   const buffer = await streamToBuffer(response.Body as Readable);
-  
+
   // Upload to Hetzner (backup target)
   await uploadToS3(
     file.name,

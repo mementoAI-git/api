@@ -17,4 +17,3 @@ export const GEMINI_MODEL = GEMINI_MODEL_VERSION;
 export const GEMINI_LIVE_MODEL = GEMINI_LIVE_MODEL_VERSION;
 
 export default gemini;
-

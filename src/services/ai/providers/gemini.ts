@@ -19,7 +19,7 @@ export class GeminiProvider implements AIProvider {
 
     // Map user/assistant messages into proper multi-turn content for the SDK
     const contents = userMessages.map(m => ({
-      role: m.role === 'assistant' ? 'model' as const : 'user' as const,
+      role: m.role === 'assistant' ? ('model' as const) : ('user' as const),
       parts: [{text: m.content}],
     }));
 
@@ -36,4 +36,3 @@ export class GeminiProvider implements AIProvider {
     return response.text;
   }
 }
-

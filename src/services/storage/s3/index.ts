@@ -29,7 +29,8 @@ export const cloudflareClient = new S3Client({
     : undefined,
   credentials: {
     accessKeyId: CLOUDFLARE_R2_ACCESS_KEY_ID || AWS_ACCESS_KEY_ID || 'dummy',
-    secretAccessKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY || AWS_SECRET_ACCESS_KEY || 'dummy',
+    secretAccessKey:
+      CLOUDFLARE_R2_SECRET_ACCESS_KEY || AWS_SECRET_ACCESS_KEY || 'dummy',
   },
 });
 
@@ -68,7 +69,8 @@ export function getStorageTarget(target: 'primary' | 'backup' = 'primary') {
   }
   return {
     client: cloudflareClient,
-    bucket: CLOUDFLARE_R2_BUCKET_NAME || AWS_S3_BUCKET_NAME || 'dummy-primary-bucket',
+    bucket:
+      CLOUDFLARE_R2_BUCKET_NAME || AWS_S3_BUCKET_NAME || 'dummy-primary-bucket',
   };
 }
 

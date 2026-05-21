@@ -3,7 +3,8 @@ const billingDocs = {
     get: {
       tags: ['Billing'],
       summary: 'Get Subscription Summary',
-      description: 'Retrieve current subscription status, tier, and renewal information',
+      description:
+        'Retrieve current subscription status, tier, and renewal information',
       security: [{bearerAuth: []}],
       responses: {
         200: {
@@ -20,7 +21,11 @@ const billingDocs = {
                       tier: {type: 'string', example: 'pro'},
                       status: {type: 'string', example: 'active'},
                       current_period_end: {type: 'string', format: 'date-time'},
-                      trial_ends_at: {type: 'string', format: 'date-time', nullable: true},
+                      trial_ends_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        nullable: true,
+                      },
                       provider: {type: 'string', example: 'polar'},
                       currency: {type: 'string', example: 'USD'},
                       usage: {
@@ -46,7 +51,8 @@ const billingDocs = {
     get: {
       tags: ['Billing'],
       summary: 'Get Usage Statistics',
-      description: 'Retrieve resource usage against plan limits (e.g., storage, AI messages)',
+      description:
+        'Retrieve resource usage against plan limits (e.g., storage, AI messages)',
       security: [{bearerAuth: []}],
       responses: {
         200: {
@@ -83,7 +89,10 @@ const billingDocs = {
                 success_url: {type: 'string', format: 'uri'},
                 cancel_url: {type: 'string', format: 'uri'},
                 tier: {type: 'string', enum: ['free', 'pro', 'legacy']},
-                interval: {type: 'string', enum: ['monthly', 'annual', 'lifetime']},
+                interval: {
+                  type: 'string',
+                  enum: ['monthly', 'annual', 'lifetime'],
+                },
               },
             },
           },
@@ -116,7 +125,8 @@ const billingDocs = {
     post: {
       tags: ['Billing'],
       summary: 'Create Customer Portal Session',
-      description: 'Create a Polar customer portal session for managing payments and subscriptions',
+      description:
+        'Create a Polar customer portal session for managing payments and subscriptions',
       security: [{bearerAuth: []}],
       requestBody: {
         required: true,
@@ -221,7 +231,8 @@ const billingDocs = {
     post: {
       tags: ['Billing'],
       summary: 'Cancel Subscription',
-      description: 'Cancel the active subscription at the end of the current period',
+      description:
+        'Cancel the active subscription at the end of the current period',
       security: [{bearerAuth: []}],
       responses: {
         200: {

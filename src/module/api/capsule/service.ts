@@ -214,7 +214,11 @@ export async function getCapsule(id: string, user: string) {
   const capsule = await Capsule.findOne({user, _id: id}).populate([
     {path: 'recipients', select: 'email first_name last_name'},
     {path: 'benefactor', select: 'first_name last_name fullname'},
-    {path: 'attachments', select: '-base64', match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}}},
+    {
+      path: 'attachments',
+      select: '-base64',
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
+    },
     {
       path: 'memories',
       select: '_id title body tags created_at attachments status',

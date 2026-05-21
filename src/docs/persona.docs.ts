@@ -31,16 +31,19 @@ const personaDocs = {
                         memory: {
                           type: 'string',
                           example: '507f1f77bcf86cd799439012',
-                          description: 'ID of the memory the insight was extracted from',
+                          description:
+                            'ID of the memory the insight was extracted from',
                         },
                         field: {
                           type: 'string',
                           example: 'key_preferences',
-                          description: 'The persona field this insight belongs to',
+                          description:
+                            'The persona field this insight belongs to',
                         },
                         content: {
                           type: 'string',
-                          example: 'User prefers dark chocolate over milk chocolate',
+                          example:
+                            'User prefers dark chocolate over milk chocolate',
                         },
                         source: {
                           type: 'string',
@@ -74,7 +77,7 @@ const personaDocs = {
       tags: ['Persona'],
       summary: 'Approve Pending Insight',
       description:
-        'Approve a pending insight and add it to the user\'s persona profile',
+        "Approve a pending insight and add it to the user's persona profile",
       security: [{bearerAuth: []}],
       parameters: [
         {
@@ -94,7 +97,10 @@ const personaDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {type: 'string', example: 'Insight approved and applied'},
+                  message: {
+                    type: 'string',
+                    example: 'Insight approved and applied',
+                  },
                   data: {type: 'object', nullable: true},
                 },
               },
@@ -136,7 +142,10 @@ const personaDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {type: 'string', example: 'Pending insight rejected'},
+                  message: {
+                    type: 'string',
+                    example: 'Pending insight rejected',
+                  },
                   data: {type: 'object', nullable: true},
                 },
               },

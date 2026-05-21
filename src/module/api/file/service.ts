@@ -57,7 +57,10 @@ export async function removeFile(name: string, user_id: string) {
       await Promise.all(keys.map(k => redis.del(k)));
     }
   } catch (redisError) {
-    console.error(`Error invalidating Redis cache for file ${name}:`, redisError);
+    console.error(
+      `Error invalidating Redis cache for file ${name}:`,
+      redisError,
+    );
   }
 
   if (isBackedUp) {
