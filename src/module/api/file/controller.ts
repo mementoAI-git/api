@@ -69,10 +69,14 @@ const safeStreamToResponse = async (
   res.on('close', onClose);
 
   try {
-    await pipeline(stream, res, { signal: abortController.signal });
+    await pipeline(stream, res, {
+      signal: abortController.signal,
+    });
   } catch (error) {
     if (isClientDisconnectError(error) || abortController.signal.aborted) {
-      logger.info('Client disconnected or stream aborted during file streaming');
+      logger.info(
+        'Client disconnected or stream aborted during file streaming',
+      );
     } else {
       throw error;
     }
