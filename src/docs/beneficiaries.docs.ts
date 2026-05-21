@@ -19,10 +19,21 @@ const beneficiariesDocs = {
                   description: 'Beneficiary email address',
                   example: 'beneficiary@example.com',
                 },
-                level: {
-                  type: 'integer',
-                  description: 'Access level (1-5)',
-                  example: 1,
+                name: {
+                  type: 'string',
+                  description: 'Optional name',
+                  example: 'Jane Doe',
+                },
+                relationship: {
+                  type: 'string',
+                  description: 'Relationship to the user',
+                  example: 'spouse',
+                  default: 'friend',
+                },
+                groups: {
+                  type: 'array',
+                  items: {type: 'string'},
+                  description: 'Array of group IDs to add the beneficiary to',
                 },
               },
             },
@@ -45,44 +56,16 @@ const beneficiariesDocs = {
                   data: {
                     type: 'object',
                     properties: {
-                      _id: {
-                        type: 'string',
-                        example: '507f1f77bcf86cd799439011',
-                      },
-                      email: {
-                        type: 'string',
-                        example: 'beneficiary@example.com',
-                      },
-                      level: {type: 'number', example: 1},
-                      user: {
-                        type: 'string',
-                        example: '507f1f77bcf86cd799439012',
-                      },
-                      created_at: {
-                        type: 'string',
-                        format: 'date-time',
-                        example: '2024-01-01T00:00:00.000Z',
-                      },
+                      _id: {type: 'string'},
+                      email: {type: 'string'},
+                      name: {type: 'string'},
+                      relationship: {type: 'string'},
+                      user: {type: 'string'},
+                      created_at: {type: 'string', format: 'date-time'},
                     },
                   },
                 },
               },
-            },
-          },
-        },
-        400: {
-          description: 'Validation error',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
-        },
-        401: {
-          description: 'Unauthorized',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -91,21 +74,18 @@ const beneficiariesDocs = {
     get: {
       tags: ['Beneficiaries'],
       summary: 'List Beneficiaries',
-      description:
-        'Get paginated list of beneficiaries for the authenticated user',
+      description: 'Get paginated list of beneficiaries for the authenticated user',
       security: [{bearerAuth: []}],
       parameters: [
         {
           name: 'page',
           in: 'query',
           schema: {type: 'number', default: 1},
-          description: 'Page number',
         },
         {
           name: 'limit',
           in: 'query',
           schema: {type: 'number', default: 10},
-          description: 'Items per page',
         },
       ],
       responses: {
@@ -117,57 +97,20 @@ const beneficiariesDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {
-                    type: 'string',
-                    example: 'Beneficiaries retrieved successfully',
-                  },
                   data: {
                     type: 'object',
                     properties: {
-                      docs: {
-                        type: 'array',
-                        items: {
-                          type: 'object',
-                          properties: {
-                            _id: {
-                              type: 'string',
-                              example: '507f1f77bcf86cd799439011',
-                            },
-                            email: {
-                              type: 'string',
-                              example: 'beneficiary@example.com',
-                            },
-                            level: {type: 'number', example: 1},
-                            user: {
-                              type: 'string',
-                              example: '507f1f77bcf86cd799439012',
-                            },
-                            created_at: {
-                              type: 'string',
-                              format: 'date-time',
-                              example: '2024-01-01T00:00:00.000Z',
-                            },
-                          },
-                        },
-                      },
-                      totalDocs: {type: 'number', example: 10},
-                      limit: {type: 'number', example: 10},
-                      page: {type: 'number', example: 1},
-                      totalPages: {type: 'number', example: 1},
-                      hasNextPage: {type: 'boolean', example: false},
-                      hasPrevPage: {type: 'boolean', example: false},
+                      docs: {type: 'array', items: {type: 'object'}},
+                      totalDocs: {type: 'number'},
+                      limit: {type: 'number'},
+                      page: {type: 'number'},
+                      totalPages: {type: 'number'},
+                      hasNextPage: {type: 'boolean'},
+                      hasPrevPage: {type: 'boolean'},
                     },
                   },
                 },
               },
-            },
-          },
-        },
-        401: {
-          description: 'Unauthorized',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },
@@ -185,28 +128,17 @@ const beneficiariesDocs = {
           name: 'id',
           in: 'path',
           required: true,
-          description: 'Beneficiary ID',
-          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
+          schema: {type: 'string'},
         },
       ],
       requestBody: {
-        required: true,
         content: {
           'application/json': {
             schema: {
               type: 'object',
               properties: {
-                email: {
-                  type: 'string',
-                  format: 'email',
-                  description: 'New email address',
-                  example: 'newemail@example.com',
-                },
-                level: {
-                  type: 'integer',
-                  description: 'New access level',
-                  example: 2,
-                },
+                email: {type: 'string', format: 'email'},
+                level: {type: 'integer'},
               },
             },
           },
@@ -215,45 +147,6 @@ const beneficiariesDocs = {
       responses: {
         200: {
           description: 'Beneficiary updated successfully',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  status: {type: 'string', example: 'success'},
-                  message: {
-                    type: 'string',
-                    example: 'Beneficiary updated successfully',
-                  },
-                  data: {type: 'object'},
-                },
-              },
-            },
-          },
-        },
-        400: {
-          description: 'Validation error',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
-        },
-        401: {
-          description: 'Unauthorized',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
-        },
-        404: {
-          description: 'Beneficiary not found',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
         },
       },
     },
@@ -267,44 +160,12 @@ const beneficiariesDocs = {
           name: 'id',
           in: 'path',
           required: true,
-          description: 'Beneficiary ID',
-          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
+          schema: {type: 'string'},
         },
       ],
       responses: {
         200: {
           description: 'Beneficiary deleted successfully',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  status: {type: 'string', example: 'success'},
-                  message: {
-                    type: 'string',
-                    example: 'Beneficiary deleted successfully',
-                  },
-                  data: {type: 'object'},
-                },
-              },
-            },
-          },
-        },
-        401: {
-          description: 'Unauthorized',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
-        },
-        404: {
-          description: 'Beneficiary not found',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
         },
       },
     },
@@ -323,12 +184,7 @@ const beneficiariesDocs = {
               type: 'object',
               required: ['email'],
               properties: {
-                email: {
-                  type: 'string',
-                  format: 'email',
-                  description: 'Beneficiary email address',
-                  example: 'beneficiary@example.com',
-                },
+                email: {type: 'string', format: 'email'},
               },
             },
           },
@@ -337,37 +193,6 @@ const beneficiariesDocs = {
       responses: {
         200: {
           description: 'Invitation resent successfully',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  status: {type: 'string', example: 'success'},
-                  message: {
-                    type: 'string',
-                    example: 'Invitation resent successfully',
-                  },
-                  data: {type: 'object'},
-                },
-              },
-            },
-          },
-        },
-        400: {
-          description: 'Validation error',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
-        },
-        401: {
-          description: 'Unauthorized',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
         },
       },
     },
@@ -383,29 +208,9 @@ const beneficiariesDocs = {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['invite_id', 'first_name', 'last_name', 'dob'],
+              required: ['invite_id'],
               properties: {
-                invite_id: {
-                  type: 'string',
-                  description: 'Invitation ID',
-                  example: '507f1f77bcf86cd799439011',
-                },
-                first_name: {
-                  type: 'string',
-                  description: 'First name',
-                  example: 'Jane',
-                },
-                last_name: {
-                  type: 'string',
-                  description: 'Last name',
-                  example: 'Doe',
-                },
-                dob: {
-                  type: 'string',
-                  format: 'date',
-                  description: 'Date of birth',
-                  example: '1990-01-01',
-                },
+                invite_id: {type: 'string', description: 'Invitation ID (MongoId)'},
               },
             },
           },
@@ -414,41 +219,6 @@ const beneficiariesDocs = {
       responses: {
         200: {
           description: 'Invitation accepted successfully',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  status: {type: 'string', example: 'success'},
-                  message: {
-                    type: 'string',
-                    example: 'Invitation accepted successfully',
-                  },
-                  data: {
-                    type: 'object',
-                    properties: {
-                      access_token: {
-                        type: 'string',
-                        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-                      },
-                      refresh_token: {
-                        type: 'string',
-                        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-        400: {
-          description: 'Validation error or invalid invitation',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
         },
       },
     },
@@ -463,8 +233,7 @@ const beneficiariesDocs = {
           name: 'id',
           in: 'path',
           required: true,
-          description: 'Invitation ID',
-          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
+          schema: {type: 'string'},
         },
       ],
       responses: {
@@ -476,46 +245,9 @@ const beneficiariesDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {
-                    type: 'string',
-                    example: 'Invitation details retrieved successfully',
-                  },
-                  data: {
-                    type: 'object',
-                    properties: {
-                      _id: {
-                        type: 'string',
-                        example: '507f1f77bcf86cd799439011',
-                      },
-                      email: {
-                        type: 'string',
-                        example: 'beneficiary@example.com',
-                      },
-                      level: {type: 'number', example: 1},
-                      user: {
-                        type: 'string',
-                        example: '507f1f77bcf86cd799439012',
-                      },
-                    },
-                  },
+                  data: {type: 'object'},
                 },
               },
-            },
-          },
-        },
-        400: {
-          description: 'Invalid invitation ID',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
-        },
-        404: {
-          description: 'Invitation not found',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
             },
           },
         },

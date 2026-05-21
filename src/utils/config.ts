@@ -45,6 +45,15 @@ export const BACKEND_URL = process.env.BACKEND_URL;
 export const GEMINI_API_KEY_ALT = process.env.GEMINI_API_KEY_ALT;
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 export const GEMINI_API_KEY_EFFECTIVE = GEMINI_API_KEY_ALT || GEMINI_API_KEY;
+
+// ── Gemini model versions (single source of truth) ──────────────────
+// Change the model version HERE and every service picks it up automatically.
+export const GEMINI_MODEL_VERSION =
+  process.env.GEMINI_MODEL_VERSION || 'gemini-2.5-flash';
+export const GEMINI_LIVE_MODEL_VERSION =
+  process.env.GEMINI_LIVE_MODEL_VERSION ||
+  'gemini-2.5-flash-native-audio-preview-09-2025';
+
 export const VOICE_PROVIDER_DEFAULT = (
   process.env.VOICE_PROVIDER_DEFAULT || 'gemini'
 ).toLowerCase();
@@ -60,7 +69,7 @@ export const ASR_FALLBACK_PROVIDER = (
   process.env.ASR_FALLBACK_PROVIDER || 'gemini_fallback'
 ).toLowerCase();
 export const ASR_GEMINI_PRIMARY_MODEL =
-  process.env.ASR_GEMINI_PRIMARY_MODEL || 'gemini-2.0-flash';
+  process.env.ASR_GEMINI_PRIMARY_MODEL || GEMINI_MODEL_VERSION;
 export const ASR_GEMINI_FALLBACK_MODEL =
   process.env.ASR_GEMINI_FALLBACK_MODEL || ASR_GEMINI_PRIMARY_MODEL;
 export const ASR_SHADOW_ENABLED = process.env.ASR_SHADOW_ENABLED === 'true';
@@ -125,10 +134,19 @@ export const SUPPORT_MAILS = process.env.SUPPORT_MAILS?.split(',') || [];
 
 export const TEMP_PATH = process.env.TEMP_PATH ?? os.tmpdir();
 
-export const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+export const CLOUDFLARE_R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID;
+export const CLOUDFLARE_R2_ACCESS_KEY_ID = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID;
+export const CLOUDFLARE_R2_SECRET_ACCESS_KEY = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+export const CLOUDFLARE_R2_BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME;
+export const AWS_REGION = process.env.AWS_REGION || 'auto';
 export const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 export const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 export const AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
+
+export const HETZNER_ENDPOINT = process.env.HETZNER_ENDPOINT;
+export const HETZNER_ACCESS_KEY_ID = process.env.HETZNER_ACCESS_KEY_ID;
+export const HETZNER_SECRET_ACCESS_KEY = process.env.HETZNER_SECRET_ACCESS_KEY;
+export const HETZNER_BUCKET_NAME = process.env.HETZNER_BUCKET_NAME;
 
 /** Optional: legacy GCS reads / backup worker only (uploads use Cloudinary). */
 export const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;

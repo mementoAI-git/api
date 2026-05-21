@@ -1,5 +1,5 @@
 import {createUserContent} from '@google/genai';
-import {logger, prompts} from '../../utils';
+import {logger, prompts, EXCLUDED_STORAGE_PROVIDER} from '../../utils';
 import gemini, {GEMINI_MODEL} from '../../services/gemini';
 import {extractJson} from '../../utils/helpers';
 import Persona, {IPersona} from '../../module/database/model/persona';
@@ -13,7 +13,7 @@ export async function extractStoryInsights(
   try {
     const memory = await Memory.findById(memoryId).populate({
       path: 'attachments',
-      match: {provider: {$ne: 's3'}},
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     });
     const {text, processedImages} = await buildMemoryContent(memory);
 

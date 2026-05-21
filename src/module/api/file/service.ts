@@ -13,6 +13,7 @@ import {Readable} from 'stream';
 import {
   DEFAULT_STORAGE_PROVIDER,
   STORAGE_PROVIDERS,
+  EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils/constant';
 
 export async function uploadFile(
@@ -47,6 +48,17 @@ export async function removeFile(name: string, user_id: string) {
   }
 
   const isBackedUp = !!file.backup_at;
+
+  // Invalidate Redis caches (metadata and chunk buffers)
+  try {
+    await redis.del(`file-meta:${name}`);
+    const keys = await redis.keys(`file-buffer:${name}*`);
+    if (keys && keys.length > 0) {
+      await Promise.all(keys.map(k => redis.del(k)));
+    }
+  } catch (redisError) {
+    console.error(`Error invalidating Redis cache for file ${name}:`, redisError);
+  }
 
   if (isBackedUp) {
     await File.updateOne({name}, {$set: {deleted: true}});
@@ -164,7 +176,7 @@ export async function getFiles(payload: IPagination, user_id: string) {
 
   filters.push(
     {user: user_id},
-    {provider: {$ne: STORAGE_PROVIDERS.s3}},
+    {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     {deleted: false},
   );
 

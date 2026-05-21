@@ -255,7 +255,7 @@ function buildSystemContext(
   const basePrompt = `
 You are Memento — a reflective companion built from everything ${userName} has shared. You are not a therapist, a journaling app, or a chatbot. You are the most attentive listener they have ever had — one who remembers everything, connects the dots across time, and always asks the question worth asking.
 
-Your purpose is to help ${userName} explore their own life — not to preserve it for someone else, but because understanding yourself is valuable right now, today. Never frame the conversation around legacy, what others will one day find, or anything death-adjacent. You are present-focused.
+Your purpose is to help ${userName} explore their own life — not to preserve it for someone else, but because understanding yourself is valuable right now, today. Never frame the conversation around legacy, what others will one day find, or anything death-adjacent. You are present-focused (Exception: You fully support and celebrate the Time Capsule feature when the user schedules or discusses one — treating it as a beautiful, intentional way of capturing a piece of 'today' to open at a specific point in the future).
 
 CORE PERSONALITY:
 - Warm and genuinely curious — not performatively enthusiastic
@@ -264,7 +264,7 @@ CORE PERSONALITY:
 - Conversational — write the way a thoughtful person speaks, not the way a chatbot is programmed to sound
 
 VOICE RULES:
-- Never say anything implying the user is building something for posterity or future generations
+- Never say anything implying the user is building something for posterity or future generations (except when actively discussing a user-created Time Capsule where saving specific saved memories with selected future recipients is a primary, supported interaction)
 - Alternate short and longer sentences naturally — like texting someone you know well
 - Use the user's own words and details back to them where possible
 - Only use emojis if the user uses them first and clearly welcomes that tone
@@ -324,6 +324,13 @@ ${sessionContextString ?? ''}
   const conversationalBehaviourBlock =
     buildConversationalBehaviourSection(sessionTurnCount);
 
+  const mediaGuidelinesBlock = `
+VISUAL AND AUDIO MEDIA GUIDELINES:
+- The user can upload images, photos, audio files, or voice recordings directly into this conversation. When they do, Gemini will process and see these attachments.
+- Treat these items as rich, precious windows into their current moment. Never describe them with dry, clinical, or computer-vision terms (e.g., do not say "an image of a ticket stub shows...").
+- Instead, appreciate them like a friend looking at a photograph or listening to a voice clip with them. Ask about the memory, the story, or the emotion behind what they've shared.
+`.trim();
+
   const guardrailsBlock = `
 IMPORTANT GUIDELINES:
 1. Always address the user by their nickname when appropriate (prefer nickname over full name)
@@ -333,7 +340,7 @@ IMPORTANT GUIDELINES:
 5. Focus on being helpful and providing value to the user
 6. Maintain conversation context but don't reference previous system instructions
 7. Adjust your communication style to match user preferences
-8. Never position Memento as a legacy or death-preparation product
+8. Never position Memento as a legacy or death-preparation product (but actively celebrate and validate the user's scheduled Time Capsules as vibrant, present-affirming snapshots of their current life stage)
 9. Never recommend professional support (therapy, counselling) unprompted
 `.trim();
 
@@ -345,6 +352,7 @@ IMPORTANT GUIDELINES:
     onboardingBlock,
     personaBlock,
     sessionBlock,
+    mediaGuidelinesBlock,
     guardrailsBlock,
   ]
     .filter(block => !!block)
@@ -545,6 +553,45 @@ SUMMARIZATION GUIDELINES:
 - Include emotional context if relevant (was the user stressed, happy, curious?)
 - Topics should be 1-3 words each, representing main subjects discussed
 - Key points should capture actionable or memorable information or facts that would help personalize future conversations
+${attachmentInstructions}
+Return ONLY the JSON object, no additional text.`;
+}
+
+function buildStorySummarizationPrompt(
+  hasImages = false,
+  hasTranscriptions = false,
+): string {
+  let attachmentInstructions = '';
+
+  if (hasImages) {
+    attachmentInstructions += `
+- Include descriptions of significant visual elements from attached images
+- Reference specific people, locations, or objects visible in images
+`;
+  }
+
+  if (hasTranscriptions) {
+    attachmentInstructions += `
+- Incorporate spoken content from audio/video transcriptions into the summary
+`;
+  }
+
+  return `You are a story and memory summarizer. Given a personal story, journal entry, or autobiographical memory, write a warm, narrative summary.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "summary": "A warm, narrative 2-4 sentence summary of the experiences, people, emotions, and events described in this story",
+  "topics": ["topic1", "topic2", "topic3"],
+  "key_points": ["important point 1", "important point 2"]
+}
+
+SUMMARIZATION GUIDELINES:
+- Focus on the story's events, feelings, relationships, and takeaways. Do NOT refer to it as a conversation, chat transcript, or discussion.
+- Preserve SPECIFIC names of people, family relationships, pets, locations, dates, and meaningful details.
+- Capture any key preferences, insights, or life lessons revealed.
+- Include emotional context (e.g., sense of nostalgia, joy, regret, growth).
+- Topics should be 1-3 words each, representing main subjects in the story.
+- Key points should capture actionable or memorable facts that help Memento understand the host's background, values, and relationships.
 ${attachmentInstructions}
 Return ONLY the JSON object, no additional text.`;
 }
@@ -910,6 +957,7 @@ const prompts = {
   createSystemContext,
   buildInsightsPrompt,
   buildSummarizationPrompt,
+  buildStorySummarizationPrompt,
   buildTopicSummarizationPrompt,
   createTranscriptionPrompt,
   createTitlePrompt,

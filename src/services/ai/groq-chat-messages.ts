@@ -8,8 +8,8 @@ import {
   GROQ_MODEL_CHAT_PRIMARY,
 } from '../../utils/config';
 
-const GROQ_MAX_CONTEXT_CHARS = 22000;
-const GROQ_SYSTEM_PROMPT_CAP_CHARS = 5000;
+const GROQ_MAX_CONTEXT_CHARS = 120000;
+const GROQ_SYSTEM_PROMPT_CAP_CHARS = 35000;
 const GROQ_RECENT_HISTORY_TURNS = 8;
 
 function compactText(text: string, maxChars: number) {

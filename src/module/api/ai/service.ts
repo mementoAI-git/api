@@ -18,6 +18,7 @@ import User from '../../database/model/user';
 import dayjs from 'dayjs';
 import {prompts} from '../../../utils';
 import Memory from '../../database/model/memory';
+import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
 import {
   triggerSummarization,
   createChatHistory,
@@ -304,7 +305,10 @@ export async function prompt(
 
   const sessionTurnCount = getSessionTurnCount(messages);
 
-  let content: PartListUnion = [payload.text];
+  const content: PartListUnion = [];
+  if (payload.text) {
+    content.push(payload.text);
+  }
 
   let longTermContext = '';
   if (isSignificantMessage(payload.text)) {
@@ -336,7 +340,10 @@ export async function prompt(
     });
 
     const result = await processFiles(payload.attachments);
-    content = [...content, ...result];
+    content.push(...result);
+    if (content.length === 0) {
+      throw new BadRequestException('Prompt must contain text or attachments');
+    }
     const response = await chat.sendMessageStream({message: content});
     await Message.create({
       user: user_id,
@@ -472,7 +479,7 @@ export async function getUserMessages(
     .populate({
       path: 'attatchments',
       select: '-base64',
-      match: {provider: {$ne: 's3'}},
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     })
     .limit(fetch_limit);
 
@@ -508,7 +515,7 @@ export async function getUserMessagesByConversation(
     .populate({
       path: 'attatchments',
       select: '-base64',
-      match: {provider: {$ne: 's3'}},
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     })
     .limit(fetch_limit);
 
@@ -686,7 +693,10 @@ export async function startConversation(
     user: user_id,
     prompt_version: chatBootstrapPromptVersion,
   });
-  let content: PartListUnion = [payload.text];
+  const content: PartListUnion = [];
+  if (payload.text) {
+    content.push(payload.text);
+  }
 
   if (!isEmpty(payload?.attachments)) {
     const chat = gemini.chats.create({
@@ -695,7 +705,10 @@ export async function startConversation(
       history: createChatHistory(history),
     });
     const result = await processFiles(payload.attachments);
-    content = [...content, ...result];
+    content.push(...result);
+    if (content.length === 0) {
+      throw new BadRequestException('Prompt must contain text or attachments');
+    }
     const response = await chat.sendMessage({message: content});
     const now = dayjs();
     await Message.insertMany([

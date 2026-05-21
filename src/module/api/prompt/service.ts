@@ -4,6 +4,7 @@ import Prompt, {IPrompt} from '../../database/model/prompt';
 import {NotFoundException} from '../../../utils/service-error';
 import {IReplyPrompt} from './interface';
 import {isEmpty} from '../../../utils/helpers';
+import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
 import * as storage from '../../../services/storage';
 import User from '../../database/model/user';
 import ActivePrompt from '../../database/model/active-prompt';
@@ -246,7 +247,7 @@ export const getUserPromptResponse = async (id: string, user_id: string) => {
   let memory = await Memory.findOne({user: user_id, prompt: id}).populate({
     path: 'attachments',
     select: '-base64',
-    match: {provider: {$ne: 's3'}},
+    match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
   });
 
   if (!memory) {
