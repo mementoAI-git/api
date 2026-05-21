@@ -260,7 +260,8 @@ const usersDocs = {
     get: {
       tags: ['Users'],
       summary: 'Get Onboarding Details',
-      description: 'Retrieve the current onboarding state and details for the user',
+      description:
+        'Retrieve the current onboarding state and details for the user',
       security: [{bearerAuth: []}],
       responses: {
         200: {
@@ -309,7 +310,10 @@ const usersDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {type: 'string', example: 'Onboarding updated successfully'},
+                  message: {
+                    type: 'string',
+                    example: 'Onboarding updated successfully',
+                  },
                 },
               },
             },
@@ -345,7 +349,8 @@ const usersDocs = {
     post: {
       tags: ['Users'],
       summary: 'Stream Onboarding Chat',
-      description: 'Stream an AI chat response for the interactive onboarding experience',
+      description:
+        'Stream an AI chat response for the interactive onboarding experience',
       security: [{bearerAuth: []}],
       requestBody: {
         content: {
@@ -774,7 +779,8 @@ const usersDocs = {
     get: {
       tags: ['Users'],
       summary: 'Get Persona Profile',
-      description: 'Retrieve the user\'s AI-generated persona profile and traits',
+      description:
+        "Retrieve the user's AI-generated persona profile and traits",
       security: [{bearerAuth: []}],
       responses: {
         200: {
@@ -807,7 +813,10 @@ const usersDocs = {
                 important_notes: {type: 'array', items: {type: 'string'}},
                 key_preferences: {type: 'array', items: {type: 'string'}},
                 conversation_history_summary: {type: 'string'},
-                emotional_state_trends: {type: 'array', items: {type: 'string'}},
+                emotional_state_trends: {
+                  type: 'array',
+                  items: {type: 'string'},
+                },
                 goals_and_aspirations: {type: 'array', items: {type: 'string'}},
                 self_description: {type: 'string', maxLength: 500},
                 current_priority: {type: 'array', items: {type: 'string'}},

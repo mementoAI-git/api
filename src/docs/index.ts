@@ -108,7 +108,10 @@ const options: swaggerJsdoc.Options = {
       {name: 'Files', description: 'File upload and management endpoints'},
       {name: 'Activities', description: 'User activity tracking endpoints'},
       {name: 'Feedback', description: 'User feedback and bug reporting'},
-      {name: 'Persona', description: 'User personality and insights management'},
+      {
+        name: 'Persona',
+        description: 'User personality and insights management',
+      },
       {name: 'Health', description: 'Health check endpoints'},
     ],
     paths: {

@@ -1,6 +1,11 @@
 import {createUserContent} from '@google/genai';
 import Memory from '../../module/database/model/memory';
-import {extractJson, logger, prompts, EXCLUDED_STORAGE_PROVIDER} from '../../utils';
+import {
+  extractJson,
+  logger,
+  prompts,
+  EXCLUDED_STORAGE_PROVIDER,
+} from '../../utils';
 import {buildMemoryContent} from '../../module/api/ai/utils';
 import gemini, {GEMINI_MODEL} from '../../services/gemini';
 

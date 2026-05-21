@@ -7,7 +7,11 @@ import {
   uploadToS3,
 } from './s3';
 import * as cloudinaryStorage from './cloudinary';
-import {getMediaDuration, resolveUploadMime, reconstructFileName} from '../../utils/helpers';
+import {
+  getMediaDuration,
+  resolveUploadMime,
+  reconstructFileName,
+} from '../../utils/helpers';
 import type {IFile} from '../../module/database/model/file';
 import type {StorageFileMetadata, StorageGetFileResponse} from './types';
 import type {FileStorageProvider} from '../../module/database/model/file';
@@ -37,10 +41,10 @@ export async function uploadFile(
         // HEIC/HEIF is not natively supported in most web browsers.
         // Convert to progressive JPEG for compatibility and efficient storage.
         buffer = await sharp(file.buffer)
-          .jpeg({ quality: 80, progressive: true })
+          .jpeg({quality: 80, progressive: true})
           .toBuffer();
         mimetype = 'image/jpeg';
-        
+
         // Update originalName extension to .jpg so the generated key has correct extension
         const extIndex = originalName.lastIndexOf('.');
         if (extIndex !== -1) {
@@ -51,21 +55,22 @@ export async function uploadFile(
       } else if (mimetype === 'image/png') {
         // Compress PNGs safely using quality and compression options
         buffer = await sharp(file.buffer)
-          .png({ quality: 80, compressionLevel: 8 })
+          .png({quality: 80, compressionLevel: 8})
           .toBuffer();
       } else if (mimetype === 'image/jpeg' || mimetype === 'image/jpg') {
         // Compress JPEGs using high quality and progressive loading
         buffer = await sharp(file.buffer)
-          .jpeg({ quality: 80, progressive: true })
+          .jpeg({quality: 80, progressive: true})
           .toBuffer();
       } else if (mimetype === 'image/webp') {
         // Compress WebP
-        buffer = await sharp(file.buffer)
-          .webp({ quality: 80 })
-          .toBuffer();
+        buffer = await sharp(file.buffer).webp({quality: 80}).toBuffer();
       }
     } catch (err) {
-      console.error(`Image compression failed for ${originalName}, falling back to original buffer:`, err);
+      console.error(
+        `Image compression failed for ${originalName}, falling back to original buffer:`,
+        err,
+      );
       // Fallback is automatic as buffer and mimetype remain the original values
     }
   }
@@ -83,7 +88,7 @@ export async function uploadFile(
     name: result.key,
     user,
     size: buffer.length, // Save compressed size
-    type: mimetype,      // Save potentially converted mimetype
+    type: mimetype, // Save potentially converted mimetype
     duration,
     provider: DEFAULT_STORAGE_PROVIDER,
     backup_url: result.location,
@@ -107,12 +112,15 @@ export async function getFileMetadata(
     }
     return cloudinaryStorage.getFileMetadataFromCloudinary(key, mimeType);
   }
-  
+
   if (provider === 's3') {
     try {
       return await getFileMetadataFromS3(key, 'primary');
     } catch (primaryError) {
-      console.warn(`Primary metadata fetch failed for ${key}, falling back to backup:`, primaryError);
+      console.warn(
+        `Primary metadata fetch failed for ${key}, falling back to backup:`,
+        primaryError,
+      );
       return await getFileMetadataFromS3(key, 'backup');
     }
   }
@@ -149,7 +157,10 @@ export async function getFile(
         ContentType: result.ContentType,
       };
     } catch (primaryError) {
-      console.warn(`Primary storage fetch failed for ${key}, trying backup:`, primaryError);
+      console.warn(
+        `Primary storage fetch failed for ${key}, trying backup:`,
+        primaryError,
+      );
       try {
         const result = await getFileFromS3(key, range, 'backup');
         return {
@@ -158,7 +169,10 @@ export async function getFile(
           ContentType: result.ContentType,
         };
       } catch (backupError) {
-        console.error(`Backup storage fetch failed for ${key} too:`, backupError);
+        console.error(
+          `Backup storage fetch failed for ${key} too:`,
+          backupError,
+        );
         throw backupError;
       }
     }

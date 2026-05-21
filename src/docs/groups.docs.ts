@@ -124,7 +124,11 @@ const groupsDocs = {
         {
           name: 'resource',
           in: 'query',
-          schema: {type: 'string', enum: ['group', 'beneficiary', 'all'], default: 'all'},
+          schema: {
+            type: 'string',
+            enum: ['group', 'beneficiary', 'all'],
+            default: 'all',
+          },
           description: 'Type of resource to search',
         },
       ],

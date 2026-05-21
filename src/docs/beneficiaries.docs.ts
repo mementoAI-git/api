@@ -74,7 +74,8 @@ const beneficiariesDocs = {
     get: {
       tags: ['Beneficiaries'],
       summary: 'List Beneficiaries',
-      description: 'Get paginated list of beneficiaries for the authenticated user',
+      description:
+        'Get paginated list of beneficiaries for the authenticated user',
       security: [{bearerAuth: []}],
       parameters: [
         {
@@ -210,7 +211,10 @@ const beneficiariesDocs = {
               type: 'object',
               required: ['invite_id'],
               properties: {
-                invite_id: {type: 'string', description: 'Invitation ID (MongoId)'},
+                invite_id: {
+                  type: 'string',
+                  description: 'Invitation ID (MongoId)',
+                },
               },
             },
           },

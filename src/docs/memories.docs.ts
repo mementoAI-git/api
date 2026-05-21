@@ -193,7 +193,8 @@ const memoriesDocs = {
     post: {
       tags: ['Memories'],
       summary: 'Quick Capture Memory',
-      description: 'Quickly capture a memory with minimal details, often used for voice notes or quick text snips.',
+      description:
+        'Quickly capture a memory with minimal details, often used for voice notes or quick text snips.',
       security: [{bearerAuth: []}],
       requestBody: {
         content: {
@@ -202,7 +203,11 @@ const memoriesDocs = {
               type: 'object',
               properties: {
                 body: {type: 'string', description: 'Memory content'},
-                file: {type: 'string', format: 'binary', description: 'Optional voice/image file'},
+                file: {
+                  type: 'string',
+                  format: 'binary',
+                  description: 'Optional voice/image file',
+                },
               },
             },
           },
@@ -217,7 +222,10 @@ const memoriesDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {type: 'string', example: 'Memory created successfully'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory created successfully',
+                  },
                   data: {type: 'object'},
                 },
               },
@@ -450,7 +458,8 @@ const memoriesDocs = {
     get: {
       tags: ['Memories'],
       summary: 'Get Conversation Enrichment',
-      description: 'Get AI-generated enrichment data for a conversation, such as summaries, key points, and suggested follow-ups.',
+      description:
+        'Get AI-generated enrichment data for a conversation, such as summaries, key points, and suggested follow-ups.',
       security: [{bearerAuth: []}],
       parameters: [
         {
@@ -470,7 +479,10 @@ const memoriesDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {type: 'string', example: 'Conversation enrichment retrieved successfully'},
+                  message: {
+                    type: 'string',
+                    example: 'Conversation enrichment retrieved successfully',
+                  },
                   data: {
                     type: 'object',
                     properties: {
