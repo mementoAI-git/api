@@ -50,6 +50,7 @@ const safeStreamToResponse = async (
   stream: NodeJS.ReadableStream,
   res: Response,
 ): Promise<void> => {
+  // Listen for errors on the stream
   stream.on('error', streamError => {
     console.error('Stream error:', streamError);
     if (!res.headersSent) {
@@ -57,14 +58,27 @@ const safeStreamToResponse = async (
     }
   });
 
+  // Abort streaming if the client closes the connection
+  const abortController = new AbortController();
+  const onClose = () => {
+    abortController.abort();
+    // Safely destroy the stream if the method exists
+    (stream as any).destroy?.();
+    logger.info('Response closed by client, aborting stream');
+  };
+  res.on('close', onClose);
+
   try {
-    await pipeline(stream, res);
+    await pipeline(stream, res, { signal: abortController.signal });
   } catch (error) {
-    if (isClientDisconnectError(error)) {
-      logger.info('Client disconnected during file streaming');
+    if (isClientDisconnectError(error) || abortController.signal.aborted) {
+      logger.info('Client disconnected or stream aborted during file streaming');
     } else {
       throw error;
     }
+  } finally {
+    // Clean up listener
+    res.off('close', onClose);
   }
 };
 
