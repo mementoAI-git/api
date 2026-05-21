@@ -12,5 +12,5 @@ google-storage.json
 docs
 yarn.lock
 .claude
-.cursor
+# Keep repo-level AI guidance versioned with the backend.
 .env.prod

@@ -1,0 +1,11 @@
+---
+description: Use typed service errors and keep controllers thin
+alwaysApply: true
+---
+
+# Typed Error Handling
+
+- Keep controllers thin: request in, response out, business logic elsewhere.
+- In services, throw typed errors from `src/utils/service-error.ts` instead of ad hoc error objects.
+- Do not invent one-off error response formats in feature code.
+- Let the shared error-handling path map service errors to HTTP responses consistently.

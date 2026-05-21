@@ -47,6 +47,7 @@ import {
   getNudge,
   getJumpPills,
 } from '../../../services/enrichment';
+import {getMemorySpotlightForUser} from '../../../services/enrichment/memory-spotlight';
 
 const ONBOARDING_PROMPT_VERSION = getPromptVersion('onboarding_chat');
 
@@ -386,6 +387,30 @@ export async function completeOnboarding(
     ) {
       personaData.join_reasons = payload.join_reasons;
     }
+    if (!isEmpty(payload?.motivationType)) {
+      personaData.motivation = payload.motivationType;
+    }
+    if (!isEmpty(payload?.motivationDetail)) {
+      personaData.motivation_detail = payload.motivationDetail;
+    }
+    if (!isEmpty(payload?.lifeSituation)) {
+      personaData.life_situation = payload.lifeSituation;
+    }
+    if (!isEmpty(payload?.lifeSituationDetail)) {
+      personaData.life_situation_detail = payload.lifeSituationDetail;
+    }
+    if (
+      Array.isArray(payload?.personalityTraits) &&
+      payload.personalityTraits.length > 0
+    ) {
+      personaData.personality_traits = payload.personalityTraits;
+    }
+    if (
+      Array.isArray(payload?.memoryTreasures) &&
+      payload.memoryTreasures.length > 0
+    ) {
+      personaData.memory_treasures = payload.memoryTreasures;
+    }
 
     await withTransaction(async session => {
       if (Object.keys(personaData).length > 0) {
@@ -397,6 +422,18 @@ export async function completeOnboarding(
 
       if (!isEmpty(payload?.dob)) {
         user.dob = payload.dob;
+      }
+      if (typeof payload?.stepReached === 'number') {
+        user.onboarding_step_reached = payload.stepReached;
+      }
+      if (typeof payload?.skippedDeepPersonalization === 'boolean') {
+        user.skipped_deep_personalization = payload.skippedDeepPersonalization;
+      }
+      if (!isEmpty(payload?.chronotype)) {
+        (user.preferences as any).chronotype = payload.chronotype;
+      }
+      if (!isEmpty(payload?.sharingIntent)) {
+        (user.preferences as any).sharing_intent = payload.sharingIntent;
       }
 
       user.onboarding_status = 'completed';
@@ -498,7 +535,10 @@ export async function getUserStats(user_id: string) {
     user: user_id,
   });
 
-  const enrichment = await computeEnrichmentScore(user_id);
+  const [enrichment, spotlight] = await Promise.all([
+    computeEnrichmentScore(user_id),
+    getMemorySpotlightForUser(user_id),
+  ]);
 
   const milestone = getMilestone(enrichment.enrichment_score);
   const nudge = getNudge(enrichment.lowest_category);
@@ -554,6 +594,7 @@ export async function getUserStats(user_id: string) {
     milestone,
     nudge,
     jump_pills: jumpPills,
+    spotlight,
   };
 
   return {
@@ -589,6 +630,11 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'current_priority',
     'communication_style',
     'motivation',
+    'motivation_detail',
+    'life_situation',
+    'life_situation_detail',
+    'personality_traits',
+    'memory_treasures',
   ]);
 
   const personaUpdate = Object.entries(payload).reduce((acc, p) => {
@@ -608,6 +654,8 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'age_bracket',
     'priority_dimensions',
     'expression_mode',
+    'chronotype',
+    'sharing_intent',
   ]);
 
   const preferencesUpdate = Object.entries(payload).reduce((acc, p) => {
@@ -620,7 +668,13 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
   await withTransaction(async session => {
     await User.findByIdAndUpdate(
       user_id,
-      {...updatePayload, ...preferencesUpdate, onbaorded: true},
+      {
+        ...updatePayload,
+        ...preferencesUpdate,
+        onbaorded: true,
+        onboarding_step_reached: payload.step ?? null,
+        skipped_deep_personalization: payload.skipped_deep_personalization,
+      },
       {session},
     );
     if (Object.keys(personaUpdate).length > 0) {
@@ -695,6 +749,15 @@ export async function getOnboardingDetails(user_id: string) {
         expression_mode: String(
           (u.preferences as any)?.expression_mode ?? 'text',
         ),
+        chronotype: String((u.preferences as any)?.chronotype ?? ''),
+        sharing_intent: String((u.preferences as any)?.sharing_intent ?? ''),
+        onboarding_step_reached:
+          typeof u.onboarding_step_reached === 'number'
+            ? u.onboarding_step_reached
+            : undefined,
+        skipped_deep_personalization: Boolean(
+          u.skipped_deep_personalization ?? false,
+        ),
       },
       persona: {
         join_reasons: persona?.join_reasons ?? [],
@@ -702,6 +765,11 @@ export async function getOnboardingDetails(user_id: string) {
         current_priority,
         communication_style: persona?.communication_style ?? [],
         motivation: persona?.motivation ?? '',
+        motivation_detail: (persona as any)?.motivation_detail ?? '',
+        life_situation: (persona as any)?.life_situation ?? '',
+        life_situation_detail: (persona as any)?.life_situation_detail ?? '',
+        personality_traits: (persona as any)?.personality_traits ?? [],
+        memory_treasures: (persona as any)?.memory_treasures ?? [],
       },
     },
   };
