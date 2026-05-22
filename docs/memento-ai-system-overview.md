@@ -19,7 +19,7 @@ This document explains how all the AI docs connect, what runs when, and what sti
 
 ### 1. Onboarding (one time)
 
-The host completes onboarding via `/onboarding/chat`. This seeds:
+The host completes onboarding via `/onboard/chat`. This seeds:
 - `IPersona`: important_notes, key_preferences, goals_and_aspirations, emotional_state_trends
 - `userPreferences`: communication_style, topics_of_interest, conversation_tone, response_length
 - ⬜ Still needed: motivation, age_bracket, priority_dimensions, expression_mode
