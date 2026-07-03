@@ -4,6 +4,7 @@ import {BACKEND_URL, CLOUDINARY_CLOUD_NAME} from '../../../utils/config';
 import {
   DEFAULT_STORAGE_PROVIDER,
   STORAGE_PROVIDERS,
+  EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils/constant';
 
 export interface ITranscriptionSegment {
@@ -92,7 +93,14 @@ const file = new Schema<IFile>(
 );
 
 file.virtual('url').get(function () {
-  return this.backup_url; //`${BACKEND_URL}/files/${this.name}`;
+  if (this.name && BACKEND_URL) {
+    const base = BACKEND_URL.replace(/\/$/, '');
+    return `${base}/files/${encodeURIComponent(this.name)}`;
+  }
+  if (this.backup_url) {
+    return this.backup_url;
+  }
+  return '';
 });
 
 file.plugin(mongoosePaginate);
@@ -107,7 +115,7 @@ file.statics.findActiveOne = function (
       $and: [
         {
           deleted: {$ne: true},
-          provider: {$ne: STORAGE_PROVIDERS.s3},
+          provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
         },
         filter,
       ],

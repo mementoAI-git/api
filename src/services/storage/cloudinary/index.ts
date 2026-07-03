@@ -4,8 +4,9 @@ import {
   CLOUDINARY_API_KEY,
   CLOUDINARY_API_SECRET,
 } from '../../../utils/config';
-import type {StorageGetFileResponse} from '../types';
+import type {StorageFileMetadata, StorageGetFileResponse} from '../types';
 import {reconstructFileName} from '../../../utils/helpers';
+import {createHash} from 'crypto';
 
 cloudinary.config({
   cloud_name: CLOUDINARY_CLOUD_NAME,
@@ -124,6 +125,26 @@ export async function uploadImage(
   };
 }
 
+export async function getFileMetadataFromCloudinary(
+  publicId: string,
+  mimetype: string,
+): Promise<StorageFileMetadata> {
+  const resourceType = getResourceType(mimetype);
+  const resource = await cloudinary.api.resource(publicId, {
+    resource_type: resourceType,
+  });
+  const created = resource.created_at
+    ? new Date(resource.created_at)
+    : new Date();
+  const etagSource = `${publicId}-${resource.bytes ?? 0}-${resource.version ?? ''}`;
+  return {
+    size: resource.bytes ?? 0,
+    lastModified: created,
+    etag: createHash('md5').update(etagSource).digest('hex'),
+    contentType: mimetype,
+  };
+}
+
 /** Build the public URL for a Cloudinary resource (no auth required). */
 export function getFileUrl(
   publicId: string,
@@ -159,6 +180,7 @@ export async function deleteImage(publicId: string): Promise<void> {
 export async function getFileStream(
   publicId: string,
   resourceType: CloudinaryResourceType = 'image',
+  range?: string,
 ): Promise<StorageGetFileResponse> {
   const axios = (await import('axios')).default;
   const url = getFileUrl(publicId, resourceType);
@@ -166,6 +188,8 @@ export async function getFileStream(
     method: 'GET',
     url,
     responseType: 'stream',
+    headers: range ? {Range: range} : undefined,
+    validateStatus: status => status >= 200 && status < 300,
   });
   return {
     Body: response.data as NodeJS.ReadableStream,

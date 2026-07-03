@@ -14,6 +14,75 @@ export const deleteMemoryValidator = [
 ];
 
 export default {
+  quickCapture: [
+    body('body').optional().isString().withMessage('Body must be a string'),
+    body('attachments')
+      .optional({nullable: true})
+      .customSanitizer(value => {
+        if (value === null || value === undefined || value === '') return [];
+        if (typeof value === 'string') {
+          return value
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+        }
+        return value;
+      })
+      .isArray()
+      .withMessage('Attachments must be an array'),
+    body('attachments.*')
+      .optional()
+      .isMongoId()
+      .withMessage('Each attachment must be a valid Mongo ID'),
+    body('beneficiaries')
+      .optional({nullable: true})
+      .customSanitizer(value => {
+        if (value === null || value === undefined || value === '') return [];
+        if (typeof value === 'string') {
+          return value
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+        }
+        return value;
+      })
+      .isArray()
+      .withMessage('Beneficiaries must be an array'),
+    body('beneficiaries.*')
+      .optional()
+      .isMongoId()
+      .withMessage('Each beneficiary must be a valid Mongo ID'),
+    body('transcript_uncertain')
+      .optional()
+      .isBoolean()
+      .withMessage('transcript_uncertain must be a boolean')
+      .toBoolean(),
+    body('capture_client_id')
+      .optional()
+      .isString()
+      .withMessage('capture_client_id must be a string'),
+    body('prompt_type')
+      .optional()
+      .isIn(['static', 'ai-generated'])
+      .withMessage('prompt_type must be static or ai-generated'),
+    body('prompt_id')
+      .optional()
+      .isMongoId()
+      .withMessage('prompt_id must be a valid Mongo ID'),
+    body('prompt_text')
+      .optional()
+      .isString()
+      .isLength({max: 500})
+      .withMessage('prompt_text must be a string'),
+    body('reflection_day_key')
+      .optional()
+      .matches(/^\d{4}-\d{2}-\d{2}$/)
+      .withMessage('reflection_day_key must be YYYY-MM-DD'),
+    body('visibility')
+      .optional()
+      .isIn(['private'])
+      .withMessage("visibility must be 'private' for quick capture"),
+  ],
   createMemory: [
     body('title')
       .notEmpty()
@@ -51,6 +120,10 @@ export default {
       .optional()
       .isString()
       .withMessage('Each tag must be a string'),
+    body('visibility')
+      .optional()
+      .isIn(['private', 'everyone'])
+      .withMessage("visibility must be 'private' or 'everyone'"),
   ],
   updateMemory: [
     param('id')
@@ -93,6 +166,10 @@ export default {
       .toInt(),
     body('title').optional().isString().withMessage('Title must be a string'),
     body('body').optional().isString().withMessage('Body must be a string'),
+    body('visibility')
+      .optional()
+      .isIn(['private', 'everyone'])
+      .withMessage("visibility must be 'private' or 'everyone'"),
   ],
   removeFileFromMemory: [
     param('id')

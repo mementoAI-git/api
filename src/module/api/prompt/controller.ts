@@ -16,7 +16,9 @@ export async function getPrompts(
   next: NextFunction,
 ) {
   try {
-    const {message, data} = await service.getPrompts(req.auth.id);
+    const date_key =
+      typeof req.query?.date_key === 'string' ? req.query.date_key : undefined;
+    const {message, data} = await service.getPrompts(req.auth.id, date_key);
 
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

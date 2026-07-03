@@ -21,12 +21,21 @@ export const SUPPORTED_FILE_TYPES = [
   'video/quicktime',
   'video/x-msvideo',
   'audio/webm',
+  'audio/mp4', // Safari / MediaRecorder fallback, voice memos
+  'audio/m4a', // some clients label M4A this way
+  'audio/x-m4a',
   'audio/mpeg', // .mp3
   'audio/wav', // .wav
+  'audio/x-wav',
+  'audio/wave',
+  'audio/opus',
   'audio/ogg', // .ogg
   'audio/aac', // .aac
   'audio/flac', // .flac
   'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
   'audio/mpeg',
   'audio/mp3',
   'audio/mpeg3',
@@ -100,6 +109,12 @@ export const MEMORY_STATUS = {
   DELETED: 'deleted',
 };
 
+/** Story visibility: explicit `everyone` requires client flag; default is private. */
+export const MEMORY_VISIBILITY = {
+  PRIVATE: 'private',
+  EVERYONE: 'everyone',
+} as const;
+
 export const PERSONA_INSIGHT_FIELDS = [
   'important_notes',
   'key_preferences',
@@ -113,11 +128,16 @@ export const STORAGE_PROVIDERS = {
   cloudinary: 'cloudinary',
 } as const;
 
-export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.gcs;
+export const DEFAULT_STORAGE_PROVIDER = STORAGE_PROVIDERS.s3;
+
+export const EXCLUDED_STORAGE_PROVIDER =
+  DEFAULT_STORAGE_PROVIDER === STORAGE_PROVIDERS.s3
+    ? STORAGE_PROVIDERS.gcs
+    : STORAGE_PROVIDERS.s3;
 
 export const FREE_STORAGE_LIMIT_BYTES = 5 * 1024 ** 3; // 5 GB
 
-/** Predefined tags for story/memory auto-generation. Only these may be returned by the AI. */
+/** Predefined tags for story/memory auto-generation (modal + quick-capture enrichment). Only these; AI returns 2–3. */
 export const PREDEFINED_STORY_TAGS = [
   'family',
   'friends',

@@ -416,6 +416,31 @@ const promptsDocs = {
       },
     },
   },
+  '/prompts/suggestions/overview': {
+    get: {
+      tags: ['Prompts'],
+      summary: 'Get Suggestions Overview',
+      description:
+        'Get an overview of prompt suggestions grouped by category or theme',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Overview retrieved successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'object'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   '/prompts/categories/{id}': {
     get: {
       tags: ['Prompts'],

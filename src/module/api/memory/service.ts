@@ -14,17 +14,20 @@ import {
   IAddMessageToMemory,
   ICreateMemoryPayload,
   IDeleteMemoryPayload,
+  IQuickCapturePayload,
 } from './interface';
 import Bookmark from '../../database/model/bookmarks';
 import {track} from '../activity/service';
 import {
   filterGenerator,
   MEMORY_STATUS,
+  MEMORY_VISIBILITY,
   emptyPaginatedList,
   isEmpty,
   STORAGE_PROVIDERS,
   formatBytes,
   FREE_STORAGE_LIMIT_BYTES,
+  EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils';
 import Prompt from '../../database/model/prompt';
 import {updateStreak} from '../user/service';
@@ -32,22 +35,74 @@ import Message from '../../database/model/message';
 import {updateMemoryTitle} from '../ai/utils';
 import ActivePrompt from '../../database/model/active-prompt';
 import {queueStoryInsights} from '../../../services/queues/insights';
+import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
 import {queueSummarization} from '../../../services/queues/summarization';
 import * as storage from '../../../services/storage';
 import {getConversationEnrichment} from '../../../services/enrichment';
 
 export {getConversationEnrichment};
 
+function shareIdsFromMemoryDoc(field: unknown): string[] {
+  if (!Array.isArray(field) || field.length === 0) return [];
+  const out: string[] = [];
+  for (const x of field) {
+    if (typeof x === 'string') {
+      out.push(x);
+    } else if (x && typeof x === 'object' && '_id' in x) {
+      const raw = (x as {_id: unknown})._id;
+      if (raw) out.push(String(raw));
+    }
+  }
+  return out;
+}
+
+/** Specific shares always imply private visibility; everyone only when explicit and no shares. */
+function normalizeMemoryVisibility(
+  requested: unknown,
+  hasSpecificShares: boolean,
+): 'private' | 'everyone' {
+  if (hasSpecificShares) {
+    return MEMORY_VISIBILITY.PRIVATE;
+  }
+  const v = typeof requested === 'string' ? requested.toLowerCase().trim() : '';
+  return v === MEMORY_VISIBILITY.EVERYONE
+    ? MEMORY_VISIBILITY.EVERYONE
+    : MEMORY_VISIBILITY.PRIVATE;
+}
+
 export async function memoryStats(user_id: string) {
   const memory_count = await Memory.countDocuments({
     user: user_id,
     status: {$nin: ['draft', 'deleted']},
   });
+  /** Same scope as GET /memories/stories (all tab, not bookmarked/deleted). */
+  const stories_count = await Memory.countDocuments({
+    user: user_id,
+    type: 'story',
+    status: {$nin: ['draft', 'deleted']},
+  });
+  const bookmarkedStoryIds = await Bookmark.find({user: user_id}).distinct(
+    'memory',
+  );
+  const stories_bookmarked_count =
+    bookmarkedStoryIds.length === 0
+      ? 0
+      : await Memory.countDocuments({
+          user: user_id,
+          type: 'story',
+          status: {$nin: ['draft', 'deleted']},
+          _id: {$in: bookmarkedStoryIds},
+        });
+  const stories_deleted_count = await Memory.countDocuments({
+    user: user_id,
+    type: 'story',
+    status: 'deleted',
+  });
   const bookmark_count = await Bookmark.countDocuments({user: user_id});
   const media_count = await File.countDocuments({
     user: user_id,
     deleted: false,
-    provider: {$ne: STORAGE_PROVIDERS.s3},
+    provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
   });
 
   const user = await User.findById(user_id).select('storage_limit').lean();
@@ -57,6 +112,9 @@ export async function memoryStats(user_id: string) {
 
   const data = {
     memory_count,
+    stories_count,
+    stories_bookmarked_count,
+    stories_deleted_count,
     bookmark_count,
     media_count,
     storage: `${formatBytes(storage_size)}/${formatBytes(storage_limit)}`,
@@ -81,6 +139,7 @@ export async function createMemory(
     level = 1,
     groups: groupIds = [],
     beneficiaries: beneficiaryIds = [],
+    visibility: visibilityRaw,
   } = payload;
   const user = await User.findById(user_id);
   if (!user) {
@@ -114,6 +173,13 @@ export async function createMemory(
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
 
+  const hasSpecificShares =
+    !isEmpty(validGroupIds) || !isEmpty(validBeneficiaryIds);
+  const visibility = normalizeMemoryVisibility(
+    visibilityRaw,
+    hasSpecificShares,
+  );
+
   const memory = await Memory.create({
     title,
     user: user_id,
@@ -122,8 +188,13 @@ export async function createMemory(
     status,
     tags,
     attachments,
+    visibility,
     ...(!isEmpty(validGroupIds) && {groups: validGroupIds}),
     ...(!isEmpty(validBeneficiaryIds) && {beneficiaries: validBeneficiaryIds}),
+    ...(status === MEMORY_STATUS.SAVE &&
+      body &&
+      body.trim().length > 0 &&
+      tags.length === 0 && {enrichment_status: 'pending'}),
   });
 
   // Track activity
@@ -143,12 +214,186 @@ export async function createMemory(
   if (isStory && status === 'save' && body && body.trim().length > 0) {
     void queueStoryInsights(user_id, memory.id);
     void queueSummarization(memory.id, 'story');
+    if ((memory.tags?.length || 0) === 0) {
+      void queueQuickCaptureEnrichment({
+        user_id,
+        memory_id: memory.id,
+      });
+    }
   }
 
   void updateStreak(user_id);
 
   return {
     message: 'Memory created successfully',
+    data: memory,
+  };
+}
+
+const QUICK_CAPTURE_PLACEHOLDER_TITLE = 'Thought';
+const PROMPT_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function quickCaptureMemory(
+  payload: IQuickCapturePayload,
+  user_id: string,
+  files: Express.Multer.File[] | null = null,
+) {
+  let body = (payload.body || '').trim();
+  const user = await User.findById(user_id);
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  if (
+    payload.visibility !== undefined &&
+    String(payload.visibility).toLowerCase() !== MEMORY_VISIBILITY.PRIVATE
+  ) {
+    throw new BadRequestException('Quick capture stories are private only.');
+  }
+
+  const promptType = payload.prompt_type;
+  const reflectionDayKey = (payload.reflection_day_key || '').trim();
+  let promptFields: Record<string, string> = {};
+
+  if (promptType) {
+    if (!PROMPT_DATE_RE.test(reflectionDayKey)) {
+      throw new BadRequestException(
+        'A valid reflection day is required for prompt responses.',
+      );
+    }
+    if (promptType === 'static') {
+      const pid = String(payload.prompt_id || '').trim();
+      if (!pid) {
+        throw new BadRequestException('prompt_id is required');
+      }
+      const p = await Prompt.findById(pid);
+      if (!p) {
+        throw new BadRequestException('Prompt not found');
+      }
+      promptFields = {
+        prompt: pid,
+        prompt_text: p.title,
+        prompt_type: 'static',
+        reflection_day_key: reflectionDayKey,
+      };
+    } else {
+      const ptext = String(payload.prompt_text || '').trim();
+      if (!ptext) {
+        throw new BadRequestException('prompt_text is required');
+      }
+      promptFields = {
+        prompt_text: ptext,
+        prompt_type: 'ai-generated',
+        reflection_day_key: reflectionDayKey,
+      };
+    }
+  }
+
+  let validBeneficiaryIds: string[] = [];
+  let beneficiaryIds: string[] = [];
+  const rawBen = payload.beneficiaries;
+  if (typeof rawBen === 'string' && rawBen.trim()) {
+    beneficiaryIds = rawBen
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+  } else if (Array.isArray(rawBen)) {
+    beneficiaryIds = rawBen.filter(Boolean);
+  }
+
+  if (!isEmpty(beneficiaryIds)) {
+    const beneficiaries = await Beneficiary.find({
+      _id: {$in: beneficiaryIds},
+      benefactor: user_id,
+    });
+    validBeneficiaryIds = beneficiaries.map(b => b.id);
+  }
+
+  let attachments: string[] = [];
+  const rawAtt = payload.attachments;
+  if (typeof rawAtt === 'string' && rawAtt.trim()) {
+    attachments = rawAtt
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+  } else if (Array.isArray(rawAtt)) {
+    attachments = rawAtt.filter(Boolean);
+  }
+
+  if (!isEmpty(files)) {
+    const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
+    await storage.checkStorageQuota(user, additionalBytes);
+    const unsavedFiles = await Promise.all(
+      files.map(file => storage.uploadFile(file, user_id)),
+    );
+    const savedFiles = await File.insertMany(unsavedFiles);
+    attachments = [...attachments, ...savedFiles.map(f => f.id)];
+  }
+
+  const hasText = body.length > 0;
+  const hasFiles = attachments.length > 0;
+  if (!hasText && !hasFiles) {
+    throw new BadRequestException(
+      'Add something to save — a note, voice, or photo.',
+    );
+  }
+
+  if (!hasText && hasFiles) {
+    body = '<p></p>';
+  }
+
+  const transcriptUncertain =
+    payload.transcript_uncertain === true ||
+    payload.transcript_uncertain === 'true';
+
+  const memory = await Memory.create({
+    title: QUICK_CAPTURE_PLACEHOLDER_TITLE,
+    user: user_id,
+    body,
+    level: 1,
+    status: MEMORY_STATUS.SAVE,
+    tags: [],
+    attachments,
+    type: 'story',
+    capture_source: 'quick',
+    enrichment_status: 'pending',
+    visibility: MEMORY_VISIBILITY.PRIVATE,
+    ...promptFields,
+    ...(!isEmpty(validBeneficiaryIds) && {beneficiaries: validBeneficiaryIds}),
+  });
+
+  if (promptFields.prompt) {
+    const activePrompt = await ActivePrompt.findOne({
+      user: user_id,
+      prompt: promptFields.prompt,
+    });
+    if (activePrompt) {
+      await ActivePrompt.findByIdAndUpdate(activePrompt.id, {
+        memory: memory.id,
+      });
+    }
+  }
+
+  await track(
+    {
+      title: 'Quick capture created',
+      description: `Quick capture: "${memory.id}"`,
+      type: 'memory',
+      action: 'created',
+      reference: memory.id,
+    },
+    user_id,
+  );
+
+  void queueQuickCaptureEnrichment({
+    user_id,
+    memory_id: memory.id,
+    transcript_uncertain: transcriptUncertain,
+  });
+  void updateStreak(user_id);
+
+  return {
+    message: 'Thought saved',
     data: memory,
   };
 }
@@ -180,8 +425,9 @@ async function paginateMemories(
       {
         path: 'attachments',
         select: '-base64',
-        match: {provider: {$ne: 's3'}},
+        match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
       },
+      {path: 'prompt', select: 'title'},
       {path: 'groups', select: 'name description'},
       {path: 'beneficiaries', select: 'name email relationship'},
     ],
@@ -198,10 +444,22 @@ async function paginateMemories(
 
   return {
     ...memories,
-    docs: memories.docs.map(memory => ({
-      ...memory.toObject(),
-      bookmarked: bookmarkedIds.has(memory.id),
-    })),
+    docs: memories.docs.map(memory => {
+      const obj = memory.toObject() as unknown as {
+        [key: string]: unknown;
+        prompt_text?: string;
+        prompt?: {title?: string} | string;
+      };
+      const promptTitle =
+        typeof obj.prompt === 'object' && obj.prompt
+          ? obj.prompt.title || ''
+          : '';
+      return {
+        ...obj,
+        prompt_text: obj.prompt_text || promptTitle || undefined,
+        bookmarked: bookmarkedIds.has(memory.id),
+      };
+    }),
   };
 }
 
@@ -273,7 +531,7 @@ export async function getMemory(_id: string, user_id: string = null) {
     .populate({
       path: 'attachments',
       select: '-base64',
-      match: {provider: {$ne: 's3'}},
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     })
     .populate({path: 'groups', select: 'name description'})
     .populate({path: 'beneficiaries', select: 'name email relationship'});
@@ -331,6 +589,7 @@ export async function updateMemory(
     level,
     groups: groupIds,
     beneficiaries: beneficiaryIds,
+    visibility: visibilityRaw,
   } = payload;
   const memory = await Memory.findOne({_id, user: user_id});
   if (!memory) {
@@ -375,6 +634,32 @@ export async function updateMemory(
     setPayload.beneficiaries = resolvedBeneficiaryIds;
   }
 
+  const effectiveGroupIds =
+    resolvedGroupIds !== undefined
+      ? resolvedGroupIds
+      : shareIdsFromMemoryDoc(memory.get('groups'));
+  const effectiveBenIds =
+    resolvedBeneficiaryIds !== undefined
+      ? resolvedBeneficiaryIds
+      : shareIdsFromMemoryDoc(memory.get('beneficiaries'));
+  const hasSpecificShares =
+    !isEmpty(effectiveGroupIds) || !isEmpty(effectiveBenIds);
+
+  const shouldNormalizeVisibility =
+    visibilityRaw !== undefined ||
+    groupIds !== undefined ||
+    beneficiaryIds !== undefined;
+  if (shouldNormalizeVisibility) {
+    const requested =
+      visibilityRaw !== undefined
+        ? visibilityRaw
+        : (memory.visibility ?? MEMORY_VISIBILITY.PRIVATE);
+    setPayload.visibility = normalizeMemoryVisibility(
+      requested,
+      hasSpecificShares,
+    );
+  }
+
   const updatedMemory = await Memory.findByIdAndUpdate(
     _id,
     {
@@ -394,6 +679,19 @@ export async function updateMemory(
   if (hasChanges && updatedMemory?.status === MEMORY_STATUS.SAVE) {
     void queueStoryInsights(user_id, updatedMemory.id);
     void queueSummarization(updatedMemory.id, 'story');
+    if (
+      (updatedMemory.tags?.length || 0) === 0 &&
+      updatedMemory.body &&
+      updatedMemory.body.trim().length > 0
+    ) {
+      await Memory.findByIdAndUpdate(updatedMemory.id, {
+        enrichment_status: 'pending',
+      });
+      void queueQuickCaptureEnrichment({
+        user_id,
+        memory_id: updatedMemory.id,
+      });
+    }
   }
 
   await track(

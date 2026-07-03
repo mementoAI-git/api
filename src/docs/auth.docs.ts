@@ -715,6 +715,75 @@ const authDocs = {
       },
     },
   },
+  '/auth/2fa/verify': {
+    post: {
+      tags: ['Auth'],
+      summary: 'Verify 2FA Login',
+      description: 'Complete login by verifying TOTP code.',
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['email', 'code'],
+              properties: {
+                email: {type: 'string'},
+                code: {type: 'string'},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: '2FA verified',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'object'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/auth/passkey/register/begin': {
+    post: {
+      tags: ['Auth'],
+      summary: 'Begin Passkey Registration',
+      security: [{bearerAuth: []}],
+      responses: {200: {description: 'Options for registration'}},
+    },
+  },
+  '/auth/passkey/register/complete': {
+    post: {
+      tags: ['Auth'],
+      summary: 'Complete Passkey Registration',
+      security: [{bearerAuth: []}],
+      requestBody: {content: {'application/json': {schema: {type: 'object'}}}},
+      responses: {200: {description: 'Registration complete'}},
+    },
+  },
+  '/auth/passkey/login/begin': {
+    post: {
+      tags: ['Auth'],
+      summary: 'Begin Passkey Login',
+      responses: {200: {description: 'Options for login'}},
+    },
+  },
+  '/auth/passkey/login/complete': {
+    post: {
+      tags: ['Auth'],
+      summary: 'Complete Passkey Login',
+      requestBody: {content: {'application/json': {schema: {type: 'object'}}}},
+      responses: {200: {description: 'Login successful'}},
+    },
+  },
 };
 
 export default authDocs;

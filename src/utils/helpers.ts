@@ -13,7 +13,7 @@ import {IPagination} from './interface';
 import dayjs from 'dayjs';
 import {FilterQuery} from 'mongoose';
 import {writeFile, unlink} from 'fs/promises';
-import {join} from 'path';
+import {extname, join} from 'path';
 import {tmpdir} from 'os';
 import {getAudioDurationInSeconds} from 'get-audio-duration';
 import mongoose from '../module/database/connection';
@@ -104,22 +104,76 @@ export const validateRequest = (req: Request) => {
   }
 };
 
+/** MIME type without parameters (e.g. `codecs=`), lowercased — matches browser `MediaRecorder` types like `audio/webm;codecs=opus`. */
+export function uploadMimeBaseType(mimetype: string): string {
+  return mimetype.split(';')[0]!.trim().toLowerCase();
+}
+
+/** When Safari/mobile send `application/octet-stream` or an empty type for M4A/MP4 blobs, infer from filename. Keys must stay in sync with `SUPPORTED_FILE_TYPES`. */
+const UPLOAD_EXT_FALLBACK: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.heic': 'image/heic',
+  '.pdf': 'application/pdf',
+  '.doc': 'application/msword',
+  '.docx':
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.txt': 'text/plain',
+  '.mp4': 'video/mp4',
+  '.m4a': 'audio/mp4',
+  '.mp3': 'audio/mpeg',
+  '.mpeg': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.webm': 'video/webm',
+  '.ogg': 'audio/ogg',
+  '.flac': 'audio/flac',
+  '.aac': 'audio/aac',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+};
+
+const allowedUploadMimeSet = new Set<string>(SUPPORTED_FILE_TYPES);
+
+/**
+ * Effective MIME for validation and storage. Fixes octet-stream / missing types from mobile recorders.
+ */
+export function resolveUploadMime(file: {
+  mimetype: string;
+  originalname: string;
+}): string {
+  const base = uploadMimeBaseType(file.mimetype);
+  if (
+    base &&
+    base !== 'application/octet-stream' &&
+    allowedUploadMimeSet.has(base)
+  ) {
+    return base;
+  }
+  const ext = extname(file.originalname || '').toLowerCase();
+  const fromExt = UPLOAD_EXT_FALLBACK[ext];
+  if (fromExt && allowedUploadMimeSet.has(fromExt)) {
+    return fromExt;
+  }
+  return base;
+}
+
 export const getFiles = (
   req: Request,
   required = false,
 ): Express.Multer.File[] => {
   const files = req.files as unknown as Express.Multer.File[] | undefined;
 
-  if (required && !files) {
+  if (required && (!files || files.length === 0)) {
     throw new UnprocessableContent('Upload a file');
   }
 
   if (!files) return [];
 
-  const allowedTypes = new Set<string>(SUPPORTED_FILE_TYPES);
-  if (files.some(f => !allowedTypes.has(f.mimetype))) {
+  const allowedTypes = allowedUploadMimeSet;
+  if (files.some(f => !allowedTypes.has(resolveUploadMime(f)))) {
     throw new UnprocessableContent(
-      'Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, AVI videos, and audio files (MP3, WAV, OGG, AAC, FLAC, WebM).',
+      'Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, Word (.doc, .docx), plain text, MP4, WebM, QuickTime, AVI videos, and common audio formats (MP3, WAV, OGG, AAC, FLAC, WebM).',
     );
   }
 

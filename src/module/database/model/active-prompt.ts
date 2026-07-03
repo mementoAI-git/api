@@ -5,6 +5,8 @@ interface IActivePrompt {
   prompt: string | IPrompt;
   memory: string;
   user: string;
+  /** Calendar day (YYYY-MM-DD) in the user's timezone — from client `date_key`. */
+  day_key?: string;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +24,10 @@ const activePrompt = new Schema<IActivePrompt>(
       ref: 'user',
       index: true,
     },
+    day_key: {
+      type: String,
+      index: true,
+    },
   },
   {
     timestamps: {
@@ -30,6 +36,8 @@ const activePrompt = new Schema<IActivePrompt>(
     },
   },
 );
+
+activePrompt.index({user: 1, day_key: 1});
 
 const ActivePrompt = model<IActivePrompt>('activeprompt', activePrompt);
 export default ActivePrompt;

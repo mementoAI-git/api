@@ -1,4 +1,3 @@
-import {createUserContent} from '@google/genai';
 import gemini, {GEMINI_MODEL} from '../../gemini';
 import {AIProvider, ChatMessage} from '../types';
 
@@ -18,9 +17,11 @@ export class GeminiProvider implements AIProvider {
     const systemMsg = messages.find(m => m.role === 'system');
     const userMessages = messages.filter(m => m.role !== 'system');
 
-    // Combine all user/assistant messages into a single prompt
-    const prompt = userMessages.map(m => m.content).join('\n\n');
-    const contents = createUserContent([prompt]);
+    // Map user/assistant messages into proper multi-turn content for the SDK
+    const contents = userMessages.map(m => ({
+      role: m.role === 'assistant' ? ('model' as const) : ('user' as const),
+      parts: [{text: m.content}],
+    }));
 
     const response = await gemini.models.generateContent({
       model: GEMINI_MODEL,

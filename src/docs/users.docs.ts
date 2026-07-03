@@ -256,120 +256,54 @@ const usersDocs = {
       },
     },
   },
-  '/users/context': {
-    put: {
+  '/users/onboarding-details': {
+    get: {
       tags: ['Users'],
-      summary: 'Update User Context',
+      summary: 'Get Onboarding Details',
       description:
-        'Update user context information including preferences, notes, and goals',
+        'Retrieve the current onboarding state and details for the user',
       security: [{bearerAuth: []}],
-      requestBody: {
-        required: true,
-        content: {
-          'application/json': {
-            schema: {
-              type: 'object',
-              properties: {
-                important_notes: {
-                  type: 'array',
-                  items: {type: 'string'},
-                  description: 'Array of important notes',
-                  example: ['Note 1', 'Note 2'],
-                },
-                key_preferences: {
-                  type: 'array',
-                  items: {type: 'string'},
-                  description: 'Array of key preferences',
-                  example: ['Preference 1'],
-                },
-                conversation_history_summary: {
-                  type: 'string',
-                  description: 'Summary of conversation history',
-                  example: 'User prefers detailed explanations',
-                },
-                emotional_state_trends: {
-                  type: 'array',
-                  items: {type: 'string'},
-                  description: 'Array of emotional state trends',
-                  example: ['positive', 'calm'],
-                },
-                goals_and_aspirations: {
-                  type: 'array',
-                  items: {type: 'string'},
-                  description: 'Array of goals and aspirations',
-                  example: ['Learn new skills', 'Travel more'],
-                },
-                self_description: {
-                  type: 'string',
-                  maxLength: 500,
-                  description: 'User self-description',
-                  example:
-                    'I am a software developer passionate about technology',
-                },
-                current_priority: {
-                  type: 'string',
-                  maxLength: 200,
-                  description: 'Current priority',
-                  example: 'Completing project deadline',
-                },
-                join_reasons: {
-                  type: 'array',
-                  items: {type: 'string'},
-                  description: 'Reasons for joining',
-                  example: ['Memory preservation', 'Family connections'],
-                },
-              },
-            },
-          },
-        },
-      },
       responses: {
         200: {
-          description: 'Context updated successfully',
+          description: 'Onboarding details retrieved successfully',
           content: {
             'application/json': {
               schema: {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {
-                    type: 'string',
-                    example: 'Context updated successfully',
-                  },
                   data: {type: 'object'},
                 },
               },
             },
           },
         },
-        400: {
-          description: 'Validation error',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
-            },
-          },
-        },
-        401: {
-          description: 'Unauthorized',
-          content: {
-            'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
+      },
+    },
+  },
+  '/users/onboarding': {
+    post: {
+      tags: ['Users'],
+      summary: 'Update Onboarding Step',
+      description: 'Update user progress through the onboarding steps',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                step: {type: 'number'},
+                nickname: {type: 'string'},
+                join_reasons: {type: 'array', items: {type: 'string'}},
+              },
             },
           },
         },
       },
-    },
-  },
-  '/users/update-streak': {
-    post: {
-      tags: ['Users'],
-      summary: 'Update User Streak',
-      description: 'Update user daily streak counter',
-      security: [{bearerAuth: []}],
       responses: {
         200: {
-          description: 'Streak updated successfully',
+          description: 'Onboarding updated',
           content: {
             'application/json': {
               schema: {
@@ -378,26 +312,63 @@ const usersDocs = {
                   status: {type: 'string', example: 'success'},
                   message: {
                     type: 'string',
-                    example: 'Streak updated successfully',
-                  },
-                  data: {
-                    type: 'object',
-                    properties: {
-                      streak: {type: 'number', example: 6},
-                    },
+                    example: 'Onboarding updated successfully',
                   },
                 },
               },
             },
           },
         },
-        401: {
-          description: 'Unauthorized',
+      },
+    },
+  },
+  '/users/onboarding/skip': {
+    post: {
+      tags: ['Users'],
+      summary: 'Skip Onboarding',
+      description: 'Mark onboarding as skipped for the user',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Onboarding skipped',
           content: {
             'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                },
+              },
             },
           },
+        },
+      },
+    },
+  },
+  '/users/onboarding/chat/prompt': {
+    post: {
+      tags: ['Users'],
+      summary: 'Stream Onboarding Chat',
+      description:
+        'Stream an AI chat response for the interactive onboarding experience',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                messages: {type: 'array', items: {type: 'object'}},
+                nickname: {type: 'string'},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Streaming response',
+          content: {'text/plain': {schema: {type: 'string'}}},
         },
       },
     },
@@ -653,10 +624,10 @@ const usersDocs = {
                   example: 'I am a software developer',
                 },
                 current_priority: {
-                  type: 'string',
-                  maxLength: 200,
-                  description: 'Current priority',
-                  example: 'Learning new technologies',
+                  type: 'array',
+                  items: {type: 'string'},
+                  description: 'Current priorities',
+                  example: ['Learning new technologies', 'Writing memories'],
                 },
                 dob: {
                   type: 'string',
@@ -804,53 +775,156 @@ const usersDocs = {
       },
     },
   },
-  // TODO: Remove this endpoint after migration is complete
-  '/users/migrate-context-to-persona': {
-    post: {
+  '/users/persona': {
+    get: {
       tags: ['Users'],
-      summary: 'Migrate User Context to Persona',
+      summary: 'Get Persona Profile',
       description:
-        'Migrate existing user context data from User model to Persona model. This is a one-time migration endpoint that should be removed after migration is complete.',
+        "Retrieve the user's AI-generated persona profile and traits",
       security: [{bearerAuth: []}],
       responses: {
         200: {
-          description: 'Migration completed successfully',
+          description: 'Persona retrieved successfully',
           content: {
             'application/json': {
               schema: {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  message: {type: 'string', example: 'Migration completed'},
-                  data: {
-                    type: 'object',
-                    properties: {
-                      totalUsersWithContext: {type: 'number', example: 100},
-                      migrated: {type: 'number', example: 95},
-                      skipped: {type: 'number', example: 5},
-                      errors: {type: 'number', example: 0},
-                      errorDetails: {
-                        type: 'array',
-                        items: {
-                          type: 'object',
-                          properties: {
-                            user_id: {type: 'string'},
-                            error: {type: 'string'},
-                          },
-                        },
-                      },
-                    },
-                  },
+                  data: {type: 'object'},
                 },
               },
             },
           },
         },
-        401: {
-          description: 'Unauthorized',
+      },
+    },
+    put: {
+      tags: ['Users'],
+      summary: 'Update Persona Profile',
+      description: 'Manually update user persona traits and preferences',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                important_notes: {type: 'array', items: {type: 'string'}},
+                key_preferences: {type: 'array', items: {type: 'string'}},
+                conversation_history_summary: {type: 'string'},
+                emotional_state_trends: {
+                  type: 'array',
+                  items: {type: 'string'},
+                },
+                goals_and_aspirations: {type: 'array', items: {type: 'string'}},
+                self_description: {type: 'string', maxLength: 500},
+                current_priority: {type: 'array', items: {type: 'string'}},
+                join_reasons: {type: 'array', items: {type: 'string'}},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Persona updated successfully',
           content: {
             'application/json': {
-              schema: {$ref: '#/components/schemas/Error'},
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/users/persona/memory-insights-summary': {
+    get: {
+      tags: ['Users'],
+      summary: 'Get Memory Insights Summary',
+      description: 'Get a summary of insights derived from user memories',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'refresh',
+          in: 'query',
+          schema: {type: 'boolean', default: false},
+          description: 'Force a refresh of insights',
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Insights summary retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'object'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/users/passkeys': {
+    get: {
+      tags: ['Users'],
+      summary: 'List Passkeys',
+      description: 'Retrieve a list of passkeys registered to the user',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Passkeys retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {type: 'array', items: {type: 'object'}},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/users/passkeys/{credential_id}': {
+    delete: {
+      tags: ['Users'],
+      summary: 'Delete Passkey',
+      description: 'Unregister a passkey',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'credential_id',
+          in: 'path',
+          required: true,
+          description: 'Credential ID of the passkey',
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Passkey deleted',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                },
+              },
             },
           },
         },

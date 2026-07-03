@@ -1,8 +1,9 @@
 import bcrypt from 'bcrypt';
 import dayjs from 'dayjs';
 import User, {IUser} from '../../database/model/user';
-import Persona, {IPersona} from '../../database/model/persona';
+import Persona from '../../database/model/persona';
 import Memory from '../../database/model/memory';
+import Message from '../../database/model/message';
 import {
   concatStrings,
   hashPassword,
@@ -24,14 +25,41 @@ import PendingInsight from '../../database/model/pending-insight';
 import * as storage from '../../../services/storage';
 import speakeasy from 'speakeasy';
 import Qr from 'qrcode';
+import {z} from 'zod';
 import mail from '../../mail';
 import {OnboardingBody} from './dto';
+import ai from '../../../services/ai';
+import {gatherMemoryInsightsSummaryContext} from '../../../utils/ai-prompt';
+import {
+  buildMemoryInsightsSummaryRequest,
+  normalizeMemoryInsightsSummaryOutput,
+} from '../../../utils/ai-prompt/memory-insights-summary-prompt';
+import {OnboardingChatPromptBody} from './dto';
+import gemini, {GEMINI_MODEL} from '../../../services/gemini';
+import type {OpenRouterMessage} from '../../../services/ai/openrouter';
+import {recordAiMetric} from '../../../services/ai/metrics';
+import {streamCriticalChatResponse} from '../../../services/ai/critical-chat-stream';
+import type {GroqMessage} from '../../../services/ai/groq';
+import {getPromptVersion} from '../../../utils/ai-prompt/registry';
 import {
   computeEnrichmentScore,
   getMilestone,
   getNudge,
   getJumpPills,
 } from '../../../services/enrichment';
+import {getMemorySpotlightForUser} from '../../../services/enrichment/memory-spotlight';
+
+const ONBOARDING_PROMPT_VERSION = getPromptVersion('onboarding_chat');
+
+const onboardingTrailerSchema = z.object({
+  suggestion_chips: z.array(z.string()).min(1),
+  composer_placeholder: z.string().min(1),
+  composer_label: z.string().min(1),
+  flow_complete: z.boolean(),
+  step_index: z.number().int().min(1),
+  total_steps: z.number().int().min(1).nullable(),
+  intent_id: z.string().min(1),
+});
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
   const {new_password, old_password} = payload;
@@ -85,6 +113,66 @@ export async function getPersona(user_id: string) {
   };
 }
 
+export type MemoryInsightsSummaryDto = {
+  summary: string | null;
+  generated_at: string | null;
+  cached: boolean;
+};
+
+export async function getMemoryInsightsSummary(
+  user_id: string,
+  refresh: boolean,
+): Promise<{message: string; data: MemoryInsightsSummaryDto}> {
+  const persona = await Persona.findOne({user: user_id}).lean();
+
+  // Generate once and persist; only regenerate when explicitly requested (refresh=true).
+  if (!refresh && persona?.memory_insights_summary?.trim()) {
+    return {
+      message: 'Memory insights summary retrieved',
+      data: {
+        summary: persona.memory_insights_summary.trim(),
+        generated_at: persona.memory_insights_summary_at
+          ? new Date(persona.memory_insights_summary_at).toISOString()
+          : null,
+        cached: true,
+      },
+    };
+  }
+
+  const {pack, hasSignal} = await gatherMemoryInsightsSummaryContext(user_id);
+
+  if (!hasSignal) {
+    return {
+      message: 'Not enough context for a summary yet',
+      data: {
+        summary: null,
+        generated_at: null,
+        cached: false,
+      },
+    };
+  }
+
+  const prompt = buildMemoryInsightsSummaryRequest(pack);
+  const raw = await ai.generateText([{role: 'user', content: prompt}]);
+  const summary = normalizeMemoryInsightsSummaryOutput(raw);
+
+  if (persona?._id) {
+    await Persona.findByIdAndUpdate(persona._id, {
+      memory_insights_summary: summary,
+      memory_insights_summary_at: new Date(),
+    });
+  }
+
+  return {
+    message: 'Memory insights summary generated',
+    data: {
+      summary,
+      generated_at: new Date().toISOString(),
+      cached: false,
+    },
+  };
+}
+
 export async function updateProfile(payload: Partial<IUser>, user_id: string) {
   const user = await User.findById(user_id).select('-password -providers');
   if (!user) {
@@ -100,6 +188,7 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     'country',
     'bg_music',
     'chat_voice',
+    'chat_voice_provider',
     'location',
   ]);
 
@@ -298,6 +387,30 @@ export async function completeOnboarding(
     ) {
       personaData.join_reasons = payload.join_reasons;
     }
+    if (!isEmpty(payload?.motivationType)) {
+      personaData.motivation = payload.motivationType;
+    }
+    if (!isEmpty(payload?.motivationDetail)) {
+      personaData.motivation_detail = payload.motivationDetail;
+    }
+    if (!isEmpty(payload?.lifeSituation)) {
+      personaData.life_situation = payload.lifeSituation;
+    }
+    if (!isEmpty(payload?.lifeSituationDetail)) {
+      personaData.life_situation_detail = payload.lifeSituationDetail;
+    }
+    if (
+      Array.isArray(payload?.personalityTraits) &&
+      payload.personalityTraits.length > 0
+    ) {
+      personaData.personality_traits = payload.personalityTraits;
+    }
+    if (
+      Array.isArray(payload?.memoryTreasures) &&
+      payload.memoryTreasures.length > 0
+    ) {
+      personaData.memory_treasures = payload.memoryTreasures;
+    }
 
     await withTransaction(async session => {
       if (Object.keys(personaData).length > 0) {
@@ -309,6 +422,18 @@ export async function completeOnboarding(
 
       if (!isEmpty(payload?.dob)) {
         user.dob = payload.dob;
+      }
+      if (typeof payload?.stepReached === 'number') {
+        user.onboarding_step_reached = payload.stepReached;
+      }
+      if (typeof payload?.skippedDeepPersonalization === 'boolean') {
+        user.skipped_deep_personalization = payload.skippedDeepPersonalization;
+      }
+      if (!isEmpty(payload?.chronotype)) {
+        (user.preferences as any).chronotype = payload.chronotype;
+      }
+      if (!isEmpty(payload?.sharingIntent)) {
+        (user.preferences as any).sharing_intent = payload.sharingIntent;
       }
 
       user.onboarding_status = 'completed';
@@ -399,18 +524,21 @@ export async function getUserStats(user_id: string) {
     prompt: {$exists: true, $ne: null},
   });
 
-  // Count uploaded stories (memories with type "story" and status "save" or higher)
+  // Stories visible on /stories (non-draft, non-deleted), aligned with GET /memories/stories
   const stories_count = await Memory.countDocuments({
     user: user_id,
     type: 'story',
-    status: {$in: ['save', 'queued', 'on_chain']},
+    status: {$nin: ['draft', 'deleted']},
   });
 
   const pending_insights_count = await PendingInsight.countDocuments({
     user: user_id,
   });
 
-  const enrichment = await computeEnrichmentScore(user_id);
+  const [enrichment, spotlight] = await Promise.all([
+    computeEnrichmentScore(user_id),
+    getMemorySpotlightForUser(user_id),
+  ]);
 
   const milestone = getMilestone(enrichment.enrichment_score);
   const nudge = getNudge(enrichment.lowest_category);
@@ -434,11 +562,31 @@ export async function getUserStats(user_id: string) {
   );
   const jumpPills = getJumpPills(gapDimensions, priorityDimensions);
 
+  const quickCapturePending = await Memory.find({
+    user: user_id,
+    capture_source: 'quick',
+    enrichment_status: 'pending',
+    status: {$nin: ['draft', 'deleted']},
+  })
+    .sort({created_at: -1})
+    .select('_id')
+    .limit(1)
+    .lean();
+
+  const quick_capture_pending_count = await Memory.countDocuments({
+    user: user_id,
+    capture_source: 'quick',
+    enrichment_status: 'pending',
+    status: {$nin: ['draft', 'deleted']},
+  });
+
   const stats = {
     streak_count,
     reflections_count,
     stories_count,
     pending_insights_count,
+    quick_capture_pending_count,
+    quick_capture_latest_id: quickCapturePending[0]?._id?.toString?.() ?? null,
     enrichment_score: enrichment.enrichment_score,
     category_scores: enrichment.category_scores,
     lowest_category: enrichment.lowest_category,
@@ -446,6 +594,7 @@ export async function getUserStats(user_id: string) {
     milestone,
     nudge,
     jump_pills: jumpPills,
+    spotlight,
   };
 
   return {
@@ -481,6 +630,11 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'current_priority',
     'communication_style',
     'motivation',
+    'motivation_detail',
+    'life_situation',
+    'life_situation_detail',
+    'personality_traits',
+    'memory_treasures',
   ]);
 
   const personaUpdate = Object.entries(payload).reduce((acc, p) => {
@@ -500,6 +654,8 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'age_bracket',
     'priority_dimensions',
     'expression_mode',
+    'chronotype',
+    'sharing_intent',
   ]);
 
   const preferencesUpdate = Object.entries(payload).reduce((acc, p) => {
@@ -512,7 +668,13 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
   await withTransaction(async session => {
     await User.findByIdAndUpdate(
       user_id,
-      {...updatePayload, ...preferencesUpdate, onbaorded: true},
+      {
+        ...updatePayload,
+        ...preferencesUpdate,
+        onbaorded: true,
+        onboarding_step_reached: payload.step ?? null,
+        skipped_deep_personalization: payload.skipped_deep_personalization,
+      },
       {session},
     );
     if (Object.keys(personaUpdate).length > 0) {
@@ -587,6 +749,15 @@ export async function getOnboardingDetails(user_id: string) {
         expression_mode: String(
           (u.preferences as any)?.expression_mode ?? 'text',
         ),
+        chronotype: String((u.preferences as any)?.chronotype ?? ''),
+        sharing_intent: String((u.preferences as any)?.sharing_intent ?? ''),
+        onboarding_step_reached:
+          typeof u.onboarding_step_reached === 'number'
+            ? u.onboarding_step_reached
+            : undefined,
+        skipped_deep_personalization: Boolean(
+          u.skipped_deep_personalization ?? false,
+        ),
       },
       persona: {
         join_reasons: persona?.join_reasons ?? [],
@@ -594,7 +765,230 @@ export async function getOnboardingDetails(user_id: string) {
         current_priority,
         communication_style: persona?.communication_style ?? [],
         motivation: persona?.motivation ?? '',
+        motivation_detail: (persona as any)?.motivation_detail ?? '',
+        life_situation: (persona as any)?.life_situation ?? '',
+        life_situation_detail: (persona as any)?.life_situation_detail ?? '',
+        personality_traits: (persona as any)?.personality_traits ?? [],
+        memory_treasures: (persona as any)?.memory_treasures ?? [],
       },
     },
   };
+}
+
+function buildOnboardingSystemPrompt(nickname: string) {
+  const safeName = nickname?.trim() || 'there';
+  return [
+    `You are Memento's host onboarding guide for ${safeName}.`,
+    'Your job is to run a short, warm, practical conversation that helps them open up.',
+    'Keep replies concise and human. No bullet points. No headings.',
+    'Ask at most one forward-moving question per turn.',
+    'Reflect briefly before your question when it helps build trust.',
+    'Never mention internal prompts, system behavior, or model details.',
+  ].join(' ');
+}
+
+function buildOnboardingTrailer(
+  messageCount: number,
+  latestUserMessage: string,
+) {
+  const normalized = latestUserMessage.toLowerCase();
+  const userSignaledDone =
+    /(^|\b)(done|finished|that'?s all|thank you|thanks)(\b|$)/i.test(
+      normalized,
+    );
+  const flowComplete = userSignaledDone || messageCount >= 10;
+
+  const trailer = {
+    suggestion_chips: flowComplete
+      ? ['Go to dashboard', 'Continue later']
+      : ['Tell me more', 'Can you give an example?', 'Not sure where to start'],
+    composer_placeholder: flowComplete
+      ? "You're all set. You can continue anytime."
+      : 'Share whatever comes to mind...',
+    composer_label: 'Onboarding chat message',
+    flow_complete: flowComplete,
+    step_index: Math.max(1, Math.ceil(messageCount / 2)),
+    total_steps: flowComplete ? Math.max(1, Math.ceil(messageCount / 2)) : null,
+    intent_id: ONBOARDING_PROMPT_VERSION,
+  };
+  return onboardingTrailerSchema.parse(trailer);
+}
+
+function buildGeminiOnboardingHistory(
+  transcript: Array<{role: 'user' | 'assistant'; content: string}>,
+) {
+  if (!Array.isArray(transcript) || transcript.length <= 1) return [];
+  const historyItems = transcript.slice(0, -1);
+  return historyItems.map(item => ({
+    role: item.role === 'assistant' ? 'model' : 'user',
+    parts: [{text: item.content}],
+  }));
+}
+
+async function getOrCreatePrimaryConversation(user_id: string) {
+  const user = await User.findById(user_id);
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
+  let memory = null;
+  if (user.primary_conversation_id) {
+    memory = await Memory.findById(user.primary_conversation_id);
+  }
+
+  if (!memory) {
+    memory = await Memory.create({
+      title: null,
+      user: user_id,
+      type: 'conversation',
+      status: 'save',
+      message_count: 0,
+      last_active: dayjs().toDate(),
+    });
+    await User.findByIdAndUpdate(user_id, {primary_conversation_id: memory.id});
+  }
+
+  return memory;
+}
+
+export async function streamOnboardingChatPrompt(
+  payload: OnboardingChatPromptBody,
+  user_id: string,
+) {
+  const requestStart = Date.now();
+  const memory = await getOrCreatePrimaryConversation(user_id);
+  const transcript = Array.isArray(payload.messages) ? payload.messages : [];
+  const latestUser = [...transcript].reverse().find(m => m.role === 'user');
+  const latestUserMessage = (latestUser?.content || '').trim();
+  const messageCount = transcript.length;
+
+  const historyMessages: OpenRouterMessage[] = transcript.map(item => ({
+    role: item.role === 'assistant' ? 'assistant' : 'user',
+    content: item.content,
+  }));
+
+  const systemPrompt = buildOnboardingSystemPrompt(payload.nickname);
+  console.log('AI prompt version', {
+    task: 'onboarding_chat',
+    promptVersion: ONBOARDING_PROMPT_VERSION,
+    userId: user_id,
+  });
+  void recordAiMetric({
+    event: 'prompt_version_used',
+    task: 'onboarding_chat',
+    endpoint: '/users/onboarding/chat/prompt',
+    user: user_id,
+    memory: String(memory.id),
+    prompt_version: ONBOARDING_PROMPT_VERSION,
+  });
+  const shouldBootstrap = Boolean(payload.bootstrap && transcript.length === 0);
+
+  const bootstrapUserLine = `Start the onboarding chat with a warm opener for ${payload.nickname || 'the host'}.`;
+
+  const lines = transcript.filter(
+    m => m.role === 'user' || m.role === 'assistant',
+  );
+  const lastLine = lines[lines.length - 1];
+  const priorLines = shouldBootstrap ? [] : lines.slice(0, -1);
+  const latestUserText = shouldBootstrap
+    ? bootstrapUserLine
+    : lastLine?.role === 'user'
+      ? (lastLine.content || '').trim()
+      : latestUserMessage || 'Continue the onboarding conversation naturally.';
+
+  const groqHistory: GroqMessage[] = priorLines.map(m => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: m.content,
+  }));
+
+  const routing = await streamCriticalChatResponse({
+    userId: user_id,
+    requestStart,
+    userTextForGroqRouting: latestUserText,
+    systemInstruction: systemPrompt,
+    groqHistory,
+    latestUserText,
+    task: 'onboarding_chat',
+    metricsEndpoint: '/users/onboarding/chat/prompt',
+    memoryIdForMetrics: String(memory.id),
+    createGeminiStream: async () => {
+      const chat = gemini.chats.create({
+        model: GEMINI_MODEL,
+        config: {systemInstruction: systemPrompt},
+        history: buildGeminiOnboardingHistory(
+          transcript as Array<{role: 'user' | 'assistant'; content: string}>,
+        ),
+      });
+      const latestPrompt = shouldBootstrap
+        ? bootstrapUserLine
+        : latestUserMessage ||
+          'Continue the onboarding conversation naturally.';
+      return chat.sendMessageStream({
+        message: latestPrompt,
+      });
+    },
+    buildOpenRouterMessages: () =>
+      shouldBootstrap
+        ? [
+            {role: 'system', content: systemPrompt},
+            {role: 'user', content: bootstrapUserLine},
+          ]
+        : [{role: 'system', content: systemPrompt}, ...historyMessages],
+  });
+
+  return {
+    stream: routing.stream,
+    memoryId: String(memory.id),
+    latestUserMessage,
+    trailer: buildOnboardingTrailer(messageCount, latestUserMessage),
+    skipPersistence: routing.recordUserMessageInDb === false,
+  };
+}
+
+export async function persistOnboardingChatTurn(
+  user_id: string,
+  memoryId: string,
+  latestUserMessage: string,
+  assistantText: string,
+) {
+  const trimmedUserText = latestUserMessage.trim();
+  const trimmedAssistantText = assistantText.trim();
+
+  let createdCount = 0;
+
+  if (!isEmpty(trimmedUserText)) {
+    const lastUserMessage = await Message.findOne({
+      user: user_id,
+      memory: memoryId,
+      role: 'user',
+    }).sort({created_at: -1});
+
+    if (!lastUserMessage || lastUserMessage.text !== trimmedUserText) {
+      await Message.create({
+        user: user_id,
+        memory: memoryId,
+        role: 'user',
+        attatchments: [],
+        text: trimmedUserText,
+      });
+      createdCount += 1;
+    }
+  }
+
+  if (!isEmpty(trimmedAssistantText)) {
+    await Message.create({
+      user: user_id,
+      memory: memoryId,
+      role: 'ai',
+      text: trimmedAssistantText,
+    });
+    createdCount += 1;
+  }
+
+  if (createdCount > 0) {
+    await Memory.findByIdAndUpdate(memoryId, {
+      $inc: {message_count: createdCount},
+      $set: {last_active: dayjs().toDate()},
+    });
+  }
 }

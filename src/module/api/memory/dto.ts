@@ -65,6 +65,11 @@ const groupsSchema = z
   .optional()
   .default([]);
 
+const visibilitySchema = z
+  .enum(['private', 'everyone'])
+  .optional()
+  .default('private');
+
 // Create memory
 export const createMemorySchema = z.object({
   body: z.strictObject({
@@ -75,6 +80,7 @@ export const createMemorySchema = z.object({
     tags: tagsSchema,
     groups: groupsSchema,
     beneficiaries: beneficiariesSchema,
+    visibility: visibilitySchema,
   }),
 });
 
@@ -92,6 +98,7 @@ export const updateMemorySchema = z.object({
     body: z.string().optional(),
     groups: groupsSchema.optional(),
     beneficiaries: beneficiariesSchema.optional(),
+    visibility: z.enum(['private', 'everyone']).optional(),
   }),
 });
 

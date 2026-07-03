@@ -1,4 +1,4 @@
-import {model, Schema, Types} from 'mongoose';
+import {model, Schema} from 'mongoose';
 
 export interface IPersona {
   _id?: string;
@@ -12,13 +12,21 @@ export interface IPersona {
   current_priority?: string[];
   join_reasons?: string[];
   motivation?: string;
+  motivation_detail?: string;
   open_threads?: string[];
   audience?: string[];
   communication_style?: string[];
+  life_situation?: string;
+  life_situation_detail?: string;
+  personality_traits?: string[];
+  memory_treasures?: string[];
   last_array_update?: Date;
   last_summarized_at?: Date;
   last_update?: Record<string, Date>; // Per-field update timestamps
   last_summarized?: Record<string, Date>; // Per-field summarization timestamps
+  /** AI-written Memory Insights modal summary (cached). */
+  memory_insights_summary?: string;
+  memory_insights_summary_at?: Date;
   created_at: string;
   updated_at: string;
 }
@@ -40,9 +48,14 @@ const persona = new Schema<IPersona>(
     current_priority: [String],
     join_reasons: [String],
     motivation: String,
+    motivation_detail: String,
     open_threads: [String],
     audience: [String],
     communication_style: [String],
+    life_situation: String,
+    life_situation_detail: String,
+    personality_traits: [String],
+    memory_treasures: [String],
     last_array_update: Date,
     last_summarized_at: Date,
     last_update: {
@@ -55,6 +68,8 @@ const persona = new Schema<IPersona>(
       of: Date,
       default: {},
     },
+    memory_insights_summary: String,
+    memory_insights_summary_at: Date,
   },
   {
     timestamps: {

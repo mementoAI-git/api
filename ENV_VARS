@@ -1,0 +1,60 @@
+
+  1. Core App Settings
+   - PORT: Port the server runs on (defaults to 5000).
+   - NODE_ENV: Application environment (development, production, test).
+   - FRONTEND_URL: URL of the frontend application.
+   - BACKEND_URL: URL of the backend API.
+   - TEMP_PATH: Directory for temporary files (defaults to system temp).
+
+  2. Database & Cache
+   - MONGODB_URL: Connection string for MongoDB.
+   - REDIS_URL: Connection string for Redis.
+
+  3. Security & Authentication
+   - JWT_SECRET: Secret key for signing JWTs.
+   - GOOGLE_ID / GOOGLE_SECRET: Google OAuth credentials.
+   - META_ID / META_SECRET: Meta (Facebook) OAuth credentials.
+   - APPLE_ID / APPLE_SECRET: Apple OAuth credentials.
+   - WEBAUTHN_RP_ID: WebAuthn Relying Party ID (e.g., localhost).
+   - WEBAUTHN_RP_NAME: WebAuthn Relying Party Name (e.g., Memento).
+   - WEBAUTHN_ORIGIN: Allowed origin for WebAuthn (e.g., http://localhost:5173).
+
+  4. AI & LLM Providers
+   - Gemini: GEMINI_API_KEY, GEMINI_API_KEY_ALT, GEMINI_MODEL_VERSION, GEMINI_LIVE_MODEL_VERSION.
+   - Groq: GROQ_API_KEY, GROQ_BASE_URL, GROQ_MODEL_CHAT_PRIMARY, GROQ_MODEL_CHAT_FALLBACK, GROQ_FAST_MODE_ENABLED,
+     GROQ_FAST_MODE_MAX_INPUT_CHARS, GROQ_MODEL_CHAT_FAST_PRIMARY, GROQ_MODEL_CHAT_FAST_FALLBACK.
+   - OpenRouter: OPENROUTER_API_KEY, OPENROUTER_BASE_URL, OPENROUTER_APP_NAME, OPENROUTER_SITE_URL, OPENROUTER_CRITICAL_ENABLED,
+     OR_MODEL_CHAT_PRIMARY, OR_MODEL_CHAT_FALLBACK, OR_MODEL_TAGS_PRIMARY, OR_MODEL_TAGS_FALLBACK.
+   - ElevenLabs: ELEVENLABS_API_KEY, ELEVENLABS_BASE_URL, ELEVENLABS_TTS_MODEL_ID.
+   - Others (Optional): CEREBRAS_API_KEY, NVIDIA_NIM_API_KEY, SAMBANOVA_API_KEY, CLOUDFLARE_AI_API_KEY, CLOUDFLARE_AI_ACCOUNT_ID.
+   - SuperMemory: SUPERMEMORY_API_KEY.
+   - ASR Settings: ASR_PROVIDER, ASR_FALLBACK_PROVIDER, ASR_GEMINI_PRIMARY_MODEL, ASR_GEMINI_FALLBACK_MODEL, ASR_SHADOW_ENABLED,
+     ASR_SHADOW_PROVIDER.
+  5. Storage
+   - Cloudinary: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET.
+   - Cloudflare R2 / AWS S3: CLOUDFLARE_R2_ACCOUNT_ID, CLOUDFLARE_R2_ACCESS_KEY_ID, CLOUDFLARE_R2_SECRET_ACCESS_KEY, CLOUDFLARE_R2_BUCKET_NAME,
+     AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET_NAME.
+   - Hetzner (Backup): HETZNER_ENDPOINT, HETZNER_ACCESS_KEY_ID, HETZNER_SECRET_ACCESS_KEY, HETZNER_BUCKET_NAME.
+   - GCS (Legacy): GCS_BUCKET_NAME, GCS_PROJECT_ID, GCS_KEY_FILENAME.
+   - Storage API: STORAGE_BASE_URL, STORAGE_API_KEY.
+
+  6. Billing (Polar.sh)
+   - POLAR_ACCESS_TOKEN: API token for Polar.sh.
+   - POLAR_BASE_URL: API base URL for Polar.
+   - POLAR_WEBHOOK_SECRET: Secret for verifying Polar webhooks (can use POLAR_WEBHOOK_SECRET_DEV or POLAR_WEBHOOK_SECRET_PROD).
+   - Product IDs: POLAR_PRODUCT_PRO_MONTHLY, POLAR_PRODUCT_PRO_ANNUAL, POLAR_PRODUCT_LEGACY_MONTHLY, POLAR_PRODUCT_LEGACY_ANNUAL,
+     POLAR_PRODUCT_LEGACY_LIFETIME.
+
+  7. Mail & Communication
+   - MAIL_HOST: SMTP server host.
+   - MAIL_PORT: SMTP server port (defaults to 465).
+   - MAIL_USER / MAIL_PASSWORD: SMTP credentials.
+   - DEV_MAILS / SUPPORT_MAILS: Comma-separated lists of email addresses.
+   - DISCORD_FEEDBACK_WEBHOOK_URL: Discord webhook for feedback notifications.
+
+  8. Miscellaneous
+   - TALLY_WEBHOOK_SECRET: Secret for verifying Tally.so webhooks.
+   - FEATURE_FLAG_ENVIRONMENT: Environment name for feature flags.
+   - FEATURE_FLAGS_ADMIN_EMAILS: Admin emails for feature flag overrides.
+   - AI_SLO_*: Latency and error rate thresholds (AI_SLO_ERROR_RATE_MAX, AI_SLO_FALLBACK_RATE_MAX, AI_SLO_P95_LATENCY_MS_MAX).
+   - PROMPT_VERSION_*: Overrides for AI prompt versions (e.g., PROMPT_VERSION_CHAT_PRIMARY).

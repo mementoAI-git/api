@@ -13,6 +13,8 @@ interface IUserPreferences {
   age_bracket?: string;
   priority_dimensions?: string[];
   expression_mode?: 'text' | 'voice' | 'mixed';
+  chronotype?: string;
+  sharing_intent?: string;
 }
 
 // TODO: to be remove after thorough test and confirmation
@@ -48,6 +50,8 @@ export interface IUser {
   password: string;
   /** never | skipped | completed */
   onboarding_status?: string;
+  onboarding_step_reached?: number;
+  skipped_deep_personalization?: boolean;
   providers: string[];
   preferences: IUserPreferences;
   context: IUserContext;
@@ -69,6 +73,7 @@ export interface IUser {
   streak: number;
   bg_music?: string;
   chat_voice?: string;
+  chat_voice_provider?: string;
   fullname?: string | null;
   newsletter_subscriber: boolean;
   created_at: string;
@@ -101,6 +106,10 @@ const user = new Schema<IUser>(
     chat_voice: {
       type: String,
       default: null,
+    },
+    chat_voice_provider: {
+      type: String,
+      default: 'gemini',
     },
     two_factor: {
       secret: {
@@ -174,6 +183,16 @@ const user = new Schema<IUser>(
         enum: ['text', 'voice', 'mixed'],
         default: 'text',
       },
+      chronotype: String,
+      sharing_intent: String,
+    },
+    onboarding_step_reached: {
+      type: Number,
+      default: null,
+    },
+    skipped_deep_personalization: {
+      type: Boolean,
+      default: false,
     },
     primary_conversation_id: {
       type: String,

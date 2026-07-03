@@ -1,0 +1,14 @@
+---
+description: Quick capture worker must produce content-derived creative titles, not placeholder headers
+globs:
+  - "**/workers/quick-capture/**"
+  - "**/queues/quick-capture/**"
+  - "**/module/api/memory/service.ts"
+---
+
+# Quick capture → AI title enrichment
+
+- **Behavior**: Quick captures are saved with a placeholder title (`Thought` in `quickCaptureMemory`). The Bull worker `quick-capture-enrichment` must replace it with a **specific, creative** title derived from the entry (and reflection prompt context when `prompt_text` exists).
+- **Prompt**: System instructions live in `src/workers/quick-capture/index.ts` (`ENRICHMENT_SYSTEM`). When changing title behavior, update that string—not ad hoc strings elsewhere.
+- **Guardrails**: `resolveEnrichmentTitle` rejects generic labels (e.g. "Thought", "Quick capture") when the body has substantive text, and falls back to a trimmed excerpt so users never stay on a dead placeholder.
+- **Do not** strip title enrichment for daily reflections or other prompt-linked captures; they include `prompt_text` in the user message for better naming.

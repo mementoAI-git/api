@@ -12,6 +12,9 @@ import aiDocs from './ai.docs';
 import promptsDocs from './prompts.docs';
 import filesDocs from './files.docs';
 import activitiesDocs from './activities.docs';
+import feedbackDocs from './feedback.docs';
+import billingDocs from './billing.docs';
+import personaDocs from './persona.docs';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -93,6 +96,7 @@ const options: swaggerJsdoc.Options = {
       {name: 'Auth', description: 'Authentication and authorization endpoints'},
       {name: 'Users', description: 'User management endpoints'},
       {name: 'Beneficiaries', description: 'Beneficiary management endpoints'},
+      {name: 'Billing', description: 'Subscription and payment management'},
       {
         name: 'Groups',
         description: 'Group management – create groups and add beneficiaries',
@@ -103,6 +107,11 @@ const options: swaggerJsdoc.Options = {
       {name: 'Prompts', description: 'Prompt management endpoints'},
       {name: 'Files', description: 'File upload and management endpoints'},
       {name: 'Activities', description: 'User activity tracking endpoints'},
+      {name: 'Feedback', description: 'User feedback and bug reporting'},
+      {
+        name: 'Persona',
+        description: 'User personality and insights management',
+      },
       {name: 'Health', description: 'Health check endpoints'},
     ],
     paths: {
@@ -158,6 +167,9 @@ const options: swaggerJsdoc.Options = {
       ...promptsDocs,
       ...filesDocs,
       ...activitiesDocs,
+      ...feedbackDocs,
+      ...billingDocs,
+      ...personaDocs,
     },
   },
   apis: [],

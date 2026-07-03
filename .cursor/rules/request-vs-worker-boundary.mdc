@@ -1,0 +1,11 @@
+---
+description: Keep heavy enrichment and async processing in worker paths
+alwaysApply: true
+---
+
+# Request vs Worker Boundary
+
+- Keep synchronous request handlers focused on API-time behavior.
+- Keep heavy enrichment, long-running AI work, and background processing in worker/queue paths unless there is a clear reason not to.
+- Do not casually move worker logic into request handlers.
+- If request-time code depends on background work, make that boundary explicit in the service flow.

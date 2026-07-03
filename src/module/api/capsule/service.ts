@@ -8,6 +8,7 @@ import {IPagination} from '../../../utils/interface';
 import {NotFoundException} from '../../../utils/service-error';
 import {track} from '../activity/service';
 import {scheduleCapsuleDelivery} from '../../../services/queues/system';
+import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
 
 export async function createCapsule(payload: ICapsule, user_id: string) {
   const users = await Beneficiary.find({
@@ -191,7 +192,7 @@ export async function getCapsules(payload: IPagination, user: string) {
         {
           path: 'attachments',
           select: '_id name url',
-          match: {provider: {$ne: 's3'}},
+          match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
         },
         {
           path: 'memories',
@@ -199,7 +200,7 @@ export async function getCapsules(payload: IPagination, user: string) {
           populate: {
             path: 'attachments',
             select: '_id name url',
-            match: {provider: {$ne: 's3'}},
+            match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
           },
         },
       ],
@@ -213,14 +214,18 @@ export async function getCapsule(id: string, user: string) {
   const capsule = await Capsule.findOne({user, _id: id}).populate([
     {path: 'recipients', select: 'email first_name last_name'},
     {path: 'benefactor', select: 'first_name last_name fullname'},
-    {path: 'attachments', select: '-base64', match: {provider: {$ne: 's3'}}},
+    {
+      path: 'attachments',
+      select: '-base64',
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
+    },
     {
       path: 'memories',
       select: '_id title body tags created_at attachments status',
       populate: {
         path: 'attachments',
         select: '_id name url',
-        match: {provider: {$ne: 's3'}},
+        match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
       },
     },
   ]);

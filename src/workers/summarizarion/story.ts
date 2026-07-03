@@ -1,6 +1,11 @@
 import {createUserContent} from '@google/genai';
 import Memory from '../../module/database/model/memory';
-import {extractJson, logger, prompts} from '../../utils';
+import {
+  extractJson,
+  logger,
+  prompts,
+  EXCLUDED_STORAGE_PROVIDER,
+} from '../../utils';
 import {buildMemoryContent} from '../../module/api/ai/utils';
 import gemini, {GEMINI_MODEL} from '../../services/gemini';
 
@@ -8,12 +13,12 @@ export default async function summarizeStory(memoryId: string): Promise<void> {
   try {
     const memory = await Memory.findById(memoryId).populate({
       path: 'attachments',
-      match: {provider: {$ne: 's3'}},
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
     });
     const {text, processedImages, hasAttachments, hasTranscription} =
       await buildMemoryContent(memory);
 
-    const prompt = prompts.buildSummarizationPrompt(
+    const prompt = prompts.buildStorySummarizationPrompt(
       hasAttachments,
       hasTranscription,
     );

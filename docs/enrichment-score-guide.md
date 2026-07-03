@@ -1,6 +1,6 @@
 # Memento — Enrichment Score (plain-language guide)
 
-This document explains what the Enrichment Score is supposed to be, how it fits together, and how that compares to what the Memento web app actually does today. You do not need to be a developer to read it.
+This document explains what the Enrichment Score is supposed to be, how it fits together, and how that compares to what the Memento product actually does today across the API and web app. You do not need to be a developer to read it.
 
 If you only want the mismatch list, jump to Section 5 — Discrepancies.
 
@@ -81,40 +81,48 @@ Deferred categories: `lessons_wisdom` and `hopes_legacy` are not meant to appear
 
 ---
 
-## 4. What this website (memento-web) actually does today
+## 4. What the product actually does today
 
-This section is about this React codebase only. Backend may already do more; the browser can only show what the API returns and what we built in UI.
+### 4.1 Backend — `/users/stats` is now a real enrichment endpoint
 
-### 4.1 Overview dashboard — one real number from the server
+The API already computes a real enrichment snapshot for the user and returns it from `GET /users/stats`.
 
-- The overview page calls `GET /users/stats` and displays `enrichment_score` as a single percentage next to "Enrichment score" (in the welcome / enrichment card).
-- That is one overall number. The UI does not show the 10 category breakdown, weights, decay rules, or beneficiary gate here.
+Today that payload includes:
 
-File reference (for developers): `src/pages/dashboard/overview/sections/welcome-section.tsx`
+- `enrichment_score` — one overall percentage
+- `category_scores` — the per-category breakdown
+- `lowest_category` — used for nudge logic
+- `beneficiary_access_unlocked`
+- `milestone`
+- `nudge`
+- `jump_pills`
+- `spotlight`
+- supporting counts like stories, reflections, pending insights, and quick-capture pending state
 
-### 4.2 Host chat — placeholder UI, not real data
+Under the hood, the backend is already doing the main scoring work:
 
-- On the main host chat screen there is an "Enrichment" bar component.
-- Today it uses a fixed stub (hardcoded 47% and text like "Grew today +0"). Comments in code say to replace this when an API exists.
-- A "Milestone" card (e.g. "Your Memento grew by +X% this exchange") exists in the layout, but the value that would trigger it is never set from the server yet—so users normally do not see that card.
+- conversation-derived items count at a slightly lower weight than explicit stories
+- onboarding priorities increase category weight
+- deferred categories unlock later based on account age
+- inactive categories can decay over time
+- the overall score has a floor
 
-File references:
-- `src/features/host-chat/components/host-chat-enrichment-bar.tsx`
-- `src/features/host-chat/components/milestone-card.tsx`
-- `src/pages/dashboard/chat/conversation/index.tsx`
+Important caveat: the code comment says beneficiary access should unlock forever after 20%, but the current implementation still computes that as `enrichment_score >= 20` in the moment. So the field exists, but the “forever unlocked” part is not yet persisted.
 
-### 4.3 Sidebar, profile, beneficiary gate, Supermemory — not implemented in this UI (as of this doc)
+### 4.2 Web app — some surfaces are live, some are still partial
 
-A search of this repo shows no implementation of:
+The web app is no longer purely stubbed:
 
-- The sidebar enrichment widget (Lora font, amber ring, 10-bar chart, tooltips) from your spec
-- Profile page enrichment breakdown
-- `beneficiary_access_unlocked` (or any 20% gate) in the TypeScript user model used here
-- Supermemory naming, auto-accepted chat-derived insights, or 0.9× weighting logic in frontend code
-- Decay or weighted category math in the browser (that would live on the server anyway)
-- Dashboard nudge logic based on "lowest category"
+- **Overview dashboard** shows the real `enrichment_score` from `GET /users/stats`.
+- **Post-onboarding summary** also reads the real score from `GET /users/stats` and combines it with a 10-category onboarding coverage map.
 
-### 4.4 Onboarding and Host Chat use the same enrichment categories
+But some enrichment UI is still partial:
+
+- the main **host chat enrichment bar** is still a placeholder UI rather than a fully wired category breakdown
+- the old milestone card in host chat still is not driven by a live per-message enrichment delta
+- there is still no full profile/sidebar breakdown experience for the 10 categories
+
+### 4.3 Onboarding and Host Chat use the same enrichment categories
 
 Onboarding "what matters most" and Host Chat deep dive both use `EnrichmentCategory` (10 keys). Definitions live in `src/features/enrichment/enrichment-categories.ts`. `DIMENSION_OPTIONS` in onboarding types re-exports the full list; `ONBOARDING_DIMENSION_OPTIONS` is the subset without deferred categories (`lessons_wisdom`, `hopes_legacy`) for the initial onboarding step.
 
@@ -127,30 +135,30 @@ File references:
 
 ---
 
-## 5. Discrepancies (spec vs this website today)
+## 5. Discrepancies (spec vs product today)
 
-| Topic | Your spec says… | In memento-web today… |
+| Topic | Your spec says… | In the product today… |
 |---|---|---|
 | Category taxonomy | 10 EnrichmentCategory keys | Implemented in `src/features/enrichment/enrichment-categories.ts`; onboarding + host chat aligned. Legacy API values are migrated on read. |
-| Overall score display | Dashboard widget + profile + chat context | Overview shows one % from `/users/stats → enrichment_score`. Chat shows a stub (fake 47%). No sidebar/profile breakdown UI. |
-| Category breakdown UI | 10-bar mini chart, tooltips | Not built here. |
-| Weighted average & seed weights | Formula + onboarding-based weights | Not in frontend; would be server-side. No UI exposes weights. |
-| Decay & floor | 14-day rule, weekly decay, 5% floor, pause rules | Not in frontend; not visible in API types in this repo. |
-| 20% beneficiary gate | Unlock Memento AI for beneficiaries at 20%; permanent flag | No `beneficiary_access_unlocked` (or similar) in IUser / UI flows found in this repo. |
-| Supermemory | Auto-accepted, 0.9× weight, "From conversation" label | No references in this codebase. |
+| Overall score display | Dashboard widget + profile + chat context | Overview and post-onboarding summary use the live `enrichment_score` from `/users/stats`. Main chat context is still partial. |
+| Category breakdown UI | 10-bar mini chart, tooltips | Backend returns `category_scores`, but the full breakdown UI is still not built across the product. |
+| Weighted average & seed weights | Formula + onboarding-based weights | Implemented on the backend; not explained visually in the UI. |
+| Decay & floor | 14-day rule, weekly decay, 5% floor, pause rules | Implemented in backend scoring logic; still mostly invisible to the user. |
+| 20% beneficiary gate | Unlock Memento AI for beneficiaries at 20%; permanent flag | Backend returns `beneficiary_access_unlocked`, but the “unlock forever” behavior is still computed from the current score instead of being persisted permanently. |
+| Supermemory | Auto-accepted, 0.9× weight, "From conversation" label | Conversation-derived weighting exists in backend scoring, but the full user-facing “From conversation” product layer is still incomplete. |
 | Insight JSON tagging | AI appends `{"category": "…"}` | Not implemented in this frontend repo (generation is backend / prompt). |
-| Deferred categories & unlock schedule | Week 2 / week 3, session rules | Not implemented in this repo. |
-| Milestone after chat | `enrichmentDelta` after an exchange | UI exists but `enrichmentDelta` is always unset—card never shows. |
-| Visual design details | Lora serif, amber ring | Host chat enrichment uses Inter + v3 tokens; overview enrichment card uses Garamond for the big %—not the spec's Lora/amber sidebar widget. |
+| Deferred categories & unlock schedule | Week 2 / week 3, session rules | Implemented in backend scoring using account age; still not surfaced very explicitly in UI. |
+| Milestone after chat | `enrichmentDelta` after an exchange | Milestone data exists on `/users/stats`, but the per-exchange host-chat milestone moment is still not fully wired. |
+| Visual design details | Lora serif, amber ring | Current UI styling differs from the older spec visuals. |
 
-**Bottom line:** Your document describes a full engine + UX system. This repository implements the shared 10-category taxonomy in the web app and (a) one server-provided `enrichment_score` on the overview, and (b) placeholder enrichment UI in host chat waiting for real APIs and data. Scoring math, decay, Supermemory, beneficiary gate, and breakdown UI remain mostly backend / future frontend work.
+**Bottom line:** The scoring engine is no longer hypothetical. The backend already computes a meaningful enrichment snapshot and exposes it through `/users/stats`, and the web app already uses that real data in overview and post-onboarding summary. What is still missing is the fuller user-facing enrichment experience: richer breakdown UI, cleaner beneficiary-unlock persistence, and better chat-surface wiring.
 
 ---
 
 ## 6. Suggested next steps (for product + engineering)
 
-1. **API contract:** Define what `/users/stats` (or new endpoints) returns: overall %, per-category scores, deltas, unlock flags, beneficiary gate, etc.
-2. **Frontend milestones:** (1) Wire host chat bar + milestone to real API fields. (2) Add profile breakdown when design + data exist. (3) Implement beneficiary gate once `beneficiary_access_unlocked` (or equivalent) exists on the user or settings payload.
+1. **Frontend milestones:** (1) Wire host chat bar + milestone to real API fields. (2) Add profile/sidebar breakdown when design + data exist. (3) Surface jump pills, spotlight, and richer category context where product wants them.
+2. **Persistence cleanup:** Make `beneficiary_access_unlocked` truly permanent once the user crosses 20%, instead of recalculating it from the current score only.
 3. **Keep this doc updated** when the spec or the API changes.
 
 ---
@@ -159,13 +167,16 @@ File references:
 
 | Area | Location |
 |---|---|
-| Overview enrichment % | `src/pages/dashboard/overview/sections/welcome-section.tsx` |
+| Overview enrichment % | `memento-web/src/pages/dashboard/overview/sections/welcome-section.tsx` |
+| Onboarding summary enrichment | `memento-web/src/pages/onboard/summary.tsx` |
 | Chat enrichment stub + milestone | `src/features/host-chat/components/host-chat-enrichment-bar.tsx`, `milestone-card.tsx` |
-| Chat screen wiring | `src/pages/dashboard/chat/conversation/index.tsx` |
-| Stats endpoint path | `src/api/endpoint.ts → userStats: "/users/stats"` |
-| Enrichment categories (canonical) | `src/features/enrichment/enrichment-categories.ts` |
-| Onboarding re-exports | `src/features/onboarding-groot/types.ts` |
-| Host chat deep-dive dimensions | `src/features/host-chat/chat.types.ts` |
+| Chat screen wiring | `memento-web/src/pages/dashboard/chat/conversation/index.tsx` |
+| Stats endpoint path | `memento-web/src/api/endpoint.ts → userStats: "/users/stats"` |
+| User stats response builder | `src/module/api/user/service.ts → getUserStats()` |
+| Enrichment computation | `src/services/enrichment/index.ts → computeEnrichmentScore()` |
+| Enrichment categories (canonical) | `memento-web/src/features/enrichment/enrichment-categories.ts` |
+| Onboarding re-exports | `memento-web/src/features/onboarding-groot/types.ts` |
+| Host chat deep-dive dimensions | `memento-web/src/features/host-chat/chat.types.ts` |
 | Backend handoff (related) | `docs/MEMENTO_HOST_CHAT_BACKEND_WORK.md` |
 
 This document summarizes your enrichment spec and compares it to the memento-web repository. It is not a promise of roadmap priority—use it to align conversation between product, design, backend, and frontend.

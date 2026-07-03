@@ -1,6 +1,7 @@
 import multer from 'multer';
 import {Request} from 'express';
 import {SUPPORTED_FILE_TYPES as allowedTypes} from '../utils/constant';
+import {resolveUploadMime} from '../utils/helpers';
 
 // Configure multer to use memory storage (similar to express-fileupload default behavior)
 const storage = multer.memoryStorage();
@@ -11,12 +12,13 @@ const fileFilter = (
   file: Express.Multer.File,
   cb: multer.FileFilterCallback,
 ) => {
-  if (allowedTypes.includes(file.mimetype as (typeof allowedTypes)[number])) {
+  const effective = resolveUploadMime(file);
+  if ((allowedTypes as readonly string[]).includes(effective)) {
     cb(null, true);
   } else {
     cb(
       new Error(
-        'Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, MP4, WebM, QuickTime, AVI videos, and audio files (MP3, WAV, OGG, AAC, FLAC, WebM).',
+        'Invalid file type. Supported types: PNG, JPEG, HEIC, PDF, Word (.doc, .docx), plain text, MP4, WebM, QuickTime, AVI videos, and common audio formats (MP3, WAV, OGG, AAC, FLAC, WebM).',
       ),
     );
   }

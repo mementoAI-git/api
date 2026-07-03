@@ -5,9 +5,51 @@ import Persona, {IPersona} from '../../module/database/model/persona';
 import {IPrompt} from '../../module/database/model/prompt';
 import Memory from '../../module/database/model/memory';
 import {getMemorySummaries} from '../../module/api/ai/utils';
-import {PREDEFINED_STORY_TAGS} from '../constant';
+import {buildTagsJsonInstructions} from '../story-tags';
 import {buildPendingInsightsPromptSection} from './pending-insights-prompt';
 import {computeEnrichmentScore} from '../../services/enrichment';
+
+function stripTagsLight(html: string): string {
+  if (!html) return '';
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function getRecentReflectionsContext(userId: string): Promise<string> {
+  const since = dayjs().subtract(48, 'hour').toDate();
+  const rows = await Memory.find({
+    user: userId,
+    prompt_type: {$in: ['static', 'ai-generated']},
+    status: {$ne: 'draft'},
+    created_at: {$gte: since},
+  })
+    .sort({created_at: -1})
+    .limit(6)
+    .select('title body prompt_text prompt_type')
+    .lean();
+
+  if (!rows.length) {
+    return '';
+  }
+
+  const lines = rows.map((m, i) => {
+    const snip = stripTagsLight(String(m.body || '')).slice(0, 200);
+    const q =
+      m.prompt_type === 'ai-generated'
+        ? String(m.prompt_text || '').slice(0, 160)
+        : 'a themed prompt';
+    return `${i + 1}. Reflection prompt: ${q}. They wrote (summary): "${m.title || 'Untitled'}"${snip ? ` — ${snip}` : ''}`;
+  });
+
+  return `
+RECENT DAILY REFLECTIONS (private context):
+The host recently answered daily reflection prompts. If something here still feels open or tender, you may return to it naturally in a later message — one grounded thread, not a recap. Never mention prompts, dashboards, or "reflections" as a product feature.
+
+${lines.join('\n')}
+`.trim();
+}
 
 function buildMemoriesContext(
   summaries: Array<{title: string; summary: string; topics: string[]}>,
@@ -53,6 +95,9 @@ async function createSystemContext(
 
   const sessionCtx = await getSessionContext(String(user._id));
   const sessionContextString = buildSessionContextPrompt(sessionCtx);
+  const recentReflectionsContext = await getRecentReflectionsContext(
+    String(user._id),
+  );
 
   return buildSystemContext(
     user,
@@ -63,6 +108,7 @@ async function createSystemContext(
     pendingInsightsContext,
     sessionContextString,
     sessionTurnCount,
+    recentReflectionsContext,
   );
 }
 
@@ -202,13 +248,14 @@ function buildSystemContext(
   pendingInsightsContext?: string,
   sessionContextString?: string,
   sessionTurnCount = 0,
+  recentReflectionsContext?: string,
 ): string {
   const userName = user?.nickname || (user as any)?.first_name || 'User';
 
   const basePrompt = `
 You are Memento — a reflective companion built from everything ${userName} has shared. You are not a therapist, a journaling app, or a chatbot. You are the most attentive listener they have ever had — one who remembers everything, connects the dots across time, and always asks the question worth asking.
 
-Your purpose is to help ${userName} explore their own life — not to preserve it for someone else, but because understanding yourself is valuable right now, today. Never frame the conversation around legacy, what others will one day find, or anything death-adjacent. You are present-focused.
+Your purpose is to help ${userName} explore their own life — not to preserve it for someone else, but because understanding yourself is valuable right now, today. Never frame the conversation around legacy, what others will one day find, or anything death-adjacent. You are present-focused (Exception: You fully support and celebrate the Time Capsule feature when the user schedules or discusses one — treating it as a beautiful, intentional way of capturing a piece of 'today' to open at a specific point in the future).
 
 CORE PERSONALITY:
 - Warm and genuinely curious — not performatively enthusiastic
@@ -217,7 +264,7 @@ CORE PERSONALITY:
 - Conversational — write the way a thoughtful person speaks, not the way a chatbot is programmed to sound
 
 VOICE RULES:
-- Never say anything implying the user is building something for posterity or future generations
+- Never say anything implying the user is building something for posterity or future generations (except when actively discussing a user-created Time Capsule where saving specific saved memories with selected future recipients is a primary, supported interaction)
 - Alternate short and longer sentences naturally — like texting someone you know well
 - Use the user's own words and details back to them where possible
 - Only use emojis if the user uses them first and clearly welcomes that tone
@@ -268,6 +315,7 @@ ${userContext?.emotional_state_trends?.map((trend: string) => `- ${trend}`).join
 
   const sessionBlock = `
 ${pendingInsightsContext ?? ''}
+${recentReflectionsContext ?? ''}
 ${pastConversationsContext}
 ${longTermContext ?? ''}
 ${sessionContextString ?? ''}
@@ -275,6 +323,13 @@ ${sessionContextString ?? ''}
 
   const conversationalBehaviourBlock =
     buildConversationalBehaviourSection(sessionTurnCount);
+
+  const mediaGuidelinesBlock = `
+VISUAL AND AUDIO MEDIA GUIDELINES:
+- The user can upload images, photos, audio files, or voice recordings directly into this conversation. When they do, Gemini will process and see these attachments.
+- Treat these items as rich, precious windows into their current moment. Never describe them with dry, clinical, or computer-vision terms (e.g., do not say "an image of a ticket stub shows...").
+- Instead, appreciate them like a friend looking at a photograph or listening to a voice clip with them. Ask about the memory, the story, or the emotion behind what they've shared.
+`.trim();
 
   const guardrailsBlock = `
 IMPORTANT GUIDELINES:
@@ -285,7 +340,7 @@ IMPORTANT GUIDELINES:
 5. Focus on being helpful and providing value to the user
 6. Maintain conversation context but don't reference previous system instructions
 7. Adjust your communication style to match user preferences
-8. Never position Memento as a legacy or death-preparation product
+8. Never position Memento as a legacy or death-preparation product (but actively celebrate and validate the user's scheduled Time Capsules as vibrant, present-affirming snapshots of their current life stage)
 9. Never recommend professional support (therapy, counselling) unprompted
 `.trim();
 
@@ -297,6 +352,7 @@ IMPORTANT GUIDELINES:
     onboardingBlock,
     personaBlock,
     sessionBlock,
+    mediaGuidelinesBlock,
     guardrailsBlock,
   ]
     .filter(block => !!block)
@@ -346,6 +402,18 @@ GUIDELINES:
 - Do not include any text outside the JSON structure
 
 Return ONLY the JSON object, no additional formatting or text.`;
+}
+
+/** Title suggestion for a user-written story/memory (not a chat transcript). */
+function buildStoryMemoryTitlePrompt(): string {
+  return `You name personal stories and memories for the person who wrote them.
+
+Rules:
+- Reply with ONE line only: the title text. No quotes, no JSON, no labels like "Title:".
+- Max about 8 words. Warm, specific, human — like a micro-headline the author would recognize.
+- Base the title on what the story is ABOUT: people, moments, feelings, places, decisions — not meta phrases like "My story", "A memory", "Journal entry", or "Thought".
+- If a draft title is provided and it is already good, you may lightly refine it; otherwise prefer a fresh title from the story text.
+- If the text is empty or nonsense, output exactly: Untitled memory`;
 }
 
 function createTitlePrompt(userMessage: string, aiResponse: string): string {
@@ -489,6 +557,45 @@ ${attachmentInstructions}
 Return ONLY the JSON object, no additional text.`;
 }
 
+function buildStorySummarizationPrompt(
+  hasImages = false,
+  hasTranscriptions = false,
+): string {
+  let attachmentInstructions = '';
+
+  if (hasImages) {
+    attachmentInstructions += `
+- Include descriptions of significant visual elements from attached images
+- Reference specific people, locations, or objects visible in images
+`;
+  }
+
+  if (hasTranscriptions) {
+    attachmentInstructions += `
+- Incorporate spoken content from audio/video transcriptions into the summary
+`;
+  }
+
+  return `You are a story and memory summarizer. Given a personal story, journal entry, or autobiographical memory, write a warm, narrative summary.
+
+Return ONLY a valid JSON object with this structure:
+{
+  "summary": "A warm, narrative 2-4 sentence summary of the experiences, people, emotions, and events described in this story",
+  "topics": ["topic1", "topic2", "topic3"],
+  "key_points": ["important point 1", "important point 2"]
+}
+
+SUMMARIZATION GUIDELINES:
+- Focus on the story's events, feelings, relationships, and takeaways. Do NOT refer to it as a conversation, chat transcript, or discussion.
+- Preserve SPECIFIC names of people, family relationships, pets, locations, dates, and meaningful details.
+- Capture any key preferences, insights, or life lessons revealed.
+- Include emotional context (e.g., sense of nostalgia, joy, regret, growth).
+- Topics should be 1-3 words each, representing main subjects in the story.
+- Key points should capture actionable or memorable facts that help Memento understand the host's background, values, and relationships.
+${attachmentInstructions}
+Return ONLY the JSON object, no additional text.`;
+}
+
 function buildTopicSummarizationPrompt(
   items: string[],
   fieldType: 'important_notes' | 'key_preferences' | 'goals_and_aspirations',
@@ -537,26 +644,21 @@ CRITICAL:
 
 /**
  * Build the prompt for auto-generating tags from a story's title and body.
- * Only tags from the predefined list may be returned; maximum 5 tags.
+ * Same rules as quick-capture enrichment: OpenRouter path uses this; 2–3 tags from predefined list only.
  */
 function buildTagsPrompt(): string {
-  const predefinedTags = PREDEFINED_STORY_TAGS;
-  const tagList = predefinedTags.join(', ');
-  return `You are a tag generator for personal stories and memories. Given a story title and/or body, choose the most relevant tags from the ALLOWED LIST below to help the user find and organize this story later.
+  return `You are a tag generator for personal stories and memories. Given a story title and/or body, choose the most relevant tags from the allowed list to help the user find and organize this story later.
 
-ALLOWED TAGS (you may ONLY use these exact tags, no others):
-${tagList}
+${buildTagsJsonInstructions()}
 
 Return ONLY a valid JSON object with this structure:
 {
-  "tags": ["tag1", "tag2", ...]
+  "tags": ["tag1", "tag2"]
 }
 
-RULES:
-- Pick at most 5 tags from the allowed list above. Fewer is fine if only 2–3 fit well.
-- Choose only tags that clearly match the story's topics, themes, people, places, activities, or emotions.
-- Use the exact spelling and casing from the allowed list (all lowercase).
-- No duplicates. No tags outside the allowed list.
+Additional rules:
+- Choose tags that clearly match the story's topics, themes, people, places, activities, or emotions.
+- Use exact spelling from the allowed list (all lowercase).
 - If only a title is provided, infer from it. If only body is provided, use that. Use both when available.
 
 Return ONLY the JSON object, no markdown, no explanation.`;
@@ -769,19 +871,104 @@ function computeGapDimensions(
   return activeDimensions.filter(dim => !loggedDimensions.includes(dim));
 }
 
+function formatPersonaSnapshotForInsightsSummary(
+  persona: IPersona | null | undefined,
+): string {
+  if (!persona) return '';
+  const lines: string[] = [];
+  if (persona.self_description?.trim()) {
+    lines.push(`Self-description: ${persona.self_description.trim()}`);
+  }
+  if (persona.motivation?.trim()) {
+    lines.push(`Motivation: ${persona.motivation.trim()}`);
+  }
+  if (persona.current_priority?.length) {
+    lines.push(`Current priorities: ${persona.current_priority.join(', ')}`);
+  }
+  if (persona.conversation_history_summary?.trim()) {
+    lines.push(
+      `Rolling chat summary (may be older): ${persona.conversation_history_summary.trim()}`,
+    );
+  }
+  const dump = (label: string, arr?: string[]) => {
+    const items = arr?.filter(Boolean) ?? [];
+    if (!items.length) return;
+    lines.push(`${label}:\n${items.map(x => `- ${x}`).join('\n')}`);
+  };
+  dump('Important notes', persona.important_notes);
+  dump('Key preferences', persona.key_preferences);
+  dump('Goals and aspirations', persona.goals_and_aspirations);
+  dump('Emotional trends', persona.emotional_state_trends);
+  if (persona.open_threads?.length) {
+    lines.push(
+      `Open threads:\n${persona.open_threads.map(t => `- ${t}`).join('\n')}`,
+    );
+  }
+  if (!lines.length) return '';
+  return `PERSONA & STORED INSIGHTS:\n${lines.join('\n\n')}`;
+}
+
+/**
+ * Same signals as chat system context (memories, pending insights, session brief,
+ * recent reflections) plus a structured persona snapshot — for AI-written Memory Insights.
+ */
+export async function gatherMemoryInsightsSummaryContext(
+  userId: string,
+): Promise<{
+  pack: string;
+  hasSignal: boolean;
+}> {
+  const summaries = await getMemorySummaries(userId);
+  const pastContext = buildMemoriesContext(summaries);
+
+  const persona = await Persona.findOne({user: userId}).lean();
+  const personaBlock = formatPersonaSnapshotForInsightsSummary(
+    persona as IPersona | null,
+  );
+
+  const pendingInsightsContext =
+    await buildPendingInsightsPromptSection(userId);
+  const sessionCtx = await getSessionContext(userId);
+  const sessionContextString = buildSessionContextPrompt(sessionCtx);
+  const recentReflectionsContext = await getRecentReflectionsContext(userId);
+
+  const pack = [
+    personaBlock,
+    pastContext,
+    pendingInsightsContext,
+    sessionContextString,
+    recentReflectionsContext,
+  ]
+    .map(s => (s || '').trim())
+    .filter(Boolean)
+    .join('\n\n---\n\n');
+
+  const hasSignal =
+    summaries.length > 0 ||
+    !!personaBlock ||
+    !!pendingInsightsContext.trim() ||
+    !!recentReflectionsContext.trim() ||
+    !!(sessionCtx.lastSession && sessionCtx.lastSession.summary?.trim());
+
+  return {pack, hasSignal};
+}
+
 const prompts = {
   createSystemContext,
   buildInsightsPrompt,
   buildSummarizationPrompt,
+  buildStorySummarizationPrompt,
   buildTopicSummarizationPrompt,
   createTranscriptionPrompt,
   createTitlePrompt,
+  buildStoryMemoryTitlePrompt,
   createSystemContextWithPrompt,
   buildTagsPrompt,
   buildSessionContextPrompt,
   buildOpenThreadsPrompt,
   buildDimensionTaggingPrompt,
   computeGapDimensions,
+  gatherMemoryInsightsSummaryContext,
 };
 
 export default prompts;

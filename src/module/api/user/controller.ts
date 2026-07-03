@@ -135,6 +135,23 @@ export async function getPersona(
   }
 }
 
+export async function getMemoryInsightsSummary(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const refresh = req.query?.refresh === '1' || req.query?.refresh === 'true';
+    const {message, data} = await service.getMemoryInsightsSummary(
+      req.auth.id,
+      refresh,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateContext(
   req: IRequest,
   res: Response,
@@ -208,6 +225,56 @@ export async function getOnboardingDetails(
   try {
     const {message, data} = await service.getOnboardingDetails(req.auth!.id);
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function onboardingChatPrompt(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const requestStart = Date.now();
+    const {stream, memoryId, latestUserMessage, trailer, skipPersistence} =
+      await service.streamOnboardingChatPrompt(req.body, req.auth!.id);
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    /** Avoid reverse-proxy buffering so the browser receives incremental chunks */
+    res.setHeader('X-Accel-Buffering', 'no');
+    let assistantText = '';
+
+    try {
+      for await (const chunk of stream) {
+        if (chunk.text) {
+          assistantText += chunk.text;
+          res.write(chunk.text);
+        }
+      }
+    } catch (streamError) {
+      console.error('Onboarding stream error', {
+        userId: req.auth!.id,
+        error: (streamError as Error)?.message,
+      });
+      res.write('I hit a temporary issue. Please try again.');
+    } finally {
+      if (!skipPersistence) {
+        await service.persistOnboardingChatTurn(
+          req.auth!.id,
+          memoryId,
+          latestUserMessage,
+          assistantText,
+        );
+      }
+      res.write(`\n__MEMENTO_ONBOARDING__${JSON.stringify(trailer)}`);
+      res.end();
+      console.log('Onboarding stream complete', {
+        userId: req.auth!.id,
+        durationMs: Date.now() - requestStart,
+        memoryId,
+      });
+    }
   } catch (error) {
     next(error);
   }

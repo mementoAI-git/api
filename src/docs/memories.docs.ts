@@ -189,6 +189,52 @@ const memoriesDocs = {
       },
     },
   },
+  '/memories/quick-capture': {
+    post: {
+      tags: ['Memories'],
+      summary: 'Quick Capture Memory',
+      description:
+        'Quickly capture a memory with minimal details, often used for voice notes or quick text snips.',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              properties: {
+                body: {type: 'string', description: 'Memory content'},
+                file: {
+                  type: 'string',
+                  format: 'binary',
+                  description: 'Optional voice/image file',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Memory captured successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Memory created successfully',
+                  },
+                  data: {type: 'object'},
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   '/memories/stats': {
     get: {
       tags: ['Memories'],
@@ -402,6 +448,51 @@ const memoriesDocs = {
           content: {
             'application/json': {
               schema: {$ref: '#/components/schemas/Error'},
+            },
+          },
+        },
+      },
+    },
+  },
+  '/memories/{id}/enrichment': {
+    get: {
+      tags: ['Memories'],
+      summary: 'Get Conversation Enrichment',
+      description:
+        'Get AI-generated enrichment data for a conversation, such as summaries, key points, and suggested follow-ups.',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          description: 'Memory ID',
+          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Enrichment retrieved successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  message: {
+                    type: 'string',
+                    example: 'Conversation enrichment retrieved successfully',
+                  },
+                  data: {
+                    type: 'object',
+                    properties: {
+                      summary: {type: 'string'},
+                      key_points: {type: 'array', items: {type: 'string'}},
+                      sentiment: {type: 'string'},
+                    },
+                  },
+                },
+              },
             },
           },
         },

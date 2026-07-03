@@ -13,6 +13,8 @@ import {StatusCodes} from 'http-status-codes';
 import dayjs from 'dayjs';
 import {pipeline} from 'stream/promises';
 import logger from '../../../utils/logger';
+import {DEFAULT_STORAGE_PROVIDER} from '../../../utils/constant';
+import {assertAccess} from '../billing/service';
 
 export async function uploadFile(
   req: IRequest,
@@ -21,6 +23,8 @@ export async function uploadFile(
 ) {
   try {
     const files = getFiles(req, true);
+    const additionalBytes = files.reduce((total, file) => total + file.size, 0);
+    await assertAccess(req.auth.id, 'storage', {additionalBytes});
     const clientDuration = req.body?.duration
       ? parseFloat(req.body.duration)
       : undefined;
@@ -46,6 +50,7 @@ const safeStreamToResponse = async (
   stream: NodeJS.ReadableStream,
   res: Response,
 ): Promise<void> => {
+  // Listen for errors on the stream
   stream.on('error', streamError => {
     console.error('Stream error:', streamError);
     if (!res.headersSent) {
@@ -53,14 +58,31 @@ const safeStreamToResponse = async (
     }
   });
 
+  // Abort streaming if the client closes the connection
+  const abortController = new AbortController();
+  const onClose = () => {
+    abortController.abort();
+    // Safely destroy the stream if the method exists
+    (stream as any).destroy?.();
+    logger.info('Response closed by client, aborting stream');
+  };
+  res.on('close', onClose);
+
   try {
-    await pipeline(stream, res);
+    await pipeline(stream, res, {
+      signal: abortController.signal,
+    });
   } catch (error) {
-    if (isClientDisconnectError(error)) {
-      logger.info('Client disconnected during file streaming');
+    if (isClientDisconnectError(error) || abortController.signal.aborted) {
+      logger.info(
+        'Client disconnected or stream aborted during file streaming',
+      );
     } else {
       throw error;
     }
+  } finally {
+    // Clean up listener
+    res.off('close', onClose);
   }
 };
 
@@ -143,7 +165,8 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
       const fileResponse = await storage.getFile(
         file.name,
         undefined,
-        file.provider ?? 's3',
+        file.provider ?? DEFAULT_STORAGE_PROVIDER,
+        file.type,
       );
       if (!fileResponse.Body) throw new Error('File content not found');
       await safeStreamToResponse(

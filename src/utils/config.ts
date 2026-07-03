@@ -5,7 +5,19 @@ export const JWT_SECRET = process.env.JWT_SECRET;
 
 export const NODE_ENV = process.env.NODE_ENV || 'development';
 export const IS_PRODUCTION = NODE_ENV === 'production';
+export const IS_DEV_ENV = ['development', 'dev', 'local'].includes(
+  NODE_ENV.toLowerCase(),
+);
 export const PORT = process.env.PORT || 5000;
+export const AI_SLO_ERROR_RATE_MAX = Number(
+  process.env.AI_SLO_ERROR_RATE_MAX || 0.03,
+);
+export const AI_SLO_FALLBACK_RATE_MAX = Number(
+  process.env.AI_SLO_FALLBACK_RATE_MAX || 0.25,
+);
+export const AI_SLO_P95_LATENCY_MS_MAX = Number(
+  process.env.AI_SLO_P95_LATENCY_MS_MAX || 6000,
+);
 
 export const MONGODB_URL = process.env.MONGODB_URL;
 export const REDIS_URL = process.env.REDIS_URL;
@@ -30,14 +42,90 @@ export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const BACKEND_URL = process.env.BACKEND_URL;
 
+export const GEMINI_API_KEY_ALT = process.env.GEMINI_API_KEY_ALT;
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+export const GEMINI_API_KEY_EFFECTIVE = GEMINI_API_KEY_ALT || GEMINI_API_KEY;
+
+// ── Gemini model versions (single source of truth) ──────────────────
+// Change the model version HERE and every service picks it up automatically.
+export const GEMINI_MODEL_VERSION =
+  process.env.GEMINI_MODEL_VERSION || 'gemini-2.5-flash';
+export const GEMINI_LIVE_MODEL_VERSION =
+  process.env.GEMINI_LIVE_MODEL_VERSION ||
+  'gemini-2.5-flash-native-audio-preview-09-2025';
+
+export const VOICE_PROVIDER_DEFAULT = (
+  process.env.VOICE_PROVIDER_DEFAULT || 'gemini'
+).toLowerCase();
+export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+export const ELEVENLABS_BASE_URL =
+  process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io/v1';
+export const ELEVENLABS_TTS_MODEL_ID =
+  process.env.ELEVENLABS_TTS_MODEL_ID || 'eleven_multilingual_v2';
+export const ASR_PROVIDER = (
+  process.env.ASR_PROVIDER || 'gemini'
+).toLowerCase();
+export const ASR_FALLBACK_PROVIDER = (
+  process.env.ASR_FALLBACK_PROVIDER || 'gemini_fallback'
+).toLowerCase();
+export const ASR_GEMINI_PRIMARY_MODEL =
+  process.env.ASR_GEMINI_PRIMARY_MODEL || GEMINI_MODEL_VERSION;
+export const ASR_GEMINI_FALLBACK_MODEL =
+  process.env.ASR_GEMINI_FALLBACK_MODEL || ASR_GEMINI_PRIMARY_MODEL;
+export const ASR_SHADOW_ENABLED = process.env.ASR_SHADOW_ENABLED === 'true';
+export const ASR_SHADOW_PROVIDER = (
+  process.env.ASR_SHADOW_PROVIDER || ''
+).toLowerCase();
+export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+export const OPENROUTER_BASE_URL =
+  process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1';
+export const OPENROUTER_APP_NAME =
+  process.env.OPENROUTER_APP_NAME || 'Memento API';
+export const OPENROUTER_SITE_URL =
+  process.env.OPENROUTER_SITE_URL || FRONTEND_URL || 'http://localhost:5173';
+export const OPENROUTER_CRITICAL_ENABLED =
+  process.env.OPENROUTER_CRITICAL_ENABLED !== 'false';
+export const GROQ_API_KEY = process.env.GROQ_API_KEY;
+export const GROQ_BASE_URL =
+  process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
+export const GROQ_MODEL_CHAT_PRIMARY =
+  process.env.GROQ_MODEL_CHAT_PRIMARY || 'llama-3.3-70b-versatile';
+export const GROQ_MODEL_CHAT_FALLBACK =
+  process.env.GROQ_MODEL_CHAT_FALLBACK || 'llama-3.1-8b-instant';
+export const GROQ_FAST_MODE_ENABLED =
+  process.env.GROQ_FAST_MODE_ENABLED !== 'false';
+export const GROQ_FAST_MODE_MAX_INPUT_CHARS = Number(
+  process.env.GROQ_FAST_MODE_MAX_INPUT_CHARS || 320,
+);
+export const GROQ_MODEL_CHAT_FAST_PRIMARY =
+  process.env.GROQ_MODEL_CHAT_FAST_PRIMARY || 'llama-3.1-8b-instant';
+export const GROQ_MODEL_CHAT_FAST_FALLBACK =
+  process.env.GROQ_MODEL_CHAT_FAST_FALLBACK || GROQ_MODEL_CHAT_PRIMARY;
+
+export const OR_MODEL_CHAT_PRIMARY =
+  process.env.OR_MODEL_CHAT_PRIMARY || 'google/gemma-4-26b-a4b-it';
+export const OR_MODEL_CHAT_FALLBACK =
+  process.env.OR_MODEL_CHAT_FALLBACK || 'google/gemma-4-26b-a4b-it:free';
+export const OR_MODEL_TAGS_PRIMARY =
+  process.env.OR_MODEL_TAGS_PRIMARY || 'google/gemma-4-26b-a4b-it:free';
+export const OR_MODEL_TAGS_FALLBACK =
+  process.env.OR_MODEL_TAGS_FALLBACK || 'google/gemma-4-26b-a4b-it';
+export const OR_MODEL_TRANSCRIPTION_PRIMARY =
+  process.env.OR_MODEL_TRANSCRIPTION_PRIMARY || '';
+export const OR_MODEL_TRANSCRIPTION_FALLBACK =
+  process.env.OR_MODEL_TRANSCRIPTION_FALLBACK || '';
+export const PROMPT_VERSION_OVERRIDES: Record<string, string> = {
+  chat_primary: process.env.PROMPT_VERSION_CHAT_PRIMARY || '',
+  chat_bootstrap: process.env.PROMPT_VERSION_CHAT_BOOTSTRAP || '',
+  onboarding_chat: process.env.PROMPT_VERSION_ONBOARDING_CHAT || '',
+  tags_generate: process.env.PROMPT_VERSION_TAGS_GENERATE || '',
+  transcription: process.env.PROMPT_VERSION_TRANSCRIPTION || '',
+};
 
 // Multi-provider AI router (all optional — only providers with keys are registered)
-export const GROQ_API_KEY = process.env.GROQ_API_KEY;
 export const CEREBRAS_API_KEY = process.env.CEREBRAS_API_KEY;
 export const NVIDIA_NIM_API_KEY = process.env.NVIDIA_NIM_API_KEY;
 export const SAMBANOVA_API_KEY = process.env.SAMBANOVA_API_KEY;
-export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 export const CLOUDFLARE_AI_API_KEY = process.env.CLOUDFLARE_AI_API_KEY;
 export const CLOUDFLARE_AI_ACCOUNT_ID = process.env.CLOUDFLARE_AI_ACCOUNT_ID;
 
@@ -46,31 +134,60 @@ export const SUPPORT_MAILS = process.env.SUPPORT_MAILS?.split(',') || [];
 
 export const TEMP_PATH = process.env.TEMP_PATH ?? os.tmpdir();
 
-export const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+export const CLOUDFLARE_R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID;
+export const CLOUDFLARE_R2_ACCESS_KEY_ID =
+  process.env.CLOUDFLARE_R2_ACCESS_KEY_ID;
+export const CLOUDFLARE_R2_SECRET_ACCESS_KEY =
+  process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
+export const CLOUDFLARE_R2_BUCKET_NAME =
+  process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.AWS_S3_BUCKET_NAME;
+export const AWS_REGION = process.env.AWS_REGION || 'auto';
 export const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 export const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
 export const AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
 
+export const HETZNER_ENDPOINT = process.env.HETZNER_ENDPOINT;
+export const HETZNER_ACCESS_KEY_ID = process.env.HETZNER_ACCESS_KEY_ID;
+export const HETZNER_SECRET_ACCESS_KEY = process.env.HETZNER_SECRET_ACCESS_KEY;
+export const HETZNER_BUCKET_NAME = process.env.HETZNER_BUCKET_NAME;
+
+/** Optional: legacy GCS reads / backup worker only (uploads use Cloudinary). */
 export const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME;
 export const GCS_PROJECT_ID = process.env.GCS_PROJECT_ID;
-export const GCS_KEY_FILENAME = process.env.GCS_KEY_FILENAME; // optional; uses ADC if not set
-/** When true, GCS is not used (e.g. billing disabled). All uploads go to Cloudinary. */
-export const GCS_DISABLED = process.env.GCS_DISABLED === 'true';
+export const GCS_KEY_FILENAME = process.env.GCS_KEY_FILENAME;
 
 export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
-/** When true, image uploads go to Cloudinary instead of GCS. Ignored when GCS_DISABLED is true. */
-export const CLOUDINARY_UPLOAD_IMAGES =
-  process.env.CLOUDINARY_UPLOAD_IMAGES === 'true';
-
 export const SUPERMEMORY_API_KEY = process.env.SUPERMEMORY_API_KEY;
 
 export const TALLY_WEBHOOK_SECRET = process.env.TALLY_WEBHOOK_SECRET;
+export const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
+export const POLAR_WEBHOOK_SECRET_DEV = process.env.POLAR_WEBHOOK_SECRET_DEV;
+export const POLAR_WEBHOOK_SECRET_PROD = process.env.POLAR_WEBHOOK_SECRET_PROD;
+export const POLAR_WEBHOOK_SECRET =
+  process.env.POLAR_WEBHOOK_SECRET ||
+  (IS_PRODUCTION ? POLAR_WEBHOOK_SECRET_PROD : POLAR_WEBHOOK_SECRET_DEV);
+export const POLAR_BASE_URL =
+  process.env.POLAR_BASE_URL || 'https://api.polar.sh/v1';
+export const POLAR_PRODUCT_PRO_MONTHLY = process.env.POLAR_PRODUCT_PRO_MONTHLY;
+export const POLAR_PRODUCT_PRO_ANNUAL = process.env.POLAR_PRODUCT_PRO_ANNUAL;
+export const POLAR_PRODUCT_LEGACY_MONTHLY =
+  process.env.POLAR_PRODUCT_LEGACY_MONTHLY;
+export const POLAR_PRODUCT_LEGACY_ANNUAL =
+  process.env.POLAR_PRODUCT_LEGACY_ANNUAL;
+export const POLAR_PRODUCT_LEGACY_LIFETIME =
+  process.env.POLAR_PRODUCT_LEGACY_LIFETIME;
 
 export const DISCORD_FEEDBACK_WEBHOOK_URL =
   process.env.DISCORD_FEEDBACK_WEBHOOK_URL;
+export const FEATURE_FLAG_ENVIRONMENT =
+  process.env.FEATURE_FLAG_ENVIRONMENT || NODE_ENV;
+export const FEATURE_FLAGS_ADMIN_EMAILS =
+  process.env.FEATURE_FLAGS_ADMIN_EMAILS?.split(',')
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean) || [];
 // WebAuthn / Passkeys
 export const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 export const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Memento';

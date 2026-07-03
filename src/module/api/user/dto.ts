@@ -17,12 +17,39 @@ export const onboardingSchema = z.object({
       .optional()
       .default('never'),
     motivation: z.string().trim().optional().default(''),
+    motivation_detail: z.string().trim().optional().default(''),
     age_bracket: z.string().trim().optional().default(''),
     priority_dimensions: z.array(z.string().trim()).optional().default([]),
     expression_mode: z
       .enum(['text', 'voice', 'mixed'])
       .optional()
       .default('text'),
+    chronotype: z.string().trim().optional().default(''),
+    sharing_intent: z.string().trim().optional().default(''),
+    life_situation: z.string().trim().optional().default(''),
+    life_situation_detail: z.string().trim().optional().default(''),
+    personality_traits: z.array(z.string().trim()).optional().default([]),
+    memory_treasures: z.array(z.string().trim()).optional().default([]),
+    skipped_deep_personalization: z.boolean().optional().default(false),
   }),
 });
 export type OnboardingBody = z.infer<typeof onboardingSchema>['body'];
+
+export const onboardingChatPromptSchema = z.object({
+  body: z.strictObject({
+    messages: z
+      .array(
+        z.strictObject({
+          role: z.enum(['user', 'assistant']),
+          content: z.string().trim().default(''),
+        }),
+      )
+      .default([]),
+    nickname: z.string().trim().default(''),
+    bootstrap: z.boolean().optional().default(false),
+  }),
+});
+
+export type OnboardingChatPromptBody = z.infer<
+  typeof onboardingChatPromptSchema
+>['body'];

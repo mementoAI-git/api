@@ -5,6 +5,7 @@ export interface IMessage {
   user: string;
   text: string;
   role: string; // user, ai
+  ai_model?: string;
   attatchments: string[];
   memory: string;
   is_voice: boolean;
@@ -18,6 +19,7 @@ const message = new Schema<IMessage>(
     user: String,
     text: String,
     role: String,
+    ai_model: String,
     memory: {
       type: String,
       ref: 'memory',

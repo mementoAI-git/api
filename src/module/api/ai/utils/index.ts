@@ -1,17 +1,25 @@
 import path from 'path';
 import fs from 'fs/promises';
-import {createPartFromUri} from '@google/genai';
+import {
+  createPartFromUri,
+  createUserContent,
+  PartListUnion,
+} from '@google/genai';
 import {IMessage} from '../../../database/model/message';
-import gemini from '../../../../services/gemini';
-import ai from '../../../../services/ai';
+import gemini, {GEMINI_MODEL} from '../../../../services/gemini';
 import File, {IFile} from '../../../database/model/file';
 import {TEMP_PATH} from '../../../../utils/config';
 import dayjs from 'dayjs';
 import {isEmpty, prompts} from '../../../../utils';
 import Memory, {IMemory} from '../../../database/model/memory';
-import {getFileFromS3} from '../../../../services/storage/s3';
+import * as storage from '../../../../services/storage';
 import {Readable} from 'stream';
+import {DEFAULT_STORAGE_PROVIDER} from '../../../../utils/constant';
 import {queueSummarization} from '../../../../services/queues';
+import {
+  openRouterClient,
+  generateTextWithFallback,
+} from '../../../../services/ai/openrouter';
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024;
 const INACTIVITY_MINUTES = 10; // Summarize after 10 minutes of inactivity
@@ -26,16 +34,19 @@ export async function processFiles(file_ids: string[]) {
 export async function processFile(file: IFile) {
   let file_path = null;
   try {
-    // Fetch file from S3
-    const s3Response = await getFileFromS3(file.name);
+    const fileResponse = await storage.getFile(
+      file.name,
+      undefined,
+      file.provider ?? DEFAULT_STORAGE_PROVIDER,
+      file.type,
+    );
 
-    if (!s3Response.Body) {
-      throw new Error('File content not found in S3');
+    if (!fileResponse.Body) {
+      throw new Error('File content not found in storage');
     }
 
-    // Convert S3 stream to buffer
     const chunks: Uint8Array[] = [];
-    const stream = s3Response.Body as Readable;
+    const stream = fileResponse.Body as Readable;
 
     for await (const chunk of stream) {
       chunks.push(chunk);
@@ -70,10 +81,18 @@ export async function processFile(file: IFile) {
 }
 
 export function createChatHistory(messages: IMessage[]) {
-  return messages.map(m => ({
-    role: m.role === 'ai' ? 'model' : 'user',
-    parts: [{text: m.text}],
-  }));
+  return messages
+    .map(m => {
+      let text = m.text || '';
+      if (!text && !isEmpty(m.attatchments)) {
+        text = '[Attached files]';
+      }
+      return {
+        role: m.role === 'ai' ? 'model' : 'user',
+        parts: [{text}],
+      };
+    })
+    .filter(h => h.parts[0].text.trim().length > 0);
 }
 
 export async function generateConversationTitle(
@@ -83,11 +102,21 @@ export async function generateConversationTitle(
   const prompt = prompts.createTitlePrompt(userMessage, aiResponse);
 
   try {
-    const responseText = await ai.generateText([
-      {role: 'user', content: prompt},
-    ]);
-
-    let title = responseText.trim();
+    let title = '';
+    if (openRouterClient.isConfigured()) {
+      const result = await generateTextWithFallback({
+        task: 'title_generate',
+        messages: [{role: 'user', content: prompt}],
+        temperature: 0.2,
+      });
+      title = result.text.trim();
+    } else {
+      const response = await gemini.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: createUserContent([prompt]),
+      });
+      title = response.text.trim();
+    }
 
     // Clean up the response to ensure it's just the title
     title = title.replace(/^["']|["']$/g, ''); // Remove quotes
