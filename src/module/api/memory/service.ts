@@ -98,6 +98,13 @@ export async function memoryStats(user_id: string) {
     type: 'story',
     status: 'deleted',
   });
+  const quick_capture_pending_count = await Memory.countDocuments({
+    user: user_id,
+    type: 'story',
+    capture_source: 'quick',
+    enrichment_status: 'pending',
+    status: {$nin: ['draft', 'deleted']},
+  });
   const bookmark_count = await Bookmark.countDocuments({user: user_id});
   const media_count = await File.countDocuments({
     user: user_id,
@@ -116,6 +123,7 @@ export async function memoryStats(user_id: string) {
     stories_bookmarked_count,
     stories_deleted_count,
     bookmark_count,
+    quick_capture_pending_count,
     media_count,
     storage: `${formatBytes(storage_size)}/${formatBytes(storage_limit)}`,
   };

@@ -31,6 +31,7 @@ export interface IFile {
   backup_url?: string;
   transcription: ITranscriptionData;
   duration?: number; // duration in seconds for audio/video files
+  thumbnail?: string; // album art URL for audio files with embedded cover art (ID3)
   deleted?: boolean; // marks file as deleted so it can be cleaned up
   created_at: string;
   updated_at: string;
@@ -77,6 +78,7 @@ const file = new Schema<IFile>(
     backup_at: {type: Date, select: false},
     transcription: transcriptionDataSchema,
     duration: Number,
+    thumbnail: {type: String},
     deleted: {
       type: Boolean,
       default: false,

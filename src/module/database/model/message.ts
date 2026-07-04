@@ -10,6 +10,8 @@ export interface IMessage {
   memory: string;
   is_voice: boolean;
   duration: number;
+  /** Quoted message the user is replying to — persisted so clients don't need to parse wrapper text */
+  replyTo?: { role: string; text: string };
   created_at: string;
   updated_at: string;
 }
@@ -39,6 +41,13 @@ const message = new Schema<IMessage>(
         ref: 'file',
       },
     ],
+    replyTo: {
+      type: {
+        role: String,
+        text: String,
+      },
+      default: undefined,
+    },
   },
   {
     timestamps: {

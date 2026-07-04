@@ -24,6 +24,7 @@ import {
 import User, {IUser} from '../../module/database/model/user';
 import File from '../../module/database/model/file';
 import {ForbiddenException} from '../../utils/service-error';
+import {BACKEND_URL} from '../../utils/config';
 
 export async function uploadFile(
   file: Express.Multer.File,
@@ -80,6 +81,30 @@ export async function uploadFile(
   // Use client-supplied duration if server-side detection fails (e.g. WebM from MediaRecorder)
   const duration = detectedDuration ?? clientDuration;
 
+  // ── Extract embedded album art from audio files ────────────────────────────
+  // Only for uploaded audio files that may have ID3/iTunes embedded cover art.
+  // Voice recordings (audio/m4a named voice_*.m4a) rarely have cover art but we
+  // still attempt — it's a no-op if no cover is present.
+  let thumbnail: string | undefined;
+  if (mimetype.startsWith('audio/')) {
+    try {
+      const mm = await import('music-metadata');
+      const metadata = await mm.parseBuffer(buffer, {mimeType: mimetype});
+      const cover = mm.selectCover(metadata.common.picture);
+      if (cover?.data && cover.data.length > 0) {
+        const thumbKey = reconstructFileName(
+          `thumb_${originalName.replace(/\.[^.]+$/, '')}.jpg`,
+        );
+        await uploadToS3(thumbKey, Buffer.from(cover.data), 'image/jpeg');
+        const thumbBase = BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : '';
+        thumbnail = `${thumbBase}/files/${encodeURIComponent(thumbKey)}`;
+      }
+    } catch (err) {
+      // No cover art or parse failure — non-fatal, skip silently
+      console.warn(`[storage] Album art extraction skipped for ${originalName}:`, (err as Error)?.message ?? err);
+    }
+  }
+
   // Upload to Cloudflare R2 S3-compatible primary storage
   const key = reconstructFileName(originalName);
   const result = await uploadToS3(key, buffer, mimetype);
@@ -90,6 +115,7 @@ export async function uploadFile(
     size: buffer.length, // Save compressed size
     type: mimetype, // Save potentially converted mimetype
     duration,
+    thumbnail,
     provider: DEFAULT_STORAGE_PROVIDER,
     backup_url: result.location,
   };

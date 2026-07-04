@@ -80,6 +80,31 @@ export async function initializeCapsuleReveal(): Promise<void> {
   );
 }
 
+/** Every 30 min: re-queue or clear memories stuck at enrichment_status: 'pending' > 15 min. */
+export async function initializeStalePendingRecovery(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, cannot initialize stale-pending recovery job',
+    );
+    return;
+  }
+
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.recoverStalePending,
+    {every: 30 * 60 * 1000}, // every 30 minutes
+    {
+      opts: {
+        removeOnComplete: true,
+        removeOnFail: 3,
+      },
+    },
+  );
+
+  logger.debug(
+    'Initialized stale-pending recovery job (runs every 30 minutes)',
+  );
+}
+
 export async function scheduleCapsuleDelivery(
   capsule_id: string,
   schedule_date: string,
