@@ -86,6 +86,15 @@ export const OPENROUTER_SITE_URL =
 export const OPENROUTER_CRITICAL_ENABLED =
   process.env.OPENROUTER_CRITICAL_ENABLED !== 'false';
 export const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+// DeepSeek direct API (OpenAI-compatible)
+export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+export const DEEPSEEK_BASE_URL =
+  process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1';
+export const DEEPSEEK_MODEL_CHAT_PRIMARY =
+  process.env.DEEPSEEK_MODEL_CHAT_PRIMARY || 'deepseek-chat';
+export const DEEPSEEK_MODEL_CHAT_FALLBACK =
+  process.env.DEEPSEEK_MODEL_CHAT_FALLBACK || 'deepseek-reasoner';
 export const GROQ_BASE_URL =
   process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
 export const GROQ_MODEL_CHAT_PRIMARY =
