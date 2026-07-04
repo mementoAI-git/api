@@ -96,6 +96,7 @@ export const queueNames = {
       resetStreak: 'reset-streak',
       backupFiles: 'backup-files',
       scheduleCapsuleReveals: 'schedule-capsule-reveals',
+      recoverStalePending: 'recover-stale-pending',
       revealCapsules: 'reveal-capsules',
     },
   },

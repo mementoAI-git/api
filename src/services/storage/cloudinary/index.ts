@@ -191,12 +191,22 @@ export async function getFileStream(
     headers: range ? {Range: range} : undefined,
     validateStatus: status => status >= 200 && status < 300,
   });
+  const rawContentType = response.headers['content-type'];
+  let contentType: string | undefined;
+  if (Array.isArray(rawContentType)) {
+    contentType = rawContentType[0];
+  } else if (rawContentType === null || rawContentType === undefined) {
+    contentType = undefined;
+  } else {
+    contentType = String(rawContentType);
+  }
+
   return {
     Body: response.data as NodeJS.ReadableStream,
     ContentLength: response.headers['content-length']
       ? Number(response.headers['content-length'])
       : undefined,
-    ContentType: response.headers['content-type'],
+    ContentType: contentType,
   };
 }
 

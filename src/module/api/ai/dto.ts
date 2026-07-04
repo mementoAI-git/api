@@ -11,6 +11,7 @@ export const promptSchema = z.object({
     text: z.string().min(1, 'Text is required').trim(),
     memory: mongoIdSchema,
     attachments: z.array(mongoIdSchema).optional(),
+    replyTo: z.object({role: z.string(), text: z.string()}).optional(),
   }),
 });
 

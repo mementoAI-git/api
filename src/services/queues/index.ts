@@ -12,6 +12,7 @@ import {
   initializeCapsuleReveal,
   initializeFileBackup,
   initializeResetStreak,
+  initializeStalePendingRecovery,
   systemQueue,
 } from './system';
 import logger from '../../utils/logger';
@@ -40,6 +41,7 @@ export async function initializeScheduler() {
   await initializeResetStreak();
   await initializeFileBackup();
   await initializeCapsuleReveal();
+  await initializeStalePendingRecovery();
   await initializePersonaSummarization();
   await initializeConversationSummary();
 }

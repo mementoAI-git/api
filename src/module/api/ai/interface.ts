@@ -1,6 +1,8 @@
 export interface IPrompt {
   text: string;
   attachments?: string[];
+  /** Quoted message the user is replying to — passed through to be persisted on the user message */
+  replyTo?: {role: string; text: string};
 }
 
 export interface ITranscribeAudio {
