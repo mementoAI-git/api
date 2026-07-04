@@ -196,7 +196,13 @@ export async function generateTextWithDeepSeekFallback(params: {
       temperature: params.temperature,
       timeoutMs,
     });
-    return {text, effectiveModel: primary, usedFallback: false, durationMs: Date.now() - start, tokenUsage};
+    return {
+      text,
+      effectiveModel: primary,
+      usedFallback: false,
+      durationMs: Date.now() - start,
+      tokenUsage,
+    };
   } catch {
     const {text, tokenUsage} = await generateWithModel({
       model: fallback,
@@ -204,7 +210,13 @@ export async function generateTextWithDeepSeekFallback(params: {
       temperature: params.temperature,
       timeoutMs,
     });
-    return {text, effectiveModel: fallback, usedFallback: true, durationMs: Date.now() - start, tokenUsage};
+    return {
+      text,
+      effectiveModel: fallback,
+      usedFallback: true,
+      durationMs: Date.now() - start,
+      tokenUsage,
+    };
   }
 }
 

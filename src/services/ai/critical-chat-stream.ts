@@ -1,7 +1,11 @@
 import {GEMINI_MODEL} from '../gemini';
 import type {GroqMessage} from './groq';
 import {groqClient, streamTextWithGroqFallback} from './groq';
-import {deepSeekClient, streamTextWithDeepSeekFallback, type DeepSeekMessage} from './deepseek';
+import {
+  deepSeekClient,
+  streamTextWithDeepSeekFallback,
+  type DeepSeekMessage,
+} from './deepseek';
 import {
   openRouterClient,
   streamTextWithFallback,
@@ -149,15 +153,25 @@ export async function streamCriticalChatResponse(
     try {
       const deepSeekMessages: DeepSeekMessage[] = [
         {role: 'system', content: systemInstruction},
-        ...groqHistory.map(m => ({role: m.role as 'system' | 'user' | 'assistant', content: m.content})),
+        ...groqHistory.map(m => ({
+          role: m.role as 'system' | 'user' | 'assistant',
+          content: m.content,
+        })),
         {role: 'user', content: latestUserText},
       ];
-      const {stream, effectiveModel, usedFallback} = await streamTextWithDeepSeekFallback({
-        messages: deepSeekMessages,
-        temperature: 0.7,
-        timeoutMs: 15_000,
+      const {stream, effectiveModel, usedFallback} =
+        await streamTextWithDeepSeekFallback({
+          messages: deepSeekMessages,
+          temperature: 0.7,
+          timeoutMs: 15_000,
+        });
+      console.log('AI routing', {
+        task,
+        provider: 'deepseek',
+        effectiveModel,
+        usedFallback,
+        streamConnectMs: Date.now() - requestStart,
       });
-      console.log('AI routing', {task, provider: 'deepseek', effectiveModel, usedFallback, streamConnectMs: Date.now() - requestStart});
       void recordAiMetric({
         event: 'ai_route',
         task,
@@ -169,10 +183,19 @@ export async function streamCriticalChatResponse(
         used_fallback: usedFallback,
         stream_connect_ms: Date.now() - requestStart,
       });
-      return {stream, modelLabel: `deepseek:${effectiveModel}`, recordUserMessageInDb: true};
+      return {
+        stream,
+        modelLabel: `deepseek:${effectiveModel}`,
+        recordUserMessageInDb: true,
+      };
     } catch (deepSeekError) {
       if (isProviderRateLimited(deepSeekError)) setUserBackoffWindow(userId);
-      console.error('AI routing fallback', {task, from: 'deepseek', to: 'gemini', reason: (deepSeekError as Error)?.message});
+      console.error('AI routing fallback', {
+        task,
+        from: 'deepseek',
+        to: 'gemini',
+        reason: (deepSeekError as Error)?.message,
+      });
     }
   }
 
