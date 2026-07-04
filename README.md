@@ -1,5 +1,3 @@
-[![Backend: Deploy Prod](https://github.com/mementoAI-git/api/actions/workflows/deploy-prod.yml/badge.svg)](https://github.com/mementoAI-git/api/actions/workflows/deploy-prod.yml)
-
 # Memento Backend
 
 A Node.js/TypeScript backend application built with Express.js, MongoDB, and Redis.
