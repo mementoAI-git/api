@@ -1,6 +1,6 @@
 import {Response, Request} from 'express';
 import {check, validationResult} from 'express-validator';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import {ec} from 'elliptic';
 import {

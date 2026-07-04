@@ -1,4 +1,4 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import dayjs from 'dayjs';
 import User, {IUser} from '../../database/model/user';
 import Persona from '../../database/model/persona';
