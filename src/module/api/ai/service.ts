@@ -351,7 +351,7 @@ export async function prompt(
       role: 'user',
       attatchments: payload?.attachments || [],
       text: payload?.text,
-      ...(payload.replyTo ? { replyTo: payload.replyTo } : {}),
+      ...(payload.replyTo ? {replyTo: payload.replyTo} : {}),
     });
     return {stream: response, modelLabel: `gemini:${GEMINI_MODEL}`};
   }
@@ -397,7 +397,7 @@ export async function prompt(
       role: 'user',
       attatchments: payload?.attachments || [],
       text: payload?.text,
-      ...(payload.replyTo ? { replyTo: payload.replyTo } : {}),
+      ...(payload.replyTo ? {replyTo: payload.replyTo} : {}),
     });
   }
 

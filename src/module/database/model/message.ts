@@ -11,7 +11,7 @@ export interface IMessage {
   is_voice: boolean;
   duration: number;
   /** Quoted message the user is replying to — persisted so clients don't need to parse wrapper text */
-  replyTo?: { role: string; text: string };
+  replyTo?: {role: string; text: string};
   created_at: string;
   updated_at: string;
 }

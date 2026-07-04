@@ -23,7 +23,10 @@ async function recoverStalePendingCaptures(): Promise<void> {
 
   if (stale.length === 0) return;
 
-  logger.info({count: stale.length}, 'Recovering stale-pending enrichment entries');
+  logger.info(
+    {count: stale.length},
+    'Recovering stale-pending enrichment entries',
+  );
 
   if (quickCaptureQueue) {
     // Queue is available — re-enqueue for proper AI enrichment

@@ -101,7 +101,10 @@ export async function uploadFile(
       }
     } catch (err) {
       // No cover art or parse failure — non-fatal, skip silently
-      console.warn(`[storage] Album art extraction skipped for ${originalName}:`, (err as Error)?.message ?? err);
+      console.warn(
+        `[storage] Album art extraction skipped for ${originalName}:`,
+        (err as Error)?.message ?? err,
+      );
     }
   }
 
