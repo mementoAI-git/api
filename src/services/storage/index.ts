@@ -7,6 +7,7 @@ import {
   uploadToS3,
 } from './s3';
 import * as cloudinaryStorage from './cloudinary';
+import {CLOUDINARY_CLOUD_NAME} from '../../utils/config';
 import {
   getMediaDuration,
   resolveUploadMime,
@@ -81,11 +82,22 @@ export async function uploadFile(
   // Use client-supplied duration if server-side detection fails (e.g. WebM from MediaRecorder)
   const duration = detectedDuration ?? clientDuration;
 
+  // ── Generate video thumbnail via Cloudinary fetch transformation ──────────
+  // For video files, Cloudinary can derive a JPEG thumbnail from frame 0 of any
+  // publicly accessible video URL on-the-fly and cache it on their CDN.
+  // We compute the URL now (before the video is uploaded) — Cloudinary will lazy-
+  // fetch and cache it on first request. This requires CLOUDINARY_CLOUD_NAME to
+  // be configured, but imposes zero upload latency since no second upload happens.
+  let thumbnail: string | undefined;
+  if (mimetype.startsWith('video/') && CLOUDINARY_CLOUD_NAME) {
+    // The video URL will be known after uploadToS3 below — we set it post-upload.
+    // Placeholder: will be assigned after the S3 upload gives us result.location.
+  }
+
   // ── Extract embedded album art from audio files ────────────────────────────
   // Only for uploaded audio files that may have ID3/iTunes embedded cover art.
   // Voice recordings (audio/m4a named voice_*.m4a) rarely have cover art but we
   // still attempt — it's a no-op if no cover is present.
-  let thumbnail: string | undefined;
   if (mimetype.startsWith('audio/')) {
     try {
       const mm = await import('music-metadata');
@@ -111,6 +123,12 @@ export async function uploadFile(
   // Upload to Cloudflare R2 S3-compatible primary storage
   const key = reconstructFileName(originalName);
   const result = await uploadToS3(key, buffer, mimetype);
+
+  // Now that we have the video's public URL, derive the Cloudinary thumbnail
+  if (mimetype.startsWith('video/') && result.location && CLOUDINARY_CLOUD_NAME) {
+    const thumbUrl = cloudinaryStorage.getVideoThumbnailUrl(result.location);
+    if (thumbUrl) thumbnail = thumbUrl;
+  }
 
   return {
     name: result.key,

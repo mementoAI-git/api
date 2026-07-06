@@ -306,12 +306,13 @@ export async function prompt(
   const sessionTurnCount = getSessionTurnCount(messages);
 
   const content: PartListUnion = [];
-  if (payload.text) {
-    content.push(payload.text);
+  const userText = (payload.text ?? '').trim();
+  if (userText) {
+    content.push(userText);
   }
 
   let longTermContext = '';
-  if (isSignificantMessage(payload.text)) {
+  if (isSignificantMessage(userText)) {
     const context = await supermemory.getContextForUser(user_id, payload.text);
     longTermContext = context.formatedText;
   }
