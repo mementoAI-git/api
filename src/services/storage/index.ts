@@ -125,7 +125,11 @@ export async function uploadFile(
   const result = await uploadToS3(key, buffer, mimetype);
 
   // Now that we have the video's public URL, derive the Cloudinary thumbnail
-  if (mimetype.startsWith('video/') && result.location && CLOUDINARY_CLOUD_NAME) {
+  if (
+    mimetype.startsWith('video/') &&
+    result.location &&
+    CLOUDINARY_CLOUD_NAME
+  ) {
     const thumbUrl = cloudinaryStorage.getVideoThumbnailUrl(result.location);
     if (thumbUrl) thumbnail = thumbUrl;
   }

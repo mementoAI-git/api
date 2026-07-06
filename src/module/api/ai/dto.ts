@@ -8,19 +8,28 @@ const mongoIdSchema = z
 // Prompt (send message in existing memory)
 // text is optional — media-only messages (attachments without caption) are valid.
 export const promptSchema = z.object({
-  body: z.strictObject({
-    text: z.string().trim().optional(),
-    memory: mongoIdSchema,
-    attachments: z.array(mongoIdSchema).optional(),
-    replyTo: z.object({ role: z.string(), text: z.string() }).optional(),
-  }).refine(
-    (data) => {
-      const hasText = (data.text ?? '').length > 0;
-      const hasAttachments = (data.attachments ?? []).length > 0;
-      return hasText || hasAttachments;
-    },
-    { message: 'Send at least a message or an attachment' },
-  ),
+  body: z
+    .strictObject({
+      text: z.string().trim().optional(),
+      memory: mongoIdSchema,
+      attachments: z.array(mongoIdSchema).optional(),
+      replyTo: z
+        .object({
+          role: z.string(),
+          text: z.string(),
+        })
+        .optional(),
+    })
+    .refine(
+      data => {
+        const hasText = (data.text ?? '').length > 0;
+        const hasAttachments = (data.attachments ?? []).length > 0;
+        return hasText || hasAttachments;
+      },
+      {
+        message: 'Send at least a message or an attachment',
+      },
+    ),
 });
 
 // Start new conversation
