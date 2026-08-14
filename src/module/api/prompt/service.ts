@@ -19,6 +19,7 @@ import {
   setCachedAiPrompt,
 } from './daily-ai-prompt';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
+import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
 
 dayjs.extend(utc);
 
@@ -292,6 +293,19 @@ export const replyPrompt = async (
     );
 
     const savedFiles = await File.insertMany(unsavedFiles);
+    await Promise.all(
+      savedFiles.map(async file => {
+        if (file.type?.startsWith('video/') && file.status === 'processing') {
+          const queued = await queueAttachmentThumbnailProcessing(file.id);
+          if (!queued) {
+            await File.findByIdAndUpdate(file.id, {
+              status: 'failed',
+              thumbnail: null,
+            });
+          }
+        }
+      }),
+    );
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
 

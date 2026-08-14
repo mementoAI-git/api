@@ -119,3 +119,28 @@ export async function scheduleCapsuleDelivery(
     {delay: delayMs, removeOnComplete: true, removeOnFail: 3},
   );
 }
+
+export async function queueAttachmentThumbnailProcessing(
+  fileId: string,
+): Promise<boolean> {
+  if (!systemQueue) {
+    logger.warn(
+      {fileId},
+      'System queue not available, cannot queue attachment thumbnail processing',
+    );
+    return false;
+  }
+
+  await systemQueue.add(
+    queueNames.system.jobs.processAttachmentThumbnail,
+    {fileId},
+    {
+      attempts: 3,
+      backoff: {type: 'exponential', delay: 2000},
+      removeOnComplete: 100,
+      removeOnFail: 50,
+    },
+  );
+
+  return true;
+}

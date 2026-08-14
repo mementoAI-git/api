@@ -24,7 +24,6 @@ import {
   MEMORY_VISIBILITY,
   emptyPaginatedList,
   isEmpty,
-  STORAGE_PROVIDERS,
   formatBytes,
   FREE_STORAGE_LIMIT_BYTES,
   EXCLUDED_STORAGE_PROVIDER,
@@ -36,6 +35,7 @@ import {updateMemoryTitle} from '../ai/utils';
 import ActivePrompt from '../../database/model/active-prompt';
 import {queueStoryInsights} from '../../../services/queues/insights';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
+import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
 import {queueSummarization} from '../../../services/queues/summarization';
 import * as storage from '../../../services/storage';
 import {getConversationEnrichment} from '../../../services/enrichment';
@@ -178,6 +178,19 @@ export async function createMemory(
     );
 
     const savedFiles = await File.insertMany(unsavedFiles);
+    await Promise.all(
+      savedFiles.map(async file => {
+        if (file.type?.startsWith('video/') && file.status === 'processing') {
+          const queued = await queueAttachmentThumbnailProcessing(file.id);
+          if (!queued) {
+            await File.findByIdAndUpdate(file.id, {
+              status: 'failed',
+              thumbnail: null,
+            });
+          }
+        }
+      }),
+    );
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
 
@@ -335,6 +348,19 @@ export async function quickCaptureMemory(
       files.map(file => storage.uploadFile(file, user_id)),
     );
     const savedFiles = await File.insertMany(unsavedFiles);
+    await Promise.all(
+      savedFiles.map(async file => {
+        if (file.type?.startsWith('video/') && file.status === 'processing') {
+          const queued = await queueAttachmentThumbnailProcessing(file.id);
+          if (!queued) {
+            await File.findByIdAndUpdate(file.id, {
+              status: 'failed',
+              thumbnail: null,
+            });
+          }
+        }
+      }),
+    );
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
 

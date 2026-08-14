@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import {compareStrings, logger, queueNames} from '../../utils';
 import Memory from '../../module/database/model/memory';
 import backupFiles from './backup-files';
+import processAttachmentThumbnail from './process-attachment-thumbnail';
 import {revealCapsules, scheduleCapsuleReveals} from './reveal-capsules';
 import resetStreak from './reset-streak';
 import {quickCaptureQueue} from '../../services/queues/quick-capture';
@@ -75,6 +76,14 @@ export default function startSystemWorker(connection: RedisConnection) {
       }
       if (compareStrings(job.name, queueNames.system.jobs.backupFiles)) {
         await backupFiles();
+      }
+      if (
+        compareStrings(
+          job.name,
+          queueNames.system.jobs.processAttachmentThumbnail,
+        )
+      ) {
+        await processAttachmentThumbnail(job as {data: {fileId: string}});
       }
       if (
         compareStrings(job.name, queueNames.system.jobs.scheduleCapsuleReveals)

@@ -12,9 +12,9 @@ import {createHash} from 'crypto';
 import {Readable} from 'stream';
 import {
   DEFAULT_STORAGE_PROVIDER,
-  STORAGE_PROVIDERS,
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils/constant';
+import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
 
 export async function uploadFile(
   payload: Express.Multer.File[],
@@ -34,6 +34,20 @@ export async function uploadFile(
   );
 
   const data = await File.insertMany(files);
+
+  await Promise.all(
+    data.map(async file => {
+      if (file.type?.startsWith('video/') && file.status === 'processing') {
+        const queued = await queueAttachmentThumbnailProcessing(file.id);
+        if (!queued) {
+          await File.findByIdAndUpdate(file.id, {
+            status: 'failed',
+            thumbnail: null,
+          });
+        }
+      }
+    }),
+  );
 
   return {message: 'File uploaded successfully', data};
 }

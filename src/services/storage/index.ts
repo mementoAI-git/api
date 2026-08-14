@@ -7,7 +7,7 @@ import {
   uploadToS3,
 } from './s3';
 import * as cloudinaryStorage from './cloudinary';
-import {CLOUDINARY_CLOUD_NAME} from '../../utils/config';
+import logger from '../../utils/logger';
 import {
   getMediaDuration,
   resolveUploadMime,
@@ -19,13 +19,20 @@ import type {FileStorageProvider} from '../../module/database/model/file';
 import {
   DEFAULT_STORAGE_PROVIDER,
   FREE_STORAGE_LIMIT_BYTES,
-  STORAGE_PROVIDERS,
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../utils/constant';
 import User, {IUser} from '../../module/database/model/user';
 import File from '../../module/database/model/file';
 import {ForbiddenException} from '../../utils/service-error';
 import {BACKEND_URL} from '../../utils/config';
+
+function resolvePublicFileUrl(key: string, fallback = ''): string {
+  if (BACKEND_URL) {
+    const base = BACKEND_URL.replace(/\/$/, '');
+    return `${base}/files/${encodeURIComponent(key)}`;
+  }
+  return fallback;
+}
 
 export async function uploadFile(
   file: Express.Multer.File,
@@ -35,6 +42,18 @@ export async function uploadFile(
   let mimetype = resolveUploadMime(file);
   let buffer = file.buffer;
   let originalName = file.originalname;
+
+  const isLargeMediaFile = file.size > 8 * 1024 * 1024;
+
+  if (
+    isLargeMediaFile &&
+    (mimetype.startsWith('video/') || mimetype.startsWith('audio/'))
+  ) {
+    logger.warn(
+      {file: originalName, size: file.size},
+      'Large media upload detected; skipping expensive derivative generation',
+    );
+  }
 
   // Perform server-side image compression and conversion (e.g. HEIC -> JPEG) if it's an image
   if (mimetype.startsWith('image/') && mimetype !== 'image/svg+xml') {
@@ -69,9 +88,9 @@ export async function uploadFile(
         buffer = await sharp(file.buffer).webp({quality: 80}).toBuffer();
       }
     } catch (err) {
-      console.error(
-        `Image compression failed for ${originalName}, falling back to original buffer:`,
-        err,
+      logger.warn(
+        {file: originalName, err},
+        'Image compression failed, falling back to original buffer',
       );
       // Fallback is automatic as buffer and mimetype remain the original values
     }
@@ -81,24 +100,17 @@ export async function uploadFile(
   const detectedDuration = await getMediaDuration(base64, mimetype);
   // Use client-supplied duration if server-side detection fails (e.g. WebM from MediaRecorder)
   const duration = detectedDuration ?? clientDuration;
+  let width: number | undefined;
+  let height: number | undefined;
+  let status: IFile['status'] = 'ready';
 
-  // ── Generate video thumbnail via Cloudinary fetch transformation ──────────
-  // For video files, Cloudinary can derive a JPEG thumbnail from frame 0 of any
-  // publicly accessible video URL on-the-fly and cache it on their CDN.
-  // We compute the URL now (before the video is uploaded) — Cloudinary will lazy-
-  // fetch and cache it on first request. This requires CLOUDINARY_CLOUD_NAME to
-  // be configured, but imposes zero upload latency since no second upload happens.
-  let thumbnail: string | undefined;
-  if (mimetype.startsWith('video/') && CLOUDINARY_CLOUD_NAME) {
-    // The video URL will be known after uploadToS3 below — we set it post-upload.
-    // Placeholder: will be assigned after the S3 upload gives us result.location.
-  }
+  let thumbnail: string | null = null;
 
   // ── Extract embedded album art from audio files ────────────────────────────
   // Only for uploaded audio files that may have ID3/iTunes embedded cover art.
   // Voice recordings (audio/m4a named voice_*.m4a) rarely have cover art but we
   // still attempt — it's a no-op if no cover is present.
-  if (mimetype.startsWith('audio/')) {
+  if (mimetype.startsWith('audio/') && !isLargeMediaFile) {
     try {
       const mm = await import('music-metadata');
       const metadata = await mm.parseBuffer(buffer, {mimeType: mimetype});
@@ -107,16 +119,46 @@ export async function uploadFile(
         const thumbKey = reconstructFileName(
           `thumb_${originalName.replace(/\.[^.]+$/, '')}.jpg`,
         );
-        await uploadToS3(thumbKey, Buffer.from(cover.data), 'image/jpeg');
-        const thumbBase = BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : '';
-        thumbnail = `${thumbBase}/files/${encodeURIComponent(thumbKey)}`;
+        const thumbUpload = await uploadToS3(
+          thumbKey,
+          Buffer.from(cover.data),
+          'image/jpeg',
+        );
+        thumbnail = resolvePublicFileUrl(thumbKey, thumbUpload.location);
       }
     } catch (err) {
       // No cover art or parse failure — non-fatal, skip silently
-      console.warn(
-        `[storage] Album art extraction skipped for ${originalName}:`,
-        (err as Error)?.message ?? err,
+      logger.warn({file: originalName, err}, 'Album art extraction skipped');
+    }
+  }
+
+  if (mimetype.startsWith('image/') && mimetype !== 'image/svg+xml') {
+    try {
+      const normalizedImage = sharp(buffer).rotate();
+      const imageMetadata = await normalizedImage.metadata();
+      width = imageMetadata.width;
+      height = imageMetadata.height;
+
+      const previewBuffer = await normalizedImage
+        .clone()
+        .resize({width: 800, withoutEnlargement: true})
+        .jpeg({quality: 75, progressive: true})
+        .toBuffer();
+      const thumbKey = reconstructFileName(
+        `thumb_${originalName.replace(/\.[^.]+$/, '')}.jpg`,
       );
+      const thumbUpload = await uploadToS3(
+        thumbKey,
+        previewBuffer,
+        'image/jpeg',
+      );
+      thumbnail = resolvePublicFileUrl(thumbKey, thumbUpload.location);
+    } catch (err) {
+      logger.warn(
+        {file: originalName, err},
+        'Image thumbnail generation failed',
+      );
+      thumbnail = null;
     }
   }
 
@@ -124,14 +166,9 @@ export async function uploadFile(
   const key = reconstructFileName(originalName);
   const result = await uploadToS3(key, buffer, mimetype);
 
-  // Now that we have the video's public URL, derive the Cloudinary thumbnail
-  if (
-    mimetype.startsWith('video/') &&
-    result.location &&
-    CLOUDINARY_CLOUD_NAME
-  ) {
-    const thumbUrl = cloudinaryStorage.getVideoThumbnailUrl(result.location);
-    if (thumbUrl) thumbnail = thumbUrl;
+  if (mimetype.startsWith('video/')) {
+    status = 'processing';
+    thumbnail = null;
   }
 
   return {
@@ -140,6 +177,9 @@ export async function uploadFile(
     size: buffer.length, // Save compressed size
     type: mimetype, // Save potentially converted mimetype
     duration,
+    width,
+    height,
+    status,
     thumbnail,
     provider: DEFAULT_STORAGE_PROVIDER,
     backup_url: result.location,
@@ -168,9 +208,9 @@ export async function getFileMetadata(
     try {
       return await getFileMetadataFromS3(key, 'primary');
     } catch (primaryError) {
-      console.warn(
-        `Primary metadata fetch failed for ${key}, falling back to backup:`,
-        primaryError,
+      logger.warn(
+        {key, err: primaryError},
+        'Primary metadata fetch failed, falling back to backup',
       );
       return await getFileMetadataFromS3(key, 'backup');
     }
@@ -208,9 +248,9 @@ export async function getFile(
         ContentType: result.ContentType,
       };
     } catch (primaryError) {
-      console.warn(
-        `Primary storage fetch failed for ${key}, trying backup:`,
-        primaryError,
+      logger.warn(
+        {key, err: primaryError},
+        'Primary storage fetch failed, trying backup',
       );
       try {
         const result = await getFileFromS3(key, range, 'backup');
@@ -220,9 +260,9 @@ export async function getFile(
           ContentType: result.ContentType,
         };
       } catch (backupError) {
-        console.error(
-          `Backup storage fetch failed for ${key} too:`,
-          backupError,
+        logger.error(
+          {key, err: backupError},
+          'Backup storage fetch failed too',
         );
         throw backupError;
       }

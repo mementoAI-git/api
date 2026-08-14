@@ -183,14 +183,14 @@ export async function deleteImage(publicId: string): Promise<void> {
  * Cloudinary fetches the video from the given URL, extracts the first frame,
  * converts it to JPEG, and caches the result on its CDN.
  *
- * Format: https://res.cloudinary.com/{cloud}/video/fetch/so_0,f_jpg,w_640,q_80/{encoded_url}
+ * Format: https://res.cloudinary.com/{cloud}/video/fetch/so_1,f_jpg,w_800,q_80/{encoded_url}
  *
  * Returns null if CLOUDINARY_CLOUD_NAME is not set.
  */
 export function getVideoThumbnailUrl(videoUrl: string): string | null {
   if (!CLOUDINARY_CLOUD_NAME || !videoUrl) return null;
   const encoded = encodeURIComponent(videoUrl);
-  return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/fetch/so_0,f_jpg,w_640,q_80/${encoded}`;
+  return `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/fetch/so_1,f_jpg,w_800,q_80/${encoded}`;
 }
 
 /** Get file as stream (fetches from Cloudinary URL). Used for compatibility with storage layer. */
