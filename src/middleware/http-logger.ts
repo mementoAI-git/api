@@ -42,12 +42,15 @@ export const httpLogger = pinoHttpLogger({
       if (!isEmpty(req?.params)) {
         requestData.params = sanitizeData(req.params);
       }
-      if (!isEmpty(req?.body)) {
-        requestData.body = sanitizeData(req.body);
-      }
-
       if (!isEmpty(req?.auth?.id)) {
         requestData.user = req.auth?.id;
+      }
+
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        const body = req.body as Record<string, unknown> | undefined;
+        if (body && typeof body === 'object' && 'password' in body) {
+          requestData.body = {password: 'XXX'};
+        }
       }
 
       return requestData;

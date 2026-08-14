@@ -10,7 +10,13 @@ import {logger} from '../utils';
 
 async function startWorkers() {
   await connectMongodb();
+
   const connection = getRedisConnection();
+  if (!connection) {
+    throw new Error('Redis connection is unavailable');
+  }
+
+  logger.info('Starting background workers...');
 
   const insightsWorker = startInsightsExtractionWorker(connection);
   const quickCaptureWorker = startQuickCaptureWorker(connection);
@@ -18,19 +24,21 @@ async function startWorkers() {
   const systemWorker = startSystemWorker(connection);
 
   logger.info('Workers started');
-  // Handle graceful shutdown
+
   process.on('SIGTERM', async () => {
-    await insightsWorker.close();
-    await quickCaptureWorker.close();
-    await summarizationWorker.close();
-    await systemWorker.close();
+    logger.info('Shutting down workers...');
+    await Promise.all([
+      insightsWorker.close(),
+      quickCaptureWorker.close(),
+      summarizationWorker.close(),
+      systemWorker.close(),
+    ]);
     await mongoose.disconnect();
     process.exit(0); // eslint-disable-line n/no-process-exit
   });
 }
 
-// Start the workers
 startWorkers().catch(error => {
-  console.error('Failed to start workers:', error);
+  logger.error({err: error}, 'Failed to start workers');
   process.exit(1); // eslint-disable-line n/no-process-exit
 });

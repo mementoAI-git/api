@@ -24,9 +24,14 @@ export function setupBullBoard(app: Application) {
 
   serverAdapter.setBasePath(path);
 
-  const queues = [summarizationQueue, insightQueue, systemQueue].map(
-    queue => new BullMQAdapter(queue),
-  );
+  const queues = [summarizationQueue, insightQueue, systemQueue]
+    .filter((queue): queue is NonNullable<typeof queue> => Boolean(queue))
+    .map(queue => new BullMQAdapter(queue));
+
+  if (queues.length === 0) {
+    logger.warn('No BullMQ queues available; skipping queue dashboard setup');
+    return;
+  }
 
   createBullBoard({
     queues,
@@ -38,12 +43,27 @@ export function setupBullBoard(app: Application) {
 
 export async function initializeScheduler() {
   logger.info('Initializing scheduler...');
-  await initializeResetStreak();
-  await initializeFileBackup();
-  await initializeCapsuleReveal();
-  await initializeStalePendingRecovery();
-  await initializePersonaSummarization();
-  await initializeConversationSummary();
+
+  const jobs = [
+    ['reset streak', initializeResetStreak],
+    ['file backup', initializeFileBackup],
+    ['capsule reveal', initializeCapsuleReveal],
+    ['stale pending recovery', initializeStalePendingRecovery],
+    ['persona summarization', initializePersonaSummarization],
+    ['conversation summary', initializeConversationSummary],
+  ] as const;
+
+  for (const [name, init] of jobs) {
+    try {
+      await init();
+      logger.info({job: name}, 'Scheduler job initialized');
+    } catch (error) {
+      logger.error(
+        {job: name, err: error},
+        'Scheduler job initialization failed',
+      );
+    }
+  }
 }
 
 export * from './insights';

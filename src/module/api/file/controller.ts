@@ -52,7 +52,7 @@ const safeStreamToResponse = async (
 ): Promise<void> => {
   // Listen for errors on the stream
   stream.on('error', streamError => {
-    console.error('Stream error:', streamError);
+    logger.error({err: streamError}, 'Stream error while piping file response');
     if (!res.headersSent) {
       res.destroy();
     }
@@ -192,7 +192,7 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     if (!res.headersSent) {
       next(error);
     } else {
-      console.error('Error after headers sent:', error);
+      logger.error({err: error}, 'Error after headers sent');
     }
   }
 }

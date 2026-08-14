@@ -8,7 +8,7 @@ import path from 'path';
 import setupSwagger from './docs';
 import {httpLogger} from './middleware/http-logger';
 import {setupBullBoard} from './services/queues';
-import {PORT} from './utils/config';
+import {CORS_ALLOWED_ORIGINS, JSON_BODY_LIMIT, PORT} from './utils/config';
 import {logger} from './utils';
 
 export function createServer(): Application {
@@ -19,8 +19,15 @@ export function createServer(): Application {
   app.use(helmet());
   app.use(
     cors({
-      origin: '*',
-      credentials: true,
+      origin: (origin, callback) => {
+        if (!origin || CORS_ALLOWED_ORIGINS.includes(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error('Not allowed by CORS'));
+      },
+      credentials: false,
       optionsSuccessStatus: 200,
     }),
   );
@@ -28,7 +35,7 @@ export function createServer(): Application {
   app.use(express.urlencoded({extended: false}));
   app.use(
     express.json({
-      limit: '100mb',
+      limit: JSON_BODY_LIMIT,
       verify: (req: express.Request | any, _res, buf) => {
         req.rawBody = buf;
       },
