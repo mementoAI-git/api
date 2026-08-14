@@ -46,7 +46,8 @@ export default async function processAttachmentThumbnail(job: {
   try {
     const artifact = await createUploadedVideoThumbnailArtifact({
       name: file.name,
-      backup_url: file.backup_url,
+      provider: file.provider,
+      type: file.type,
     });
     await file.updateOne({
       thumbnail: artifact.thumbnailUrl,

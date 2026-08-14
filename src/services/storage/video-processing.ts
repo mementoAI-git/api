@@ -3,11 +3,12 @@ import {createWriteStream} from 'fs';
 import {mkdir, readFile, rm} from 'fs/promises';
 import path from 'path';
 import {pipeline} from 'stream/promises';
-import axios from 'axios';
 import {v4 as uuid} from 'uuid';
 import {FFMPEG_PATH, FFPROBE_PATH, TEMP_PATH} from '../../utils/config';
+import type {FileStorageProvider} from '../../module/database/model/file';
 import {uploadToS3} from './s3';
 import {resolvePublicFileUrl} from './public-url';
+import {getFile} from './index';
 
 export interface VideoMediaMetadata {
   width: number | null;
@@ -69,20 +70,34 @@ async function ensureTempDir(): Promise<string> {
   return dir;
 }
 
+type StoredFileRef = {
+  key: string;
+  provider: FileStorageProvider;
+  mimeType: string;
+};
+
 function extFromFileName(name: string, fallback: string): string {
   const ext = path.extname(name).trim();
   return ext || fallback;
 }
 
-async function downloadToTempFile(url: string, ext: string): Promise<string> {
+async function downloadToTempFile(
+  fileRef: StoredFileRef,
+  ext: string,
+): Promise<string> {
   const dir = await ensureTempDir();
   const filePath = path.join(dir, `${uuid()}${ext}`);
-  const response = await axios.get(url, {
-    responseType: 'stream',
-    validateStatus: status => status >= 200 && status < 300,
-  });
+  const response = await getFile(
+    fileRef.key,
+    undefined,
+    fileRef.provider,
+    fileRef.mimeType,
+  );
+  if (!response.Body) {
+    throw new Error('File content not found in storage');
+  }
 
-  await pipeline(response.data, createWriteStream(filePath));
+  await pipeline(response.Body, createWriteStream(filePath));
   return filePath;
 }
 
@@ -134,14 +149,18 @@ async function generateThumbnailImage(
 
 export async function createUploadedVideoThumbnailArtifact(file: {
   name: string;
-  backup_url?: string | null;
+  provider?: FileStorageProvider;
+  type: string;
 }): Promise<VideoThumbnailArtifactResult> {
-  if (!file.backup_url) {
-    throw new Error('Video backup URL is not available for processing');
-  }
-
   const sourceExt = extFromFileName(file.name, '.mp4');
-  const inputPath = await downloadToTempFile(file.backup_url, sourceExt);
+  const inputPath = await downloadToTempFile(
+    {
+      key: file.name,
+      provider: file.provider ?? 's3',
+      mimeType: file.type,
+    },
+    sourceExt,
+  );
   const dir = await ensureTempDir();
   const outputPath = path.join(dir, `${uuid()}.jpg`);
   const thumbnailKey = `thumbnails/${file.name.replace(/\.[^.]+$/, '')}.jpg`;
