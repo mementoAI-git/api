@@ -16,7 +16,7 @@ export const UPLOAD_FILE_SIZE_LIMIT_MB = Number(
 );
 export const CORS_ALLOWED_ORIGINS = (
   process.env.CORS_ALLOWED_ORIGINS ||
-  'http://localhost:5173,https://app.memento.app,https://www.memento.app'
+  'http://localhost:5173,https://app.mymemento.io,https://dev.mymemento.io,https://www.mymemento.io,https://mymemento.io'
 )
   .split(',')
   .map(value => value.trim())
