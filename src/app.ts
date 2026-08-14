@@ -17,20 +17,21 @@ export function createServer(): Application {
   app.set('trust proxy', 1);
 
   app.use(helmet());
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        if (!origin || CORS_ALLOWED_ORIGINS.includes(origin)) {
-          callback(null, true);
-          return;
-        }
+ app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || CORS_ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+        return;
+      }
 
-        callback(new Error('Not allowed by CORS'));
-      },
-      credentials: false,
-      optionsSuccessStatus: 200,
-    }),
-  );
+      console.warn(`CORS rejected origin: "${origin}". Allowed: ${CORS_ALLOWED_ORIGINS.join(', ')}`);
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: false,
+    optionsSuccessStatus: 200,
+  }),
+);
 
   app.use(express.urlencoded({extended: false}));
   app.use(
