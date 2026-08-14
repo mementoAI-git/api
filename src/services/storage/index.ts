@@ -23,8 +23,26 @@ import {
 } from '../../utils/constant';
 import User, {IUser} from '../../module/database/model/user';
 import File from '../../module/database/model/file';
-import {ForbiddenException} from '../../utils/service-error';
+import {ForbiddenException, NotFoundException} from '../../utils/service-error';
 import {BACKEND_URL} from '../../utils/config';
+
+function isStorageNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    name?: string;
+    message?: string;
+    $metadata?: {httpStatusCode?: number};
+  };
+
+  if (candidate.$metadata?.httpStatusCode === 404) {
+    return true;
+  }
+
+  return candidate.name === 'NotFound' || candidate.message === 'UnknownError';
+}
 
 function resolvePublicFileUrl(key: string, fallback = ''): string {
   if (BACKEND_URL) {
@@ -212,7 +230,17 @@ export async function getFileMetadata(
         {key, err: primaryError},
         'Primary metadata fetch failed, falling back to backup',
       );
-      return await getFileMetadataFromS3(key, 'backup');
+      try {
+        return await getFileMetadataFromS3(key, 'backup');
+      } catch (backupError) {
+        if (
+          isStorageNotFoundError(primaryError) &&
+          isStorageNotFoundError(backupError)
+        ) {
+          throw new NotFoundException('File not found');
+        }
+        throw backupError;
+      }
     }
   }
 
@@ -260,6 +288,12 @@ export async function getFile(
           ContentType: result.ContentType,
         };
       } catch (backupError) {
+        if (
+          isStorageNotFoundError(primaryError) &&
+          isStorageNotFoundError(backupError)
+        ) {
+          throw new NotFoundException('File not found');
+        }
         logger.error(
           {key, err: backupError},
           'Backup storage fetch failed too',

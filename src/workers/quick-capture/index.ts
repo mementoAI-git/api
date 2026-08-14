@@ -4,10 +4,7 @@ import type {RedisConnection} from '../../services/redis';
 import Memory from '../../module/database/model/memory';
 import Message from '../../module/database/model/message';
 import {extractJson, logger} from '../../utils';
-import {
-  generateTextWithFallback,
-  openRouterClient,
-} from '../../services/ai/openrouter';
+import {generateTextWithProviderFallback} from '../../services/ai/nonstream-fallback';
 import {queueStoryInsights} from '../../services/queues/insights';
 import {queueSummarization} from '../../services/queues/summarization';
 import type {QuickCaptureEnrichmentJobData} from '../../services/queues/quick-capture';
@@ -173,11 +170,7 @@ export default function startQuickCaptureWorker(connection: RedisConnection) {
         .join('\n\n');
 
       try {
-        if (!openRouterClient.isConfigured()) {
-          throw new Error('OpenRouter not configured');
-        }
-
-        const result = await generateTextWithFallback({
+        const result = await generateTextWithProviderFallback({
           task: 'quick_capture_enrich',
           messages: [
             {role: 'system', content: ENRICHMENT_SYSTEM},

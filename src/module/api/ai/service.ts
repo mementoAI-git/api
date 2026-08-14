@@ -33,12 +33,11 @@ import AiMetric from '../../database/model/ai-metric';
 import {updateStreak} from '../user/service';
 import {addToInsightsBuffer} from '../../../services/queues/insights';
 import * as supermemory from '../../../services/supermemory';
+import {OpenRouterMessage} from '../../../services/ai/openrouter';
 import {
-  openRouterClient,
-  OpenRouterMessage,
-  streamTextWithFallback,
-  generateTextWithFallback,
-} from '../../../services/ai/openrouter';
+  generateTextWithProviderFallback,
+  isNonStreamingProviderFallbackConfigured,
+} from '../../../services/ai/nonstream-fallback';
 import {
   GroqMessage,
   groqClient,
@@ -874,7 +873,7 @@ export async function startConversation(
   if (
     isEmpty(responseText) &&
     OPENROUTER_CRITICAL_ENABLED &&
-    openRouterClient.isConfigured()
+    isNonStreamingProviderFallbackConfigured()
   ) {
     const historyMessages = createChatHistory(history).map(message => ({
       role: message.role === 'model' ? 'assistant' : 'user',
@@ -886,8 +885,8 @@ export async function startConversation(
       {role: 'user', content: payload.text},
     ];
     try {
-      const {text, effectiveModel, usedFallback, tokenUsage} =
-        await generateTextWithFallback({
+      const {text, provider, effectiveModel, usedFallback, tokenUsage} =
+        await generateTextWithProviderFallback({
           task: 'chat_bootstrap',
           messages: chatMessages,
           temperature: 0.7,
@@ -895,7 +894,7 @@ export async function startConversation(
       responseText = text;
       console.log('AI routing', {
         task: 'chat_bootstrap',
-        provider: 'openrouter',
+        provider,
         effectiveModel,
         usedFallback,
         durationMs: Date.now() - requestStart,
@@ -904,7 +903,7 @@ export async function startConversation(
         event: 'ai_route',
         task: 'chat_bootstrap',
         endpoint: '/ai/conversation/new',
-        provider: 'openrouter',
+        provider,
         model: effectiveModel,
         user: user_id,
         memory: String(memory.id),
@@ -1047,10 +1046,10 @@ export async function autogenerateTags(payload: {
   };
 
   try {
-    if (openRouterClient.isConfigured()) {
+    if (isNonStreamingProviderFallbackConfigured()) {
       try {
-        const {text, effectiveModel, usedFallback, tokenUsage} =
-          await generateTextWithFallback({
+        const {text, provider, effectiveModel, usedFallback, tokenUsage} =
+          await generateTextWithProviderFallback({
             task: 'tags_generate',
             messages: tagMessages,
             temperature: 0.2,
@@ -1058,7 +1057,7 @@ export async function autogenerateTags(payload: {
         rawText = text;
         console.log('AI routing', {
           task: 'tags_generate',
-          provider: 'openrouter',
+          provider,
           effectiveModel,
           usedFallback,
           durationMs: Date.now() - requestStart,
@@ -1067,7 +1066,7 @@ export async function autogenerateTags(payload: {
           event: 'ai_route',
           task: 'tags_generate',
           endpoint: '/ai/generate-tags',
-          provider: 'openrouter',
+          provider,
           model: effectiveModel,
           used_fallback: usedFallback,
           duration_ms: Date.now() - requestStart,
@@ -1076,23 +1075,23 @@ export async function autogenerateTags(payload: {
       } catch (orError) {
         console.error(
           orError,
-          'autogenerateTags: OpenRouter failed, trying Gemini',
+          'autogenerateTags: provider fallback failed, trying Gemini',
         );
         void recordAiMetric({
           event: 'ai_route',
           task: 'tags_generate',
           endpoint: '/ai/generate-tags',
-          provider: 'openrouter',
+          provider: 'provider_fallback',
           duration_ms: Date.now() - requestStart,
           metadata: {
             error: String((orError as Error)?.message),
-            stage: 'openrouter_failed',
+            stage: 'provider_fallback_failed',
           },
         });
-        await runGeminiTags('openrouter_failed');
+        await runGeminiTags('provider_fallback_failed');
       }
     } else {
-      await runGeminiTags('no_openrouter');
+      await runGeminiTags('no_provider_fallback');
     }
   } catch (error) {
     console.error(
@@ -1218,10 +1217,10 @@ export async function autogenerateStoryTitle(payload: {
   };
 
   try {
-    if (openRouterClient.isConfigured()) {
+    if (isNonStreamingProviderFallbackConfigured()) {
       try {
-        const {text, effectiveModel, usedFallback, tokenUsage} =
-          await generateTextWithFallback({
+        const {text, provider, effectiveModel, usedFallback, tokenUsage} =
+          await generateTextWithProviderFallback({
             task: 'title_generate',
             messages: titleMessages,
             temperature: 0.35,
@@ -1231,7 +1230,7 @@ export async function autogenerateStoryTitle(payload: {
           event: 'ai_route',
           task: 'story_title_generate',
           endpoint: '/ai/generate-story-title',
-          provider: 'openrouter',
+          provider,
           model: effectiveModel,
           used_fallback: usedFallback,
           duration_ms: Date.now() - requestStart,
@@ -1240,23 +1239,23 @@ export async function autogenerateStoryTitle(payload: {
       } catch (orError) {
         console.error(
           orError,
-          'autogenerateStoryTitle: OpenRouter failed, trying Gemini',
+          'autogenerateStoryTitle: provider fallback failed, trying Gemini',
         );
         void recordAiMetric({
           event: 'ai_route',
           task: 'story_title_generate',
           endpoint: '/ai/generate-story-title',
-          provider: 'openrouter',
+          provider: 'provider_fallback',
           duration_ms: Date.now() - requestStart,
           metadata: {
             error: String((orError as Error)?.message),
-            stage: 'openrouter_failed',
+            stage: 'provider_fallback_failed',
           },
         });
-        await runGeminiTitle('openrouter_failed');
+        await runGeminiTitle('provider_fallback_failed');
       }
     } else {
-      await runGeminiTitle('no_openrouter');
+      await runGeminiTitle('no_provider_fallback');
     }
   } catch (error) {
     console.error(
