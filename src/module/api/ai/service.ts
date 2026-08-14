@@ -27,6 +27,7 @@ import {
   processFiles,
   updateMemoryTitle,
 } from './utils';
+import {serializeAttachmentList} from '../../../utils/attachment-response';
 import Prompt from '../../database/model/prompt';
 import AiMetric from '../../database/model/ai-metric';
 import {updateStreak} from '../user/service';
@@ -494,7 +495,17 @@ export async function getUserMessages(
     messagesToSend = messages.slice(0, limit);
   }
 
-  const data = {messages: messagesToSend.reverse(), next};
+  const data = {
+    messages: messagesToSend.reverse().map(message => {
+      const obj = message.toObject() as {attatchments?: unknown};
+      const {attatchments, ...rest} = obj;
+      return {
+        ...rest,
+        attachments: serializeAttachmentList(attatchments),
+      };
+    }),
+    next,
+  };
   return {message: 'User messages retrieved successfully', data};
 }
 
@@ -530,7 +541,17 @@ export async function getUserMessagesByConversation(
     messagesToSend = messages.slice(0, limit);
   }
 
-  const data = {messages: messagesToSend.reverse(), next};
+  const data = {
+    messages: messagesToSend.reverse().map(message => {
+      const obj = message.toObject() as {attatchments?: unknown};
+      const {attatchments, ...rest} = obj;
+      return {
+        ...rest,
+        attachments: serializeAttachmentList(attatchments),
+      };
+    }),
+    next,
+  };
   return {message: 'User messages retrieved successfully', data};
 }
 
