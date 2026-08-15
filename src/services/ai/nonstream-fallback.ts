@@ -25,11 +25,11 @@ export async function generateTextWithProviderFallback(params: {
   temperature?: number;
 }): Promise<ProviderFallbackTextResult> {
   const start = Date.now();
-  
+
   // We map OpenRouterMessage to ChatMessage (which is the same shape)
   const result = await ai.generateText(params.messages);
 
-  // Since AIRouter.generateText only returns the string, 
+  // Since AIRouter.generateText only returns the string,
   // and doesn't currently expose which provider was used or token usage,
   // we provide best-effort metadata.
   return {

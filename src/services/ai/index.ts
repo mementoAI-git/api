@@ -76,8 +76,6 @@ if (SAMBANOVA_API_KEY) {
   );
 }
 
-
-
 if (OPENROUTER_API_KEY) {
   ai.register(
     new OpenAICompatProvider({
