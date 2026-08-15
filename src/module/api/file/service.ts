@@ -92,7 +92,8 @@ export async function removeFile(name: string, user_id: string) {
 }
 
 export async function getFileMetadata(name: string) {
-  const isThumbnail = name.startsWith('thumb_') || name.startsWith('thumbnails/');
+  const isThumbnail =
+    name.startsWith('thumb_') || name.startsWith('thumbnails/');
 
   if (isThumbnail) {
     const result = await storage.getFileMetadata(
@@ -166,7 +167,8 @@ export async function getFileBuffer(
     return {...result, buffer: Buffer.from(result.buffer.data)};
   }
 
-  const isThumbnail = name.startsWith('thumb_') || name.startsWith('thumbnails/');
+  const isThumbnail =
+    name.startsWith('thumb_') || name.startsWith('thumbnails/');
   let fileResponse;
 
   if (isThumbnail) {
