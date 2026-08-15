@@ -47,11 +47,14 @@ export class AIRouter {
         return result;
       } catch (err: any) {
         const isRateLimit = err?.status === 429;
+        const isPaymentRequired = err?.status === 402;
 
-        if (isRateLimit) {
+        if (isRateLimit || isPaymentRequired) {
           entry.rateLimitedUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
           logger.warn(
-            `AI router: ${entry.provider.name} rate-limited, cooling down for ${RATE_LIMIT_COOLDOWN_MS / 1000}s`,
+            `AI router: ${entry.provider.name} ${
+              isPaymentRequired ? 'payment required' : 'rate-limited'
+            }, cooling down for ${RATE_LIMIT_COOLDOWN_MS / 1000}s`,
           );
         } else {
           logger.error(err, `AI router: ${entry.provider.name} failed`);

@@ -1,18 +1,10 @@
-import {getTaskRouting, type AiTask} from './model-routing';
-import {
-  generateTextWithFallback,
-  openRouterClient,
-  type OpenRouterMessage,
-} from './openrouter';
-import {
-  deepSeekClient,
-  generateTextWithDeepSeekFallback,
-  type DeepSeekMessage,
-} from './deepseek';
+import ai from './index';
+import {type AiTask} from './model-routing';
+import {type OpenRouterMessage} from './openrouter';
 
 export interface ProviderFallbackTextResult {
   text: string;
-  provider: 'openrouter' | 'deepseek';
+  provider: string;
   effectiveModel: string;
   usedFallback: boolean;
   durationMs: number;
@@ -24,14 +16,7 @@ export interface ProviderFallbackTextResult {
 }
 
 export function isNonStreamingProviderFallbackConfigured(): boolean {
-  return openRouterClient.isConfigured() || deepSeekClient.isConfigured();
-}
-
-function toDeepSeekMessages(messages: OpenRouterMessage[]): DeepSeekMessage[] {
-  return messages.map(message => ({
-    role: message.role,
-    content: message.content,
-  }));
+  return ai.size > 0;
 }
 
 export async function generateTextWithProviderFallback(params: {
@@ -39,38 +24,19 @@ export async function generateTextWithProviderFallback(params: {
   messages: OpenRouterMessage[];
   temperature?: number;
 }): Promise<ProviderFallbackTextResult> {
-  let openRouterError: unknown;
+  const start = Date.now();
+  
+  // We map OpenRouterMessage to ChatMessage (which is the same shape)
+  const result = await ai.generateText(params.messages);
 
-  if (openRouterClient.isConfigured()) {
-    try {
-      const result = await generateTextWithFallback(params);
-      return {
-        ...result,
-        provider: 'openrouter',
-      };
-    } catch (error) {
-      openRouterError = error;
-    }
-  }
-
-  if (deepSeekClient.isConfigured()) {
-    const route = getTaskRouting(params.task);
-    const result = await generateTextWithDeepSeekFallback({
-      messages: toDeepSeekMessages(params.messages),
-      temperature: params.temperature,
-      timeoutMs: route.timeoutMs,
-    });
-    return {
-      ...result,
-      provider: 'deepseek',
-    };
-  }
-
-  if (openRouterError) {
-    throw openRouterError;
-  }
-
-  throw new Error(
-    `No non-streaming AI provider configured for task: ${params.task}`,
-  );
+  // Since AIRouter.generateText only returns the string, 
+  // and doesn't currently expose which provider was used or token usage,
+  // we provide best-effort metadata.
+  return {
+    text: result,
+    provider: 'router',
+    effectiveModel: 'routed-model',
+    usedFallback: false, // AIRouter handles this internally
+    durationMs: Date.now() - start,
+  };
 }
