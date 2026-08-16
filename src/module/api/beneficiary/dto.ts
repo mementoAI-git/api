@@ -18,6 +18,11 @@ export const createBeneficiarySchema = z.object({
     name: z.string().trim().optional().default(''),
     about: z.string().trim().optional().default(''),
     relationship: z.string().trim().optional().default('friend'),
+    avatar_file_id: z
+      .string()
+      .regex(/^[a-fA-F0-9]{24}$/, 'Invalid ID format')
+      .optional()
+      .nullable(),
     groups: groupsSchema,
     group_ids: groupsSchema, // Alias supported by frontend
   }),

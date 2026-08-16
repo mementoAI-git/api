@@ -17,7 +17,13 @@ import AuthCode from '../../database/model/auth-code';
 import {CreateBeneficiaryBody} from './dto';
 
 export async function create(payload: CreateBeneficiaryBody, user_id: string) {
-  const {email, name = '', about = '', relationship = 'friend'} = payload;
+  const {
+    email,
+    name = '',
+    about = '',
+    relationship = 'friend',
+    avatar_file_id = null,
+  } = payload;
   const groups =
     payload.groups && payload.groups.length > 0
       ? payload.groups
@@ -43,6 +49,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
     email,
     name,
     about,
+    avatar_file_id,
     relationship,
     due_at: dayjs().add(3, 'days').toDate(),
     user: user?.id || null,
