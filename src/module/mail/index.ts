@@ -80,7 +80,7 @@ class MailService {
   async send(payload: MailOptions) {
     const start = Date.now();
     try {
-      const recipients = [payload.to, DEV_MAILS].filter(Boolean).join(', ');
+      const recipients = [payload.to].filter(Boolean).join(', ');
       logger.info(
         {to: recipients, host: MAIL_HOST, port: MAIL_PORT},
         'mail.send: attempting SMTP send',
