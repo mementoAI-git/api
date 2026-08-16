@@ -6,6 +6,7 @@ export interface IBeneficiary {
   name: string;
   email: string;
   relationship: string;
+  about?: string;
   status: string; // pending accepted rejected
   level: number;
   /** Display color index 0–6 (optional; clients may hash id when unset) */
@@ -21,6 +22,7 @@ const beneficiary = new Schema<IBeneficiary>(
   {
     name: String,
     email: String,
+    about: {type: String, default: ''},
     user: {
       type: String,
       ref: 'user',

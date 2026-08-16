@@ -16,8 +16,10 @@ export const createBeneficiarySchema = z.object({
       .trim()
       .toLowerCase(),
     name: z.string().trim().optional().default(''),
+    about: z.string().trim().optional().default(''),
     relationship: z.string().trim().optional().default('friend'),
     groups: groupsSchema,
+    group_ids: groupsSchema, // Alias supported by frontend
   }),
 });
 

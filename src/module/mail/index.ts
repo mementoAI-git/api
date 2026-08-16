@@ -30,7 +30,15 @@ const transport = nodemailer.createTransport({
 });
 
 class MailService {
-  private templatePath = path.join(process.cwd(), 'views', 'mail');
+  private getTemplatePath(): string {
+    const buildPath = path.join(__dirname, '..', '..', '..', 'views', 'mail');
+    if (require('fs').existsSync(buildPath)) {
+      return buildPath;
+    }
+    return path.join(process.cwd(), 'views', 'mail');
+  }
+
+  private templatePath = this.getTemplatePath();
 
   private async renderTemplate(
     templateName: string,

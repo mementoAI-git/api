@@ -17,7 +17,11 @@ import AuthCode from '../../database/model/auth-code';
 import {CreateBeneficiaryBody} from './dto';
 
 export async function create(payload: CreateBeneficiaryBody, user_id: string) {
-  const {email, name = '', relationship = 'friend', groups = []} = payload;
+  const {email, name = '', about = '', relationship = 'friend'} = payload;
+  const groups =
+    payload.groups && payload.groups.length > 0
+      ? payload.groups
+      : payload.group_ids || [];
 
   const benefactor = await User.findOne({_id: user_id});
   if (!benefactor) {
@@ -38,6 +42,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   const data = await Beneficiary.create({
     email,
     name,
+    about,
     relationship,
     due_at: dayjs().add(3, 'days').toDate(),
     user: user?.id || null,

@@ -24,6 +24,10 @@ async function askQuestion(query: string): Promise<string> {
 async function runBackfill() {
   logger.info('Starting Video Thumbnail Backfill Script...');
 
+  // Parse command line arguments
+  const args = process.argv.slice(2);
+  const autoYes = args.includes('--yes') || args.includes('-y');
+
   try {
     await connectMongodb();
     logger.info('MongoDB connected');
@@ -47,13 +51,17 @@ async function runBackfill() {
     const examples = videos.slice(0, 5).map(v => ({id: v.id, name: v.name}));
     logger.info({examples}, 'Sample videos to be backfilled:');
 
-    const answer = await askQuestion(
-      '\nDo you want to queue these videos for background thumbnail generation via BullMQ? (y/N): ',
-    );
+    if (!autoYes) {
+      const answer = await askQuestion(
+        '\nDo you want to queue these videos for background thumbnail generation via BullMQ? (y/N): ',
+      );
 
-    if (answer.toLowerCase() !== 'y') {
-      logger.info('Aborting backfill operation.');
-      return;
+      if (answer.toLowerCase() !== 'y') {
+        logger.info('Aborting backfill operation.');
+        return;
+      }
+    } else {
+      logger.info('\nAuto-accepting via --yes flag.');
     }
 
     logger.info('Queueing jobs...');

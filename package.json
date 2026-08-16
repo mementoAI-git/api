@@ -16,7 +16,7 @@
   "scripts": {
     "start": "node --dns-result-order=ipv4first build/src/index.js",
     "dev": "NODE_OPTIONS=--dns-result-order=ipv4first nodemon src/index.ts",
-    "build": "npm run clean && npm run compile",
+    "build": "npm run clean && npm run compile && cp -R views build/ && cp -R public build/",
     "lint": "gts lint",
     "clean": "gts clean",
     "compile": "npx tsc",
