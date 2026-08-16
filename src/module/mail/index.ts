@@ -86,8 +86,8 @@ class MailService {
         'mail.send: attempting SMTP send',
       );
       const info = await transport.sendMail({
-        // from: MAIL_USER,
-        from: 'noreply@mymemento.io',
+        from: MAIL_USER,
+        // from: 'noreply@mymemento.io',
         ...payload,
         to: recipients,
       });
