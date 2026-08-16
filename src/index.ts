@@ -3,6 +3,7 @@ import logger from './utils/logger';
 import {connectMongodb} from './module/database/connection';
 import redis from './services/redis';
 import {initializeScheduler} from './services/queues';
+import {transport} from './module/mail';
 
 async function bootstrap(): Promise<void> {
   try {
@@ -10,6 +11,12 @@ async function bootstrap(): Promise<void> {
     await connectMongodb();
     await redis.connect();
     await initializeScheduler();
+
+    transport.verify((error, success) => {
+      if (error)
+        logger.error(error, 'SMTP transport verification failed at startup');
+      else logger.info(success, 'SMTP transport verified successfully');
+    });
 
     process.on('uncaughtException', error => {
       logger.error(error, 'Uncaught Exception');

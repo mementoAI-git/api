@@ -18,15 +18,26 @@ import {INotifyTeamFeedback} from './interface';
 import otp, {OtpType} from '../../services/otp';
 import logger from '../../utils/logger';
 
-const transport = nodemailer.createTransport({
+// const transport = nodemailer.createTransport({
+//   //@ts-ignore
+//   host: MAIL_HOST,
+//   port: MAIL_PORT,
+//   secure: true,
+//   auth: {
+//     user: MAIL_USER,
+//     pass: MAIL_PASSWORD,
+//   },
+// });
+
+export const transport = nodemailer.createTransport({
   //@ts-ignore
   host: MAIL_HOST,
   port: MAIL_PORT,
   secure: true,
-  auth: {
-    user: MAIL_USER,
-    pass: MAIL_PASSWORD,
-  },
+  auth: {user: MAIL_USER, pass: MAIL_PASSWORD},
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 15_000,
 });
 
 class MailService {
@@ -50,15 +61,48 @@ class MailService {
     return html as string;
   }
 
+  // async send(payload: MailOptions) {
+  //   try {
+  //     const recipients = [payload.to, DEV_MAILS]
+  //     .filter(Boolean)
+  //     .join(', ');
+
+  //     await transport.sendMail({
+  //       from: MAIL_USER,
+  //       to: recipients,
+  //     });
+  //   } catch (error) {
+  //     logger.error(error, 'Error sending email');
+  //   }
+  // }
+
   async send(payload: MailOptions) {
+    const start = Date.now();
     try {
-      await transport.sendMail({
+      const recipients = [payload.to, DEV_MAILS].filter(Boolean).join(', ');
+      logger.info(
+        {to: recipients, host: MAIL_HOST, port: MAIL_PORT},
+        'mail.send: attempting SMTP send',
+      );
+      const info = await transport.sendMail({
         from: MAIL_USER,
-        to: DEV_MAILS,
         ...payload,
+        to: recipients,
       });
+      logger.info(
+        {
+          ms: Date.now() - start,
+          messageId: info.messageId,
+          accepted: info.accepted,
+          rejected: info.rejected,
+        },
+        'mail.send: SMTP send completed',
+      );
     } catch (error) {
-      logger.error(error, 'Error sending email');
+      logger.error(
+        {error, ms: Date.now() - start},
+        'mail.send: SMTP send failed',
+      );
     }
   }
 
