@@ -33,7 +33,8 @@ export const transport = nodemailer.createTransport({
   //@ts-ignore
   host: MAIL_HOST,
   port: MAIL_PORT,
-  secure: true,
+  secure: false,
+  requireTLS: true,
   auth: {user: MAIL_USER, pass: MAIL_PASSWORD},
   connectionTimeout: 10_000,
   greetingTimeout: 10_000,
