@@ -15,6 +15,7 @@ import User from '../../database/model/user';
 import {v4 as uuid} from 'uuid';
 import AuthCode from '../../database/model/auth-code';
 import {CreateBeneficiaryBody} from './dto';
+import otp from '../../../services/otp';
 
 export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   const {
@@ -268,14 +269,8 @@ export async function acceptInvite(payload: IAcceptInivite) {
       email,
     });
 
-    token = uuid();
-    const expires_at = dayjs().add(10, 'minutes').toISOString();
-    await AuthCode.create({
-      code: token,
-      email,
-      type: 'reset',
-      expires_at,
-    });
+    // Generate reset token using Redis OTP service
+    token = await otp.create(email, 'reset');
   }
 
   beneficiary.user = user.id;
