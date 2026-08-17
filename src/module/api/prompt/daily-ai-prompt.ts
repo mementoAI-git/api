@@ -10,9 +10,9 @@ import {
   computeEnrichmentScore,
 } from '../../../services/enrichment';
 import {
-  generateTextWithFallback,
-  openRouterClient,
-} from '../../../services/ai/openrouter';
+  generateTextWithProviderFallback,
+  isNonStreamingProviderFallbackConfigured,
+} from '../../../services/ai/nonstream-fallback';
 
 const LLM_TIMEOUT_MS = 3000;
 
@@ -211,8 +211,8 @@ export async function buildDailyPromptUserPayload(
 async function runLlm(userPayload: string): Promise<string> {
   const userMessage = `${userPayload}\n\nWrite one reflection question.`;
 
-  if (openRouterClient.isConfigured()) {
-    const r = await generateTextWithFallback({
+  if (isNonStreamingProviderFallbackConfigured()) {
+    const r = await generateTextWithProviderFallback({
       task: 'daily_prompt_generate',
       messages: [
         {role: 'system', content: SYSTEM_INSTRUCTION},

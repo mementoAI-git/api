@@ -17,9 +17,9 @@ import {Readable} from 'stream';
 import {DEFAULT_STORAGE_PROVIDER} from '../../../../utils/constant';
 import {queueSummarization} from '../../../../services/queues';
 import {
-  openRouterClient,
-  generateTextWithFallback,
-} from '../../../../services/ai/openrouter';
+  generateTextWithProviderFallback,
+  isNonStreamingProviderFallbackConfigured,
+} from '../../../../services/ai/nonstream-fallback';
 
 const SIZE_THRESHOLD = 18 * 1024 * 1024;
 const INACTIVITY_MINUTES = 10; // Summarize after 10 minutes of inactivity
@@ -103,8 +103,8 @@ export async function generateConversationTitle(
 
   try {
     let title = '';
-    if (openRouterClient.isConfigured()) {
-      const result = await generateTextWithFallback({
+    if (isNonStreamingProviderFallbackConfigured()) {
+      const result = await generateTextWithProviderFallback({
         task: 'title_generate',
         messages: [{role: 'user', content: prompt}],
         temperature: 0.2,

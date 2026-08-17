@@ -14,8 +14,8 @@ router.post(
   ctrl.uploadFile,
 );
 router.get('/', gaurd, ctrl.getUserFiles);
-router.get('/:name', ctrl.getFile);
-router.delete('/:name', gaurd, ctrl.removeFile);
+router.get('/:name(*)', ctrl.getFile);
+router.delete('/:name(*)', gaurd, ctrl.removeFile);
 
 export const name = 'files';
 export default router;

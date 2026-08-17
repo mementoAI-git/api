@@ -12,9 +12,9 @@ import {createHash} from 'crypto';
 import {Readable} from 'stream';
 import {
   DEFAULT_STORAGE_PROVIDER,
-  STORAGE_PROVIDERS,
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils/constant';
+import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
 
 export async function uploadFile(
   payload: Express.Multer.File[],
@@ -34,6 +34,20 @@ export async function uploadFile(
   );
 
   const data = await File.insertMany(files);
+
+  await Promise.all(
+    data.map(async file => {
+      if (file.type?.startsWith('video/') && file.status === 'processing') {
+        const queued = await queueAttachmentThumbnailProcessing(file.id);
+        if (!queued) {
+          await File.findByIdAndUpdate(file.id, {
+            status: 'failed',
+            thumbnail: null,
+          });
+        }
+      }
+    }),
+  );
 
   return {message: 'File uploaded successfully', data};
 }
@@ -78,6 +92,29 @@ export async function removeFile(name: string, user_id: string) {
 }
 
 export async function getFileMetadata(name: string) {
+  const isThumbnail =
+    name.startsWith('thumb_') || name.startsWith('thumbnails/');
+
+  if (isThumbnail) {
+    const result = await storage.getFileMetadata(
+      name,
+      DEFAULT_STORAGE_PROVIDER,
+      'image/jpeg',
+    );
+    const hash = createHash('md5');
+    hash.update(`${name}-${result.size}`);
+    const etag = result.etag || `${hash.digest('hex')}`;
+    return {
+      etag,
+      name,
+      type: 'image/jpeg',
+      size: result.size,
+      lastModified: result.lastModified,
+      provider: DEFAULT_STORAGE_PROVIDER,
+      updated_at: result.lastModified || new Date(),
+    };
+  }
+
   const key = `file-meta:${name}`;
 
   const meta = await redis.get(key);
@@ -130,18 +167,32 @@ export async function getFileBuffer(
     return {...result, buffer: Buffer.from(result.buffer.data)};
   }
 
-  const file = await File.findActiveOne({name});
-  if (!file) {
-    throw new NotFoundException('File not found');
-  }
+  const isThumbnail =
+    name.startsWith('thumb_') || name.startsWith('thumbnails/');
+  let fileResponse;
 
-  const rangeHeader = range ? `bytes=${start}-${end}` : undefined;
-  const fileResponse = await storage.getFile(
-    file.name,
-    rangeHeader,
-    file.provider ?? DEFAULT_STORAGE_PROVIDER,
-    file.type,
-  );
+  if (isThumbnail) {
+    const rangeHeader = range ? `bytes=${start}-${end}` : undefined;
+    fileResponse = await storage.getFile(
+      name,
+      rangeHeader,
+      DEFAULT_STORAGE_PROVIDER,
+      'image/jpeg',
+    );
+  } else {
+    const file = await File.findActiveOne({name});
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+
+    const rangeHeader = range ? `bytes=${start}-${end}` : undefined;
+    fileResponse = await storage.getFile(
+      file.name,
+      rangeHeader,
+      file.provider ?? DEFAULT_STORAGE_PROVIDER,
+      file.type,
+    );
+  }
 
   if (!fileResponse.Body) {
     throw new NotFoundException('File content not found');

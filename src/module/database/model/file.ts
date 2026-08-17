@@ -1,11 +1,15 @@
 import {model, Model, PaginateModel, Schema} from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
-import {BACKEND_URL, CLOUDINARY_CLOUD_NAME} from '../../../utils/config';
+import {BACKEND_URL} from '../../../utils/config';
 import {
   DEFAULT_STORAGE_PROVIDER,
   STORAGE_PROVIDERS,
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils/constant';
+import {
+  applyAttachmentContract,
+  type AttachmentStatus,
+} from '../../../utils/attachment-response';
 
 export interface ITranscriptionSegment {
   start: number; // start time in seconds
@@ -31,7 +35,10 @@ export interface IFile {
   backup_url?: string;
   transcription: ITranscriptionData;
   duration?: number; // duration in seconds for audio/video files
-  thumbnail?: string; // album art URL for audio files with embedded cover art (ID3)
+  thumbnail?: string | null; // preview/thumbnail URL for media
+  width?: number;
+  height?: number;
+  status?: AttachmentStatus;
   deleted?: boolean; // marks file as deleted so it can be cleaned up
   created_at: string;
   updated_at: string;
@@ -78,15 +85,28 @@ const file = new Schema<IFile>(
     backup_at: {type: Date, select: false},
     transcription: transcriptionDataSchema,
     duration: Number,
-    thumbnail: {type: String},
+    thumbnail: {type: String, default: null},
+    width: Number,
+    height: Number,
+    status: {
+      type: String,
+      enum: ['processing', 'ready', 'failed'],
+      default: 'ready',
+    },
     deleted: {
       type: Boolean,
       default: false,
     },
   },
   {
-    toJSON: {virtuals: true},
-    toObject: {virtuals: true},
+    toJSON: {
+      virtuals: true,
+      transform: (_doc, ret) => applyAttachmentContract(ret),
+    },
+    toObject: {
+      virtuals: true,
+      transform: (_doc, ret) => applyAttachmentContract(ret),
+    },
     timestamps: {
       createdAt: 'created_at',
       updatedAt: 'updated_at',

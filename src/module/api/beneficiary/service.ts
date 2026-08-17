@@ -15,9 +15,20 @@ import User from '../../database/model/user';
 import {v4 as uuid} from 'uuid';
 import AuthCode from '../../database/model/auth-code';
 import {CreateBeneficiaryBody} from './dto';
+import otp from '../../../services/otp';
 
 export async function create(payload: CreateBeneficiaryBody, user_id: string) {
-  const {email, name = '', relationship = 'friend', groups = []} = payload;
+  const {
+    email,
+    name = '',
+    about = '',
+    relationship = 'friend',
+    avatar_file_id = null,
+  } = payload;
+  const groups =
+    payload.groups && payload.groups.length > 0
+      ? payload.groups
+      : payload.group_ids || [];
 
   const benefactor = await User.findOne({_id: user_id});
   if (!benefactor) {
@@ -38,6 +49,8 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   const data = await Beneficiary.create({
     email,
     name,
+    about,
+    avatar_file_id,
     relationship,
     due_at: dayjs().add(3, 'days').toDate(),
     user: user?.id || null,
@@ -256,14 +269,8 @@ export async function acceptInvite(payload: IAcceptInivite) {
       email,
     });
 
-    token = uuid();
-    const expires_at = dayjs().add(10, 'minutes').toISOString();
-    await AuthCode.create({
-      code: token,
-      email,
-      type: 'reset',
-      expires_at,
-    });
+    // Generate reset token using Redis OTP service
+    token = await otp.create(email, 'reset');
   }
 
   beneficiary.user = user.id;

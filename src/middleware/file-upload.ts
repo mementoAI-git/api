@@ -2,6 +2,7 @@ import multer from 'multer';
 import {Request} from 'express';
 import {SUPPORTED_FILE_TYPES as allowedTypes} from '../utils/constant';
 import {resolveUploadMime} from '../utils/helpers';
+import {MAX_UPLOAD_FILES, UPLOAD_FILE_SIZE_LIMIT_MB} from '../utils/config';
 
 // Configure multer to use memory storage (similar to express-fileupload default behavior)
 const storage = multer.memoryStorage();
@@ -27,7 +28,8 @@ const fileFilter = (
 const fileUploadMiddleWare = multer({
   storage,
   limits: {
-    fileSize: 15 * 1024 * 1024, // 15MB
+    fileSize: UPLOAD_FILE_SIZE_LIMIT_MB * 1024 * 1024,
+    files: MAX_UPLOAD_FILES,
   },
   fileFilter,
 });

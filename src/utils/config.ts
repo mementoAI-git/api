@@ -9,6 +9,18 @@ export const IS_DEV_ENV = ['development', 'dev', 'local'].includes(
   NODE_ENV.toLowerCase(),
 );
 export const PORT = process.env.PORT || 5000;
+export const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '10mb';
+export const MAX_UPLOAD_FILES = Number(process.env.MAX_UPLOAD_FILES || 5);
+export const UPLOAD_FILE_SIZE_LIMIT_MB = Number(
+  process.env.UPLOAD_FILE_SIZE_LIMIT_MB || 15,
+);
+export const CORS_ALLOWED_ORIGINS = (
+  process.env.CORS_ALLOWED_ORIGINS ||
+  'http://localhost:5173,https://app.mymemento.io,https://dev.mymemento.io,https://www.mymemento.io,https://mymemento.io'
+)
+  .split(',')
+  .map(value => value.trim())
+  .filter(Boolean);
 export const AI_SLO_ERROR_RATE_MAX = Number(
   process.env.AI_SLO_ERROR_RATE_MAX || 0.03,
 );
@@ -142,6 +154,8 @@ export const DEV_MAILS = process.env.DEV_MAILS?.split(',') || [];
 export const SUPPORT_MAILS = process.env.SUPPORT_MAILS?.split(',') || [];
 
 export const TEMP_PATH = process.env.TEMP_PATH ?? os.tmpdir();
+export const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+export const FFPROBE_PATH = process.env.FFPROBE_PATH || 'ffprobe';
 
 export const CLOUDFLARE_R2_ACCOUNT_ID = process.env.CLOUDFLARE_R2_ACCOUNT_ID;
 export const CLOUDFLARE_R2_ACCESS_KEY_ID =

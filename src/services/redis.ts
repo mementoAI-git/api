@@ -9,12 +9,21 @@ export interface RedisConnection {
   username?: string;
 }
 
-const client: RedisClientType = createClient({url: REDIS_URL});
+const client: RedisClientType = createClient({
+  url: REDIS_URL || undefined,
+});
 
 client.on('error', err => logger.error(err, 'Redis Client Error'));
 client.on('connect', () => logger.info('Redis connected...'));
 
 export function getRedisConnection(): RedisConnection | null {
+  if (!REDIS_URL) {
+    logger.warn(
+      'REDIS_URL is not configured; Redis-backed jobs and rate limiting will be disabled',
+    );
+    return null;
+  }
+
   try {
     const url = new URL(REDIS_URL);
     return {
@@ -24,7 +33,7 @@ export function getRedisConnection(): RedisConnection | null {
       username: url.username || undefined,
     };
   } catch (error) {
-    console.error('Invalid REDIS_URL format:', error);
+    logger.error({err: error}, 'Invalid REDIS_URL format');
     return null;
   }
 }

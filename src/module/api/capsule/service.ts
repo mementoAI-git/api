@@ -191,7 +191,7 @@ export async function getCapsules(payload: IPagination, user: string) {
         {path: 'benefactor', select: 'first_name last_name fullname'},
         {
           path: 'attachments',
-          select: '_id name url',
+          select: '-base64',
           match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
         },
         {
@@ -199,7 +199,7 @@ export async function getCapsules(payload: IPagination, user: string) {
           select: '_id title body tags created_at attachments status',
           populate: {
             path: 'attachments',
-            select: '_id name url',
+            select: '-base64',
             match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
           },
         },
@@ -224,7 +224,7 @@ export async function getCapsule(id: string, user: string) {
       select: '_id title body tags created_at attachments status',
       populate: {
         path: 'attachments',
-        select: '_id name url',
+        select: '-base64',
         match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
       },
     },

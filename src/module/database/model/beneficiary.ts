@@ -6,6 +6,8 @@ export interface IBeneficiary {
   name: string;
   email: string;
   relationship: string;
+  about?: string;
+  avatar_file_id?: string | null;
   status: string; // pending accepted rejected
   level: number;
   /** Display color index 0–6 (optional; clients may hash id when unset) */
@@ -21,6 +23,8 @@ const beneficiary = new Schema<IBeneficiary>(
   {
     name: String,
     email: String,
+    about: {type: String, default: ''},
+    avatar_file_id: {type: String, ref: 'file', default: null},
     user: {
       type: String,
       ref: 'user',

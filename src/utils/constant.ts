@@ -95,6 +95,7 @@ export const queueNames = {
     jobs: {
       resetStreak: 'reset-streak',
       backupFiles: 'backup-files',
+      processAttachmentThumbnail: 'process-attachment-thumbnail',
       scheduleCapsuleReveals: 'schedule-capsule-reveals',
       recoverStalePending: 'recover-stale-pending',
       revealCapsules: 'reveal-capsules',

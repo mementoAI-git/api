@@ -1,6 +1,7 @@
 import {
   GEMINI_API_KEY,
   GROQ_API_KEY,
+  DEEPSEEK_API_KEY,
   CEREBRAS_API_KEY,
   NVIDIA_NIM_API_KEY,
   SAMBANOVA_API_KEY,
@@ -16,17 +17,6 @@ const ai = new AIRouter();
 
 // --- Tier 1 providers (ordered by quality × generosity) ---
 
-if (NVIDIA_NIM_API_KEY) {
-  ai.register(
-    new OpenAICompatProvider({
-      name: 'nvidia-nim',
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      apiKey: NVIDIA_NIM_API_KEY,
-      model: 'meta/llama-3.1-405b-instruct',
-    }),
-  );
-}
-
 if (GROQ_API_KEY) {
   ai.register(
     new OpenAICompatProvider({
@@ -34,6 +24,32 @@ if (GROQ_API_KEY) {
       baseUrl: 'https://api.groq.com/openai/v1',
       apiKey: GROQ_API_KEY,
       model: 'llama-3.3-70b-versatile',
+    }),
+  );
+}
+
+if (GEMINI_API_KEY) {
+  ai.register(new GeminiProvider());
+}
+
+if (DEEPSEEK_API_KEY) {
+  ai.register(
+    new OpenAICompatProvider({
+      name: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: DEEPSEEK_API_KEY,
+      model: 'deepseek-chat',
+    }),
+  );
+}
+
+if (NVIDIA_NIM_API_KEY) {
+  ai.register(
+    new OpenAICompatProvider({
+      name: 'nvidia-nim',
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      apiKey: NVIDIA_NIM_API_KEY,
+      model: 'meta/llama-3.1-405b-instruct',
     }),
   );
 }
@@ -58,11 +74,6 @@ if (SAMBANOVA_API_KEY) {
       model: 'Meta-Llama-3.1-405B-Instruct',
     }),
   );
-}
-
-// Gemini as a text-only provider in the pool (always available since the app requires GEMINI_API_KEY)
-if (GEMINI_API_KEY) {
-  ai.register(new GeminiProvider());
 }
 
 if (OPENROUTER_API_KEY) {
