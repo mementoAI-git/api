@@ -1,6 +1,7 @@
 import Memory from '../../database/model/memory';
 import File from '../../database/model/file';
 import Prompt, {IPrompt} from '../../database/model/prompt';
+import mongoose from 'mongoose';
 import {NotFoundException} from '../../../utils/service-error';
 import {IReplyPrompt} from './interface';
 import {isEmpty} from '../../../utils/helpers';
@@ -487,6 +488,10 @@ export const getOverviewPrompts = async (user_id: string) => {
 };
 
 export const getPromptDetails = async (id: string) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new NotFoundException('Prompt not found');
+  }
+
   const prompt = await Prompt.findById(id);
   if (!prompt) {
     throw new NotFoundException('Prompt not found');
@@ -495,5 +500,13 @@ export const getPromptDetails = async (id: string) => {
   return {
     data: prompt,
     message: 'Prompt details retrieved successfully',
+  };
+};
+
+export const getCategories = async () => {
+  const categories = await Prompt.distinct('category');
+  return {
+    data: categories.filter(Boolean),
+    message: 'Categories retrieved successfully',
   };
 };

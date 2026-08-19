@@ -107,6 +107,19 @@ export async function getPromptsByCategory(
   }
 }
 
+export async function getCategories(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.getCategories();
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getOverviewPrompts(
   req: IRequest,
   res: Response,
