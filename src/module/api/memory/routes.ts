@@ -35,6 +35,7 @@ router.get('/stories', gaurd, ctrl.getStoryMemories);
 router.get('/', gaurd, ctrl.getMemories);
 router.get('/prompt/:id', gaurd, ctrl.getMemoryByPrompt);
 router.get('/:id/enrichment', gaurd, ctrl.getConversationEnrichment);
+router.get('/:id/attachments', gaurd, ctrl.getMemoryAttachments);
 router.get('/:id', gaurd, ctrl.getMemory);
 router.put(
   '/:id',
