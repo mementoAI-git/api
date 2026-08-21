@@ -9,7 +9,9 @@ import {IPagination} from '../../../utils/interface';
 import {
   BadRequestException,
   NotFoundException,
+  ServiceError,
 } from '../../../utils/service-error';
+import {StatusCodes} from 'http-status-codes';
 import {
   IAddMessageToMemory,
   ICreateMemoryPayload,
@@ -41,6 +43,61 @@ import * as storage from '../../../services/storage';
 import {getConversationEnrichment} from '../../../services/enrichment';
 
 export {getConversationEnrichment};
+
+export async function getMemoryAttachments(memory_id: string, user_id: string) {
+  const memory = await Memory.findOne({
+    _id: memory_id,
+    user: user_id,
+  });
+
+  if (!memory) {
+    throw new ServiceError('Memory not found', StatusCodes.NOT_FOUND);
+  }
+
+  const fileIds = new Set<string>();
+
+  if (memory.attachments && Array.isArray(memory.attachments)) {
+    memory.attachments.forEach(id => {
+      if (id) fileIds.add(id.toString());
+    });
+  }
+
+  const messages = await Message.find({
+    memory: memory_id,
+    $or: [
+      {attachments: {$exists: true, $not: {$size: 0}}},
+      {attatchments: {$exists: true, $not: {$size: 0}}},
+    ],
+  }).select('attachments attatchments');
+
+  messages.forEach(msg => {
+    const anyMsg = msg as any;
+    if (anyMsg.attachments && Array.isArray(anyMsg.attachments)) {
+      anyMsg.attachments.forEach((id: any) => {
+        if (id) fileIds.add(id.toString());
+      });
+    }
+    if (anyMsg.attatchments && Array.isArray(anyMsg.attatchments)) {
+      anyMsg.attatchments.forEach((id: any) => {
+        if (id) fileIds.add(id.toString());
+      });
+    }
+  });
+
+  const uniqueFileIds = Array.from(fileIds);
+
+  if (uniqueFileIds.length === 0) {
+    return [];
+  }
+
+  const files = await File.find({
+    _id: {$in: uniqueFileIds},
+    deleted: false,
+    provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
+  }).sort({created_at: -1});
+
+  return files;
+}
 
 function shareIdsFromMemoryDoc(field: unknown): string[] {
   if (!Array.isArray(field) || field.length === 0) return [];

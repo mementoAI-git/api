@@ -280,3 +280,24 @@ export async function getConversationEnrichment(
     next(error);
   }
 }
+
+export async function getMemoryAttachments(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await service.getMemoryAttachments(
+      String(req.params.id),
+      req.auth.id,
+    );
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      'Memory attachments retrieved successfully',
+      data,
+    );
+  } catch (error) {
+    next(error);
+  }
+}
