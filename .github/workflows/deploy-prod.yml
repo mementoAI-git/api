@@ -1,29 +1,89 @@
+# .github/workflows/backend-deploy-prod.yml
+#
 # ──────────────────────────────────────────────────────────────
 # Backend — Deploy to Production
-# Manual trigger only - requires typing "DEPLOY" to confirm
-# Works on GitHub Free + private repos
+#
+# Manual trigger only.
+# Requires typing exactly: DEPLOY
+# Production branch: main
+#
+# Deployment strategy:
+#   1. Validate request
+#   2. Install once in CI
+#   3. Lint + build
+#   4. Upload release artifact
+#   5. Install production dependencies in an inactive release
+#   6. Atomically switch "current" symlink
+#   7. Reload PM2
+#   8. Health check
+#   9. Roll back automatically on failure
+#
+# Works without GitHub Environment approval features.
 # ──────────────────────────────────────────────────────────────
+
 name: "Backend: Deploy Prod"
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: 'Type "DEPLOY" to confirm production deployment'
+        description: 'Type exactly "DEPLOY" to confirm production deployment'
         required: true
         type: string
 
-# Queue production deploys — never cancel one mid-flight.
+permissions:
+  contents: read
+
+# Never cancel a production deployment once it has started.
 concurrency:
   group: backend-deploy-prod
   cancel-in-progress: false
 
+env:
+  PRODUCTION_BRANCH: main
+  DEPLOY_ROOT: /opt/memento/backend-prod
+  HEALTH_URL: http://127.0.0.1:4001/health
+
 jobs:
-  # ── 1. Lint ────────────────────────────────────────────────
-  lint:
-    name: Lint
+  # ────────────────────────────────────────────────────────────
+  # 1. Validate deployment request
+  # ────────────────────────────────────────────────────────────
+  validate:
+    name: Validate Deployment
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirmation == 'DEPLOY'
+
+    steps:
+      - name: Validate confirmation and branch
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          DEPLOY_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+
+          EXPECTED_REF="refs/heads/${PRODUCTION_BRANCH}"
+
+          if [ "$CONFIRMATION" != "DEPLOY" ]; then
+            echo "::error::Production deployment requires typing exactly DEPLOY"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_REF" != "$EXPECTED_REF" ]; then
+            echo "::error::Production deployments must come from ${PRODUCTION_BRANCH}"
+            echo "::error::Selected ref was: ${DEPLOY_REF}"
+            exit 1
+          fi
+
+          echo "Deployment request validated."
+          echo "Branch: ${PRODUCTION_BRANCH}"
+
+  # ────────────────────────────────────────────────────────────
+  # 2. Install once, lint, and build
+  # ────────────────────────────────────────────────────────────
+  build:
+    name: Lint & Build
+    needs: validate
+    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,157 +100,602 @@ jobs:
       - name: Run linter
         run: yarn lint
 
-  # ── 2. Build ───────────────────────────────────────────────
-  build:
-    name: Build
-    needs: lint
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: yarn
-
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
-
       - name: Build TypeScript
         run: yarn build
 
       - name: Verify build output
         run: |
-          if [ ! -d "build" ] || [ -z "$(ls -A build)" ]; then
-            echo "::error::Build directory is empty or missing"
+          set -euo pipefail
+
+          if [ ! -d "build" ]; then
+            echo "::error::Build directory does not exist"
             exit 1
           fi
-          echo "Build output OK — $(find build -type f | wc -l) files"
 
-      - name: Upload build artifact
+          if [ -z "$(find build -type f -print -quit)" ]; then
+            echo "::error::Build directory is empty"
+            exit 1
+          fi
+
+          FILE_COUNT="$(find build -type f | wc -l | tr -d ' ')"
+          echo "Build output OK — ${FILE_COUNT} files"
+
+      - name: Upload production artifact
         uses: actions/upload-artifact@v4
         with:
-          name: backend-prod-${{ github.sha }}
+          name: backend-prod-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
           path: |
             build/
             package.json
             yarn.lock
             ecosystem.config.js
+            .nvmrc
 
-  # ── 3. Deploy ──────────────────────────────────────────────
+  # ────────────────────────────────────────────────────────────
+  # 3. Deploy
+  # ────────────────────────────────────────────────────────────
   deploy:
-    name: Deploy
+    name: Deploy Production
     needs: build
     runs-on: ubuntu-latest
+
+    env:
+      SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+      SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+      SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+      SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+
+      # Include run ID/attempt so re-deploying the same SHA
+      # still creates a unique immutable release.
+      RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
     steps:
-      - name: Download build artifact
+      - name: Download production artifact
         uses: actions/download-artifact@v4
         with:
-          name: backend-prod-${{ github.sha }}
+          name: backend-prod-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release
 
+      # ── SSH setup ──────────────────────────────────────────
       - name: Setup SSH
         run: |
+          set -euo pipefail
+
+          if [ -z "$SSH_HOST" ]; then
+            echo "::error::DEPLOY_SSH_HOST is not configured"
+            exit 1
+          fi
+
+          if [ -z "$SSH_USER" ]; then
+            echo "::error::DEPLOY_SSH_USER is not configured"
+            exit 1
+          fi
+
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "::error::DEPLOY_SSH_KEY is not configured"
+            exit 1
+          fi
+
+          if [ -z "$SSH_KNOWN_HOSTS" ]; then
+            echo "::error::DEPLOY_SSH_KNOWN_HOSTS is not configured"
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
           chmod 600 ~/.ssh/deploy_key
-          echo "${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Backup current deployment
+      - name: Verify SSH connection
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
-            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} \
-            'DEPLOY_DIR=/opt/memento/backend-prod && \
-             BACKUP_DIR=/opt/memento/backups/backend-prod && \
-             mkdir -p "$BACKUP_DIR" && \
-             if [ -d "$DEPLOY_DIR/build" ]; then \
-               cp -a "$DEPLOY_DIR/build" "$BACKUP_DIR/build-$(date +%Y%m%d-%H%M%S)"; \
-             fi && \
-             ls -dt "$BACKUP_DIR"/build-* 2>/dev/null | tail -n +4 | xargs rm -rf'
+          set -euo pipefail
 
-      - name: Rsync to server
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 \
+            -i ~/.ssh/deploy_key \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "echo 'SSH connection OK'"
+
+      # ── Create inactive release ────────────────────────────
+      - name: Create release directory
         run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }}" \
-            ./build/ \
-            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:/opt/memento/backend-prod/build/
+          set -euo pipefail
 
-          rsync -az \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }}" \
-            ./package.json ./yarn.lock ./ecosystem.config.js \
-            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}:/opt/memento/backend-prod/
+          ssh \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -i ~/.ssh/deploy_key \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "mkdir -p '$DEPLOY_ROOT/releases/$RELEASE_ID'"
 
-      - name: Install deps and reload PM2
+      - name: Upload release
         run: |
-          ssh -T -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
-            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} 'bash -s' << 'REMOTE'
-          set -e
-          cd /opt/memento/backend-prod
+          set -euo pipefail
+
+          rsync \
+            -az \
+            --delete \
+            -e "ssh \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=10 \
+              -i ~/.ssh/deploy_key \
+              -p $SSH_PORT" \
+            ./release/ \
+            "$SSH_USER@$SSH_HOST:$DEPLOY_ROOT/releases/$RELEASE_ID/"
+
+      # ── Install deps BEFORE making release live ────────────
+      - name: Install production dependencies
+        run: |
+          set -euo pipefail
+
+          ssh \
+            -T \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 \
+            -i ~/.ssh/deploy_key \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "bash -s -- '$RELEASE_ID'" <<'REMOTE'
+          set -euo pipefail
+
+          RELEASE_ID="$1"
+          DEPLOY_ROOT="/opt/memento/backend-prod"
+          RELEASE_DIR="$DEPLOY_ROOT/releases/$RELEASE_ID"
+
+          cd "$RELEASE_DIR"
+
+          if [ ! -f ".nvmrc" ]; then
+            echo "ERROR: .nvmrc is missing from release"
+            exit 1
+          fi
 
           export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-          yarn install --production --frozen-lockfile --ignore-scripts
+          if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+            echo "ERROR: NVM is not installed for the deploy user"
+            exit 1
+          fi
 
-          pm2 reload memento-backend-prod --update-env
-          pm2 reload memento-backend-prod-worker --update-env
+          . "$NVM_DIR/nvm.sh"
+
+          # Install the requested Node version if necessary,
+          # then make sure this deployment uses it.
+          nvm install
+          nvm use
+
+          # Prefer Corepack when available.
+          if command -v corepack >/dev/null 2>&1; then
+            corepack enable || true
+          fi
+
+          # This project currently uses Yarn Classic-style commands.
+          # Install Yarn only when the selected Node installation
+          # does not already provide it.
+          if ! command -v yarn >/dev/null 2>&1; then
+            npm install --global yarn@1.22.22
+          fi
+
+          echo "Node: $(node --version)"
+          echo "Yarn: $(yarn --version)"
+
+          yarn install \
+            --production \
+            --frozen-lockfile
+
+          echo "Production dependencies installed."
           REMOTE
 
-      - name: Health check
+      # ── Atomic activation + rollback ───────────────────────
+      - name: Activate release
         run: |
-          ssh -T -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_SSH_PORT || 22 }} \
-            ${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }} \
-            'echo "Waiting for app to start..." && \
-             for i in $(seq 1 15); do \
-               if curl -sf http://localhost:4001/health > /dev/null 2>&1; then \
-                 echo "Health check passed on attempt $i"; \
-                 exit 0; \
-               fi; \
-               sleep 2; \
-             done; \
-             echo "::error::Health check failed after 30 seconds"; \
-             exit 1'
+          set -euo pipefail
+
+          ssh \
+            -T \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=3 \
+            -i ~/.ssh/deploy_key \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "bash -s -- '$RELEASE_ID'" <<'REMOTE'
+          set -euo pipefail
+
+          RELEASE_ID="$1"
+
+          DEPLOY_ROOT="/opt/memento/backend-prod"
+          RELEASES="$DEPLOY_ROOT/releases"
+          CURRENT="$DEPLOY_ROOT/current"
+          NEW_RELEASE="$RELEASES/$RELEASE_ID"
+
+          API_APP="memento-backend-prod"
+          WORKER_APP="memento-backend-prod-worker"
+          HEALTH_URL="http://127.0.0.1:4001/health"
+
+          if [ ! -d "$NEW_RELEASE" ]; then
+            echo "ERROR: Release does not exist: $NEW_RELEASE"
+            exit 1
+          fi
+
+          # ----------------------------------------------------
+          # First deployment with the new release layout:
+          #
+          # Convert the old in-place deployment into a legacy
+          # release so the first deployment can also roll back.
+          # ----------------------------------------------------
+          if [ ! -L "$CURRENT" ]; then
+            if [ -e "$CURRENT" ]; then
+              echo "ERROR: $CURRENT exists but is not a symlink"
+              exit 1
+            fi
+
+            LEGACY_RELEASE="$RELEASES/legacy-$(date +%Y%m%d-%H%M%S)"
+            LEGACY_FOUND=0
+
+            mkdir -p "$LEGACY_RELEASE"
+
+            for item in \
+              build \
+              node_modules \
+              package.json \
+              yarn.lock \
+              ecosystem.config.js \
+              .nvmrc
+            do
+              if [ -e "$DEPLOY_ROOT/$item" ] || [ -L "$DEPLOY_ROOT/$item" ]; then
+                mv "$DEPLOY_ROOT/$item" "$LEGACY_RELEASE/$item"
+                LEGACY_FOUND=1
+              fi
+            done
+
+            if [ "$LEGACY_FOUND" -eq 1 ]; then
+              echo "Migrated existing deployment to:"
+              echo "  $LEGACY_RELEASE"
+
+              ln -s "$LEGACY_RELEASE" "$CURRENT"
+            else
+              # Nothing was previously deployed.
+              rmdir "$LEGACY_RELEASE"
+            fi
+
+            # Keep the old paths working.
+            #
+            # This means existing ecosystem.config.js entries using:
+            #
+            #   /opt/memento/backend-prod/build/...
+            #
+            # continue to work even though actual files now live under:
+            #
+            #   releases/<release-id>/
+            #
+            ln -s "current/build" "$DEPLOY_ROOT/build"
+            ln -s "current/node_modules" "$DEPLOY_ROOT/node_modules"
+            ln -s "current/package.json" "$DEPLOY_ROOT/package.json"
+            ln -s "current/yarn.lock" "$DEPLOY_ROOT/yarn.lock"
+            ln -s "current/ecosystem.config.js" "$DEPLOY_ROOT/ecosystem.config.js"
+            ln -s "current/.nvmrc" "$DEPLOY_ROOT/.nvmrc"
+          fi
+
+          # Remember the currently-active release for rollback.
+          PREVIOUS_RELEASE=""
+
+          if [ -L "$CURRENT" ]; then
+            PREVIOUS_RELEASE="$(readlink -f "$CURRENT" || true)"
+          fi
+
+          echo "Previous release:"
+          echo "  ${PREVIOUS_RELEASE:-none}"
+
+          echo "New release:"
+          echo "  $NEW_RELEASE"
+
+          # ----------------------------------------------------
+          # Helper: atomically repoint current symlink.
+          # ----------------------------------------------------
+          switch_release() {
+            TARGET="$1"
+
+            rm -f "$DEPLOY_ROOT/.current-next"
+            ln -s "$TARGET" "$DEPLOY_ROOT/.current-next"
+
+            # Atomic rename on the same filesystem.
+            mv -Tf "$DEPLOY_ROOT/.current-next" "$CURRENT"
+          }
+
+          # ----------------------------------------------------
+          # Helper: load Node version belonging to active release.
+          # ----------------------------------------------------
+          use_current_node() {
+            export NVM_DIR="$HOME/.nvm"
+
+            if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+              echo "ERROR: NVM is unavailable"
+              return 1
+            fi
+
+            . "$NVM_DIR/nvm.sh"
+
+            cd "$CURRENT"
+            nvm use
+
+            if ! command -v pm2 >/dev/null 2>&1; then
+              echo "ERROR: PM2 is not installed for Node $(node --version)"
+              echo "Install PM2 globally for this Node version:"
+              echo "  npm install --global pm2"
+              return 1
+            fi
+          }
+
+          # ----------------------------------------------------
+          # Helper: start new PM2 apps or reload existing ones.
+          #
+          # Using the ecosystem file means changes to the PM2
+          # application configuration are picked up as well.
+          # ----------------------------------------------------
+          reload_apps() {
+            cd "$DEPLOY_ROOT"
+
+            pm2 startOrReload \
+              "$DEPLOY_ROOT/ecosystem.config.js" \
+              --only "$API_APP,$WORKER_APP" \
+              --update-env
+
+            pm2 save
+          }
+
+          # ----------------------------------------------------
+          # Activate new release.
+          # ----------------------------------------------------
+          switch_release "$NEW_RELEASE"
+
+          rollback() {
+            echo "Deployment failed."
+
+            if [ -n "$PREVIOUS_RELEASE" ] && [ -d "$PREVIOUS_RELEASE" ]; then
+              echo "Rolling back to:"
+              echo "  $PREVIOUS_RELEASE"
+
+              switch_release "$PREVIOUS_RELEASE"
+
+              use_current_node
+              reload_apps
+
+              echo "Rollback completed."
+            else
+              echo "WARNING: No previous release is available for rollback."
+            fi
+          }
+
+          # If Node/PM2 activation itself fails, revert.
+          if ! use_current_node; then
+            rollback
+            exit 1
+          fi
+
+          if ! reload_apps; then
+            rollback
+            exit 1
+          fi
+
+          # ----------------------------------------------------
+          # Health check
+          # ----------------------------------------------------
+          echo "Waiting for application health check..."
+
+          HEALTHY=0
+
+          for attempt in $(seq 1 15); do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --max-time 5 \
+              "$HEALTH_URL" \
+              >/dev/null 2>&1
+            then
+              echo "Health check passed on attempt $attempt."
+              HEALTHY=1
+              break
+            fi
+
+            echo "Health check attempt $attempt failed."
+            sleep 2
+          done
+
+          if [ "$HEALTHY" -ne 1 ]; then
+            echo "Health check failed after 15 attempts."
+            rollback
+            exit 1
+          fi
+
+          echo "Release activated successfully:"
+          echo "  $RELEASE_ID"
+
+          # ----------------------------------------------------
+          # Keep only the five newest non-legacy/new releases.
+          #
+          # Old releases are removed only AFTER a successful
+          # health check.
+          # ----------------------------------------------------
+          mapfile -t OLD_RELEASES < <(
+            find "$RELEASES" \
+              -mindepth 1 \
+              -maxdepth 1 \
+              -type d \
+              ! -name 'legacy-*' \
+              -printf '%T@ %p\n' \
+              | sort -rn \
+              | awk 'NR > 5 { $1=""; sub(/^ /, ""); print }'
+          )
+
+          for old_release in "${OLD_RELEASES[@]}"; do
+            # Never remove anything currently active.
+            if [ "$(readlink -f "$CURRENT")" = "$old_release" ]; then
+              continue
+            fi
+
+            echo "Removing old release:"
+            echo "  $old_release"
+
+            rm -rf "$old_release"
+          done
+          REMOTE
 
       - name: Cleanup SSH credentials
         if: always()
-        run: rm -rf ~/.ssh/deploy_key ~/.ssh/known_hosts
-
-      - name: Discord notification
-        if: always()
-        env:
-          STATUS: ${{ job.status }}
         run: |
-          if [ "$STATUS" = "success" ]; then
-            COLOR=3066993
-            TITLE="Prod Deploy Succeeded"
-            EMOJI="✅"
-          else
-            COLOR=15158332
-            TITLE="Prod Deploy Failed"
-            EMOJI="❌"
+          rm -f ~/.ssh/deploy_key
+          rm -f ~/.ssh/known_hosts
+
+  # ────────────────────────────────────────────────────────────
+  # 4. Always notify
+  # ────────────────────────────────────────────────────────────
+  notify:
+    name: Notify
+    needs:
+      - validate
+      - build
+      - deploy
+
+    if: ${{ always() }}
+
+    runs-on: ubuntu-latest
+
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      VALIDATE_RESULT: ${{ needs.validate.result }}
+      BUILD_RESULT: ${{ needs.build.result }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+
+      COMMIT_SHA: ${{ github.sha }}
+      BRANCH: ${{ github.ref_name }}
+      ACTOR: ${{ github.actor }}
+      SERVER_URL: ${{ github.server_url }}
+      REPOSITORY: ${{ github.repository }}
+      RUN_ID: ${{ github.run_id }}
+
+    steps:
+      - name: Discord notification
+        run: |
+          set -u
+
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL is not configured; skipping notification."
+            exit 0
           fi
 
-          COMMIT_SHA="${{ github.sha }}"
           SHORT_SHA="${COMMIT_SHA:0:7}"
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          COMMIT_URL="${{ github.server_url }}/${{ github.repository }}/commit/${COMMIT_SHA}"
+          RUN_URL="${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}"
+          COMMIT_URL="${SERVER_URL}/${REPOSITORY}/commit/${COMMIT_SHA}"
+          TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-          curl -sf -H "Content-Type: application/json" \
-            -d "{
-              \"embeds\": [{
-                \"title\": \"${EMOJI} ${TITLE}\",
-                \"color\": ${COLOR},
-                \"fields\": [
-                  {\"name\": \"Environment\", \"value\": \"Production\", \"inline\": true},
-                  {\"name\": \"Branch\", \"value\": \"\`${{ github.ref_name }}\`\", \"inline\": true},
-                  {\"name\": \"Commit\", \"value\": \"[\`${SHORT_SHA}\`](${COMMIT_URL})\", \"inline\": true},
-                  {\"name\": \"Triggered by\", \"value\": \"${{ github.actor }}\", \"inline\": true},
-                  {\"name\": \"Workflow\", \"value\": \"[View run](${RUN_URL})\", \"inline\": true}
-                ],
-                \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-              }]
-            }" \
-            "${{ secrets.DISCORD_WEBHOOK_URL }}" || true
+          if [ "$DEPLOY_RESULT" = "success" ]; then
+            TITLE="✅ Prod Deploy Succeeded"
+            COLOR=3066993
+            STATUS="Success"
+
+          elif [ "$VALIDATE_RESULT" = "failure" ]; then
+            TITLE="⛔ Prod Deploy Rejected"
+            COLOR=16753920
+            STATUS="Rejected"
+
+          else
+            TITLE="❌ Prod Deploy Failed"
+            COLOR=15158332
+            STATUS="Failed"
+          fi
+
+          PAYLOAD="$(
+            jq -n \
+              --arg title "$TITLE" \
+              --argjson color "$COLOR" \
+              --arg status "$STATUS" \
+              --arg branch "$BRANCH" \
+              --arg short_sha "$SHORT_SHA" \
+              --arg commit_url "$COMMIT_URL" \
+              --arg actor "$ACTOR" \
+              --arg run_url "$RUN_URL" \
+              --arg validate "$VALIDATE_RESULT" \
+              --arg build "$BUILD_RESULT" \
+              --arg deploy "$DEPLOY_RESULT" \
+              --arg timestamp "$TIMESTAMP" \
+              '{
+                embeds: [{
+                  title: $title,
+                  color: $color,
+                  fields: [
+                    {
+                      name: "Environment",
+                      value: "Production",
+                      inline: true
+                    },
+                    {
+                      name: "Status",
+                      value: $status,
+                      inline: true
+                    },
+                    {
+                      name: "Branch",
+                      value: ("`" + $branch + "`"),
+                      inline: true
+                    },
+                    {
+                      name: "Commit",
+                      value: ("[`" + $short_sha + "`](" + $commit_url + ")"),
+                      inline: true
+                    },
+                    {
+                      name: "Triggered by",
+                      value: $actor,
+                      inline: true
+                    },
+                    {
+                      name: "Workflow",
+                      value: ("[View run](" + $run_url + ")"),
+                      inline: true
+                    },
+                    {
+                      name: "Pipeline",
+                      value: (
+                        "Validate: `" + $validate +
+                        "`\nBuild: `" + $build +
+                        "`\nDeploy: `" + $deploy + "`"
+                      ),
+                      inline: false
+                    }
+                  ],
+                  timestamp: $timestamp
+                }]
+              }'
+          )"
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "$DISCORD_WEBHOOK_URL" \
+            || true
