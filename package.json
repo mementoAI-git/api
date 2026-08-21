@@ -19,9 +19,8 @@
     "build": "npm run clean && npm run compile && cp -R views build/ && cp -R public build/",
     "lint": "gts lint",
     "clean": "gts clean",
-    "compile": "npx tsc",
+    "compile": "tsc -p tsconfig.json",
     "fix": "gts fix",
-    "postinstall": "npm run compile",
     "worker": "NODE_OPTIONS=--dns-result-order=ipv4first ts-node src/workers/index.ts",
     "worker:prod": "node --dns-result-order=ipv4first build/src/workers/index.js"
   },
