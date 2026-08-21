@@ -1,5 +1,3 @@
-# .github/workflows/backend-deploy-prod.yml
-#
 # ──────────────────────────────────────────────────────────────
 # Backend — Deploy to Production
 #
@@ -7,18 +5,31 @@
 # Requires typing exactly: DEPLOY
 # Production branch: main
 #
-# Deployment strategy:
-#   1. Validate request
-#   2. Install once in CI
+# Flow:
+#   1. Validate exact confirmation + branch
+#   2. Install dependencies once in CI
 #   3. Lint + build
-#   4. Upload release artifact
-#   5. Install production dependencies in an inactive release
-#   6. Atomically switch "current" symlink
-#   7. Reload PM2
-#   8. Health check
-#   9. Roll back automatically on failure
+#   4. Create deployment artifact
+#      - strips application postinstall compile hook
+#   5. Upload immutable release
+#   6. Install runtime dependencies in inactive release
+#   7. Ensure Node / Yarn / PM2 are available
+#   8. Atomically switch current symlink
+#   9. Reload PM2
+#  10. Health check
+#  11. Automatically roll back on failure
 #
-# Works without GitHub Environment approval features.
+# Server layout:
+#
+# /opt/memento/backend-prod/
+#   current -> releases/<release-id>
+#   build -> current/build
+#   node_modules -> current/node_modules
+#   package.json -> current/package.json
+#   yarn.lock -> current/yarn.lock
+#   ecosystem.config.js -> current/ecosystem.config.js
+#   .nvmrc -> current/.nvmrc
+#   releases/
 # ──────────────────────────────────────────────────────────────
 
 name: "Backend: Deploy Prod"
@@ -34,7 +45,7 @@ on:
 permissions:
   contents: read
 
-# Never cancel a production deployment once it has started.
+# Never cancel a production deployment once it starts.
 concurrency:
   group: backend-deploy-prod
   cancel-in-progress: false
@@ -46,7 +57,7 @@ env:
 
 jobs:
   # ────────────────────────────────────────────────────────────
-  # 1. Validate deployment request
+  # 1. Validate
   # ────────────────────────────────────────────────────────────
   validate:
     name: Validate Deployment
@@ -54,6 +65,7 @@ jobs:
 
     steps:
       - name: Validate confirmation and branch
+        shell: bash
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
           DEPLOY_REF: ${{ github.ref }}
@@ -69,15 +81,17 @@ jobs:
 
           if [ "$DEPLOY_REF" != "$EXPECTED_REF" ]; then
             echo "::error::Production deployments must come from ${PRODUCTION_BRANCH}"
-            echo "::error::Selected ref was: ${DEPLOY_REF}"
+            echo "::error::Selected ref: ${DEPLOY_REF}"
             exit 1
           fi
 
-          echo "Deployment request validated."
-          echo "Branch: ${PRODUCTION_BRANCH}"
+          echo "Production deployment validated."
+          echo "Ref: ${DEPLOY_REF}"
 
   # ────────────────────────────────────────────────────────────
-  # 2. Install once, lint, and build
+  # 2. Lint + build
+  #
+  # Only ONE full dependency install happens in CI.
   # ────────────────────────────────────────────────────────────
   build:
     name: Lint & Build
@@ -100,15 +114,16 @@ jobs:
       - name: Run linter
         run: yarn lint
 
-      - name: Build TypeScript
+      - name: Build
         run: yarn build
 
       - name: Verify build output
+        shell: bash
         run: |
           set -euo pipefail
 
           if [ ! -d "build" ]; then
-            echo "::error::Build directory does not exist"
+            echo "::error::Build directory is missing"
             exit 1
           fi
 
@@ -118,21 +133,79 @@ jobs:
           fi
 
           FILE_COUNT="$(find build -type f | wc -l | tr -d ' ')"
+
           echo "Build output OK — ${FILE_COUNT} files"
 
-      - name: Upload production artifact
+      # ────────────────────────────────────────────────────────
+      # Create an explicit deployment artifact.
+      #
+      # IMPORTANT:
+      #
+      # The repository currently has:
+      #
+      #   "postinstall": "npm run compile"
+      #
+      # That is useful only when source + tsconfig are present.
+      # Production receives already-compiled build/, therefore
+      # running that application lifecycle hook on the server is
+      # incorrect.
+      #
+      # We strip ONLY the root application's postinstall hook.
+      #
+      # We DO NOT use yarn --ignore-scripts, so dependency
+      # packages may still run legitimate native/install scripts.
+      # ────────────────────────────────────────────────────────
+      - name: Prepare deployment artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf release
+          mkdir -p release
+
+          cp -a build release/build
+          cp package.json release/package.json
+          cp yarn.lock release/yarn.lock
+          cp ecosystem.config.js release/ecosystem.config.js
+          cp .nvmrc release/.nvmrc
+
+          node <<'NODE'
+          const fs = require('fs');
+
+          const path = 'release/package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+
+          if (pkg.scripts?.postinstall) {
+            console.log(
+              `Removing application postinstall from deployment artifact: ${pkg.scripts.postinstall}`
+            );
+
+            delete pkg.scripts.postinstall;
+          }
+
+          fs.writeFileSync(
+            path,
+            JSON.stringify(pkg, null, 2) + '\n'
+          );
+          NODE
+
+          echo
+          echo "Deployment artifact contents:"
+          find release -maxdepth 2 -type f | sort
+
+          echo
+          echo "Deployment scripts:"
+          node -e \
+            "console.log(JSON.stringify(require('./release/package.json').scripts, null, 2))"
+
+      - name: Upload deployment artifact
         uses: actions/upload-artifact@v4
         with:
           name: backend-prod-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           retention-days: 1
           if-no-files-found: error
           include-hidden-files: true
-          path: |
-            build/
-            package.json
-            yarn.lock
-            ecosystem.config.js
-            .nvmrc
+          path: release/
 
   # ────────────────────────────────────────────────────────────
   # 3. Deploy
@@ -149,52 +222,57 @@ jobs:
       SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
 
-      # Include run ID/attempt so re-deploying the same SHA
-      # still creates a unique immutable release.
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
-      - name: Download production artifact
+      - name: Download deployment artifact
         uses: actions/download-artifact@v4
         with:
           name: backend-prod-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: release
 
-      # ── SSH setup ──────────────────────────────────────────
+      # ────────────────────────────────────────────────────────
+      # SSH setup
+      # ────────────────────────────────────────────────────────
       - name: Setup SSH
+        shell: bash
         run: |
           set -euo pipefail
 
           if [ -z "$SSH_HOST" ]; then
-            echo "::error::DEPLOY_SSH_HOST is not configured"
+            echo "::error::DEPLOY_SSH_HOST is missing"
             exit 1
           fi
 
           if [ -z "$SSH_USER" ]; then
-            echo "::error::DEPLOY_SSH_USER is not configured"
+            echo "::error::DEPLOY_SSH_USER is missing"
             exit 1
           fi
 
           if [ -z "$SSH_PRIVATE_KEY" ]; then
-            echo "::error::DEPLOY_SSH_KEY is not configured"
+            echo "::error::DEPLOY_SSH_KEY is missing"
             exit 1
           fi
 
           if [ -z "$SSH_KNOWN_HOSTS" ]; then
-            echo "::error::DEPLOY_SSH_KNOWN_HOSTS is not configured"
+            echo "::error::DEPLOY_SSH_KNOWN_HOSTS is missing"
             exit 1
           fi
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
-          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_PRIVATE_KEY" \
+            > ~/.ssh/deploy_key
+
+          printf '%s\n' "$SSH_KNOWN_HOSTS" \
+            > ~/.ssh/known_hosts
 
           chmod 600 ~/.ssh/deploy_key
           chmod 644 ~/.ssh/known_hosts
 
       - name: Verify SSH connection
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -209,8 +287,11 @@ jobs:
             "$SSH_USER@$SSH_HOST" \
             "echo 'SSH connection OK'"
 
-      # ── Create inactive release ────────────────────────────
+      # ────────────────────────────────────────────────────────
+      # Upload NEW release without touching current
+      # ────────────────────────────────────────────────────────
       - name: Create release directory
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -224,6 +305,7 @@ jobs:
             "mkdir -p '$DEPLOY_ROOT/releases/$RELEASE_ID'"
 
       - name: Upload release
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -239,8 +321,13 @@ jobs:
             ./release/ \
             "$SSH_USER@$SSH_HOST:$DEPLOY_ROOT/releases/$RELEASE_ID/"
 
-      # ── Install deps BEFORE making release live ────────────
-      - name: Install production dependencies
+      # ────────────────────────────────────────────────────────
+      # Prepare runtime BEFORE activation
+      #
+      # Nothing live has changed yet.
+      # ────────────────────────────────────────────────────────
+      - name: Prepare release runtime
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -258,13 +345,30 @@ jobs:
           set -euo pipefail
 
           RELEASE_ID="$1"
+
           DEPLOY_ROOT="/opt/memento/backend-prod"
           RELEASE_DIR="$DEPLOY_ROOT/releases/$RELEASE_ID"
 
           cd "$RELEASE_DIR"
 
           if [ ! -f ".nvmrc" ]; then
-            echo "ERROR: .nvmrc is missing from release"
+            echo "ERROR: Release is missing .nvmrc"
+            exit 1
+          fi
+
+          # Safety guard:
+          # deployment package.json must not compile application
+          # source during production dependency installation.
+          POSTINSTALL="$(
+            node -e "
+              const p = require('./package.json');
+              process.stdout.write(p.scripts?.postinstall || '');
+            " 2>/dev/null || true
+          )"
+
+          if [ -n "$POSTINSTALL" ]; then
+            echo "ERROR: Deployment package.json still contains postinstall:"
+            echo "  $POSTINSTALL"
             exit 1
           fi
 
@@ -275,37 +379,108 @@ jobs:
             exit 1
           fi
 
+          # NVM itself is not fully compatible with nounset.
+          set +u
           . "$NVM_DIR/nvm.sh"
 
-          # Install the requested Node version if necessary,
-          # then make sure this deployment uses it.
           nvm install
-          nvm use
+          NVM_INSTALL_STATUS=$?
 
-          # Prefer Corepack when available.
-          if command -v corepack >/dev/null 2>&1; then
-            corepack enable || true
+          if [ "$NVM_INSTALL_STATUS" -eq 0 ]; then
+            nvm use
+            NVM_USE_STATUS=$?
+          else
+            NVM_USE_STATUS=1
           fi
 
-          # This project currently uses Yarn Classic-style commands.
-          # Install Yarn only when the selected Node installation
-          # does not already provide it.
-          if ! command -v yarn >/dev/null 2>&1; then
-            npm install --global yarn@1.22.22
+          set -u
+
+          if [ "$NVM_INSTALL_STATUS" -ne 0 ]; then
+            echo "ERROR: Failed installing Node version from .nvmrc"
+            exit 1
+          fi
+
+          if [ "$NVM_USE_STATUS" -ne 0 ]; then
+            echo "ERROR: Failed activating Node version from .nvmrc"
+            exit 1
           fi
 
           echo "Node: $(node --version)"
-          echo "Yarn: $(yarn --version)"
+          echo "npm:  $(npm --version)"
 
+          # ────────────────────────────────────────────────────
+          # Yarn Classic
+          # ────────────────────────────────────────────────────
+          YARN_VERSION="$(yarn --version 2>/dev/null || true)"
+
+          case "$YARN_VERSION" in
+            1.*)
+              echo "Yarn: ${YARN_VERSION}"
+              ;;
+
+            *)
+              echo "Installing Yarn Classic..."
+
+              if command -v corepack >/dev/null 2>&1; then
+                set +e
+                corepack enable
+                corepack prepare yarn@1.22.22 --activate
+                COREPACK_STATUS=$?
+                set -e
+
+                if [ "$COREPACK_STATUS" -ne 0 ]; then
+                  npm install --global yarn@1.22.22 --force
+                fi
+              else
+                npm install --global yarn@1.22.22 --force
+              fi
+
+              echo "Yarn: $(yarn --version)"
+              ;;
+          esac
+
+          # ────────────────────────────────────────────────────
+          # PM2
+          #
+          # NVM global packages are Node-version-specific.
+          # Node 24 therefore needs its own PM2 CLI even when
+          # Node 22 previously had PM2 installed.
+          # ────────────────────────────────────────────────────
+          if ! command -v pm2 >/dev/null 2>&1; then
+            echo "PM2 unavailable for $(node --version)"
+            echo "Installing PM2..."
+
+            npm install --global pm2
+          fi
+
+          if ! command -v pm2 >/dev/null 2>&1; then
+            echo "ERROR: PM2 unavailable after installation"
+            exit 1
+          fi
+
+          echo "PM2: $(pm2 --version)"
+          echo "PM2 executable: $(command -v pm2)"
+
+          # ────────────────────────────────────────────────────
+          # Runtime dependency install
+          #
+          # No application compile occurs here because the
+          # deployment artifact has no root postinstall hook.
+          #
+          # Dependency package install scripts remain enabled.
+          # ────────────────────────────────────────────────────
           yarn install \
             --production \
             --frozen-lockfile
 
-          echo "Production dependencies installed."
+          echo "Runtime dependencies installed successfully."
           REMOTE
 
-      # ── Atomic activation + rollback ───────────────────────
+      # ────────────────────────────────────────────────────────
+      # Activate release + health check + rollback
+      # ────────────────────────────────────────────────────────
       - name: Activate release
+        shell: bash
         run: |
           set -euo pipefail
 
@@ -327,23 +502,216 @@ jobs:
           DEPLOY_ROOT="/opt/memento/backend-prod"
           RELEASES="$DEPLOY_ROOT/releases"
           CURRENT="$DEPLOY_ROOT/current"
+
           NEW_RELEASE="$RELEASES/$RELEASE_ID"
 
           API_APP="memento-backend-prod"
           WORKER_APP="memento-backend-prod-worker"
+
           HEALTH_URL="http://127.0.0.1:4001/health"
 
+          mkdir -p "$RELEASES"
+
           if [ ! -d "$NEW_RELEASE" ]; then
-            echo "ERROR: Release does not exist: $NEW_RELEASE"
+            echo "ERROR: New release does not exist:"
+            echo "  $NEW_RELEASE"
             exit 1
           fi
 
-          # ----------------------------------------------------
-          # First deployment with the new release layout:
-          #
-          # Convert the old in-place deployment into a legacy
-          # release so the first deployment can also roll back.
-          # ----------------------------------------------------
+          # ────────────────────────────────────────────────────
+          # Helpers
+          # ────────────────────────────────────────────────────
+          load_nvm() {
+            export NVM_DIR="$HOME/.nvm"
+
+            if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+              echo "ERROR: NVM is unavailable"
+              return 1
+            fi
+
+            set +u
+            . "$NVM_DIR/nvm.sh"
+            STATUS=$?
+            set -u
+
+            return "$STATUS"
+          }
+
+          use_release_node() {
+            RELEASE_DIR="$1"
+
+            if ! load_nvm; then
+              return 1
+            fi
+
+            OLD_PWD="$PWD"
+            cd "$RELEASE_DIR"
+
+            if [ -f ".nvmrc" ]; then
+              echo "Selecting Node from:"
+              echo "  $RELEASE_DIR/.nvmrc"
+
+              set +u
+              nvm use
+              NVM_STATUS=$?
+              set -u
+            else
+              # Old pre-release-layout deployments may not have
+              # included .nvmrc.
+              echo "WARNING: Legacy release has no .nvmrc:"
+              echo "  $RELEASE_DIR"
+
+              echo "Trying NVM default..."
+
+              set +u
+              nvm use default >/dev/null 2>&1
+              NVM_STATUS=$?
+              set -u
+
+              if [ "$NVM_STATUS" -ne 0 ]; then
+                echo "NVM default unavailable."
+                NVM_STATUS=0
+              fi
+            fi
+
+            cd "$OLD_PWD"
+
+            if [ "$NVM_STATUS" -ne 0 ]; then
+              echo "ERROR: Unable to select Node version"
+              return 1
+            fi
+
+            if ! command -v node >/dev/null 2>&1; then
+              echo "ERROR: Node unavailable"
+              return 1
+            fi
+
+            # Legacy fallback:
+            #
+            # If the legacy/default Node installation doesn't
+            # contain PM2, use the new release's Node version.
+            #
+            # That Node version was guaranteed to have PM2
+            # installed during Prepare release runtime.
+            if ! command -v pm2 >/dev/null 2>&1; then
+              echo "PM2 unavailable under current Node."
+              echo "Trying deployment Node as PM2 control runtime..."
+
+              cd "$NEW_RELEASE"
+
+              set +u
+              nvm use >/dev/null 2>&1
+              FALLBACK_STATUS=$?
+              set -u
+
+              cd "$OLD_PWD"
+
+              if [ "$FALLBACK_STATUS" -ne 0 ]; then
+                echo "ERROR: Could not select deployment Node"
+                return 1
+              fi
+            fi
+
+            if ! command -v pm2 >/dev/null 2>&1; then
+              echo "ERROR: PM2 unavailable"
+              return 1
+            fi
+
+            echo "Control Node: $(node --version)"
+            echo "PM2: $(command -v pm2)"
+
+            return 0
+          }
+
+          switch_release() {
+            TARGET="$1"
+
+            if [ ! -d "$TARGET" ]; then
+              echo "ERROR: Cannot activate missing release:"
+              echo "  $TARGET"
+              return 1
+            fi
+
+            rm -f "$DEPLOY_ROOT/.current-next"
+
+            ln -s \
+              "$TARGET" \
+              "$DEPLOY_ROOT/.current-next"
+
+            # Atomic replacement on the same filesystem.
+            mv -Tf \
+              "$DEPLOY_ROOT/.current-next" \
+              "$CURRENT"
+          }
+
+          reload_apps() {
+            cd "$DEPLOY_ROOT"
+
+            echo "Reloading production PM2 applications..."
+
+            # API
+            if pm2 describe "$API_APP" >/dev/null 2>&1; then
+              pm2 reload \
+                "$API_APP" \
+                --update-env
+            else
+              echo "$API_APP is not registered; starting from ecosystem config."
+
+              MEMENTO_ENV=prod \
+                pm2 start \
+                "$DEPLOY_ROOT/ecosystem.config.js" \
+                --only "$API_APP"
+            fi
+
+            # Worker
+            if pm2 describe "$WORKER_APP" >/dev/null 2>&1; then
+              pm2 reload \
+                "$WORKER_APP" \
+                --update-env
+            else
+              echo "$WORKER_APP is not registered; starting from ecosystem config."
+
+              MEMENTO_ENV=prod \
+                pm2 start \
+                "$DEPLOY_ROOT/ecosystem.config.js" \
+                --only "$WORKER_APP"
+            fi
+
+            pm2 save
+
+            echo "PM2 reload completed."
+          }
+
+          check_health() {
+            LABEL="$1"
+            ATTEMPTS="${2:-15}"
+
+            echo "Checking ${LABEL}..."
+
+            for attempt in $(seq 1 "$ATTEMPTS"); do
+              if curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 5 \
+                "$HEALTH_URL" \
+                >/dev/null 2>&1
+              then
+                echo "${LABEL} passed on attempt ${attempt}"
+                return 0
+              fi
+
+              echo "${LABEL} attempt ${attempt} failed"
+              sleep 2
+            done
+
+            echo "${LABEL} failed"
+            return 1
+          }
+
+          # ────────────────────────────────────────────────────
+          # First-time migration from old in-place deployment
+          # ────────────────────────────────────────────────────
           if [ ! -L "$CURRENT" ]; then
             if [ -e "$CURRENT" ]; then
               echo "ERROR: $CURRENT exists but is not a symlink"
@@ -363,8 +731,13 @@ jobs:
               ecosystem.config.js \
               .nvmrc
             do
-              if [ -e "$DEPLOY_ROOT/$item" ] || [ -L "$DEPLOY_ROOT/$item" ]; then
-                mv "$DEPLOY_ROOT/$item" "$LEGACY_RELEASE/$item"
+              if [ -e "$DEPLOY_ROOT/$item" ] || \
+                 [ -L "$DEPLOY_ROOT/$item" ]; then
+
+                mv \
+                  "$DEPLOY_ROOT/$item" \
+                  "$LEGACY_RELEASE/$item"
+
                 LEGACY_FOUND=1
               fi
             done
@@ -373,171 +746,182 @@ jobs:
               echo "Migrated existing deployment to:"
               echo "  $LEGACY_RELEASE"
 
-              ln -s "$LEGACY_RELEASE" "$CURRENT"
+              ln -s \
+                "$LEGACY_RELEASE" \
+                "$CURRENT"
             else
-              # Nothing was previously deployed.
+              echo "No previous deployment found."
               rmdir "$LEGACY_RELEASE"
             fi
 
-            # Keep the old paths working.
+            # Compatibility paths allow the existing
+            # ecosystem.config.js to continue referencing:
             #
-            # This means existing ecosystem.config.js entries using:
+            # /opt/memento/backend-prod/build/...
             #
-            #   /opt/memento/backend-prod/build/...
+            # even though the actual build lives in:
             #
-            # continue to work even though actual files now live under:
-            #
-            #   releases/<release-id>/
-            #
-            ln -s "current/build" "$DEPLOY_ROOT/build"
-            ln -s "current/node_modules" "$DEPLOY_ROOT/node_modules"
-            ln -s "current/package.json" "$DEPLOY_ROOT/package.json"
-            ln -s "current/yarn.lock" "$DEPLOY_ROOT/yarn.lock"
-            ln -s "current/ecosystem.config.js" "$DEPLOY_ROOT/ecosystem.config.js"
-            ln -s "current/.nvmrc" "$DEPLOY_ROOT/.nvmrc"
+            # releases/<id>/build/
+            ln -sfn \
+              "current/build" \
+              "$DEPLOY_ROOT/build"
+
+            ln -sfn \
+              "current/node_modules" \
+              "$DEPLOY_ROOT/node_modules"
+
+            ln -sfn \
+              "current/package.json" \
+              "$DEPLOY_ROOT/package.json"
+
+            ln -sfn \
+              "current/yarn.lock" \
+              "$DEPLOY_ROOT/yarn.lock"
+
+            ln -sfn \
+              "current/ecosystem.config.js" \
+              "$DEPLOY_ROOT/ecosystem.config.js"
+
+            ln -sfn \
+              "current/.nvmrc" \
+              "$DEPLOY_ROOT/.nvmrc"
           fi
 
-          # Remember the currently-active release for rollback.
-          PREVIOUS_RELEASE=""
-
-          if [ -L "$CURRENT" ]; then
-            PREVIOUS_RELEASE="$(readlink -f "$CURRENT" || true)"
+          # ────────────────────────────────────────────────────
+          # Validate release layout
+          # ────────────────────────────────────────────────────
+          if [ ! -L "$CURRENT" ]; then
+            echo "ERROR: current is not a symlink"
+            exit 1
           fi
 
+          if [ ! -L "$DEPLOY_ROOT/build" ]; then
+            echo "ERROR: build compatibility symlink is missing"
+            exit 1
+          fi
+
+          if [ ! -L "$DEPLOY_ROOT/ecosystem.config.js" ]; then
+            echo "ERROR: ecosystem.config.js compatibility symlink is missing"
+            exit 1
+          fi
+
+          PREVIOUS_RELEASE="$(
+            readlink -f "$CURRENT" || true
+          )"
+
+          echo
           echo "Previous release:"
           echo "  ${PREVIOUS_RELEASE:-none}"
 
           echo "New release:"
           echo "  $NEW_RELEASE"
 
-          # ----------------------------------------------------
-          # Helper: atomically repoint current symlink.
-          # ----------------------------------------------------
-          switch_release() {
-            TARGET="$1"
-
-            rm -f "$DEPLOY_ROOT/.current-next"
-            ln -s "$TARGET" "$DEPLOY_ROOT/.current-next"
-
-            # Atomic rename on the same filesystem.
-            mv -Tf "$DEPLOY_ROOT/.current-next" "$CURRENT"
-          }
-
-          # ----------------------------------------------------
-          # Helper: load Node version belonging to active release.
-          # ----------------------------------------------------
-          use_current_node() {
-            export NVM_DIR="$HOME/.nvm"
-
-            if [ ! -s "$NVM_DIR/nvm.sh" ]; then
-              echo "ERROR: NVM is unavailable"
-              return 1
-            fi
-
-            . "$NVM_DIR/nvm.sh"
-
-            cd "$CURRENT"
-            nvm use
-
-            if ! command -v pm2 >/dev/null 2>&1; then
-              echo "ERROR: PM2 is not installed for Node $(node --version)"
-              echo "Install PM2 globally for this Node version:"
-              echo "  npm install --global pm2"
-              return 1
-            fi
-          }
-
-          # ----------------------------------------------------
-          # Helper: start new PM2 apps or reload existing ones.
+          # Set to 1 immediately before calling PM2.
           #
-          # Using the ecosystem file means changes to the PM2
-          # application configuration are picked up as well.
-          # ----------------------------------------------------
-          reload_apps() {
-            cd "$DEPLOY_ROOT"
-
-            pm2 startOrReload \
-              "$DEPLOY_ROOT/ecosystem.config.js" \
-              --only "$API_APP,$WORKER_APP" \
-              --update-env
-
-            pm2 save
-          }
-
-          # ----------------------------------------------------
-          # Activate new release.
-          # ----------------------------------------------------
-          switch_release "$NEW_RELEASE"
+          # PM2 may partially reload one process and then fail,
+          # so rollback must assume processes were touched once
+          # the operation begins.
+          PM2_RELOAD_ATTEMPTED=0
 
           rollback() {
-            echo "Deployment failed."
+            echo
+            echo "Production deployment failed."
 
-            if [ -n "$PREVIOUS_RELEASE" ] && [ -d "$PREVIOUS_RELEASE" ]; then
-              echo "Rolling back to:"
-              echo "  $PREVIOUS_RELEASE"
-
-              switch_release "$PREVIOUS_RELEASE"
-
-              use_current_node
-              reload_apps
-
-              echo "Rollback completed."
-            else
-              echo "WARNING: No previous release is available for rollback."
+            if [ -z "$PREVIOUS_RELEASE" ]; then
+              echo "ERROR: No previous release available."
+              return 1
             fi
+
+            if [ ! -d "$PREVIOUS_RELEASE" ]; then
+              echo "ERROR: Previous release no longer exists:"
+              echo "  $PREVIOUS_RELEASE"
+              return 1
+            fi
+
+            echo "Restoring current symlink:"
+            echo "  $PREVIOUS_RELEASE"
+
+            if ! switch_release "$PREVIOUS_RELEASE"; then
+              echo "ERROR: Failed restoring previous symlink."
+              return 1
+            fi
+
+            # If PM2 wasn't touched, the original production
+            # processes are still running. Reloading them would
+            # only introduce another possible failure.
+            if [ "$PM2_RELOAD_ATTEMPTED" -eq 0 ]; then
+              echo "PM2 was not modified."
+              echo "Existing production processes remain running."
+              echo "Symlink rollback completed."
+              return 0
+            fi
+
+            echo "PM2 was modified; reloading previous release..."
+
+            if ! use_release_node "$PREVIOUS_RELEASE"; then
+              echo "ERROR: Symlink restored but PM2 control runtime failed."
+              return 1
+            fi
+
+            if ! reload_apps; then
+              echo "ERROR: Symlink restored but PM2 rollback failed."
+              return 1
+            fi
+
+            if ! check_health "Rollback health check" 15; then
+              echo "ERROR: Previous release restored but health check failed."
+              return 1
+            fi
+
+            echo "Production rollback completed successfully."
+            return 0
           }
 
-          # If Node/PM2 activation itself fails, revert.
-          if ! use_current_node; then
-            rollback
+          # ────────────────────────────────────────────────────
+          # Activate
+          # ────────────────────────────────────────────────────
+          echo
+          echo "Activating new production release..."
+
+          if ! switch_release "$NEW_RELEASE"; then
+            echo "ERROR: Failed activating new release."
             exit 1
           fi
+
+          # This should succeed because Prepare release runtime
+          # already provisioned Node + PM2 before activation.
+          if ! use_release_node "$NEW_RELEASE"; then
+            rollback || true
+            exit 1
+          fi
+
+          PM2_RELOAD_ATTEMPTED=1
 
           if ! reload_apps; then
-            rollback
+            rollback || true
             exit 1
           fi
 
-          # ----------------------------------------------------
+          # ────────────────────────────────────────────────────
           # Health check
-          # ----------------------------------------------------
-          echo "Waiting for application health check..."
-
-          HEALTHY=0
-
-          for attempt in $(seq 1 15); do
-            if curl \
-              --fail \
-              --silent \
-              --show-error \
-              --max-time 5 \
-              "$HEALTH_URL" \
-              >/dev/null 2>&1
-            then
-              echo "Health check passed on attempt $attempt."
-              HEALTHY=1
-              break
-            fi
-
-            echo "Health check attempt $attempt failed."
-            sleep 2
-          done
-
-          if [ "$HEALTHY" -ne 1 ]; then
-            echo "Health check failed after 15 attempts."
-            rollback
+          # ────────────────────────────────────────────────────
+          if ! check_health "Production health check" 15; then
+            rollback || true
             exit 1
           fi
 
-          echo "Release activated successfully:"
-          echo "  $RELEASE_ID"
+          echo
+          echo "Production deployment successful."
+          echo "Active release:"
+          echo "  $NEW_RELEASE"
 
-          # ----------------------------------------------------
-          # Keep only the five newest non-legacy/new releases.
+          # ────────────────────────────────────────────────────
+          # Cleanup
           #
-          # Old releases are removed only AFTER a successful
-          # health check.
-          # ----------------------------------------------------
+          # Keep latest 5 normal releases.
+          # Keep legacy releases as an additional migration
+          # safety net.
+          # ────────────────────────────────────────────────────
           mapfile -t OLD_RELEASES < <(
             find "$RELEASES" \
               -mindepth 1 \
@@ -546,12 +930,21 @@ jobs:
               ! -name 'legacy-*' \
               -printf '%T@ %p\n' \
               | sort -rn \
-              | awk 'NR > 5 { $1=""; sub(/^ /, ""); print }'
+              | awk '
+                  NR > 5 {
+                    $1 = ""
+                    sub(/^ /, "")
+                    print
+                  }
+                '
           )
 
+          ACTIVE_RELEASE="$(
+            readlink -f "$CURRENT" || true
+          )"
+
           for old_release in "${OLD_RELEASES[@]}"; do
-            # Never remove anything currently active.
-            if [ "$(readlink -f "$CURRENT")" = "$old_release" ]; then
+            if [ "$old_release" = "$ACTIVE_RELEASE" ]; then
               continue
             fi
 
@@ -564,12 +957,16 @@ jobs:
 
       - name: Cleanup SSH credentials
         if: always()
+        shell: bash
         run: |
           rm -f ~/.ssh/deploy_key
           rm -f ~/.ssh/known_hosts
 
   # ────────────────────────────────────────────────────────────
   # 4. Always notify
+  #
+  # Separate from deploy so validation/build failures are
+  # reported too.
   # ────────────────────────────────────────────────────────────
   notify:
     name: Notify
@@ -579,7 +976,6 @@ jobs:
       - deploy
 
     if: ${{ always() }}
-
     runs-on: ubuntu-latest
 
     env:
@@ -592,21 +988,24 @@ jobs:
       COMMIT_SHA: ${{ github.sha }}
       BRANCH: ${{ github.ref_name }}
       ACTOR: ${{ github.actor }}
+
       SERVER_URL: ${{ github.server_url }}
       REPOSITORY: ${{ github.repository }}
       RUN_ID: ${{ github.run_id }}
 
     steps:
       - name: Discord notification
+        shell: bash
         run: |
-          set -u
+          set -euo pipefail
 
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then
-            echo "DISCORD_WEBHOOK_URL is not configured; skipping notification."
+            echo "DISCORD_WEBHOOK_URL is not configured; skipping."
             exit 0
           fi
 
           SHORT_SHA="${COMMIT_SHA:0:7}"
+
           RUN_URL="${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}"
           COMMIT_URL="${SERVER_URL}/${REPOSITORY}/commit/${COMMIT_SHA}"
           TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -621,10 +1020,15 @@ jobs:
             COLOR=16753920
             STATUS="Rejected"
 
+          elif [ "$BUILD_RESULT" = "failure" ]; then
+            TITLE="❌ Prod Build Failed"
+            COLOR=15158332
+            STATUS="Build failed"
+
           else
             TITLE="❌ Prod Deploy Failed"
             COLOR=15158332
-            STATUS="Failed"
+            STATUS="Deploy failed"
           fi
 
           PAYLOAD="$(
@@ -633,7 +1037,7 @@ jobs:
               --argjson color "$COLOR" \
               --arg status "$STATUS" \
               --arg branch "$BRANCH" \
-              --arg short_sha "$SHORT_SHA" \
+              --arg sha "$SHORT_SHA" \
               --arg commit_url "$COMMIT_URL" \
               --arg actor "$ACTOR" \
               --arg run_url "$RUN_URL" \
@@ -663,7 +1067,11 @@ jobs:
                     },
                     {
                       name: "Commit",
-                      value: ("[`" + $short_sha + "`](" + $commit_url + ")"),
+                      value: (
+                        "[`" + $sha + "`](" +
+                        $commit_url +
+                        ")"
+                      ),
                       inline: true
                     },
                     {
@@ -673,7 +1081,11 @@ jobs:
                     },
                     {
                       name: "Workflow",
-                      value: ("[View run](" + $run_url + ")"),
+                      value: (
+                        "[View run](" +
+                        $run_url +
+                        ")"
+                      ),
                       inline: true
                     },
                     {
@@ -681,7 +1093,8 @@ jobs:
                       value: (
                         "Validate: `" + $validate +
                         "`\nBuild: `" + $build +
-                        "`\nDeploy: `" + $deploy + "`"
+                        "`\nDeploy: `" + $deploy +
+                        "`"
                       ),
                       inline: false
                     }
