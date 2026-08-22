@@ -45,6 +45,10 @@ export function createServer(): Application {
     }),
   );
   app.use('/assets', express.static(path.join(process.cwd(), 'public')));
+  app.use(
+    '/.well-known',
+    express.static(path.join(process.cwd(), 'public/.well-known')),
+  );
 
   app.use(httpLogger);
   setupBullBoard(app);
