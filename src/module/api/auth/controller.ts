@@ -124,7 +124,29 @@ export async function logout(req: IRequest, res: Response, next: NextFunction) {
     if (!userId) {
       throw new UnauthorizedException('User not authenticated');
     }
-    const {message, data} = await service.logout(userId);
+    const refreshToken = req.body?.refresh_token;
+    const {message, data} = await service.logout(userId, refreshToken);
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function logoutOther(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const userId = req.auth?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+    const currentRefreshToken = req.body?.refresh_token;
+    const {message, data} = await service.logoutOther(
+      userId,
+      currentRefreshToken,
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

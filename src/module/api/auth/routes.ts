@@ -43,6 +43,7 @@ router.post(
   ctrl.refreshToken,
 );
 router.delete('/logout', guard, ctrl.logout);
+router.delete('/logout/other', guard, ctrl.logoutOther);
 router.post(
   '/send-invite-code',
   sensitiveAuthLimiter,

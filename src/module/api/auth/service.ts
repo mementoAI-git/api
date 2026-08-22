@@ -44,7 +44,7 @@ import {
   FRONTEND_URL,
   WEBAUTHN_RP_ID,
   WEBAUTHN_RP_NAME,
-  WEBAUTHN_ORIGIN,
+  WEBAUTHN_ORIGINS,
 } from '../../../utils/config';
 
 // ---------------------------------------------------------------------------
@@ -74,6 +74,18 @@ async function consume2FAPendingToken(token: string) {
     userId: string;
     remember_for_30_days: boolean;
   };
+}
+
+async function addRefreshToken(userId: string, token: string) {
+  await User.findByIdAndUpdate(userId, {
+    $set: {refresh_token: token},
+    $push: {
+      refresh_tokens: {
+        $each: [token],
+        $slice: -10, // Limit to 10 concurrent active sessions
+      },
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +158,7 @@ export async function oauthAuthorization(
   const tokens = createTokenPair(user.id);
 
   // Store refresh token in database
-  await user.updateOne({refresh_token: tokens.refresh_token});
+  await addRefreshToken(user.id, tokens.refresh_token);
 
   const data = {
     ...tokens,
@@ -203,7 +215,7 @@ export async function login(payload: ILogin) {
   );
 
   // Store refresh token in database
-  await user.updateOne({refresh_token: tokens.refresh_token});
+  await addRefreshToken(user.id, tokens.refresh_token);
 
   const data = {
     ...tokens,
@@ -244,7 +256,7 @@ export async function verify2FALogin(payload: IVerify2FALogin) {
     expires_in * 24 * 60 * 60 * 1000,
     30 * 24 * 60 * 60 * 1000,
   );
-  await user.updateOne({refresh_token: tokens.refresh_token});
+  await addRefreshToken(user.id, tokens.refresh_token);
 
   return {
     data: {
@@ -306,7 +318,7 @@ export async function completePasskeyRegistration(
         typeof verifyRegistrationResponse
       >[0]['response'],
       expectedChallenge: expectedChallenge.toString(),
-      expectedOrigin: WEBAUTHN_ORIGIN,
+      expectedOrigin: WEBAUTHN_ORIGINS,
       expectedRPID: WEBAUTHN_RP_ID,
     });
   } catch {
@@ -402,7 +414,7 @@ export async function completePasskeyLogin(payload: IPasskeyLoginComplete) {
         typeof verifyAuthenticationResponse
       >[0]['response'],
       expectedChallenge: expectedChallenge.toString(),
-      expectedOrigin: WEBAUTHN_ORIGIN,
+      expectedOrigin: WEBAUTHN_ORIGINS,
       expectedRPID: WEBAUTHN_RP_ID,
       credential: {
         id: passkey.credential_id,
@@ -426,7 +438,7 @@ export async function completePasskeyLogin(payload: IPasskeyLoginComplete) {
   );
 
   const tokens = createTokenPair(user.id);
-  await user.updateOne({refresh_token: tokens.refresh_token});
+  await addRefreshToken(user.id, tokens.refresh_token);
 
   return {
     data: {
@@ -580,15 +592,31 @@ export async function refreshToken(payload: IRefreshToken) {
     throw new BadRequestException('Account has been deleted');
   }
 
-  if (user.refresh_token !== refresh_token) {
+  const hasToken =
+    user.refresh_tokens?.includes(refresh_token) ||
+    user.refresh_token === refresh_token;
+  if (!hasToken) {
     throw new UnauthorizedException('Invalid refresh token');
   }
 
   // Generate new token pair
   const tokens = createTokenPair(user.id);
 
+  // Update/rotate token in array
+  let updatedTokens = [...(user.refresh_tokens || [])];
+  const tokenIndex = updatedTokens.indexOf(refresh_token);
+  if (tokenIndex !== -1) {
+    updatedTokens[tokenIndex] = tokens.refresh_token;
+  } else {
+    updatedTokens.push(tokens.refresh_token);
+  }
+  updatedTokens = updatedTokens.slice(-10);
+
   // Update the user's refresh token
-  await user.updateOne({refresh_token: tokens.refresh_token});
+  await user.updateOne({
+    refresh_token: tokens.refresh_token,
+    refresh_tokens: updatedTokens,
+  });
 
   return {
     data: tokens,
@@ -596,13 +624,38 @@ export async function refreshToken(payload: IRefreshToken) {
   };
 }
 
-export async function logout(userId: string) {
-  // Clear the refresh token from the database
-  await User.findByIdAndUpdate(userId, {refresh_token: null});
+export async function logout(userId: string, refreshToken?: string) {
+  if (refreshToken) {
+    await User.findByIdAndUpdate(userId, {
+      $pull: {refresh_tokens: refreshToken},
+      $set: {refresh_token: null},
+    });
+  } else {
+    await User.findByIdAndUpdate(userId, {
+      refresh_token: null,
+      refresh_tokens: [],
+    });
+  }
 
   return {
     data: null,
     message: 'Logout successful',
+  };
+}
+
+export async function logoutOther(userId: string, currentRefreshToken: string) {
+  if (!currentRefreshToken) {
+    throw new BadRequestException('Current refresh token is required');
+  }
+
+  await User.findByIdAndUpdate(userId, {
+    refresh_token: currentRefreshToken,
+    refresh_tokens: [currentRefreshToken],
+  });
+
+  return {
+    data: null,
+    message: 'Other devices logged out successfully',
   };
 }
 
