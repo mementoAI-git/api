@@ -214,5 +214,11 @@ export const FEATURE_FLAGS_ADMIN_EMAILS =
 // WebAuthn / Passkeys
 export const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 export const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Memento';
-export const WEBAUTHN_ORIGIN =
-  process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';
+export const WEBAUTHN_ORIGINS = (
+  process.env.WEBAUTHN_ORIGINS ||
+  process.env.WEBAUTHN_ORIGIN ||
+  'http://localhost:5173'
+)
+  .split(',')
+  .map(v => v.trim())
+  .filter(Boolean);
