@@ -37,7 +37,10 @@ export async function uploadFile(
 
   await Promise.all(
     data.map(async file => {
-      if (file.type?.startsWith('video/') && file.status === 'processing') {
+      if (
+        (file.type?.startsWith('video/') || file.type?.startsWith('audio/')) &&
+        file.status === 'processing'
+      ) {
         const queued = await queueAttachmentThumbnailProcessing(file.id);
         if (!queued) {
           await File.findByIdAndUpdate(file.id, {

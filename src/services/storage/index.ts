@@ -187,6 +187,8 @@ export async function uploadFile(
   if (mimetype.startsWith('video/')) {
     status = 'processing';
     thumbnail = null;
+  } else if (mimetype.startsWith('audio/') && !thumbnail) {
+    status = 'processing';
   }
 
   return {

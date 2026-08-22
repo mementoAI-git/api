@@ -595,14 +595,24 @@ export async function getConversationMemories(
   return {data, message: 'Conversation memories retrieved successfully'};
 }
 
-export async function getStoryMemories(payload: IPagination, user_id: string) {
-  const {page, limit, search, bookmarked = false, deleted = false} = payload;
+export async function getStoryMemories(
+  payload: IPagination & {status?: string},
+  user_id: string,
+) {
+  const {
+    page,
+    limit,
+    search,
+    bookmarked = false,
+    deleted = false,
+    status,
+  } = payload;
 
   const filters = filterGenerator({search}, ['title', 'body', 'tags']);
   filters.push({
     user: user_id,
     type: 'story',
-    status: deleted ? 'deleted' : {$nin: ['draft', 'deleted']},
+    status: status || (deleted ? 'deleted' : {$nin: ['draft', 'deleted']}),
   });
 
   const data = await paginateMemories({$and: filters}, user_id, {
