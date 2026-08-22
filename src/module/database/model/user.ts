@@ -60,6 +60,7 @@ export interface IUser {
   private_key: string;
   public_key: string;
   refresh_token?: string;
+  refresh_tokens?: string[];
   two_factor: {
     secret: string;
     enabled: boolean;
@@ -99,6 +100,10 @@ const user = new Schema<IUser>(
     private_key: String,
     public_key: String,
     refresh_token: String,
+    refresh_tokens: {
+      type: [String],
+      default: [],
+    },
     bg_music: {
       type: String,
       default: null,
