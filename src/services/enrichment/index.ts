@@ -392,7 +392,9 @@ export async function computeEnrichmentScore(
 
   // --- Redis cache write ---
   if (redis) {
-    await redis.set(cacheKey, JSON.stringify(result), {EX: ENRICHMENT_CACHE_TTL});
+    await redis.set(cacheKey, JSON.stringify(result), {
+      EX: ENRICHMENT_CACHE_TTL,
+    });
   }
 
   return result;

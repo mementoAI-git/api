@@ -40,7 +40,10 @@ import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-captur
 import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
 import {queueSummarization} from '../../../services/queues/summarization';
 import * as storage from '../../../services/storage';
-import {getConversationEnrichment, invalidateEnrichmentCache} from '../../../services/enrichment';
+import {
+  getConversationEnrichment,
+  invalidateEnrichmentCache,
+} from '../../../services/enrichment';
 
 export {getConversationEnrichment};
 

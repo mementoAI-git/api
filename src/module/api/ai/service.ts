@@ -93,8 +93,8 @@ const GEMINI_LIVE_VOICE_CATALOG = [
     title: 'Denver',
     subtitle: 'grounded',
     gender: 'male',
-    voiceName: 'Fenrir',       // Gemini API name
-    alias: 'fenrir',           // legacy / raw Gemini name accepted as input
+    voiceName: 'Fenrir', // Gemini API name
+    alias: 'fenrir', // legacy / raw Gemini name accepted as input
     platform: 'Gemini',
     client: 'Google',
     style: 'grounded',
@@ -984,8 +984,8 @@ function resolveGeminiVoiceName(
   const input = chatVoice.toLowerCase();
   const match = GEMINI_LIVE_VOICE_CATALOG.find(
     v =>
-      v.id === input ||              // persona name  e.g. 'denver'
-      v.alias === input ||            // raw gemini name e.g. 'fenrir'
+      v.id === input || // persona name  e.g. 'denver'
+      v.alias === input || // raw gemini name e.g. 'fenrir'
       v.voiceName.toLowerCase() === input, // also catches full capitalised form
   );
   return match
@@ -995,7 +995,9 @@ function resolveGeminiVoiceName(
 
 export async function createEphemeralToken(userId: string) {
   // Resolve the user's preferred voice
-  const user = await User.findById(userId).select('chat_voice chat_voice_provider').lean();
+  const user = await User.findById(userId)
+    .select('chat_voice chat_voice_provider')
+    .lean();
   const {voiceName, voiceId} = resolveGeminiVoiceName(
     user?.chat_voice ?? undefined,
     user?.chat_voice_provider ?? undefined,
