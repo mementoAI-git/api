@@ -1,7 +1,8 @@
 import dayjs from 'dayjs';
 import Memory from '../../module/database/model/memory';
 import Persona from '../../module/database/model/persona';
-import PendingInsight from '../../module/database/model/pending-insight';
+import User from '../../module/database/model/user';
+import redis from '../redis';
 import {NotFoundException} from '../../utils/service-error';
 
 // ---------------------------------------------------------------------------
@@ -33,7 +34,16 @@ const DEFERRED_CATEGORIES: Record<string, number> = {
 const DECAY_IDLE_DAYS = 14; // start decaying after 14 days idle
 const DECAY_RATE_PER_WEEK = 2; // lose 2% per week per category
 const SCORE_FLOOR = 5; // overall score never below 5%
-const ACTIVITY_PAUSE_DAYS = 7; // any activity within 7 days pauses decay
+const ACTIVITY_PAUSE_DAYS = 7; // any activity within 7 days fully pauses decay
+
+// Redis cache
+const ENRICHMENT_CACHE_TTL = 60 * 30; // 30 minutes
+const enrichmentCacheKey = (userId: string) => `enrichment:score:${userId}`;
+
+/** Call after any write that changes a user's enrichment (new memory, story save, etc.) */
+export async function invalidateEnrichmentCache(userId: string): Promise<void> {
+  await redis?.del(enrichmentCacheKey(userId));
+}
 
 // Weights for different content sources
 const CONVERSATION_WEIGHT = 0.9; // AI-derived content weighted slightly lower
@@ -182,8 +192,17 @@ export interface ConversationEnrichment {
 export async function computeEnrichmentScore(
   userId: string,
 ): Promise<EnrichmentResult> {
-  // 1. Fetch all relevant data in parallel
-  const [persona, conversations, stories, pendingInsights] = await Promise.all([
+  // --- Redis cache read ---
+  const cacheKey = enrichmentCacheKey(userId);
+  if (redis) {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(String(cached)) as EnrichmentResult;
+    }
+  }
+
+  // 1. Fetch all relevant data in parallel (pendingInsights removed — was unused)
+  const [persona, conversations, stories] = await Promise.all([
     Persona.findOne({user: userId}).lean(),
     Memory.find({
       user: userId,
@@ -199,13 +218,16 @@ export async function computeEnrichmentScore(
     })
       .select('dimensions tags created_at')
       .lean(),
-    PendingInsight.countDocuments({user: userId}),
   ]);
 
-  // 2. Determine user account age (for deferred unlock logic)
-  const userCreatedAt = persona?.created_at
-    ? dayjs(persona.created_at)
-    : dayjs(); // fallback to now
+  // 2. Determine user account age (for deferred unlock logic).
+  //    Prefer persona.created_at; fall back to User.created_at to avoid
+  //    locking deferred categories forever when persona field is null.
+  let userCreatedAt = persona?.created_at ? dayjs(persona.created_at) : null;
+  if (!userCreatedAt) {
+    const user = await User.findById(userId).select('created_at').lean();
+    userCreatedAt = user?.created_at ? dayjs(user.created_at) : dayjs();
+  }
   const accountAgeDays = dayjs().diff(userCreatedAt, 'day');
 
   // 3. Get user priority dimensions from preferences (seeded by onboarding)
@@ -238,11 +260,17 @@ export async function computeEnrichmentScore(
     }
   }
 
-  // Count story dimensions/tags (explicit)
+  // Count story dimensions AND tags (explicit). Tags were fetched but previously unused.
   for (const story of stories) {
-    const dims = (story.dimensions as string[]) || [];
+    const dims = [
+      ...((story.dimensions as string[]) || []),
+      ...((story.tags as string[]) || []),
+    ];
+    const seen = new Set<string>();
     for (const dim of dims) {
-      if (categoryCounts[dim]) {
+      // Deduplicate within the same story so a tag+dimension match doesn't double-count
+      if (!seen.has(dim) && categoryCounts[dim]) {
+        seen.add(dim);
         categoryCounts[dim].explicit += 1;
         const storyDate = story.created_at ? new Date(story.created_at) : null;
         if (
@@ -296,10 +324,12 @@ export async function computeEnrichmentScore(
       counts.explicit * EXPLICIT_WEIGHT + counts.derived * CONVERSATION_WEIGHT;
     let rawScore = Math.min(100, Math.round(Math.log2(weightedItems + 1) * 20));
 
-    // Apply decay if inactive
+    // Apply decay if inactive.
+    // ACTIVITY_PAUSE_DAYS: any activity within this window fully pauses decay.
+    // Decay only starts after DECAY_IDLE_DAYS of true inactivity beyond the pause window.
     if (counts.lastActivity) {
       const idleDays = dayjs().diff(dayjs(counts.lastActivity), 'day');
-      if (idleDays > DECAY_IDLE_DAYS) {
+      if (idleDays > ACTIVITY_PAUSE_DAYS && idleDays > DECAY_IDLE_DAYS) {
         const weeksIdle = Math.floor((idleDays - DECAY_IDLE_DAYS) / 7);
         const decayAmount = weeksIdle * DECAY_RATE_PER_WEEK;
         rawScore = Math.max(0, rawScore - decayAmount);
@@ -339,15 +369,33 @@ export async function computeEnrichmentScore(
         )
       : null;
 
-  // 9. Beneficiary access: unlocked forever once score hits 20%
-  const beneficiary_access_unlocked = enrichment_score >= 20;
+  // 9. Beneficiary access: one-way persistent flag — set it on Persona if earned,
+  //    never clear it even when score decays below 20.
+  const alreadyUnlocked = persona?.beneficiary_access_unlocked ?? false;
+  const earnedNow = enrichment_score >= 20;
+  const beneficiary_access_unlocked = alreadyUnlocked || earnedNow;
 
-  return {
+  if (earnedNow && !alreadyUnlocked) {
+    // Persist the flag so future score decay doesn't revoke it
+    await Persona.updateOne(
+      {user: userId},
+      {$set: {beneficiary_access_unlocked: true}},
+    );
+  }
+
+  const result: EnrichmentResult = {
     enrichment_score,
     category_scores: categoryScores,
     lowest_category: lowest?.key || null,
     beneficiary_access_unlocked,
   };
+
+  // --- Redis cache write ---
+  if (redis) {
+    await redis.set(cacheKey, JSON.stringify(result), {EX: ENRICHMENT_CACHE_TTL});
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

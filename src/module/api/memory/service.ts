@@ -40,7 +40,7 @@ import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-captur
 import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
 import {queueSummarization} from '../../../services/queues/summarization';
 import * as storage from '../../../services/storage';
-import {getConversationEnrichment} from '../../../services/enrichment';
+import {getConversationEnrichment, invalidateEnrichmentCache} from '../../../services/enrichment';
 
 export {getConversationEnrichment};
 
@@ -301,6 +301,11 @@ export async function createMemory(
   }
 
   void updateStreak(user_id);
+
+  // Bust enrichment cache so next stats call recomputes with the new memory/story
+  if (isStory && status === 'save') {
+    void invalidateEnrichmentCache(user_id);
+  }
 
   return {
     message: 'Memory created successfully',
@@ -868,6 +873,7 @@ export async function restoreMemory(_id: string, user_id: string) {
 
   // Restore to 'save' status (or you could restore to previous status if you track it)
   await memory.updateOne({status: 'save'});
+  void invalidateEnrichmentCache(user_id);
 
   await track(
     {

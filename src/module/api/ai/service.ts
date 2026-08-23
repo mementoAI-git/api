@@ -89,70 +89,76 @@ const tagsOutputSchema = z.object({
 
 const GEMINI_LIVE_VOICE_CATALOG = [
   {
-    id: 'kore',
-    title: 'Kore',
-    subtitle: 'warm',
-    gender: 'female',
-    voiceName: 'Kore',
-    platform: 'Gemini',
-    client: 'Google',
-    style: 'warm',
-    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=clara',
-  },
-  {
-    id: 'fenrir',
-    title: 'Fenrir',
+    id: 'denver',
+    title: 'Denver',
     subtitle: 'grounded',
     gender: 'male',
-    voiceName: 'Fenrir',
+    voiceName: 'Fenrir',       // Gemini API name
+    alias: 'fenrir',           // legacy / raw Gemini name accepted as input
     platform: 'Gemini',
     client: 'Google',
     style: 'grounded',
-    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=vince',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=denver',
   },
   {
-    id: 'aoede',
-    title: 'Aoede',
-    subtitle: 'bright',
+    id: 'sue',
+    title: 'Sue',
+    subtitle: 'warm',
     gender: 'female',
-    voiceName: 'Aoede',
+    voiceName: 'Kore',
+    alias: 'kore',
     platform: 'Gemini',
     client: 'Google',
-    style: 'bright',
-    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=skye',
+    style: 'warm',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=sue',
   },
   {
-    id: 'enceladus',
-    title: 'Enceladus',
+    id: 'josef',
+    title: 'Josef',
     subtitle: 'steady',
     gender: 'male',
     voiceName: 'Enceladus',
+    alias: 'enceladus',
     platform: 'Gemini',
     client: 'Google',
     style: 'steady',
-    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=theo',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=josef',
   },
   {
-    id: 'leda',
-    title: 'Leda',
+    id: 'hannah',
+    title: 'Hannah',
+    subtitle: 'bright',
+    gender: 'female',
+    voiceName: 'Aoede',
+    alias: 'aoede',
+    platform: 'Gemini',
+    client: 'Google',
+    style: 'bright',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=hannah',
+  },
+  {
+    id: 'maya',
+    title: 'Maya',
     subtitle: 'clear',
     gender: 'female',
     voiceName: 'Leda',
+    alias: 'leda',
     platform: 'Gemini',
     client: 'Google',
     style: 'clear',
-    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=iris',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=maya',
   },
   {
-    id: 'puck',
-    title: 'Puck',
+    id: 'leo',
+    title: 'Leo',
     subtitle: 'energetic',
     gender: 'male',
     voiceName: 'Puck',
+    alias: 'puck',
     platform: 'Gemini',
     client: 'Google',
     style: 'energetic',
-    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=marcus',
+    imageUrl: 'https://api.dicebear.com/9.x/glass/svg?seed=leo',
   },
 ] as const;
 
@@ -961,9 +967,44 @@ export async function startConversation(
   };
 }
 
-export async function createEphemeralToken() {
-  const expireTime = dayjs().add(30, 'minute').toDate(); // 30 minutes from now
-  const newSessionExpireTime = dayjs().add(2, 'minutes').toDate(); // 2 minute from now
+/**
+ * Resolve the Gemini voiceName to embed in a Live session constraint.
+ * Accepts the user-facing persona name (e.g. 'denver') OR the raw Gemini
+ * voice name (e.g. 'fenrir') — whichever is stored in chat_voice.
+ * Falls back to Denver (Fenrir) if nothing matches.
+ */
+function resolveGeminiVoiceName(
+  chatVoice: string | undefined,
+  chatVoiceProvider: string | undefined,
+): {voiceName: string; voiceId: string} {
+  const DEFAULT = GEMINI_LIVE_VOICE_CATALOG[0]; // Denver / Fenrir
+  if (!chatVoice || (chatVoiceProvider && chatVoiceProvider !== 'gemini')) {
+    return {voiceName: DEFAULT.voiceName, voiceId: DEFAULT.id};
+  }
+  const input = chatVoice.toLowerCase();
+  const match = GEMINI_LIVE_VOICE_CATALOG.find(
+    v =>
+      v.id === input ||              // persona name  e.g. 'denver'
+      v.alias === input ||            // raw gemini name e.g. 'fenrir'
+      v.voiceName.toLowerCase() === input, // also catches full capitalised form
+  );
+  return match
+    ? {voiceName: match.voiceName, voiceId: match.id}
+    : {voiceName: DEFAULT.voiceName, voiceId: DEFAULT.id};
+}
+
+export async function createEphemeralToken(userId: string) {
+  // Resolve the user's preferred voice
+  const user = await User.findById(userId).select('chat_voice chat_voice_provider').lean();
+  const {voiceName, voiceId} = resolveGeminiVoiceName(
+    user?.chat_voice ?? undefined,
+    user?.chat_voice_provider ?? undefined,
+  );
+
+  const expireTime = dayjs().add(30, 'minute').toDate();
+  // 10 min gives mobile clients a realistic window to establish the WebSocket
+  // even on slow networks or after a brief app backgrounding.
+  const newSessionExpireTime = dayjs().add(10, 'minutes').toDate();
 
   const token = await geminiAuthClient.authTokens.create({
     config: {
@@ -975,6 +1016,12 @@ export async function createEphemeralToken() {
         config: {
           sessionResumption: {},
           responseModalities: [Modality.AUDIO],
+          // Apply the user's chosen Gemini voice to the live session
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {voiceName},
+            },
+          },
         },
       },
       httpOptions: {
@@ -988,6 +1035,12 @@ export async function createEphemeralToken() {
     data: {
       token: token.name,
       expiresAt: expireTime.toISOString(),
+      // Return the resolved voice so the client can display which voice is active
+      voice: {
+        id: voiceId,
+        name: voiceName,
+        provider: 'gemini',
+      },
     },
   };
 }

@@ -12,6 +12,7 @@ import PendingInsight, {
 } from '../../module/database/model/pending-insight';
 import Persona from '../../module/database/model/persona';
 import Memory from '../../module/database/model/memory';
+import {invalidateEnrichmentCache} from '../../services/enrichment';
 
 async function savePendingInsights(
   insights: Record<string, unknown>,
@@ -87,6 +88,8 @@ export default function startInsightsExtractionWorker(
             await Memory.findByIdAndUpdate(memory_id, {
               $addToSet: {dimensions: {$each: dims}},
             });
+            // New dimensions change the enrichment score — bust the cache
+            void invalidateEnrichmentCache(user_id);
           }
         } catch (err) {
           console.error('Error running parallel insight extractions:', err);

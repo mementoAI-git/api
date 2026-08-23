@@ -27,6 +27,8 @@ export interface IPersona {
   /** AI-written Memory Insights modal summary (cached). */
   memory_insights_summary?: string;
   memory_insights_summary_at?: Date;
+  /** Permanently true once enrichment score ever reaches 20. Never reset. */
+  beneficiary_access_unlocked?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -70,6 +72,10 @@ const persona = new Schema<IPersona>(
     },
     memory_insights_summary: String,
     memory_insights_summary_at: Date,
+    beneficiary_access_unlocked: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: {
