@@ -216,6 +216,25 @@ export const FEATURE_FLAGS_ADMIN_EMAILS =
     .map(v => v.trim().toLowerCase())
     .filter(Boolean) || [];
 export const BULL_BOARD_ENABLED = process.env.BULL_BOARD_ENABLED === 'true';
+export const SENTRY_TUNNEL_ENABLED =
+  process.env.SENTRY_TUNNEL_ENABLED === 'true';
+export const SENTRY_TUNNEL_ALLOWED_HOSTS =
+  process.env.SENTRY_TUNNEL_ALLOWED_HOSTS?.split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean) || [];
+export const SENTRY_TUNNEL_ALLOWED_PROJECT_IDS =
+  process.env.SENTRY_TUNNEL_ALLOWED_PROJECT_IDS?.split(',')
+    .map(value => value.trim())
+    .filter(Boolean) || [];
+export const SENTRY_TUNNEL_MAX_BYTES = Number(
+  process.env.SENTRY_TUNNEL_MAX_BYTES || 1024 * 1024,
+);
+export const SENTRY_TUNNEL_TIMEOUT_MS = Number(
+  process.env.SENTRY_TUNNEL_TIMEOUT_MS || 5000,
+);
+export const SENTRY_TUNNEL_RATE_LIMIT_PER_MINUTE = Number(
+  process.env.SENTRY_TUNNEL_RATE_LIMIT_PER_MINUTE || 60,
+);
 // WebAuthn / Passkeys
 export const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 export const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Memento';
