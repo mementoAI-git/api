@@ -26,7 +26,8 @@ export default async function processAttachmentThumbnail(job: {
         type: file.type,
       });
       await file.updateOne({
-        thumbnail: artifact.thumbnailUrl ?? file.thumbnail ?? null,
+        thumbnail_key: artifact.thumbnailKey ?? file.thumbnail_key ?? null,
+        thumbnail: null,
         duration: file.duration ?? artifact.duration ?? undefined,
         status: 'ready',
       });
@@ -70,7 +71,8 @@ export default async function processAttachmentThumbnail(job: {
       type: file.type,
     });
     await file.updateOne({
-      thumbnail: artifact.thumbnailUrl,
+      thumbnail_key: artifact.thumbnailKey,
+      thumbnail: null,
       width: artifact.width ?? undefined,
       height: artifact.height ?? undefined,
       duration: file.duration ?? artifact.duration ?? undefined,

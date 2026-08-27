@@ -53,6 +53,10 @@ export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const BACKEND_URL = process.env.BACKEND_URL;
+export const FILE_URL_SIGNING_KEYS = process.env.FILE_URL_SIGNING_KEYS || '';
+export const FILE_URL_TTL_SECONDS = Number(
+  process.env.FILE_URL_TTL_SECONDS || 3600,
+);
 
 export const GEMINI_API_KEY_ALT = process.env.GEMINI_API_KEY_ALT;
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;

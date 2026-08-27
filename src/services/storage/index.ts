@@ -123,6 +123,7 @@ export async function uploadFile(
   let status: IFile['status'] = 'ready';
 
   let thumbnail: string | null = null;
+  let thumbnailKey: string | null = null;
 
   // ── Extract embedded album art from audio files ────────────────────────────
   // Only for uploaded audio files that may have ID3/iTunes embedded cover art.
@@ -142,6 +143,7 @@ export async function uploadFile(
           Buffer.from(cover.data),
           'image/jpeg',
         );
+        thumbnailKey = thumbKey;
         thumbnail = resolvePublicFileUrl(thumbKey, thumbUpload.location);
       }
     } catch (err) {
@@ -170,6 +172,7 @@ export async function uploadFile(
         previewBuffer,
         'image/jpeg',
       );
+      thumbnailKey = thumbKey;
       thumbnail = resolvePublicFileUrl(thumbKey, thumbUpload.location);
     } catch (err) {
       logger.warn(
@@ -200,7 +203,9 @@ export async function uploadFile(
     width,
     height,
     status,
-    thumbnail,
+    thumbnail: null,
+    thumbnail_key: thumbnailKey,
+    access_mode: 'signed_only',
     provider: DEFAULT_STORAGE_PROVIDER,
     backup_url: result.location,
   };

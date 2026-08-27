@@ -1,4 +1,5 @@
 import type {Document} from 'mongoose';
+import {signFileUrl} from '../services/storage/file-capability';
 
 export type AttachmentStatus = 'processing' | 'ready' | 'failed';
 
@@ -13,6 +14,10 @@ export interface AttachmentResponse {
   height: number | null;
   size: number | null;
   status: AttachmentStatus;
+  access?: {
+    expires_at: string;
+    refresh_endpoint: string;
+  };
 }
 
 type AttachmentLike = {
@@ -21,6 +26,7 @@ type AttachmentLike = {
   url?: unknown;
   backup_url?: unknown;
   thumbnail?: unknown;
+  thumbnail_key?: unknown;
   name?: unknown;
   type?: unknown;
   duration?: unknown;
@@ -68,27 +74,52 @@ export function serializeAttachment(input: unknown): AttachmentResponse | null {
   if (!candidate) return null;
 
   const status = normalizeStatus(candidate.status);
+  const fileId = String(candidate._id ?? candidate.id ?? '');
+  const name = typeof candidate.name === 'string' ? candidate.name : '';
+  const signedOriginal =
+    fileId && name
+      ? signFileUrl({fileId, objectKey: name, variant: 'original'})
+      : null;
+  const signedThumbnail =
+    status === 'ready' &&
+    fileId &&
+    typeof candidate.thumbnail_key === 'string' &&
+    candidate.thumbnail_key
+      ? signFileUrl({
+          fileId,
+          objectKey: candidate.thumbnail_key,
+          variant: 'thumbnail',
+        })
+      : null;
   const thumbnail =
-    status === 'ready' && typeof candidate.thumbnail === 'string'
-      ? candidate.thumbnail
+    status === 'ready'
+      ? (signedThumbnail?.url ??
+        (typeof candidate.thumbnail === 'string' ? candidate.thumbnail : null))
       : null;
 
   return {
-    _id: String(candidate._id ?? candidate.id ?? ''),
+    _id: fileId,
     url:
-      typeof candidate.url === 'string'
+      signedOriginal?.url ??
+      (typeof candidate.url === 'string'
         ? candidate.url
         : typeof candidate.backup_url === 'string'
           ? candidate.backup_url
-          : '',
+          : ''),
     thumbnail,
-    name: typeof candidate.name === 'string' ? candidate.name : '',
+    name,
     type: typeof candidate.type === 'string' ? candidate.type : '',
     duration: toNumberOrNull(candidate.duration),
     width: toNumberOrNull(candidate.width),
     height: toNumberOrNull(candidate.height),
     size: toNumberOrNull(candidate.size),
     status,
+    ...(signedOriginal && {
+      access: {
+        expires_at: signedOriginal.expiresAt,
+        refresh_endpoint: `/files/${fileId}/access`,
+      },
+    }),
   };
 }
 
@@ -102,6 +133,9 @@ export function serializeAttachmentList(input: unknown): AttachmentResponse[] {
 export function applyAttachmentContract<T extends Record<string, unknown>>(
   input: T,
 ): T & AttachmentResponse {
+  const safeInput: Record<string, unknown> = {...input};
+  delete safeInput.backup_url;
+  delete safeInput.thumbnail_key;
   const serialized = serializeAttachment(input) || {
     _id: '',
     url: '',
@@ -116,7 +150,7 @@ export function applyAttachmentContract<T extends Record<string, unknown>>(
   };
 
   return {
-    ...input,
+    ...safeInput,
     ...serialized,
-  };
+  } as T & AttachmentResponse;
 }

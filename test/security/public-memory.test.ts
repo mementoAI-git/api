@@ -47,6 +47,8 @@ describe('public memory contract', () => {
     );
 
     expect(response.status).toBe(200);
+    const attachmentUrl = new URL(response.body.data.attachments[0].url);
+
     expect(response.body.data).toEqual({
       _id: memory.id,
       title: 'A public story',
@@ -56,7 +58,7 @@ describe('public memory contract', () => {
       attachments: [
         {
           _id: attachment.id,
-          url: 'http://localhost:5000/files/public-photo.jpg',
+          url: expect.any(String),
           thumbnail: null,
           name: 'public-photo.jpg',
           type: 'image/jpeg',
@@ -65,9 +67,17 @@ describe('public memory contract', () => {
           height: null,
           size: 512,
           status: 'ready',
+          access: {
+            expires_at: expect.any(String),
+            refresh_endpoint: `/files/${attachment.id}/access`,
+          },
         },
       ],
     });
+    expect(attachmentUrl.pathname).toBe('/files/public-photo.jpg');
+    expect(attachmentUrl.searchParams.get('fid')).toBe(attachment.id);
+    expect(attachmentUrl.searchParams.get('variant')).toBe('original');
+    expect(attachmentUrl.searchParams.get('sig')).toBeTruthy();
   });
 
   it.each([

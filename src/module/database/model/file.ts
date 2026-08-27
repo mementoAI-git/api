@@ -23,6 +23,7 @@ export interface ITranscriptionData {
 }
 
 export type FileStorageProvider = 's3' | 'gcs' | 'cloudinary';
+export type FileAccessMode = 'legacy_public' | 'signed_only';
 
 export interface IFile {
   type: string;
@@ -36,6 +37,8 @@ export interface IFile {
   transcription: ITranscriptionData;
   duration?: number; // duration in seconds for audio/video files
   thumbnail?: string | null; // preview/thumbnail URL for media
+  thumbnail_key?: string | null;
+  access_mode?: FileAccessMode;
   width?: number;
   height?: number;
   status?: AttachmentStatus;
@@ -86,6 +89,12 @@ const file = new Schema<IFile>(
     transcription: transcriptionDataSchema,
     duration: Number,
     thumbnail: {type: String, default: null},
+    thumbnail_key: {type: String, default: null},
+    access_mode: {
+      type: String,
+      enum: ['legacy_public', 'signed_only'],
+      default: 'legacy_public',
+    },
     width: Number,
     height: Number,
     status: {
