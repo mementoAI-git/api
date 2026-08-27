@@ -4,3 +4,5 @@ process.env.FILE_URL_SIGNING_KEYS =
   'test-v1:test-file-signing-secret-at-least-32-characters,' +
   'test-v0:test-previous-file-signing-secret-at-least-32-characters';
 process.env.BACKEND_URL = 'http://localhost:5000';
+process.env.FEATURE_FLAGS_ADMIN_EMAILS = 'admin@example.com';
+process.env.BULL_BOARD_ENABLED = 'false';

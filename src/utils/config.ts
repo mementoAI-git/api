@@ -215,6 +215,7 @@ export const FEATURE_FLAGS_ADMIN_EMAILS =
   process.env.FEATURE_FLAGS_ADMIN_EMAILS?.split(',')
     .map(v => v.trim().toLowerCase())
     .filter(Boolean) || [];
+export const BULL_BOARD_ENABLED = process.env.BULL_BOARD_ENABLED === 'true';
 // WebAuthn / Passkeys
 export const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 export const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Memento';
