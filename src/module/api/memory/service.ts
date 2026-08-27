@@ -44,6 +44,7 @@ import {
   getConversationEnrichment,
   invalidateEnrichmentCache,
 } from '../../../services/enrichment';
+import {assertOwnedMemory, assertReadableMemory} from './access';
 
 export {getConversationEnrichment};
 
@@ -633,21 +634,16 @@ export async function getStoryMemories(
 }
 
 export async function getMemory(_id: string, user_id: string = null) {
-  const memory = await Memory.findOne({
-    _id,
-    status: {$nin: ['draft', 'deleted']},
-  })
-    .populate({
+  const memory = await assertReadableMemory(_id, {userId: user_id});
+  await memory.populate([
+    {
       path: 'attachments',
       select: '-base64',
       match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
-    })
-    .populate({path: 'groups', select: 'name description'})
-    .populate({path: 'beneficiaries', select: 'name email relationship'});
-
-  if (!memory) {
-    throw new NotFoundException('Memory not found');
-  }
+    },
+    {path: 'groups', select: 'name description'},
+    {path: 'beneficiaries', select: 'name email relationship'},
+  ]);
 
   const bookmark_count = await Bookmark.countDocuments({
     memory: memory.id,
@@ -666,6 +662,7 @@ export async function getMemoryByPrompt(
   let memory = null;
   memory = await Memory.findOne({
     prompt: prompt_id,
+    user: user_id,
     status: {$nin: ['draft', 'deleted']},
   });
 
@@ -893,10 +890,7 @@ export async function restoreMemory(_id: string, user_id: string) {
 }
 
 export async function bookmark(memory_id: string, user_id: string) {
-  const memory = await Memory.findById(memory_id);
-  if (!memory) {
-    throw new NotFoundException('Memory not found');
-  }
+  const memory = await assertReadableMemory(memory_id, {userId: user_id});
 
   let bookmark = await Bookmark.findOne({memory: memory_id, user: user_id});
   if (!bookmark) {
@@ -964,8 +958,10 @@ export async function addMessageToMemory(
   payload: IAddMessageToMemory,
   user_id: string,
 ) {
-  let memory = await Memory.findById(payload.memory_id);
-  if (!memory) {
+  let memory = payload.memory_id
+    ? await assertOwnedMemory(payload.memory_id, user_id)
+    : null;
+  if (!memory && !payload.memory_id) {
     memory = await Memory.findOne({
       session_id: payload.session_id,
       user: user_id,
