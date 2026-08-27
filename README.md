@@ -322,3 +322,22 @@ MIT
 ## Support
 
 For issues and questions, please contact the development team or open an issue in the repository.
+## File access rollout operations
+
+Audit active file records without writing:
+
+```bash
+yarn files:audit-access
+yarn files:backfill-thumbnails
+```
+
+The thumbnail backfill is dry-run by default. After reviewing its unmatched
+count, apply only the recoverable thumbnail keys with:
+
+```bash
+yarn files:backfill-thumbnails --commit
+```
+
+This backfill does not change legacy file access modes. Before production
+rollout, configure reverse-proxy and CDN access logs to redact the `sig`,
+`token`, and `code` query parameters just as the application logger does.
