@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import {responsHandler} from '../utils/helpers';
 import {ServiceError} from '../utils/service-error';
 import logger from '../utils/logger';
+import {sanitizeUrlForLogs} from '../utils/sanitize-url';
 
 const errorHandler = (
   err: any,
@@ -20,7 +21,7 @@ const errorHandler = (
   const {method, url} = req;
 
   const timestamp = dayjs().format('DD/MM/YY HH:mm:ss');
-  const request = `[${timestamp}] ${method.toUpperCase()} ${url}`;
+  const request = `[${timestamp}] ${method.toUpperCase()} ${sanitizeUrlForLogs(url)}`;
 
   const stackLines = err?.stack?.split('\n');
   const path = stackLines?.[1]?.trim() || err;

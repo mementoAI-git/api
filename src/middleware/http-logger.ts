@@ -3,6 +3,7 @@ import {IRequest} from '../utils/interface';
 import pinoHttpLogger from 'pino-http';
 import pino from 'pino';
 import {isEmpty, sanitizeData} from '../utils/helpers';
+import {redactSensitiveQuery, sanitizeUrlForLogs} from '../utils/sanitize-url';
 
 const ignorePaths = ['/health', '/favicon.ico', '/metrics'];
 
@@ -32,12 +33,14 @@ export const httpLogger = pinoHttpLogger({
 
       const requestData: Record<string, any> = {
         method: req.method,
-        url: req.url,
+        url: sanitizeUrlForLogs(req.url),
         ip,
       };
 
       if (!isEmpty(req?.query)) {
-        requestData.query = sanitizeData(req.query);
+        requestData.query = redactSensitiveQuery(
+          sanitizeData(req.query) as Record<string, unknown>,
+        );
       }
       if (!isEmpty(req?.params)) {
         requestData.params = sanitizeData(req.params);

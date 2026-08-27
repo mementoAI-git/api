@@ -2,7 +2,6 @@ import {NextFunction, Response, Request} from 'express';
 import {IRequest} from '../../../utils/interface';
 import * as service from './service';
 import * as storage from '../../../services/storage';
-import File from '../../database/model/file';
 import {
   getFiles,
   responsHandler,
@@ -13,8 +12,8 @@ import {StatusCodes} from 'http-status-codes';
 import dayjs from 'dayjs';
 import {pipeline} from 'stream/promises';
 import logger from '../../../utils/logger';
-import {DEFAULT_STORAGE_PROVIDER} from '../../../utils/constant';
 import {assertAccess} from '../billing/service';
+import {CORS_ALLOWED_ORIGINS} from '../../../utils/config';
 
 export async function uploadFile(
   req: IRequest,
@@ -87,14 +86,26 @@ const safeStreamToResponse = async (
 };
 
 // Helper function to set common response headers
-const setFileHeaders = (res: Response, metadata: any): void => {
+const setCapabilityCorsHeaders = (req: Request, res: Response): void => {
+  const origin = req.header('origin');
+  if (origin && CORS_ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+};
+
+const setFileHeaders = (
+  req: Request,
+  res: Response,
+  metadata: any,
+  cacheTtl: number,
+): void => {
   const commonHeaders = {
-    'Access-Control-Allow-Origin': '*',
     'Content-Type': metadata.type,
     'Content-Disposition': `inline; filename="${metadata.name}"`,
     'Cross-Origin-Resource-Policy': 'cross-origin',
     ETag: metadata.etag,
-    'Cache-Control': 'public, max-age=3600',
+    'Cache-Control': `private, max-age=${cacheTtl}`,
     'Last-Modified': dayjs(metadata.updated_at).toDate().toUTCString(),
     'Accept-Ranges': 'bytes',
   };
@@ -102,6 +113,7 @@ const setFileHeaders = (res: Response, metadata: any): void => {
   Object.entries(commonHeaders).forEach(([key, value]) => {
     res.setHeader(key, value);
   });
+  setCapabilityCorsHeaders(req, res);
 
   // Add video-specific headers
   if (metadata.type.startsWith('video/')) {
@@ -113,15 +125,16 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
   try {
     const name = String(req.params.name);
     const range = req.headers?.range;
+    const resolved = await service.resolveFileRequest(name, req.query);
 
-    const metadata = await service.getFileMetadata(name);
-    setFileHeaders(res, metadata);
+    const metadata = await service.getResolvedFileMetadata(resolved);
+    setFileHeaders(req, res, metadata, resolved.cacheTtl);
 
     // ── Range request (partial content) ─────────────────────────────────────
     if (range) {
-      const data = await service.getFileBuffer(
-        name,
-        parseInt(metadata.size, 10),
+      const data = await service.getResolvedFileBuffer(
+        resolved,
+        Number(metadata.size),
         range,
       );
       const {start, end, buffer} = data;
@@ -130,8 +143,7 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
         'Content-Length': end - start + 1,
         'Content-Type': metadata.type,
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=3600',
-        'Access-Control-Allow-Origin': '*',
+        'Cache-Control': `private, max-age=${resolved.cacheTtl}`,
         'Access-Control-Expose-Headers':
           'Content-Range, Content-Length, Accept-Ranges',
         'Cross-Origin-Resource-Policy': 'cross-origin',
@@ -155,18 +167,15 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
       metadata.type?.startsWith('video/');
 
     if (isMedia) {
-      const file = await File.findActiveOne({name});
-      if (!file) throw new Error('File not found');
-
       res.setHeader('Content-Length', metadata.size);
       res.setHeader('Accept-Ranges', 'bytes');
       res.status(200);
 
       const fileResponse = await storage.getFile(
-        file.name,
+        resolved.key,
         undefined,
-        file.provider ?? DEFAULT_STORAGE_PROVIDER,
-        file.type,
+        resolved.file.provider,
+        resolved.type,
       );
       if (!fileResponse.Body) throw new Error('File content not found');
       await safeStreamToResponse(
@@ -177,7 +186,10 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     }
 
     // ── Non-media files: buffered path (supports Redis cache) ────────────────
-    const data = await service.getFileBuffer(name, parseInt(metadata.size, 10));
+    const data = await service.getResolvedFileBuffer(
+      resolved,
+      Number(metadata.size),
+    );
     res.setHeader('Content-Length', metadata.size);
     res.setHeader('Accept-Ranges', 'bytes');
     res.status(200);
@@ -194,6 +206,24 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     } else {
       logger.error({err: error}, 'Error after headers sent');
     }
+  }
+}
+
+export async function refreshFileAccess(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const {message, data} = await service.refreshFileAccess(
+      String(req.params.id),
+      req.auth.id,
+      req.body || {},
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
   }
 }
 
