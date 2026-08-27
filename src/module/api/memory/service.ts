@@ -46,6 +46,7 @@ import {
 } from '../../../services/enrichment';
 import {assertOwnedMemory, assertReadableMemory} from './access';
 import {assertOwnedFileIds} from '../file/access';
+import {toPublicMemory} from './public-dto';
 
 export {getConversationEnrichment};
 
@@ -658,6 +659,26 @@ export async function getMemory(_id: string, user_id: string = null) {
   const data = {...memory.toObject(), bookmarked: bookmark_count > 0};
 
   return {data, message: 'User memory retrieved successfully'};
+}
+
+export async function getPublicMemory(_id: string) {
+  const memory = await Memory.findOne({
+    _id,
+    visibility: MEMORY_VISIBILITY.EVERYONE,
+    status: {$nin: ['draft', 'deleted']},
+  }).populate({
+    path: 'attachments',
+    match: {
+      deleted: {$ne: true},
+      provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
+    },
+  });
+  if (!memory) throw new NotFoundException('Memory not found');
+
+  return {
+    data: toPublicMemory(memory),
+    message: 'Public memory retrieved successfully',
+  };
 }
 
 export async function getMemoryByPrompt(

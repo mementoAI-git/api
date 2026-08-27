@@ -141,6 +141,22 @@ export async function getMemory(
   }
 }
 
+export async function getPublicMemory(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const {message, data} = await service.getPublicMemory(
+      String(req.params.id),
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getMemoryByPrompt(
   req: IRequest,
   res: Response,

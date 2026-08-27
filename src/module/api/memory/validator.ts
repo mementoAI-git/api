@@ -182,6 +182,7 @@ export default {
     param('memoryId').isMongoId().withMessage('Invalid memory ID'),
     param('fileId').isMongoId().withMessage('Invalid file ID'),
   ],
+  publicMemory: [param('id').isMongoId().withMessage('Invalid memory ID')],
   addMessageToMemory: [
     body('messages').notEmpty().withMessage('Messages are reqired'),
     body('messages.*.text').notEmpty().withMessage('Text is reqired'),
