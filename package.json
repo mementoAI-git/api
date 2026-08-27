@@ -18,6 +18,9 @@
     "dev": "NODE_OPTIONS=--dns-result-order=ipv4first nodemon src/index.ts",
     "build": "npm run clean && npm run compile && cp -R views build/ && cp -R public build/",
     "lint": "gts lint",
+    "test": "vitest run --sequence.concurrent=false",
+    "test:watch": "vitest",
+    "verify": "yarn lint && yarn compile && yarn test",
     "clean": "gts clean",
     "compile": "tsc -p tsconfig.json",
     "fix": "gts fix",
@@ -40,11 +43,15 @@
     "@types/nodemailer": "^6.4.17",
     "@types/qrcode": "^1.5.5",
     "@types/speakeasy": "^2.0.10",
+    "@types/supertest": "^7.2.1",
     "@types/swagger-jsdoc": "^6.0.1",
     "@types/swagger-ui-express": "^4.1.6",
-    "nodemon": "^3.1.14",
     "gts": "^6.0.2",
-    "typescript": "^5.9.3"
+    "mongodb-memory-server": "^11.2.0",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.901.0",
