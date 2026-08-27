@@ -45,6 +45,7 @@ import {
   invalidateEnrichmentCache,
 } from '../../../services/enrichment';
 import {assertOwnedMemory, assertReadableMemory} from './access';
+import {assertOwnedFileIds} from '../file/access';
 
 export {getConversationEnrichment};
 
@@ -230,7 +231,10 @@ export async function createMemory(
     validBeneficiaryIds = beneficiaries.map(b => b.id);
   }
 
-  let attachments = payload?.attachments || [];
+  let attachments = await assertOwnedFileIds(
+    user_id,
+    payload?.attachments || [],
+  );
   if (!isEmpty(files)) {
     const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
     await storage.checkStorageQuota(user, additionalBytes);
@@ -406,6 +410,7 @@ export async function quickCaptureMemory(
   } else if (Array.isArray(rawAtt)) {
     attachments = rawAtt.filter(Boolean);
   }
+  attachments = await assertOwnedFileIds(user_id, attachments);
 
   if (!isEmpty(files)) {
     const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
@@ -701,6 +706,10 @@ export async function updateMemory(
   if (!memory) {
     throw new NotFoundException('Memory not found');
   }
+  const validatedAttachmentIds = await assertOwnedFileIds(
+    user_id,
+    attachments.map(String),
+  );
 
   let resolvedGroupIds: string[] | undefined;
   if (groupIds !== undefined) {
@@ -770,8 +779,8 @@ export async function updateMemory(
     _id,
     {
       $set: setPayload,
-      ...(attachments.length > 0 && {
-        $addToSet: {attachments: {$each: attachments}},
+      ...(validatedAttachmentIds.length > 0 && {
+        $addToSet: {attachments: {$each: validatedAttachmentIds}},
       }),
     },
     {new: true},
@@ -938,19 +947,30 @@ export async function unbookmark(memory_id: string, user_id: string) {
 }
 
 export async function removeFileFromMemory(file_id: string, user_id: string) {
-  const file = await File.findOne({_id: file_id, user: user_id});
-  if (!file) {
-    throw new NotFoundException('File not found');
-  }
+  await assertOwnedFileIds(user_id, [file_id]);
 
   const memory = await Memory.findOne({user: user_id, attachments: file_id});
-  if (memory) {
-    await memory.updateOne({$pull: {attachments: file_id}});
-  }
+  if (!memory) throw new NotFoundException('Memory not found');
+
+  return removeFileFromSpecificMemory(memory.id, file_id, user_id);
+}
+
+export async function removeFileFromSpecificMemory(
+  memory_id: string,
+  file_id: string,
+  user_id: string,
+) {
+  await assertOwnedFileIds(user_id, [file_id]);
+  const memory = await Memory.findOneAndUpdate(
+    {_id: memory_id, user: user_id, attachments: file_id},
+    {$pull: {attachments: file_id}},
+    {new: true},
+  );
+  if (!memory) throw new NotFoundException('Memory not found');
 
   return {
     data: memory,
-    message: 'File removed and deleted from memory successfully',
+    message: 'File detached from memory successfully',
   };
 }
 

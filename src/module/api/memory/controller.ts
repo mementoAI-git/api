@@ -243,6 +243,24 @@ export async function removeFileFromMemory(
   }
 }
 
+export async function detachFileFromMemory(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    validateRequest(req);
+    const {message, data} = await service.removeFileFromSpecificMemory(
+      String(req.params.memoryId),
+      String(req.params.fileId),
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function addMessageToMemory(
   req: IRequest,
   res: Response,

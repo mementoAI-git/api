@@ -1,13 +1,13 @@
 import dayjs from 'dayjs';
 import Beneficiary from '../../database/model/beneficiary';
 import Capsule, {ICapsule} from '../../database/model/capsule';
-import File from '../../database/model/file';
 import Memory from '../../database/model/memory';
 import {isEmpty, filterGenerator} from '../../../utils/helpers';
 import {IPagination} from '../../../utils/interface';
 import {NotFoundException} from '../../../utils/service-error';
 import {track} from '../activity/service';
 import {scheduleCapsuleDelivery} from '../../../services/queues/system';
+import {assertOwnedFileIds} from '../file/access';
 import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
 
 export async function createCapsule(payload: ICapsule, user_id: string) {
@@ -21,14 +21,7 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
 
   let attachments: string[] = [];
   if (payload?.attachments && payload.attachments.length > 0) {
-    const files = await File.find({
-      _id: {$in: payload.attachments},
-      user: user_id,
-    });
-    if (files.length !== payload.attachments.length) {
-      throw new NotFoundException('Some attachment files not found');
-    }
-    attachments = files.map(f => f.id);
+    attachments = await assertOwnedFileIds(user_id, payload.attachments);
   }
 
   let memories: string[] = [];
@@ -102,14 +95,10 @@ export async function updateCapsule(
   }
 
   if (!isEmpty(payload.attachments)) {
-    const files = await File.find({
-      _id: {$in: payload.attachments},
-      user: user_id,
-    });
-    if (files.length !== payload.attachments.length) {
-      throw new NotFoundException('Some attachment files not found');
-    }
-    payload.attachments = files.map(f => f.id);
+    payload.attachments = await assertOwnedFileIds(
+      user_id,
+      payload.attachments!,
+    );
   }
 
   let validatedMemories: string[] | undefined;

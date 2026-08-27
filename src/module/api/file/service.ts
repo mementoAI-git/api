@@ -2,10 +2,7 @@ import * as storage from '../../../services/storage';
 import {filterGenerator} from '../../../utils/helpers';
 import User from '../../database/model/user';
 import File from '../../database/model/file';
-import {
-  NotFoundException,
-  UnauthorizedException,
-} from '../../../utils/service-error';
+import {NotFoundException, ServiceError} from '../../../utils/service-error';
 import {IPagination} from '../../../utils/interface';
 import redis from '../../../services/redis';
 import {createHash} from 'crypto';
@@ -15,6 +12,10 @@ import {
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils/constant';
 import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
+import Memory from '../../database/model/memory';
+import Capsule from '../../database/model/capsule';
+import Message from '../../database/model/message';
+import {StatusCodes} from 'http-status-codes';
 
 export async function uploadFile(
   payload: Express.Multer.File[],
@@ -56,12 +57,23 @@ export async function uploadFile(
 }
 
 export async function removeFile(name: string, user_id: string) {
-  const file = await File.findActiveOne({name}).select('+backup_at');
+  const file = await File.findActiveOne({name, user: user_id}).select(
+    '+backup_at',
+  );
   if (!file) {
-    throw new NotFoundException('file not found');
+    throw new NotFoundException('File not found');
   }
-  if (file.user !== user_id) {
-    throw new UnauthorizedException();
+
+  const [memoryReference, capsuleReference, messageReference] =
+    await Promise.all([
+      Memory.exists({attachments: file.id}),
+      Capsule.exists({attachments: file.id}),
+      Message.exists({attatchments: file.id}),
+    ]);
+  if (memoryReference || capsuleReference || messageReference) {
+    throw new ServiceError('File is still referenced', StatusCodes.CONFLICT, {
+      code: 'file_still_referenced',
+    });
   }
 
   const isBackedUp = !!file.backup_at;

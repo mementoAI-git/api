@@ -30,6 +30,12 @@ router.delete(
   valid.removeFileFromMemory,
   ctrl.removeFileFromMemory,
 );
+router.delete(
+  '/:memoryId/attachments/:fileId',
+  gaurd,
+  valid.detachFileFromMemory,
+  ctrl.detachFileFromMemory,
+);
 router.get('/conversations', gaurd, ctrl.getConversationMemories);
 router.get('/stories', gaurd, ctrl.getStoryMemories);
 router.get('/', gaurd, ctrl.getMemories);
