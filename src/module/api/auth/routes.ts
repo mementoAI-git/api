@@ -22,7 +22,7 @@ router.post(
   ctrl.authorization,
 );
 router.post('/login', rateLimiter(5, 5), valid.login, ctrl.login);
-router.post('/register', publicAuthLimiter, valid.login, ctrl.register);
+router.post('/register', publicAuthLimiter, valid.register, ctrl.register);
 router.post('/send-link', sensitiveAuthLimiter, valid.sendLink, ctrl.sendLink);
 router.post(
   '/verify-email',

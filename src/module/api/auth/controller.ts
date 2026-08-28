@@ -5,6 +5,12 @@ import {StatusCodes} from 'http-status-codes';
 import {IRequest} from '../../../utils/interface';
 import {UnauthorizedException} from '../../../utils/service-error';
 
+function clientContext(req: Request) {
+  return {
+    client: (req as IRequest).context?.client || ('legacy-unknown' as const),
+  };
+}
+
 export function generateOauthUrl(
   req: Request,
   res: Response,
@@ -31,6 +37,7 @@ export async function authorization(
     const {message, data} = await service.oauthAuthorization(
       req.body,
       String(req.params.provider),
+      clientContext(req),
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
@@ -41,7 +48,7 @@ export async function authorization(
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     validateRequest(req);
-    const {message, data} = await service.login(req.body);
+    const {message, data} = await service.login(req.body, clientContext(req));
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -83,7 +90,10 @@ export async function verifyEmail(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.verifyEmail(req.body);
+    const {message, data} = await service.verifyEmail(
+      req.body,
+      clientContext(req),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -174,7 +184,10 @@ export async function verify2FALogin(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.verify2FALogin(req.body);
+    const {message, data} = await service.verify2FALogin(
+      req.body,
+      clientContext(req),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -235,7 +248,10 @@ export async function completePasskeyLogin(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.completePasskeyLogin(req.body);
+    const {message, data} = await service.completePasskeyLogin(
+      req.body,
+      clientContext(req),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

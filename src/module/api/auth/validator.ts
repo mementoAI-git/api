@@ -19,6 +19,10 @@ export default {
   authorization: [
     providerValidator,
     body('code').notEmpty().withMessage('Authorization code is required'),
+    body('user')
+      .optional()
+      .custom(value => typeof value === 'string' || typeof value === 'object')
+      .withMessage('Invalid Apple user data'),
   ],
   login: [
     emailValidator,
@@ -32,8 +36,8 @@ export default {
     body('password')
       .notEmpty()
       .withMessage('Password is required')
-      .isStrongPassword()
-      .withMessage('Password must be strong'),
+      .isLength({min: 6})
+      .withMessage('Password must be at least 6 characters'),
   ],
   sendLink: [
     emailValidator,
