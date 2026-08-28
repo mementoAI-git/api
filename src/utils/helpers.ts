@@ -22,7 +22,10 @@ import {ClientSession} from 'mongoose';
 import {randomUUID} from 'crypto';
 import {
   CONTRACT_VERSION,
+  defaultErrorCode,
+  type ApiError,
   type ApiResponse,
+  type ErrorCode,
   type RequestContext,
 } from '../contracts/response';
 
@@ -109,6 +112,43 @@ export const responsHandler = (
     },
   };
   res.status(status).json(response);
+};
+
+export const errorResponsHandler = (
+  res: Response,
+  status: number,
+  message: string,
+  options: {
+    code?: ErrorCode;
+    data?: unknown;
+    topLevel?: Record<string, unknown>;
+  } = {},
+) => {
+  const context = res.locals.requestContext as RequestContext | undefined;
+  const requestId = context?.requestId || randomUUID();
+  if (!res.getHeader('X-Request-Id')) res.setHeader('X-Request-Id', requestId);
+
+  const data = options.data ?? null;
+  const details = Array.isArray(data)
+    ? {errors: data}
+    : data && typeof data === 'object'
+      ? (data as Record<string, unknown>)
+      : undefined;
+  const response: ApiError & {
+    data: unknown;
+    [key: string]: unknown;
+  } = {
+    status,
+    success: false,
+    message,
+    code: options.code ?? defaultErrorCode(status),
+    request_id: requestId,
+    ...(details ? {details} : {}),
+    ...(options.topLevel || {}),
+    data,
+  };
+
+  return res.status(status).json(response);
 };
 
 export const validateRequest = (req: Request) => {

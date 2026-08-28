@@ -1,10 +1,12 @@
 import {StatusCodes} from 'http-status-codes';
+import {defaultErrorCode, type ErrorCode} from '../contracts/response';
 
 export class ServiceError extends Error {
   statusCode: number;
   status: string;
   data: any;
   errorStack: any;
+  code: ErrorCode;
 
   constructor(
     message: string,
@@ -12,6 +14,7 @@ export class ServiceError extends Error {
     data: any = null,
     status: 'failed' | 'success' = 'failed',
     errorStack?: any,
+    code: ErrorCode = defaultErrorCode(statusCode),
   ) {
     super(message);
     Object.setPrototypeOf(this, new.target.prototype);
@@ -20,6 +23,7 @@ export class ServiceError extends Error {
     this.statusCode = statusCode;
     this.data = data;
     this.errorStack = errorStack;
+    this.code = code;
 
     Error.captureStackTrace(this);
   }

@@ -1,5 +1,5 @@
 import {Application, IRouter, NextFunction, Request, Response} from 'express';
-import {responsHandler} from '../../utils/helpers';
+import {errorResponsHandler, responsHandler} from '../../utils/helpers';
 import {StatusCodes} from 'http-status-codes';
 import errorHandler from '../../middleware/error-handler';
 import activityRoutes from './activity/routes';
@@ -59,11 +59,12 @@ function router(app: Application) {
   }
 
   app.get('/health', health);
-  app.use((req, res, next) => {
-    return responsHandler(
+  app.use((_req, res, _next) => {
+    return errorResponsHandler(
       res,
       StatusCodes.NOT_FOUND,
       'Resource does not exist, check endpoint or method',
+      {code: 'not_found'},
     );
   });
 
