@@ -27,7 +27,9 @@
     "worker": "NODE_OPTIONS=--dns-result-order=ipv4first ts-node src/workers/index.ts",
     "worker:prod": "node --dns-result-order=ipv4first build/src/workers/index.js",
     "files:audit-access": "ts-node src/scripts/file-access-audit.ts",
-    "files:backfill-thumbnails": "ts-node src/scripts/backfill-thumbnail-keys.ts"
+    "files:backfill-thumbnails": "ts-node src/scripts/backfill-thumbnail-keys.ts",
+    "contracts:export": "ts-node src/scripts/export-openapi.ts",
+    "contracts:check": "ts-node src/scripts/export-openapi.ts --check"
   },
   "author": "Frank",
   "license": "MIT",

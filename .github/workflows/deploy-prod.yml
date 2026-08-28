@@ -117,6 +117,9 @@ jobs:
       - name: Run tests
         run: yarn test
 
+      - name: Verify API contract artifact
+        run: yarn contracts:check
+
       - name: Build
         run: yarn build
 
@@ -171,6 +174,8 @@ jobs:
           cp yarn.lock release/yarn.lock
           cp ecosystem.config.js release/ecosystem.config.js
           cp .nvmrc release/.nvmrc
+          cp openapi.json release/openapi.json
+          cp openapi.sha256 release/openapi.sha256
 
           node <<'NODE'
           const fs = require('fs');
