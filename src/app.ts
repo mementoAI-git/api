@@ -11,11 +11,13 @@ import {setupBullBoard} from './services/queues';
 import {CORS_ALLOWED_ORIGINS, JSON_BODY_LIMIT, PORT} from './utils/config';
 import {logger} from './utils';
 import {ForbiddenException} from './utils/service-error';
+import requestContext from './middleware/request-context';
 
 export function createServer(): Application {
   const app = express();
 
   app.set('trust proxy', 1);
+  app.use(requestContext);
 
   app.use(helmet());
   app.use(

@@ -19,6 +19,12 @@ import {getAudioDurationInSeconds} from 'get-audio-duration';
 import mongoose from '../module/database/connection';
 import {SENSITIVE_FIELDS, SUPPORTED_FILE_TYPES} from './constant';
 import {ClientSession} from 'mongoose';
+import {randomUUID} from 'crypto';
+import {
+  CONTRACT_VERSION,
+  type ApiResponse,
+  type RequestContext,
+} from '../contracts/response';
 
 export const random = (len = 6, type: 'number' | 'alphanumeric' = 'number') => {
   if (type === 'number') {
@@ -89,11 +95,20 @@ export const responsHandler = (
   message: string,
   data: any = null,
 ) => {
-  res.status(status).json({
-    status: status,
-    message: message,
+  const context = res.locals.requestContext as RequestContext | undefined;
+  const requestId = context?.requestId || randomUUID();
+  if (!res.getHeader('X-Request-Id')) res.setHeader('X-Request-Id', requestId);
+  const response: ApiResponse<unknown> = {
+    status,
+    success: true,
+    message,
     data,
-  });
+    meta: {
+      contract_version: CONTRACT_VERSION,
+      request_id: requestId,
+    },
+  };
+  res.status(status).json(response);
 };
 
 export const validateRequest = (req: Request) => {

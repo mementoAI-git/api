@@ -1,4 +1,5 @@
 import {Request} from 'express';
+import type {RequestContext} from '../contracts/response';
 
 export interface IPagination {
   page: number;
@@ -11,6 +12,7 @@ export interface IPagination {
 }
 
 export interface IRequest extends Request {
+  context?: RequestContext;
   auth?: {
     id: string;
   };
