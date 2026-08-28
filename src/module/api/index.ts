@@ -18,6 +18,7 @@ import promptRoutes from './prompt/routes';
 import sentryTunnelRoutes from './sentry_tunnel/routes';
 import userRoutes from './user/routes';
 import webhookRoutes from './webhook/routes';
+import {SENTRY_TUNNEL_ENABLED} from '../../utils/config';
 
 const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
   {path: 'activities', router: activityRoutes},
@@ -33,7 +34,9 @@ const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
   {path: 'memories', router: memoryRoutes},
   {path: 'persona', router: personaRoutes},
   {path: 'prompts', router: promptRoutes},
-  {path: 'sentry_tunnel', router: sentryTunnelRoutes},
+  ...(SENTRY_TUNNEL_ENABLED
+    ? [{path: 'sentry_tunnel', router: sentryTunnelRoutes}]
+    : []),
   {path: 'users', router: userRoutes},
   {path: 'webhooks', router: webhookRoutes},
 ];

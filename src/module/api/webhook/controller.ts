@@ -11,8 +11,12 @@ export async function handleTally(
   next: NextFunction,
 ) {
   try {
+    const requestWithRawBody = req as Request & {rawBody?: Buffer};
+    const rawBody = Buffer.isBuffer(requestWithRawBody.rawBody)
+      ? requestWithRawBody.rawBody
+      : null;
     const payload = req.body as ITallyWebhookPayload;
-    if (!payload) {
+    if (!payload || !rawBody) {
       return responsHandler(
         res,
         StatusCodes.BAD_REQUEST,
@@ -22,7 +26,7 @@ export async function handleTally(
     }
     const signature = req.headers['tally-signature'] as string | undefined;
 
-    service.verifyTallySignature(req.body, signature);
+    service.verifyTallySignature(rawBody, signature);
 
     const result = await service.processTallySubmission(payload);
 

@@ -11,3 +11,7 @@ process.env.SENTRY_TUNNEL_ALLOWED_HOSTS = 'o123.ingest.sentry.io';
 process.env.SENTRY_TUNNEL_ALLOWED_PROJECT_IDS = '456';
 process.env.SENTRY_TUNNEL_MAX_BYTES = '1024';
 process.env.SENTRY_TUNNEL_RATE_LIMIT_PER_MINUTE = '100';
+process.env.TALLY_WEBHOOK_ENABLED = 'true';
+process.env.TALLY_WEBHOOK_SECRET =
+  'test-tally-webhook-secret-at-least-32-characters';
+process.env.TALLY_WEBHOOK_RATE_LIMIT_PER_MINUTE = '100';
