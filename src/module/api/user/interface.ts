@@ -1,6 +1,7 @@
 export interface ISetPassword {
   new_password: string;
-  old_password: string;
+  current_password?: string;
+  old_password?: string;
 }
 
 export interface IVerifyTOTP {

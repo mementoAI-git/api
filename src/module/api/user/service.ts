@@ -65,13 +65,17 @@ const onboardingTrailerSchema = z.object({
 });
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
-  const {new_password, old_password} = payload;
+  const {new_password} = payload;
+  const currentPassword = payload.current_password || payload.old_password;
   const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException('User not found');
   }
 
-  const is_match = await bcrypt.compare(old_password, `${user?.password}`);
+  const is_match = await bcrypt.compare(
+    String(currentPassword),
+    `${user?.password}`,
+  );
   if (!is_match) {
     throw new BadRequestException('Incorrect password');
   }
@@ -171,10 +175,6 @@ export async function getMemoryInsightsSummary(
 }
 
 export async function updateProfile(payload: Partial<IUser>, user_id: string) {
-  const user = await User.findById(user_id).select('-password -providers');
-  if (!user) {
-    throw new NotFoundException('User not found', null);
-  }
   const updateableFields = new Set([
     'first_name',
     'last_name',
@@ -189,18 +189,35 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     'location',
   ]);
 
-  const updatePayload = Object.entries(payload).reduce((acc, p) => {
-    if (updateableFields.has(p[0])) {
-      acc[p[0]] = p[1];
-    }
-    return acc;
-  }, {});
+  const updatePayload = Object.entries(payload).reduce<Record<string, unknown>>(
+    (acc, p) => {
+      if (updateableFields.has(p[0])) {
+        acc[p[0]] = p[1];
+      }
+      return acc;
+    },
+    {},
+  );
+
+  if (
+    typeof payload.fullname === 'string' &&
+    payload.first_name === undefined &&
+    payload.last_name === undefined
+  ) {
+    const [firstName, ...lastName] = payload.fullname.trim().split(/\s+/);
+    updatePayload.first_name = firstName;
+    updatePayload.last_name = lastName.join(' ');
+  }
 
   const data = await User.findByIdAndUpdate(user_id, updatePayload, {
     new: true,
-  }).select('-password -providers -public_key -private_key');
+  }).select(PUBLIC_USER_SELECT);
+  if (!data) throw new NotFoundException('User not found', null);
 
-  return {message: 'User profile updated successfully', data: null};
+  return {
+    message: 'User profile updated successfully',
+    data: toPublicUser(data.toObject({virtuals: true})),
+  };
 }
 
 export async function updateStreak(user_id: string) {

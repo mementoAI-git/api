@@ -7,6 +7,7 @@ import {
 } from '../../../utils/helpers';
 import {StatusCodes} from 'http-status-codes';
 import {IRequest} from '../../../utils/interface';
+import logger from '../../../utils/logger';
 
 export async function updateProfile(
   req: IRequest,
@@ -18,7 +19,22 @@ export async function updateProfile(
 
     const {message, data} = await service.updateProfile(req.body, req.auth.id);
 
-    return responsHandler(res, StatusCodes.OK, message, data);
+    const deprecatedPost = req.method === 'POST';
+    if (deprecatedPost) {
+      logger.info(
+        {
+          event: 'compat.users.profile_post',
+          client: req.context?.client || 'legacy-unknown',
+          version: req.context?.version,
+          build: req.context?.build,
+        },
+        'Deprecated profile update alias used',
+      );
+    }
+
+    return responsHandler(res, StatusCodes.OK, message, data, {
+      deprecations: deprecatedPost ? ['USERS_PROFILE_POST'] : undefined,
+    });
   } catch (error) {
     next(error);
   }
@@ -44,9 +60,28 @@ export async function setPassword(
   next: NextFunction,
 ) {
   try {
+    validateRequest(req);
     const {message, data} = await service.setPassword(req.body, req.auth.id);
 
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getContext(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {data} = await service.getPersona(req.auth.id);
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      'User context retrieved successfully',
+      data,
+    );
   } catch (error) {
     next(error);
   }

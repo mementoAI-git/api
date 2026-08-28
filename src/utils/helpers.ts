@@ -100,6 +100,7 @@ export const responsHandler = (
   status: number,
   message: string,
   data: any = null,
+  options: {deprecations?: string[]} = {},
 ) => {
   const context = res.locals.requestContext as RequestContext | undefined;
   const requestId = context?.requestId || randomUUID();
@@ -112,6 +113,9 @@ export const responsHandler = (
     meta: {
       contract_version: CONTRACT_VERSION,
       request_id: requestId,
+      ...(options.deprecations?.length
+        ? {deprecations: options.deprecations}
+        : {}),
     },
   };
   res.status(status).json(response);

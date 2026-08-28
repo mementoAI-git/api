@@ -50,12 +50,6 @@ router.post(
 );
 
 router.post(
-  '/conversation/new',
-  gaurd,
-  valid.startConversation,
-  ctrl.startConversation,
-);
-router.post(
   '/transcribe-audio',
   gaurd,
   requireFeature('ai.transcribe_audio'),

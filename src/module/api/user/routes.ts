@@ -11,6 +11,7 @@ const router: IRouter = Router();
 router.use(gaurd);
 
 router.get('/profile', ctrl.getProfile);
+router.get('/context', ctrl.getContext);
 router.get('/onboarding-details', ctrl.getOnboardingDetails);
 router.post('/onboarding/skip', ctrl.skipOnboarding);
 router.post('/onboarding', validate(dto.onboardingSchema), ctrl.onboarding);
@@ -21,7 +22,8 @@ router.post(
   ctrl.onboardingChatPrompt,
 );
 router.post('/change-password', valid.setPassword, ctrl.setPassword);
-router.put('/profile', ctrl.updateProfile);
+router.put('/profile', valid.profile, ctrl.updateProfile);
+router.post('/profile', valid.profile, ctrl.updateProfile);
 router.get('/persona/memory-insights-summary', ctrl.getMemoryInsightsSummary);
 router.get('/persona', ctrl.getPersona);
 router.put('/persona', valid.updateContext, ctrl.updateContext);
@@ -40,8 +42,8 @@ router.post(
 );
 router.delete('/account', ctrl.deleteUser);
 router.get('/stats', ctrl.getUserStats);
+router.get('/passkeys', ctrl.listPasskeys);
+router.delete('/passkeys/:credential_id', ctrl.deletePasskey);
 
 export const name = 'users';
 export default router;
-router.get('/passkeys', ctrl.listPasskeys);
-router.delete('/passkeys/:credential_id', ctrl.deletePasskey);
