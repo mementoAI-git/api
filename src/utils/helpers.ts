@@ -28,6 +28,9 @@ import {
   type ErrorCode,
   type RequestContext,
 } from '../contracts/response';
+import type {SessionClaims} from '../contracts/session';
+
+type NewSessionClaims = Pick<SessionClaims, 'sid' | 'sv'>;
 
 export const random = (len = 6, type: 'number' | 'alphanumeric' = 'number') => {
   if (type === 'number') {
@@ -262,8 +265,9 @@ export const generateKeys = () => {
 export const createAccessToken = (
   id: string,
   expires_in = 24 * 60 * 60 * 1000,
+  claims: NewSessionClaims = {},
 ) => {
-  const access_token = jwt.sign({id}, String(JWT_SECRET), {
+  const access_token = jwt.sign({id, ...claims}, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
     expiresIn: expires_in,
@@ -276,12 +280,18 @@ export const createAccessToken = (
 export const createRefreshToken = (
   id: string,
   expires_in = 30 * 24 * 60 * 60 * 1000,
+  claims: NewSessionClaims = {},
 ) => {
-  const refresh_token = jwt.sign({id, type: 'refresh'}, String(JWT_SECRET), {
-    audience: 'API',
-    issuer: 'Memento',
-    expiresIn: expires_in,
-  });
+  const refresh_token = jwt.sign(
+    {id, ...claims, type: 'refresh'},
+    String(JWT_SECRET),
+    {
+      audience: 'API',
+      issuer: 'Memento',
+      expiresIn: expires_in,
+      jwtid: randomUUID(),
+    },
+  );
 
   const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
   return {refresh_token, expires_at};
@@ -291,13 +301,15 @@ export const createTokenPair = (
   id: string,
   accessExpiresIn = 24 * 60 * 60 * 1000,
   refreshExpiresIn = 30 * 24 * 60 * 60 * 1000,
+  claims: NewSessionClaims = {},
 ) => {
-  const accessToken = createAccessToken(id, accessExpiresIn);
-  const refreshToken = createRefreshToken(id, refreshExpiresIn);
+  const accessToken = createAccessToken(id, accessExpiresIn, claims);
+  const refreshToken = createRefreshToken(id, refreshExpiresIn, claims);
 
   return {
     access_token: accessToken.access_token,
     refresh_token: refreshToken.refresh_token,
+    access_expires_at: accessToken.expires_at,
     expires_at: accessToken.expires_at,
     refresh_expires_at: refreshToken.expires_at,
   };
@@ -311,31 +323,33 @@ export const reconstructFileName = (name: string) => {
   return `${file_name.replace(/\.[^/.]+$/, '')}_${timestamp}.${extension}`.toLowerCase();
 };
 
-export const verifyAccessToken = (token: string): any => {
-  return jwt.verify(token, String(JWT_SECRET), (err, decoded) => {
-    if (err) {
-      if (err.name === 'TokenExpiredError') {
-        throw new SessionTimeout();
-      }
-      throw new UnauthorizedException();
-    }
-    return decoded;
-  });
+export const verifyAccessToken = (token: string): SessionClaims => {
+  try {
+    return jwt.verify(token, String(JWT_SECRET), {
+      audience: 'API',
+      issuer: 'Memento',
+    }) as SessionClaims;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) throw new SessionTimeout();
+    throw new UnauthorizedException();
+  }
 };
 
-export const verifyRefreshToken = (token: string): any => {
-  return jwt.verify(token, String(JWT_SECRET), (err, decoded: any) => {
-    if (err) {
-      if (err.name === 'TokenExpiredError') {
-        throw new SessionTimeout();
-      }
-      throw new UnauthorizedException();
-    }
-    if (decoded.type !== 'refresh') {
-      throw new UnauthorizedException('Invalid token type');
-    }
-    return decoded;
-  });
+export const verifyRefreshToken = (token: string): SessionClaims => {
+  let decoded: SessionClaims;
+  try {
+    decoded = jwt.verify(token, String(JWT_SECRET), {
+      audience: 'API',
+      issuer: 'Memento',
+    }) as SessionClaims;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) throw new SessionTimeout();
+    throw new UnauthorizedException();
+  }
+  if (decoded.type !== 'refresh') {
+    throw new UnauthorizedException('Invalid token type');
+  }
+  return decoded;
 };
 
 export const filterGenerator = (payload: object, fields: string[] = []) => {

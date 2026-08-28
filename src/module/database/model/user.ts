@@ -61,6 +61,8 @@ export interface IUser {
   public_key: string;
   refresh_token?: string;
   refresh_tokens?: string[];
+  session_version?: number;
+  purge_status?: 'active' | 'purge_pending' | 'purged';
   two_factor: {
     secret: string;
     enabled: boolean;
@@ -103,6 +105,15 @@ const user = new Schema<IUser>(
     refresh_tokens: {
       type: [String],
       default: [],
+    },
+    session_version: {
+      type: Number,
+      default: 0,
+    },
+    purge_status: {
+      type: String,
+      enum: ['active', 'purge_pending', 'purged'],
+      default: 'active',
     },
     bg_music: {
       type: String,
