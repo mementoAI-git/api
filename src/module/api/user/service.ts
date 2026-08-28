@@ -51,6 +51,8 @@ import {getMemorySpotlightForUser} from '../../../services/enrichment/memory-spo
 import {PUBLIC_USER_SELECT, toPublicUser} from '../../../contracts/public-user';
 import AuthSession from '../../database/model/auth-session';
 import {invalidateSecurityState} from '../auth/security-state';
+import type {MementoClient} from '../../../contracts/response';
+import {registerLegacyProfileToken} from '../push-device/service';
 
 const ONBOARDING_PROMPT_VERSION = getPromptVersion('onboarding_chat');
 
@@ -174,7 +176,14 @@ export async function getMemoryInsightsSummary(
   };
 }
 
-export async function updateProfile(payload: Partial<IUser>, user_id: string) {
+export async function updateProfile(
+  payload: Partial<IUser> & {push_token?: string},
+  user_id: string,
+  client: MementoClient = 'legacy-unknown',
+) {
+  if (payload.push_token) {
+    await registerLegacyProfileToken(user_id, payload.push_token, client);
+  }
   const updateableFields = new Set([
     'first_name',
     'last_name',

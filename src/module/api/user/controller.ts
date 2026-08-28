@@ -17,7 +17,23 @@ export async function updateProfile(
   try {
     validateRequest(req);
 
-    const {message, data} = await service.updateProfile(req.body, req.auth.id);
+    const {message, data} = await service.updateProfile(
+      req.body,
+      req.auth.id,
+      req.context?.client || 'legacy-unknown',
+    );
+
+    if (req.body.push_token) {
+      logger.info(
+        {
+          event: 'compat.push.legacy_profile_token',
+          client: req.context?.client || 'legacy-unknown',
+          version: req.context?.version,
+          build: req.context?.build,
+        },
+        'Legacy profile push token bridge used',
+      );
+    }
 
     const deprecatedPost = req.method === 'POST';
     if (deprecatedPost) {

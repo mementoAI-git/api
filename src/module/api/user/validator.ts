@@ -33,6 +33,11 @@ export default {
     body('chat_voice').optional({nullable: true}).isString(),
     body('chat_voice_provider').optional().isString(),
     body('location').optional().isString().isLength({max: 200}),
+    body('push_token')
+      .optional()
+      .isString()
+      .trim()
+      .isLength({min: 1, max: 4096}),
   ],
   verifyTOTP: body('token').notEmpty().withMessage('Token is required'),
   updateContext: [
