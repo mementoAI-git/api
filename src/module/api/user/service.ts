@@ -48,6 +48,7 @@ import {
   getJumpPills,
 } from '../../../services/enrichment';
 import {getMemorySpotlightForUser} from '../../../services/enrichment/memory-spotlight';
+import {PUBLIC_USER_SELECT, toPublicUser} from '../../../contracts/public-user';
 
 const ONBOARDING_PROMPT_VERSION = getPromptVersion('onboarding_chat');
 
@@ -80,9 +81,7 @@ export async function setPassword(payload: ISetPassword, user_id: string) {
 }
 
 export async function getProfile(user_id: string) {
-  const user = await User.findById(user_id)
-    .select('-password -providers -two_factor.secret -context')
-    .lean();
+  const user = await User.findById(user_id).select(PUBLIC_USER_SELECT).lean();
   if (!user) {
     throw new NotFoundException('User not found', null);
   }
@@ -91,14 +90,10 @@ export async function getProfile(user_id: string) {
     user: user_id,
   });
 
-  // Manually compute virtual fields stripped by .lean()
-  const fullname = concatStrings(user.first_name, user.last_name, ' ').trim();
-
   return {
     message: 'User profile retrieved successfully',
     data: {
-      ...user,
-      fullname: fullname || null,
+      ...toPublicUser(user),
       pending_insights_count,
     },
   };
