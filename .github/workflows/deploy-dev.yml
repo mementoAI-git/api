@@ -4,16 +4,17 @@
 # Push to dev:
 #   1. Install once in CI
 #   2. Lint
-#   3. Build
-#   4. Create immutable deployment artifact
-#   5. Upload inactive release
-#   6. Install production dependencies
-#   7. Provision Yarn + PM2 for the release's Node version
-#   8. Atomically activate release
-#   9. Reload PM2
-#  10. Health check
-#  11. Roll back automatically on failure
-#  12. Keep current + previous healthy release only
+#   3. Test
+#   4. Build
+#   5. Create immutable deployment artifact
+#   6. Upload inactive release
+#   7. Install production dependencies
+#   8. Provision Yarn + PM2 for the release's Node version
+#   9. Atomically activate release
+#  10. Reload PM2
+#  11. Health check
+#  12. Roll back automatically on failure
+#  13. Keep current + previous healthy release only
 #
 # Server layout:
 #
@@ -28,7 +29,7 @@
 #   releases/
 # ──────────────────────────────────────────────────────────────
 
-name: "Backend: Deploy Dev"
+name: 'Backend: Deploy Dev'
 
 on:
   push:
@@ -44,13 +45,13 @@ env:
 
 jobs:
   # ────────────────────────────────────────────────────────────
-  # 1. Lint + Build
+  # 1. Lint + Test + Build
   #
   # It is safe to cancel an obsolete build because it has not
   # touched the server yet.
   # ────────────────────────────────────────────────────────────
   build:
-    name: Lint & Build
+    name: Lint, Test & Build
     runs-on: ubuntu-latest
 
     concurrency:
@@ -72,6 +73,9 @@ jobs:
 
       - name: Run linter
         run: yarn lint
+
+      - name: Run tests
+        run: yarn test
 
       - name: Build
         run: yarn build

@@ -8,7 +8,7 @@
 # Flow:
 #   1. Validate exact confirmation + branch
 #   2. Install dependencies once in CI
-#   3. Lint + build
+#   3. Lint + test + build
 #   4. Create deployment artifact
 #      - strips application postinstall compile hook
 #   5. Upload immutable release
@@ -32,7 +32,7 @@
 #   releases/
 # ──────────────────────────────────────────────────────────────
 
-name: "Backend: Deploy Prod"
+name: 'Backend: Deploy Prod'
 
 on:
   workflow_dispatch:
@@ -89,12 +89,12 @@ jobs:
           echo "Ref: ${DEPLOY_REF}"
 
   # ────────────────────────────────────────────────────────────
-  # 2. Lint + build
+  # 2. Lint + test + build
   #
   # Only ONE full dependency install happens in CI.
   # ────────────────────────────────────────────────────────────
   build:
-    name: Lint & Build
+    name: Lint, Test & Build
     needs: validate
     runs-on: ubuntu-latest
 
@@ -113,6 +113,9 @@ jobs:
 
       - name: Run linter
         run: yarn lint
+
+      - name: Run tests
+        run: yarn test
 
       - name: Build
         run: yarn build

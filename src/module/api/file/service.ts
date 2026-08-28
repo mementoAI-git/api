@@ -143,7 +143,7 @@ export async function resolveFileRequest(
       throw new ForbiddenException('A valid file capability is required');
     }
     logger.warn(
-      {fileId: file.id, event: 'legacy_public_file_access'},
+      {fileId: file.id, event: 'compat.files.legacy_bare_url'},
       'Serving a legacy bare file URL during compatibility rollout',
     );
     return {
