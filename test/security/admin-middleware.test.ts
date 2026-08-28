@@ -52,6 +52,6 @@ describe('administrator middleware', () => {
     const response = await request(createAdminTestApp())
       .get('/admin')
       .set('Authorization', `Bearer ${issueLegacyAccessToken(deleted)}`);
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(401);
   });
 });

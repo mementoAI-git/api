@@ -38,4 +38,37 @@ export function getRedisConnection(): RedisConnection | null {
   }
 }
 
+export async function getCachedJson<T>(key: string): Promise<T | null> {
+  if (!client.isReady) return null;
+  try {
+    const value = await client.get(key);
+    return typeof value === 'string' ? (JSON.parse(value) as T) : null;
+  } catch (error) {
+    logger.warn({err: error, key}, 'Redis cache read failed; using fallback');
+    return null;
+  }
+}
+
+export async function setCachedJson(
+  key: string,
+  value: unknown,
+  ttlSeconds: number,
+): Promise<void> {
+  if (!client.isReady) return;
+  try {
+    await client.set(key, JSON.stringify(value), {EX: ttlSeconds});
+  } catch (error) {
+    logger.warn({err: error, key}, 'Redis cache write failed');
+  }
+}
+
+export async function deleteCacheValue(key: string): Promise<void> {
+  if (!client.isReady) return;
+  try {
+    await client.del(key);
+  } catch (error) {
+    logger.warn({err: error, key}, 'Redis cache invalidation failed');
+  }
+}
+
 export default client;

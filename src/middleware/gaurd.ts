@@ -1,10 +1,12 @@
 import {NextFunction, Request, Response} from 'express';
 import {UnauthorizedException} from '../utils/service-error';
 import {verifyAccessToken} from '../utils/helpers';
+import type {IRequest} from '../utils/interface';
+import {assertActiveSecurityState} from '../module/api/auth/security-state';
 
 export default async function (
-  req: Request | any,
-  res: Response,
+  req: Request,
+  _res: Response,
   next: NextFunction,
 ) {
   try {
@@ -13,7 +15,9 @@ export default async function (
       throw new UnauthorizedException('Token is required');
     }
 
-    req.auth = verifyAccessToken(token.replace('Bearer ', ''));
+    const claims = verifyAccessToken(token.replace('Bearer ', ''));
+    await assertActiveSecurityState(claims);
+    (req as IRequest).auth = claims;
 
     next();
   } catch (err) {

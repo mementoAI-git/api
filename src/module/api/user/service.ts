@@ -49,6 +49,8 @@ import {
 } from '../../../services/enrichment';
 import {getMemorySpotlightForUser} from '../../../services/enrichment/memory-spotlight';
 import {PUBLIC_USER_SELECT, toPublicUser} from '../../../contracts/public-user';
+import AuthSession from '../../database/model/auth-session';
+import {invalidateSecurityState} from '../auth/security-state';
 
 const ONBOARDING_PROMPT_VERSION = getPromptVersion('onboarding_chat');
 
@@ -492,11 +494,22 @@ export async function deleteUser(user_id: string) {
     throw new NotFoundException('User not found');
   }
 
-  // Mark user as deleted (soft delete) and clear refresh token
+  // Access is revoked immediately; the durable purge pipeline is introduced
+  // separately and treats purge_pending as an irreversible state.
   await User.findByIdAndUpdate(user_id, {
-    deleted: true,
-    refresh_token: null,
+    $set: {
+      deleted: true,
+      purge_status: 'purge_pending',
+      refresh_token: null,
+      refresh_tokens: [],
+    },
+    $inc: {session_version: 1},
   });
+  await AuthSession.updateMany(
+    {user_id, revoked_at: null},
+    {$set: {revoked_at: new Date()}},
+  );
+  await invalidateSecurityState(user_id);
 
   return {
     data: null,
