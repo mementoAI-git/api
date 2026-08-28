@@ -121,7 +121,10 @@ export async function refreshToken(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.refreshToken(req.body);
+    const {message, data} = await service.refreshToken(
+      req.body,
+      clientContext(req),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -135,7 +138,11 @@ export async function logout(req: IRequest, res: Response, next: NextFunction) {
       throw new UnauthorizedException('User not authenticated');
     }
     const refreshToken = req.body?.refresh_token;
-    const {message, data} = await service.logout(userId, refreshToken);
+    const {message, data} = await service.logout(
+      userId,
+      req.auth?.sid,
+      refreshToken,
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -155,6 +162,7 @@ export async function logoutOther(
     const currentRefreshToken = req.body?.refresh_token;
     const {message, data} = await service.logoutOther(
       userId,
+      req.auth?.sid,
       currentRefreshToken,
     );
     return responsHandler(res, StatusCodes.OK, message, data);

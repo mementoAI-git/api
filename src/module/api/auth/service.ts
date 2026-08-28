@@ -24,7 +24,6 @@ import {
 import {OAUTH_PROVIDERS} from '../../../utils/constant';
 import {
   compareStrings,
-  createTokenPair,
   generateKeys,
   hashPassword,
   isEmpty,
@@ -48,8 +47,15 @@ import {
 } from '../../../utils/config';
 import type {RequestContext} from '../../../contracts/response';
 import type {SessionPayload} from '../../../contracts/session';
-import {createSession} from './session-service';
+import {
+  createSession,
+  revokeAllSessions,
+  revokeOtherSessions,
+  revokeSession,
+  rotateSession,
+} from './session-service';
 import {verifyAppleIdentity} from './providers/apple';
+import {invalidateSecurityState} from './security-state';
 
 // ---------------------------------------------------------------------------
 // 2FA pending session helpers (Redis, 5-min TTL)
@@ -550,7 +556,17 @@ export async function setPassword(payload: ISetPassword) {
 
   const password = await hashPassword(payload.password);
 
-  await User.updateOne({email: result.email}, {password});
+  const user = await User.findOneAndUpdate(
+    {email: result.email},
+    {
+      $set: {password, refresh_token: null, refresh_tokens: []},
+      $inc: {session_version: 1},
+    },
+    {new: true},
+  );
+  if (!user) throw new NotFoundException('User not found');
+  await revokeAllSessions(user.id);
+  await invalidateSecurityState(user.id);
 
   return {data: null, message: 'Password reset successful'};
 }
@@ -617,59 +633,105 @@ async function getOauthUser(
   return null;
 }
 
-export async function refreshToken(payload: IRefreshToken) {
+export async function refreshToken(
+  payload: IRefreshToken,
+  context: Pick<RequestContext, 'client'> = LEGACY_CLIENT,
+) {
   const {refresh_token} = payload;
 
-  // Verify the refresh token
   const decoded = verifyRefreshToken(refresh_token);
+  if (decoded.sid) {
+    const session = await rotateSession(refresh_token);
+    return {
+      data: withLegacySession(session),
+      message: 'Tokens refreshed successfully',
+    };
+  }
 
-  // Find the user and check if the refresh token matches
   const user = await User.findById(decoded.id);
   if (!user) {
     throw new NotFoundException('User not found');
   }
-  if (user.deleted) {
-    throw new BadRequestException('Account has been deleted');
-  }
+  assertCanAuthenticate(user);
 
-  const hasToken =
-    user.refresh_tokens?.includes(refresh_token) ||
-    user.refresh_token === refresh_token;
-  if (!hasToken) {
+  const consumed = await User.updateOne(
+    {
+      _id: user.id,
+      $or: [{refresh_token}, {refresh_tokens: refresh_token}],
+    },
+    [
+      {
+        $set: {
+          refresh_token: {
+            $cond: [
+              {$eq: ['$refresh_token', refresh_token]},
+              null,
+              '$refresh_token',
+            ],
+          },
+          refresh_tokens: {
+            $filter: {
+              input: {$ifNull: ['$refresh_tokens', []]},
+              as: 'storedToken',
+              cond: {$ne: ['$$storedToken', refresh_token]},
+            },
+          },
+        },
+      },
+    ],
+  );
+  if (consumed.modifiedCount !== 1) {
     throw new UnauthorizedException('Invalid refresh token');
   }
 
-  // Generate new token pair
-  const tokens = createTokenPair(user.id);
-
-  // Update/rotate token in array
-  let updatedTokens = [...(user.refresh_tokens || [])];
-  const tokenIndex = updatedTokens.indexOf(refresh_token);
-  if (tokenIndex !== -1) {
-    updatedTokens[tokenIndex] = tokens.refresh_token;
-  } else {
-    updatedTokens.push(tokens.refresh_token);
-  }
-  updatedTokens = updatedTokens.slice(-10);
-
-  // Update the user's refresh token
-  await user.updateOne({
-    refresh_token: tokens.refresh_token,
-    refresh_tokens: updatedTokens,
-  });
+  const session = await createSession(user, context);
 
   return {
-    data: tokens,
+    data: withLegacySession(session),
     message: 'Tokens refreshed successfully',
   };
 }
 
-export async function logout(userId: string, refreshToken?: string) {
-  if (refreshToken) {
-    await User.findByIdAndUpdate(userId, {
-      $pull: {refresh_tokens: refreshToken},
-      $set: {refresh_token: null},
-    });
+export async function logout(
+  userId: string,
+  sessionId?: string,
+  refreshToken?: string,
+) {
+  if (sessionId) {
+    if (refreshToken) {
+      const claims = verifyRefreshToken(refreshToken);
+      if (claims.id !== userId || claims.sid !== sessionId) {
+        throw new UnauthorizedException('Refresh token does not match session');
+      }
+    }
+    if (!(await revokeSession(userId, sessionId))) {
+      throw new UnauthorizedException('Session is no longer active');
+    }
+  } else if (refreshToken) {
+    const claims = verifyRefreshToken(refreshToken);
+    if (claims.id !== userId || claims.sid) {
+      throw new UnauthorizedException('Refresh token does not match session');
+    }
+    await User.updateOne({_id: userId}, [
+      {
+        $set: {
+          refresh_token: {
+            $cond: [
+              {$eq: ['$refresh_token', refreshToken]},
+              null,
+              '$refresh_token',
+            ],
+          },
+          refresh_tokens: {
+            $filter: {
+              input: {$ifNull: ['$refresh_tokens', []]},
+              as: 'storedToken',
+              cond: {$ne: ['$$storedToken', refreshToken]},
+            },
+          },
+        },
+      },
+    ]);
   } else {
     await User.findByIdAndUpdate(userId, {
       refresh_token: null,
@@ -683,15 +745,38 @@ export async function logout(userId: string, refreshToken?: string) {
   };
 }
 
-export async function logoutOther(userId: string, currentRefreshToken: string) {
-  if (!currentRefreshToken) {
+export async function logoutOther(
+  userId: string,
+  currentSessionId?: string,
+  currentRefreshToken?: string,
+) {
+  if (currentSessionId) {
+    if (currentRefreshToken) {
+      const claims = verifyRefreshToken(currentRefreshToken);
+      if (claims.id !== userId || claims.sid !== currentSessionId) {
+        throw new UnauthorizedException('Refresh token does not match session');
+      }
+    }
+    await revokeOtherSessions(userId, currentSessionId);
+  } else if (!currentRefreshToken) {
     throw new BadRequestException('Current refresh token is required');
+  } else {
+    const claims = verifyRefreshToken(currentRefreshToken);
+    const user = await User.findOne({
+      _id: userId,
+      $or: [
+        {refresh_token: currentRefreshToken},
+        {refresh_tokens: currentRefreshToken},
+      ],
+    });
+    if (!user || claims.id !== userId || claims.sid) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    await User.findByIdAndUpdate(userId, {
+      refresh_token: currentRefreshToken,
+      refresh_tokens: [currentRefreshToken],
+    });
   }
-
-  await User.findByIdAndUpdate(userId, {
-    refresh_token: currentRefreshToken,
-    refresh_tokens: [currentRefreshToken],
-  });
 
   return {
     data: null,

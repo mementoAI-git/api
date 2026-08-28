@@ -5,6 +5,7 @@ import type {SessionClaims, SessionPayload} from '../../../contracts/session';
 import {toPublicUser} from '../../../contracts/public-user';
 import {createTokenPair, verifyRefreshToken} from '../../../utils/helpers';
 import {UnauthorizedException} from '../../../utils/service-error';
+import {assertActiveSecurityState} from './security-state';
 import AuthSession from '../../database/model/auth-session';
 import User, {type IUser} from '../../database/model/user';
 
@@ -72,6 +73,7 @@ export async function rotateSession(
 ): Promise<SessionPayload> {
   const claims = verifyRefreshToken(refreshToken) as SessionClaims;
   if (!claims.sid) throw new UnauthorizedException('Invalid session');
+  await assertActiveSecurityState(claims);
 
   const session = await AuthSession.findOne({
     session_id: claims.sid,
@@ -138,6 +140,14 @@ export async function revokeOtherSessions(
       session_id: {$ne: currentSessionId},
       revoked_at: null,
     },
+    {$set: {revoked_at: new Date()}},
+  );
+  return result.modifiedCount;
+}
+
+export async function revokeAllSessions(userId: string): Promise<number> {
+  const result = await AuthSession.updateMany(
+    {user_id: userId, revoked_at: null},
     {$set: {revoked_at: new Date()}},
   );
   return result.modifiedCount;

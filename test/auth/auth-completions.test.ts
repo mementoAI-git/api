@@ -5,6 +5,7 @@ import redis from '../../src/services/redis';
 import otp from '../../src/services/otp';
 import AuthSession from '../../src/module/database/model/auth-session';
 import User from '../../src/module/database/model/user';
+import {createSession} from '../../src/module/api/auth/session-service';
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -159,5 +160,33 @@ describe('authentication completion paths', () => {
     expectCanonicalSession(apple.data, appleUser!.id);
     expect(appleUser).toMatchObject({first_name: 'Apple', last_name: 'User'});
     expect(await AuthSession.countDocuments()).toBe(2);
+  });
+
+  it('globally revokes sessions after a password reset', async () => {
+    const user = await createUserFixture({
+      refresh_token: 'legacy-refresh',
+      refresh_tokens: ['legacy-refresh'],
+    });
+    await createSession(user, context);
+    vi.spyOn(otp, 'verify').mockResolvedValue({
+      valid: true,
+      email: user.email,
+      alreadyUsed: false,
+    });
+    vi.spyOn(otp, 'delete').mockResolvedValue(undefined);
+
+    await auth.setPassword({
+      token: 'reset-token',
+      password: 'NewStrongPassword1!',
+    });
+
+    expect(await User.findById(user.id).lean()).toMatchObject({
+      session_version: 1,
+      refresh_token: null,
+      refresh_tokens: [],
+    });
+    expect(
+      await AuthSession.countDocuments({user_id: user.id, revoked_at: null}),
+    ).toBe(0);
   });
 });
