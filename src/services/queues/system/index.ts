@@ -3,6 +3,8 @@ import {logger, queueNames} from '../../../utils';
 import {getRedisConnection} from '../../redis';
 import {IS_PRODUCTION} from '../../../utils/config';
 import dayjs from 'dayjs';
+import PurgeCommand from '../../../module/database/model/purge-command';
+import {PURGE_SCHEMA_VERSION} from '../../account-purge';
 
 const connection = getRedisConnection();
 
@@ -103,6 +105,70 @@ export async function initializeStalePendingRecovery(): Promise<void> {
   logger.debug(
     'Initialized stale-pending recovery job (runs every 30 minutes)',
   );
+}
+
+/** Durable purge commands are polled because Redis publication is not the outbox. */
+export async function initializeAccountPurgeDispatcher(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, account purge commands remain pending',
+    );
+    return;
+  }
+
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.dispatchAccountPurges,
+    {every: 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
+export async function dispatchPendingAccountPurges(): Promise<number> {
+  if (!systemQueue) return 0;
+  const commands = await PurgeCommand.find({
+    available_at: {$lte: new Date()},
+    $or: [
+      {status: {$in: ['pending', 'failed']}},
+      {
+        status: 'running',
+        started_at: {$lte: new Date(Date.now() - 15 * 60 * 1000)},
+      },
+    ],
+  })
+    .sort({created_at: 1})
+    .limit(50)
+    .lean();
+
+  for (const command of commands) {
+    await systemQueue.add(
+      queueNames.system.jobs.accountPurge,
+      {schema_version: command.schema_version, command_id: String(command._id)},
+      {
+        jobId: `account-purge-${command._id}`,
+        attempts: 10,
+        backoff: {type: 'exponential', delay: 5000},
+        removeOnComplete: 100,
+        removeOnFail: true,
+      },
+    );
+  }
+  return commands.length;
+}
+
+export async function publishAccountPurge(commandId: string): Promise<boolean> {
+  if (!systemQueue) return false;
+  await systemQueue.add(
+    queueNames.system.jobs.accountPurge,
+    {schema_version: PURGE_SCHEMA_VERSION, command_id: commandId},
+    {
+      jobId: `account-purge-${commandId}`,
+      attempts: 10,
+      backoff: {type: 'exponential', delay: 5000},
+      removeOnComplete: 100,
+      removeOnFail: true,
+    },
+  );
+  return true;
 }
 
 export async function scheduleCapsuleDelivery(

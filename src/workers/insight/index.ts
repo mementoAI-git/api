@@ -13,6 +13,7 @@ import PendingInsight, {
 import Persona from '../../module/database/model/persona';
 import Memory from '../../module/database/model/memory';
 import {invalidateEnrichmentCache} from '../../services/enrichment';
+import {isActiveAccount} from '../../services/account-purge/account-state';
 
 async function savePendingInsights(
   insights: Record<string, unknown>,
@@ -57,6 +58,7 @@ export default function startInsightsExtractionWorker(
     'insights-extraction',
     async job => {
       const {user_id, memory_id, exchanges} = job.data;
+      if (!(await isActiveAccount(user_id))) return;
 
       const isStory = !exchanges || exchanges.length === 0;
       const source: PendingInsightSource = isStory ? 'story' : 'conversation';
@@ -66,7 +68,9 @@ export default function startInsightsExtractionWorker(
         : await extractBatchInsights(user_id, exchanges);
 
       if (insights && typeof insights === 'object') {
-        await savePendingInsights(insights, user_id, memory_id, source);
+        if (await isActiveAccount(user_id)) {
+          await savePendingInsights(insights, user_id, memory_id, source);
+        }
       }
 
       if (!isStory) {
@@ -75,6 +79,8 @@ export default function startInsightsExtractionWorker(
             extractOpenThreads(user_id, exchanges),
             extractConversationDimensions(exchanges),
           ]);
+
+          if (!(await isActiveAccount(user_id))) return;
 
           if (threads) {
             await Persona.findOneAndUpdate(

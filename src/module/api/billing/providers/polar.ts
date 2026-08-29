@@ -151,6 +151,28 @@ export async function createPolarPortalSession({
   return {portalUrl};
 }
 
+/** Delete and GDPR-anonymize a Polar customer using Memento's user id. */
+export async function deletePolarCustomerByExternalId(
+  externalCustomerId: string,
+): Promise<void> {
+  // Accounts without a Polar customer (including free accounts) need no call.
+  if (!POLAR_ACCESS_TOKEN) return;
+
+  try {
+    await axios.delete(
+      `${POLAR_BASE_URL}/customers/external/${encodeURIComponent(externalCustomerId)}`,
+      {
+        params: {anonymize: true},
+        headers: {Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`},
+        timeout: 15000,
+      },
+    );
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) return;
+    throw error;
+  }
+}
+
 export function verifyPolarWebhookSignature(
   rawBody: Buffer,
   signatureHeader: string | undefined,

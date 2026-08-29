@@ -511,15 +511,13 @@ export async function withTransaction<T>(
   callback: (session: ClientSession) => Promise<T>,
 ): Promise<T> {
   const session = await mongoose.startSession();
-  session.startTransaction();
+  let result: T | undefined;
 
   try {
-    const result = await callback(session);
-    await session.commitTransaction();
-    return result;
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
+    await session.withTransaction(async () => {
+      result = await callback(session);
+    });
+    return result as T;
   } finally {
     await session.endSession();
   }

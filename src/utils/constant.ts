@@ -99,6 +99,8 @@ export const queueNames = {
       scheduleCapsuleReveals: 'schedule-capsule-reveals',
       recoverStalePending: 'recover-stale-pending',
       revealCapsules: 'reveal-capsules',
+      dispatchAccountPurges: 'dispatch-account-purges',
+      accountPurge: 'account-purge',
     },
   },
 };

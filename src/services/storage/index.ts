@@ -344,6 +344,28 @@ export async function deleteFile(
   return deleteFileFromS3(key);
 }
 
+/** Purge a durable object from primary storage and any configured backup. */
+export async function deleteFileEverywhere(
+  key: string,
+  provider: FileStorageProvider = DEFAULT_STORAGE_PROVIDER,
+  mimeType?: string,
+  hasBackup = false,
+): Promise<void> {
+  if (provider === 's3') {
+    await deleteFileFromS3(key, 'both');
+    return;
+  }
+  await deleteFile(key, provider, mimeType);
+  if (provider === 'gcs' && hasBackup) {
+    if (!mimeType) throw new Error('mimeType is required for backup delete');
+    const publicId = key.includes('/') ? key : `memento/${key}`;
+    await cloudinaryStorage.deleteFile(
+      publicId,
+      cloudinaryStorage.getResourceType(mimeType),
+    );
+  }
+}
+
 export async function getUserStorageUsed(user_id: string): Promise<number> {
   const result = await File.aggregate<{total: number}>([
     {

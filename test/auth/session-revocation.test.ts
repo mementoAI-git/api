@@ -19,7 +19,7 @@ import type {IRequest} from '../../src/utils/interface';
 import {
   clearTestDatabase,
   closeTestDatabase,
-  connectTestDatabase,
+  connectTestReplicaSet,
 } from '../helpers/database';
 import {createUserFixture, issueLegacyAccessToken} from '../helpers/factories';
 
@@ -47,7 +47,7 @@ async function protectedRequest(token: string) {
 }
 
 describe('session revocation enforcement', () => {
-  beforeAll(connectTestDatabase);
+  beforeAll(connectTestReplicaSet);
   afterEach(clearTestDatabase);
   afterAll(closeTestDatabase);
 

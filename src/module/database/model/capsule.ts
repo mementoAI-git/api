@@ -17,6 +17,9 @@ export interface ICapsule {
   memories?: string[];
   status: string; // draft scheduled delivered failed pause received
   viewed_at?: Date;
+  /** True when the sender account was purged after delivery. */
+  sender_anonymized?: boolean;
+  sender_anonymized_at?: Date;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +59,8 @@ const capsule = new Schema<ICapsule>(
     ],
     status: String,
     viewed_at: Date,
+    sender_anonymized: {type: Boolean, default: false},
+    sender_anonymized_at: {type: Date, default: null},
   },
   {
     timestamps: {

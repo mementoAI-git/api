@@ -132,3 +132,11 @@ export async function addApprovedMemory(
     throw err;
   }
 }
+
+/** Permanently remove every document stored for an account container. */
+export async function deleteUserContainer(userId: string): Promise<void> {
+  const c = getClient();
+  if (!c) return;
+
+  await c.documents.deleteBulk({containerTags: [getContainerTag(userId)]});
+}

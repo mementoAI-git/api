@@ -8,6 +8,7 @@ import {generateTextWithProviderFallback} from '../../services/ai/nonstream-fall
 import {queueStoryInsights} from '../../services/queues/insights';
 import {queueSummarization} from '../../services/queues/summarization';
 import type {QuickCaptureEnrichmentJobData} from '../../services/queues/quick-capture';
+import {isActiveAccount} from '../../services/account-purge/account-state';
 import {
   buildTagsJsonInstructions,
   ensureStoryAutogenTagCount,
@@ -143,6 +144,8 @@ export default function startQuickCaptureWorker(connection: RedisConnection) {
       const {user_id, memory_id, transcript_uncertain} =
         job.data as QuickCaptureEnrichmentJobData;
 
+      if (!(await isActiveAccount(user_id))) return;
+
       const memory = await Memory.findOne({
         _id: memory_id,
         user: user_id,
@@ -201,6 +204,8 @@ export default function startQuickCaptureWorker(connection: RedisConnection) {
         const category = parsed?.category?.trim() || undefined;
         const unclear =
           Boolean(transcript_uncertain) || Boolean(parsed?.transcript_unclear);
+
+        if (!(await isActiveAccount(user_id))) return;
 
         await Memory.findByIdAndUpdate(memory_id, {
           ...(shouldSetQuickCaptureTitle && {title: nextQuickCaptureTitle}),

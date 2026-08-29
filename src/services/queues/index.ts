@@ -10,6 +10,7 @@ import {BullMQAdapter} from '@bull-board/api/bullMQAdapter';
 import {insightQueue} from './insights';
 import {
   initializeCapsuleReveal,
+  initializeAccountPurgeDispatcher,
   initializeFileBackup,
   initializeResetStreak,
   initializeStalePendingRecovery,
@@ -58,6 +59,7 @@ export async function initializeScheduler() {
     ['file backup', initializeFileBackup],
     ['capsule reveal', initializeCapsuleReveal],
     ['stale pending recovery', initializeStalePendingRecovery],
+    ['account purge dispatcher', initializeAccountPurgeDispatcher],
     ['persona summarization', initializePersonaSummarization],
     ['conversation summary', initializeConversationSummary],
   ] as const;

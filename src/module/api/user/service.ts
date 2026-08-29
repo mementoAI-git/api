@@ -53,6 +53,11 @@ import AuthSession from '../../database/model/auth-session';
 import {invalidateSecurityState} from '../auth/security-state';
 import type {MementoClient} from '../../../contracts/response';
 import {registerLegacyProfileToken} from '../push-device/service';
+import PurgeCommand from '../../database/model/purge-command';
+import PushDevice from '../../database/model/push-device';
+import {PURGE_SCHEMA_VERSION} from '../../../services/account-purge';
+import {publishAccountPurge} from '../../../services/queues/system';
+import logger from '../../../utils/logger';
 
 const ONBOARDING_PROMPT_VERSION = getPromptVersion('onboarding_chat');
 
@@ -515,27 +520,62 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
 }
 
 export async function deleteUser(user_id: string) {
-  const user = await User.findById(user_id);
-  if (!user) {
-    throw new NotFoundException('User not found');
-  }
+  const commandId = await withTransaction(async session => {
+    const user = await User.findById(user_id).session(session);
+    if (!user) throw new NotFoundException('User not found');
 
-  // Access is revoked immediately; the durable purge pipeline is introduced
-  // separately and treats purge_pending as an irreversible state.
-  await User.findByIdAndUpdate(user_id, {
-    $set: {
-      deleted: true,
-      purge_status: 'purge_pending',
-      refresh_token: null,
-      refresh_tokens: [],
-    },
-    $inc: {session_version: 1},
+    const firstRequest =
+      user.purge_status !== 'purge_pending' && user.purge_status !== 'purged';
+    await User.findByIdAndUpdate(
+      user_id,
+      {
+        $set: {
+          deleted: true,
+          purge_status:
+            user.purge_status === 'purged' ? 'purged' : 'purge_pending',
+          refresh_token: null,
+          refresh_tokens: [],
+        },
+        ...(firstRequest ? {$inc: {session_version: 1}} : {}),
+      },
+      {session},
+    );
+    await AuthSession.updateMany(
+      {user_id, revoked_at: null},
+      {$set: {revoked_at: new Date()}},
+      {session},
+    );
+    await PushDevice.updateMany(
+      {user_id, enabled: true},
+      {$set: {enabled: false}},
+      {session},
+    );
+    const command = await PurgeCommand.findOneAndUpdate(
+      {user_id},
+      {
+        $setOnInsert: {
+          user_id,
+          email: user.email,
+          schema_version: PURGE_SCHEMA_VERSION,
+          status: 'pending',
+          available_at: new Date(),
+        },
+      },
+      {upsert: true, new: true, session},
+    );
+    return command.id;
   });
-  await AuthSession.updateMany(
-    {user_id, revoked_at: null},
-    {$set: {revoked_at: new Date()}},
-  );
   await invalidateSecurityState(user_id);
+
+  // Best effort only: the committed PurgeCommand is the durable outbox.
+  try {
+    await publishAccountPurge(commandId);
+  } catch (error) {
+    logger.warn(
+      {commandId, errorCode: error instanceof Error ? error.name : 'unknown'},
+      'Account purge publication deferred to dispatcher',
+    );
+  }
 
   return {
     data: null,

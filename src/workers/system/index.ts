@@ -8,6 +8,8 @@ import processAttachmentThumbnail from './process-attachment-thumbnail';
 import {revealCapsules, scheduleCapsuleReveals} from './reveal-capsules';
 import resetStreak from './reset-streak';
 import {quickCaptureQueue} from '../../services/queues/quick-capture';
+import {processPurgeCommand} from '../../services/account-purge';
+import {dispatchPendingAccountPurges} from '../../services/queues/system';
 
 /** Sweep for memories stuck at enrichment_status:'pending' for > 15 minutes.
  *  - If the quick-capture queue is available: re-enqueue for proper AI enrichment.
@@ -97,6 +99,18 @@ export default function startSystemWorker(connection: RedisConnection) {
         compareStrings(job.name, queueNames.system.jobs.recoverStalePending)
       ) {
         await recoverStalePendingCaptures();
+      }
+      if (
+        compareStrings(job.name, queueNames.system.jobs.dispatchAccountPurges)
+      ) {
+        await dispatchPendingAccountPurges();
+      }
+      if (compareStrings(job.name, queueNames.system.jobs.accountPurge)) {
+        const data = job.data as {schema_version?: number; command_id?: string};
+        if (data.schema_version !== 1 || !data.command_id) {
+          throw new Error('Unsupported account purge job payload');
+        }
+        await processPurgeCommand(data.command_id);
       }
     },
     {
