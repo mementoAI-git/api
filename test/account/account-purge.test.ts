@@ -100,6 +100,7 @@ describe('account purge pipeline', () => {
         'BillingWebhookEvent',
         'Bookmark',
         'Capsule',
+        'CapsuleDelivery',
         'DailyAiPromptCache',
         'FeatureFlagAudit',
         'Feedback',

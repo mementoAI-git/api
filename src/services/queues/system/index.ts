@@ -179,10 +179,26 @@ export async function scheduleCapsuleDelivery(
   const scheduleDate = dayjs(schedule_date);
   const delayMs = Math.max(0, scheduleDate.valueOf() - now.valueOf());
 
+  if (!systemQueue) {
+    logger.warn({capsule_id}, 'System queue unavailable for capsule delivery');
+    return;
+  }
+  const jobId = `capsule-reveal-${capsule_id}`;
+  const existing = await systemQueue.getJob(jobId);
+  if (existing && ['delayed', 'waiting'].includes(await existing.getState())) {
+    await existing.remove();
+  }
   await systemQueue.add(
     queueNames.system.jobs.revealCapsules,
-    {capsuleId: capsule_id},
-    {delay: delayMs, removeOnComplete: true, removeOnFail: 3},
+    {schema_version: 1, capsuleId: capsule_id},
+    {
+      jobId,
+      delay: delayMs,
+      attempts: 5,
+      backoff: {type: 'exponential', delay: 5000},
+      removeOnComplete: true,
+      removeOnFail: true,
+    },
   );
 }
 

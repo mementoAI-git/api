@@ -7,6 +7,7 @@ import Beneficiary from '../../module/database/model/beneficiary';
 import BillingWebhookEvent from '../../module/database/model/billing-webhook-event';
 import Bookmark from '../../module/database/model/bookmarks';
 import Capsule from '../../module/database/model/capsule';
+import CapsuleDelivery from '../../module/database/model/capsule-delivery';
 import DailyAiPromptCache from '../../module/database/model/daily-ai-prompt-cache';
 import Feedback from '../../module/database/model/feedback';
 import File from '../../module/database/model/file';
@@ -46,6 +47,7 @@ export const PURGE_MANIFEST = [
   {model: 'BillingWebhookEvent', disposition: 'anonymize'},
   {model: 'Bookmark', disposition: 'delete'},
   {model: 'Capsule', disposition: 'delete-or-anonymize'},
+  {model: 'CapsuleDelivery', disposition: 'delete-or-anonymize'},
   {model: 'DailyAiPromptCache', disposition: 'delete'},
   {model: 'FeatureFlagAudit', disposition: 'anonymize'},
   {model: 'Feedback', disposition: 'delete'},
@@ -131,11 +133,23 @@ async function cleanupProviders(command: IPurgeCommand): Promise<void> {
 }
 
 async function anonymizeDeliveredCapsules(userId: string): Promise<void> {
-  const delivered = await Capsule.find({benefactor: userId, status: 'received'})
-    .select('attachments')
-    .lean();
+  const deliveredSourceIds = await CapsuleDelivery.distinct('capsule_id', {
+    status: {$in: ['sent', 'delivered']},
+  });
+  const [delivered, deliveredSources] = await Promise.all([
+    Capsule.find({benefactor: userId, status: 'received'})
+      .select('attachments')
+      .lean(),
+    Capsule.find({_id: {$in: deliveredSourceIds}, user: userId})
+      .select('attachments recipient_snapshots')
+      .lean(),
+  ]);
   const retainedAttachmentIds = Array.from(
-    new Set(delivered.flatMap(capsule => capsule.attachments || [])),
+    new Set(
+      [...delivered, ...deliveredSources].flatMap(
+        capsule => capsule.attachments || [],
+      ),
+    ),
   );
   if (retainedAttachmentIds.length > 0) {
     // The immutable recipient artifact outlives the sender account and no longer
@@ -156,6 +170,32 @@ async function anonymizeDeliveredCapsules(userId: string): Promise<void> {
       },
     },
   );
+  for (const source of deliveredSources) {
+    await Capsule.updateOne(
+      {_id: source._id, user: userId},
+      {
+        $set: {
+          user: 'delivered-capsule',
+          sender_anonymized: true,
+          sender_anonymized_at: new Date(),
+          recipients: [],
+          memories: [],
+          recipient_snapshots: (source.recipient_snapshots || []).map(
+            recipient => ({
+              recipient_id: recipient.recipient_id,
+              email: 'redacted@invalid.memento',
+              delivery_status: recipient.delivery_status,
+              delivered_at: recipient.delivered_at,
+            }),
+          ),
+        },
+      },
+    );
+    await CapsuleDelivery.updateMany(
+      {capsule_id: String(source._id)},
+      {$set: {recipient_email: 'redacted@invalid.memento'}},
+    );
+  }
 }
 
 function containsAccountReference(
@@ -243,6 +283,11 @@ type Deletion = {
 async function deleteDomainRecords(command: IPurgeCommand): Promise<void> {
   const userId = command.user_id;
   const email = command.email;
+  const ownedCapsuleIds = await Capsule.distinct('_id', {user: userId});
+  if (ownedCapsuleIds.length) {
+    await CapsuleDelivery.deleteMany({capsule_id: {$in: ownedCapsuleIds}});
+  }
+  await CapsuleDelivery.deleteMany({linked_user_id: userId});
   const deletions: Deletion[] = [
     {model: ActivePrompt, filter: {user: userId}},
     {model: Activity, filter: {user: userId}},

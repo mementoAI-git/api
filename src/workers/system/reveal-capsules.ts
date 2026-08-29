@@ -1,15 +1,14 @@
 import dayjs from 'dayjs';
 import Capsule from '../../module/database/model/capsule';
-import mail from '../../module/mail';
 import {
   scheduleCapsuleDelivery,
   systemQueue,
 } from '../../services/queues/system';
-import {FRONTEND_URL} from '../../utils/config';
 import logger from '../../utils/logger';
 import {concatStrings} from '../../utils';
 import {IUser} from '../../module/database/model/user';
-import {IBeneficiary} from '../../module/database/model/beneficiary';
+import {normalizeCapsuleRecipients} from '../../module/api/capsule/recipients';
+import {deliverCapsuleRecipient} from '../../module/api/capsule/capsule-delivery';
 
 /**
  * Handler for scheduleCapsuleReveals job (runs daily at midnight).
@@ -53,13 +52,12 @@ export async function revealCapsules(job: {
     .populate('user', 'first_name last_name fullname _id')
     .populate('recipients', 'email name user');
 
-  console.log(capsule);
   if (!capsule) {
     logger.warn({capsuleId}, 'Capsule not found for reveal');
     return;
   }
 
-  if (capsule.status !== 'scheduled') {
+  if (!['scheduled', 'failed'].includes(capsule.status)) {
     logger.debug(
       {capsuleId, status: capsule.status},
       'Capsule already processed',
@@ -67,59 +65,47 @@ export async function revealCapsules(job: {
     return;
   }
 
-  try {
-    const benefactor = capsule.user as IUser;
-    const benefactorName =
-      benefactor?.fullname ||
-      concatStrings(
-        benefactor?.first_name,
-        benefactor?.last_name,
-        ' ',
-      ).trim() ||
-      'Someone';
+  const benefactor = capsule.user as IUser;
+  const benefactorName =
+    benefactor?.fullname ||
+    concatStrings(benefactor?.first_name, benefactor?.last_name, ' ').trim() ||
+    'Someone';
 
-    const benefactorUserId = benefactor?._id;
-
-    const attachmentIds = capsule.attachments || [];
-    const memoryIds = capsule.memories || [];
-
-    const recipients = capsule.recipients as unknown as IBeneficiary[];
-    for (const recipient of recipients) {
-      const recipientUserId = recipient.user ? String(recipient.user) : null;
-      if (!recipientUserId) {
-        logger.debug(
-          {email: recipient.email},
-          'Skipping recipient without user (invite not accepted)',
-        );
-        continue;
-      }
-
-      const created = await Capsule.create({
-        user: recipientUserId,
-        benefactor: benefactorUserId,
-        source: capsuleId,
-        status: 'received',
-        title: capsule.title,
-        body: capsule.body,
-        attachments: attachmentIds,
-        memories: memoryIds,
-        recipients: [], // received capsules have no recipients
-      });
-
-      const url = `${FRONTEND_URL}/timecapsule/${created._id}`;
-      await mail.sendCapsuleReveal({
-        email: recipient.email,
-        name: recipient.name || '',
-        url,
-        benefactorName,
-      });
-    }
-
-    await Capsule.findByIdAndUpdate(capsuleId, {status: 'delivered'});
-    logger.info({capsuleId}, 'Capsule revealed and delivered successfully');
-  } catch (error) {
-    logger.error({error, capsuleId}, 'Failed to reveal capsule');
-    await Capsule.findByIdAndUpdate(capsuleId, {status: 'failed'});
-    throw error;
+  if (!capsule.recipient_snapshots?.length && capsule.recipients.length) {
+    const legacyIds = capsule.recipients.map(recipient =>
+      typeof recipient === 'string'
+        ? recipient
+        : String((recipient as unknown as {_id: unknown})._id),
+    );
+    const normalized = await normalizeCapsuleRecipients(
+      legacyIds,
+      String(benefactor?._id),
+    );
+    capsule.recipient_snapshots = normalized.snapshots;
+    capsule.recipients_snapshot_version = 1;
+    capsule.recipients = normalized.legacyIds;
+    await capsule.save();
   }
+
+  const results = await Promise.all(
+    (capsule.recipient_snapshots || []).map(recipient =>
+      deliverCapsuleRecipient(capsuleId, recipient, benefactorName),
+    ),
+  );
+  if (results.some(result => result === null)) {
+    logger.debug({capsuleId}, 'Capsule delivery is already being processed');
+    return;
+  }
+  const complete = results.length > 0 && results.every(Boolean);
+  await Capsule.findByIdAndUpdate(capsuleId, {
+    status: complete ? 'delivered' : 'failed',
+  });
+  if (!complete) {
+    logger.warn(
+      {capsuleId},
+      'Capsule delivery has retryable recipient failures',
+    );
+    throw new Error('Capsule delivery incomplete');
+  }
+  logger.info({capsuleId}, 'Capsule revealed and delivered successfully');
 }

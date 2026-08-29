@@ -1,4 +1,71 @@
 const capsulesDocs = {
+  '/capsule/view/exchange': {
+    post: {
+      tags: ['Capsules'],
+      summary: 'Exchange an external capsule link',
+      description:
+        'Consumes a one-time email token and returns a short-lived capsule view grant.',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['token'],
+              properties: {token: {type: 'string'}},
+            },
+          },
+        },
+      },
+      responses: {
+        200: {description: 'Short-lived view grant issued'},
+        401: {
+          description: 'Link is invalid, expired, revoked, or already used',
+        },
+        429: {description: 'Too many exchange attempts'},
+      },
+    },
+  },
+  '/capsule/view': {
+    get: {
+      tags: ['Capsules'],
+      summary: 'View an externally delivered capsule',
+      description:
+        'Returns recipient-safe capsule content for a valid short-lived grant.',
+      parameters: [
+        {
+          in: 'header',
+          name: 'x-capsule-view-grant',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {description: 'Recipient-safe capsule content'},
+        401: {description: 'View grant is invalid, expired, or revoked'},
+      },
+    },
+  },
+  '/capsule/{id}/schedule': {
+    post: {
+      tags: ['Capsules'],
+      summary: 'Schedule a saved capsule draft',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          in: 'path',
+          name: 'id',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {description: 'Capsule scheduled successfully'},
+        400: {description: 'Draft is not ready to schedule'},
+        404: {description: 'Capsule not found'},
+      },
+    },
+  },
   '/capsule': {
     post: {
       tags: ['Capsules'],
@@ -12,15 +79,24 @@ const capsulesDocs = {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['recipients', 'title', 'body'],
               properties: {
                 recipients: {
                   type: 'array',
                   items: {
-                    type: 'string',
-                    format: 'email',
+                    oneOf: [
+                      {type: 'string'},
+                      {
+                        type: 'object',
+                        properties: {
+                          beneficiary_id: {type: 'string'},
+                          email: {type: 'string', format: 'email'},
+                          display_name: {type: 'string'},
+                        },
+                      },
+                    ],
                   },
-                  description: 'Array of recipient email addresses',
+                  description:
+                    'Beneficiary IDs, email addresses, or canonical recipient inputs',
                   example: ['recipient1@example.com', 'recipient2@example.com'],
                 },
                 title: {
@@ -54,6 +130,12 @@ const capsulesDocs = {
                   description:
                     'Optional array of memory IDs to attach to the capsule',
                   example: ['507f1f77bcf86cd799439012'],
+                },
+                status: {
+                  type: 'string',
+                  enum: ['draft', 'scheduled'],
+                  description:
+                    'Drafts may be incomplete; scheduled capsules require complete content, recipients, and a future reveal date.',
                 },
               },
             },

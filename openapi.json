@@ -3460,14 +3460,32 @@
                     "type": "array"
                   },
                   "recipients": {
-                    "description": "Array of recipient email addresses",
+                    "description": "Beneficiary IDs, email addresses, or canonical recipient inputs",
                     "example": [
                       "recipient1@example.com",
                       "recipient2@example.com"
                     ],
                     "items": {
-                      "format": "email",
-                      "type": "string"
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "properties": {
+                            "beneficiary_id": {
+                              "type": "string"
+                            },
+                            "display_name": {
+                              "type": "string"
+                            },
+                            "email": {
+                              "format": "email",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      ]
                     },
                     "type": "array"
                   },
@@ -3477,17 +3495,20 @@
                     "format": "date-time",
                     "type": "string"
                   },
+                  "status": {
+                    "description": "Drafts may be incomplete; scheduled capsules require complete content, recipients, and a future reveal date.",
+                    "enum": [
+                      "draft",
+                      "scheduled"
+                    ],
+                    "type": "string"
+                  },
                   "title": {
                     "description": "Capsule title",
                     "example": "Future Message to Myself",
                     "type": "string"
                   }
                 },
-                "required": [
-                  "recipients",
-                  "title",
-                  "body"
-                ],
                 "type": "object"
               }
             }
@@ -4000,6 +4021,40 @@
         ]
       }
     },
+    "/capsule/{id}/schedule": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Capsule scheduled successfully"
+          },
+          "400": {
+            "description": "Draft is not ready to schedule"
+          },
+          "404": {
+            "description": "Capsule not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Schedule a saved capsule draft",
+        "tags": [
+          "Capsules"
+        ]
+      }
+    },
     "/capsule/stats": {
       "get": {
         "description": "Get statistics about capsules including counts of delivered, scheduled, and draft capsules for the authenticated user",
@@ -4061,6 +4116,71 @@
           }
         ],
         "summary": "Get Capsule Statistics",
+        "tags": [
+          "Capsules"
+        ]
+      }
+    },
+    "/capsule/view": {
+      "get": {
+        "description": "Returns recipient-safe capsule content for a valid short-lived grant.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-capsule-view-grant",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recipient-safe capsule content"
+          },
+          "401": {
+            "description": "View grant is invalid, expired, or revoked"
+          }
+        },
+        "summary": "View an externally delivered capsule",
+        "tags": [
+          "Capsules"
+        ]
+      }
+    },
+    "/capsule/view/exchange": {
+      "post": {
+        "description": "Consumes a one-time email token and returns a short-lived capsule view grant.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "token"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Short-lived view grant issued"
+          },
+          "401": {
+            "description": "Link is invalid, expired, revoked, or already used"
+          },
+          "429": {
+            "description": "Too many exchange attempts"
+          }
+        },
+        "summary": "Exchange an external capsule link",
         "tags": [
           "Capsules"
         ]

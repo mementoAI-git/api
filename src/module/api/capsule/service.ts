@@ -1,23 +1,70 @@
 import dayjs from 'dayjs';
-import Beneficiary from '../../database/model/beneficiary';
 import Capsule, {ICapsule} from '../../database/model/capsule';
 import Memory from '../../database/model/memory';
-import {isEmpty, filterGenerator} from '../../../utils/helpers';
+import {filterGenerator} from '../../../utils/helpers';
 import {IPagination} from '../../../utils/interface';
 import {NotFoundException} from '../../../utils/service-error';
+import {BadRequestException} from '../../../utils/service-error';
 import {track} from '../activity/service';
 import {scheduleCapsuleDelivery} from '../../../services/queues/system';
 import {assertOwnedFileIds} from '../file/access';
 import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
+import {normalizeCapsuleRecipients} from './recipients';
+export {
+  exchangeExternalViewToken,
+  getExternalCapsule,
+} from './capsule-delivery';
 
-export async function createCapsule(payload: ICapsule, user_id: string) {
-  const users = await Beneficiary.find({
-    email: {$in: payload.recipients},
-    benefactor: user_id,
-  });
-  if (isEmpty(users)) {
-    throw new NotFoundException('Users not found');
+type CapsuleMutationPayload = Omit<
+  ICapsule,
+  'user' | 'created_at' | 'updated_at'
+>;
+
+function validateStyle(style: ICapsule['style']): ICapsule['style'] {
+  if (!style) return undefined;
+  const safeValue = (value: unknown, max = 64) =>
+    typeof value === 'string' && value.length <= max ? value : undefined;
+  return {
+    themeId: safeValue(style.themeId),
+    backgroundColor: safeValue(style.backgroundColor),
+    fontSize: safeValue(style.fontSize, 24),
+    textColor: safeValue(style.textColor),
+    headerColor: safeValue(style.headerColor),
+  };
+}
+
+function assertSchedulable(capsule: {
+  title?: string;
+  body?: string;
+  schedule_date?: string | Date;
+  recipient_snapshots?: unknown[];
+}): void {
+  if (!capsule.title?.trim() || !capsule.body?.trim()) {
+    throw new BadRequestException('Title and body are required to schedule');
   }
+  if (!capsule.recipient_snapshots?.length) {
+    throw new BadRequestException(
+      'At least one valid recipient is required to schedule',
+    );
+  }
+  if (
+    !capsule.schedule_date ||
+    !dayjs(capsule.schedule_date).isAfter(dayjs())
+  ) {
+    throw new BadRequestException(
+      'A valid future reveal date is required to schedule',
+    );
+  }
+}
+
+export async function createCapsule(
+  payload: CapsuleMutationPayload,
+  user_id: string,
+) {
+  const {snapshots, legacyIds} = await normalizeCapsuleRecipients(
+    payload.recipients || [],
+    user_id,
+  );
 
   let attachments: string[] = [];
   if (payload?.attachments && payload.attachments.length > 0) {
@@ -36,20 +83,34 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
     memories = memoryDocs.map(m => m.id);
   }
 
+  const status =
+    payload.status === 'draft'
+      ? 'draft'
+      : payload.status === 'scheduled' || payload.schedule_date
+        ? 'scheduled'
+        : 'draft';
+  const candidate = {
+    title: payload?.title?.trim() || '',
+    body: payload?.body?.trim() || '',
+    schedule_date: payload?.schedule_date
+      ? dayjs(payload.schedule_date).toISOString()
+      : undefined,
+    recipient_snapshots: snapshots,
+  };
+  if (status === 'scheduled') assertSchedulable(candidate);
+
   const capsule = await Capsule.create({
-    ...payload,
-    title: payload?.title.trim(),
-    body: payload?.body.trim(),
+    title: candidate.title,
+    body: candidate.body,
     user: user_id,
-    recipients: users.map(u => u.id),
+    recipients: legacyIds,
+    recipient_snapshots: snapshots,
+    recipients_snapshot_version: 1,
     attachments,
     memories,
-    ...(payload?.schedule_date
-      ? {
-          schedule_date: dayjs(payload.schedule_date).toISOString(),
-          status: 'scheduled',
-        }
-      : {status: 'draft'}),
+    style: validateStyle(payload.style),
+    ...(candidate.schedule_date && {schedule_date: candidate.schedule_date}),
+    status,
   });
 
   if (
@@ -75,7 +136,7 @@ export async function createCapsule(payload: ICapsule, user_id: string) {
 
 export async function updateCapsule(
   id: string,
-  payload: Partial<ICapsule>,
+  payload: Partial<CapsuleMutationPayload>,
   user_id: string,
 ) {
   const capsule = await Capsule.findOne({_id: id, user: user_id});
@@ -83,34 +144,48 @@ export async function updateCapsule(
     throw new NotFoundException('Capsule not found');
   }
 
-  if (payload.recipients && payload.recipients.length > 0) {
-    const users = await Beneficiary.find({
-      email: {$in: payload.recipients},
-      benefactor: user_id,
-    });
-    if (isEmpty(users)) {
-      throw new NotFoundException('Recipients not found');
-    }
-    payload.recipients = users.map(u => u.id);
-  }
-
-  if (!isEmpty(payload.attachments)) {
-    payload.attachments = await assertOwnedFileIds(
+  let normalizedRecipients:
+    | Awaited<ReturnType<typeof normalizeCapsuleRecipients>>
+    | undefined;
+  if (payload.recipients !== undefined) {
+    normalizedRecipients = await normalizeCapsuleRecipients(
+      payload.recipients,
       user_id,
-      payload.attachments!,
+    );
+  }
+  if (
+    payload.status === 'scheduled' &&
+    !normalizedRecipients &&
+    !capsule.recipient_snapshots?.length &&
+    capsule.recipients.length
+  ) {
+    normalizedRecipients = await normalizeCapsuleRecipients(
+      capsule.recipients,
+      user_id,
     );
   }
 
+  let validatedAttachments: string[] | undefined;
+  if (payload.attachments !== undefined) {
+    validatedAttachments = payload.attachments.length
+      ? await assertOwnedFileIds(user_id, payload.attachments)
+      : [];
+  }
+
   let validatedMemories: string[] | undefined;
-  if (payload?.memories && payload.memories.length > 0) {
-    const memoryDocs = await Memory.find({
-      _id: {$in: payload.memories},
-      user: user_id,
-    });
-    if (memoryDocs.length !== payload.memories.length) {
-      throw new NotFoundException('Some memories not found');
+  if (payload.memories !== undefined) {
+    if (payload.memories.length > 0) {
+      const memoryDocs = await Memory.find({
+        _id: {$in: payload.memories},
+        user: user_id,
+      });
+      if (memoryDocs.length !== payload.memories.length) {
+        throw new NotFoundException('Some memories not found');
+      }
+      validatedMemories = memoryDocs.map(m => m.id);
+    } else {
+      validatedMemories = [];
     }
-    validatedMemories = memoryDocs.map(m => m.id);
   }
 
   if (payload?.schedule_date) {
@@ -128,26 +203,38 @@ export async function updateCapsule(
         schedule_date: payload.schedule_date,
       }),
       ...(payload.status !== undefined && {status: payload.status}),
+      ...(normalizedRecipients && {
+        recipients: normalizedRecipients.legacyIds,
+        recipient_snapshots: normalizedRecipients.snapshots,
+        recipients_snapshot_version: 1,
+      }),
+      ...(validatedAttachments !== undefined && {
+        attachments: validatedAttachments,
+      }),
+      ...(validatedMemories !== undefined && {memories: validatedMemories}),
+      ...(payload.style !== undefined && {style: validateStyle(payload.style)}),
     },
   };
 
-  if (!isEmpty(payload.attachments)) {
-    updateData.$addToSet = {
-      ...(updateData.$addToSet as Record<string, unknown>),
-      attachments: {$each: payload.attachments},
-    };
-  }
-
-  if (!isEmpty(validatedMemories)) {
-    updateData.$addToSet = {
-      ...(updateData.$addToSet as Record<string, unknown>),
-      memories: {$each: validatedMemories},
-    };
-  }
+  const merged = {
+    title: payload.title ?? capsule.title,
+    body: payload.body ?? capsule.body,
+    schedule_date: payload.schedule_date ?? capsule.schedule_date,
+    recipient_snapshots:
+      normalizedRecipients?.snapshots ?? capsule.recipient_snapshots,
+  };
+  if (payload.status === 'scheduled') assertSchedulable(merged);
 
   const updateCapsule = await Capsule.findByIdAndUpdate(id, updateData, {
     new: true,
   });
+
+  if (payload.status === 'scheduled' && updateCapsule?.schedule_date) {
+    await scheduleCapsuleDelivery(
+      updateCapsule.id,
+      updateCapsule.schedule_date,
+    );
+  }
 
   await track(
     {
@@ -161,6 +248,39 @@ export async function updateCapsule(
   );
 
   return {message: 'Capsule updated successfully', data: updateCapsule};
+}
+
+export async function scheduleCapsule(id: string, userId: string) {
+  const capsule = await Capsule.findOne({_id: id, user: userId});
+  if (!capsule) throw new NotFoundException('Capsule not found');
+
+  if (!capsule.recipient_snapshots?.length && capsule.recipients.length) {
+    const normalized = await normalizeCapsuleRecipients(
+      capsule.recipients,
+      userId,
+    );
+    capsule.recipients = normalized.legacyIds;
+    capsule.recipient_snapshots = normalized.snapshots;
+    capsule.recipients_snapshot_version = 1;
+  }
+  assertSchedulable(capsule);
+  capsule.status = 'scheduled';
+  await capsule.save();
+  await scheduleCapsuleDelivery(capsule.id, capsule.schedule_date!);
+  return {message: 'Capsule scheduled successfully', data: capsule};
+}
+
+export async function getCapsuleScheduleDate(
+  id: string,
+  userId: string,
+): Promise<string | undefined> {
+  const capsule = await Capsule.findOne({_id: id, user: userId})
+    .select('schedule_date')
+    .lean();
+  if (!capsule) throw new NotFoundException('Capsule not found');
+  return capsule.schedule_date
+    ? dayjs(capsule.schedule_date).toISOString()
+    : undefined;
 }
 
 export async function getCapsules(payload: IPagination, user: string) {
