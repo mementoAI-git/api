@@ -9,6 +9,35 @@ import {concatStrings} from '../../utils';
 import {IUser} from '../../module/database/model/user';
 import {normalizeCapsuleRecipients} from '../../module/api/capsule/recipients';
 import {deliverCapsuleRecipient} from '../../module/api/capsule/capsule-delivery';
+import {applyUsageDelta} from '../../module/api/billing/usage-accounting';
+import mongoose from 'mongoose';
+
+export async function finalizeCapsuleDelivery(
+  capsuleId: string,
+  userId: string,
+  status: 'delivered' | 'failed',
+): Promise<boolean> {
+  const session = await mongoose.startSession();
+  try {
+    let finalized = false;
+    await session.withTransaction(async () => {
+      const previous = await Capsule.findOneAndUpdate(
+        {_id: capsuleId, status: {$in: ['scheduled', 'failed']}},
+        {$set: {status}},
+        {session},
+      );
+      if (!previous) return;
+
+      finalized = true;
+      if (previous.status === 'scheduled') {
+        await applyUsageDelta(userId, 'timed_message_count', -1, session);
+      }
+    });
+    return finalized;
+  } finally {
+    await session.endSession();
+  }
+}
 
 /**
  * Handler for scheduleCapsuleReveals job (runs daily at midnight).
@@ -97,9 +126,11 @@ export async function revealCapsules(job: {
     return;
   }
   const complete = results.length > 0 && results.every(Boolean);
-  await Capsule.findByIdAndUpdate(capsuleId, {
-    status: complete ? 'delivered' : 'failed',
-  });
+  await finalizeCapsuleDelivery(
+    capsuleId,
+    String((benefactor as IUser & {_id?: unknown})?._id),
+    complete ? 'delivered' : 'failed',
+  );
   if (!complete) {
     logger.warn(
       {capsuleId},

@@ -8,6 +8,7 @@ import {
 import {StatusCodes} from 'http-status-codes';
 import {IRequest} from '../../../utils/interface';
 import logger from '../../../utils/logger';
+import {resolveUploadReservationId} from '../file/upload-idempotency';
 
 export async function updateProfile(
   req: IRequest,
@@ -110,7 +111,15 @@ export async function uploadPicture(
 ) {
   try {
     const files = getFiles(req, true);
-    const {message, data} = await service.uploadPicture(files, req.auth.id);
+    const {message, data} = await service.uploadPicture(
+      files,
+      req.auth.id,
+      resolveUploadReservationId(
+        req.header('Idempotency-Key'),
+        req.context?.requestId,
+        'user:picture',
+      ),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

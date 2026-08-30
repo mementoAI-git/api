@@ -1,224 +1,51 @@
-# Billing & Subscription Implementation Checklist (API)
+# Billing, entitlements, and storage rollout checklist
 
-This checklist is mapped to the current backend structure under `api/src/module/api/*` and `api/src/module/database/model/*`.
+This document reflects the implemented billing contract. Polar is the only
+payment target. `paystack` may remain in persisted legacy enums so old records
+can still be read, but no Paystack checkout, portal, webhook, or invoice flow is
+part of this rollout.
 
-## 1) Create billing module (new files)
+## Implemented contract
 
-- [ ] `src/module/api/billing/routes.ts`
-  - Add routes:
-    - `GET /billing/subscription`
-    - `GET /billing/usage` (optional but recommended)
-    - `POST /billing/checkout`
-    - `POST /billing/portal`
-    - `POST /billing/promo/redeem`
-    - `GET /billing/invoices`
-    - `POST /billing/cancel`
-    - `POST /billing/resume`
-  - Add `export const name = 'billing';`
-  - Protect all routes with `gaurd`.
+- [x] Polar checkout, portal, cancellation, resumption, invoices, and receipts.
+- [x] Standard Webhooks signature verification and transactional replay safety.
+- [x] Product-ID-based entitlement mapping with explicit configured products.
+- [x] Stable subscription and feature-denial response contracts.
+- [x] Atomic free-tier beneficiary and scheduled-capsule limits.
+- [x] Per-plan storage limits, upload reservations, idempotent replay, and cleanup.
+- [x] Usage reconciliation and stale-reservation background jobs.
+- [x] Additive web and mobile usage metadata support.
 
-- [ ] `src/module/api/billing/controller.ts`
-  - Add handler per route; keep controller thin:
-    - parse request
-    - call service
-    - return via `responsHandler`
+## Production rollout order
 
-- [ ] `src/module/api/billing/service.ts`
-  - Add business logic:
-    - fetch summary/usage
-    - create checkout URL
-    - open customer portal URL
-    - redeem promo
-    - list invoices
-    - cancel/resume behavior
+1. Deploy with `STORAGE_QUOTA_ENFORCEMENT_ENABLED=false`.
+2. Configure Polar product IDs, API token, and webhook secret. Do not configure
+   Paystack as a target provider.
+3. Let the billing usage reconciliation worker complete at least one full pass;
+   compare `usage.storage_used_bytes` with active stored file totals and inspect
+   accounts where `over_limit` would be true.
+4. Confirm web and mobile display `storage_reserved_bytes`, `remaining_bytes`,
+   `percent_used`, and `over_limit` while continuing to accept older responses.
+5. Enable `STORAGE_QUOTA_ENFORCEMENT_ENABLED=true` in one API deployment,
+   monitor quota denials and upload cleanup, then roll it out to the remainder.
+6. Keep legacy file URLs available during the separate signed-file migration;
+   storage enforcement does not require changing attachment URLs.
 
-- [ ] `src/module/api/billing/dto.ts` (or `validator.ts`)
-  - Validate checkout payload:
-    - `tier`: `free|pro|legacy`
-    - `interval`: `monthly|annual|lifetime`
-    - `success_url`, `cancel_url`
-  - Validate promo payload:
-    - `code` required.
+## Required operational checks
 
-## 2) Add database models (new files)
+- [ ] A reconciliation pass completes without a growing retry backlog.
+- [ ] Stale reservations return to zero after their TTL.
+- [ ] Concurrent uploads cannot exceed the configured plan limit.
+- [ ] Failed provider or database writes remove uploaded objects and release quota.
+- [ ] Polar duplicate deliveries are acknowledged without applying state twice.
+- [ ] Unknown Polar product IDs do not grant paid entitlements in production.
+- [ ] Free and paid over-limit clients show warnings without crashing on old API
+  responses.
 
-- [ ] `src/module/database/model/subscription.ts`
-  - Fields:
-    - `user_id`
-    - `tier` (`free|pro|legacy`)
-    - `status` (`active|trialing|past_due|cancelled|paused`)
-    - `billing_interval`
-    - `current_period_start`, `current_period_end`
-    - `trial_ends_at`, `has_used_trial`
-    - `cancelled_at`
-    - `payment_provider` (`paystack|polar`)
-    - `provider_customer_id`, `provider_subscription_id`
-    - `promo_code_used`, `promo_expires_at`
-    - `currency`, `country`
+## Default limits
 
-- [ ] `src/module/database/model/usage.ts`
-  - Fields:
-    - `user_id`
-    - `storage_used_bytes`
-    - `storage_limit_bytes` (optional but useful for direct UI contract)
-    - `beneficiary_count`
-    - `timed_message_count`
-    - `time_capsule_count`
-    - `memory_integration_count`
-    - `last_updated`
+- Free: 200 MiB.
+- Pro and legacy: 10 GiB.
+- An admin `storage_limit_override_bytes` value takes precedence.
 
-- [ ] `src/module/database/model/promo-code.ts`
-  - Fields:
-    - `code`
-    - `grants_tier`
-    - `duration_days`
-    - `created_by`
-    - `redeemed_by`
-    - `redeemed_at`
-    - `expires_at`
-    - `campaign_tag`
-
-## 3) Add subscription enforcement utility
-
-- [ ] `src/module/api/billing/access.ts` (or `service.ts` export)
-  - Implement:
-    - `checkFeatureAccess(userId, feature): { allowed, requiredTier?, reason? }`
-  - Rules:
-    - resolve effective tier from subscription/status/trial/promo
-    - enforce launch limits:
-      - voice mode
-      - storage/upload
-      - time capsule window
-      - beneficiaries count
-      - timed messages count
-      - supermemory writes
-
-- [ ] Stable denied payload helper
-  - Return a consistent payload used everywhere:
-    - `error: "subscription_required"`
-    - `feature`
-    - `requiredTier`
-    - `message`
-
-## 4) Replace/augment feature-gate middleware for billing semantics
-
-- [ ] Update `src/middleware/feature-gate.ts`
-  - Current behavior returns 402 with `requiredTier: "admin_toggle"` based on feature flags.
-  - Keep feature flags for rollout control, but for billing-gated flows:
-    - evaluate feature flag (optional)
-    - then call subscription access check
-    - return stable subscription payload on deny.
-
-- [ ] Ensure payload shape is frontend-compatible
-  - Frontend currently parses gate payload from top-level body.
-  - Use top-level `feature`, `requiredTier`, `message` for 402 responses.
-
-## 5) Wire enforcement into existing gated routes
-
-- [ ] `src/module/api/ai/routes.ts`
-  - voice mode/live token paths should enforce subscription tier/feature.
-
-- [ ] `src/module/api/file/routes.ts`
-  - upload path should enforce storage limit and upload quality rules.
-
-- [ ] `src/module/api/capsule/routes.ts`
-  - capsule creation should enforce free time-window limit.
-
-- [ ] `src/module/api/beneficiary/routes.ts`
-  - beneficiary create should enforce free max count.
-
-- [ ] Timed messages path
-  - Identify endpoint in codebase where timed messages are created and enforce count limit.
-
-## 6) Payment provider integration (Paystack-first)
-
-- [ ] `src/module/api/billing/providers/paystack.ts`
-  - methods:
-    - initialize checkout
-    - verify webhook signature
-    - map events to subscription updates
-
-- [ ] Optional: `src/module/api/billing/providers/polar.ts`
-  - only if Polar retained.
-
-- [ ] Environment variables in `api/.env` and config
-  - Add keys for:
-    - Paystack secret/public/webhook secret
-    - plan codes per tier/interval
-    - optional Polar keys.
-
-## 7) Payment webhooks
-
-- [ ] Extend existing webhook module or add payment webhook module
-  - Option A (preferred for consistency): keep `webhooks` module and add:
-    - `POST /webhooks/payments?provider=paystack`
-    - `POST /webhooks/payments?provider=polar`
-  - Option B: create dedicated `payments-webhook` module.
-
-- [ ] Add idempotency store
-  - e.g. `processed_webhook_event` collection/table with unique `event_id`.
-
-- [ ] Make webhook handlers fast
-  - verify signature -> enqueue job -> `200`.
-
-## 8) Background jobs
-
-- [ ] Add job runner integration (BullMQ/Inngest/other).
-- [ ] Add jobs:
-  - trial expiry
-  - promo expiry
-  - past_due grace downgrade
-  - optional storage reconciliation
-
-## 9) API contract alignment with frontend (critical)
-
-- [ ] `GET /billing/subscription` response
-  - Must include:
-    - `tier`, `status`
-    - `trial_ends_at`, `current_period_end`
-    - `provider`, `currency`, `country`
-    - optional `usage` object
-
-- [ ] `POST /billing/checkout` response
-  - Frontend currently expects: `data.checkout_url`
-  - Standardize on this key and update docs/tests to match.
-
-- [ ] `POST /billing/portal` response
-  - Frontend expects: `data.portal_url`.
-
-- [ ] `POST /billing/promo/redeem` response
-  - Keep `{ success, message }` semantics.
-
-- [ ] `GET /billing/invoices` response
-  - Return array with `{ url?, label? }` or update frontend expectations.
-
-## 10) Update tests (backend)
-
-- [ ] Unit tests:
-  - `checkFeatureAccess` matrix by feature x tier x status.
-  - payload shape for denied gates.
-
-- [ ] Integration tests:
-  - billing routes happy/deny paths
-  - checkout creation
-  - promo redeem.
-
-- [ ] Webhook tests:
-  - signature rejection
-  - idempotent replay.
-
-## 11) Frontend-impact sanity checks after backend merge
-
-- [ ] Verify `memento-web` can call all `/billing/*` endpoints without mock handlers.
-- [ ] Verify 402 body shape triggers correct upgrade prompt copy (not fallback "storage").
-- [ ] Verify voice, upload, beneficiary, capsule flows surface correct gate prompts.
-
-## Suggested implementation order (fastest path)
-
-1. Add models (`subscription`, `usage`, `promo-code`).
-2. Add `billing` module with `GET /billing/subscription` and `POST /billing/checkout`.
-3. Add `checkFeatureAccess` + wire to one route (`ai` voice) end-to-end.
-4. Add paystack webhook endpoint + idempotency.
-5. Wire remaining gated routes (file/capsule/beneficiary/timed message).
-6. Add portal/promo/invoices endpoints.
-7. Add scheduled jobs.
+All values are configurable through the storage quota environment variables.

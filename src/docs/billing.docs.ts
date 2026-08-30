@@ -20,6 +20,7 @@ const billingDocs = {
                     properties: {
                       tier: {type: 'string', example: 'pro'},
                       status: {type: 'string', example: 'active'},
+                      cancel_at_period_end: {type: 'boolean'},
                       current_period_end: {type: 'string', format: 'date-time'},
                       trial_ends_at: {
                         type: 'string',
@@ -32,9 +33,15 @@ const billingDocs = {
                         type: 'object',
                         properties: {
                           storage_used_bytes: {type: 'number'},
+                          storage_reserved_bytes: {type: 'number'},
                           storage_limit_bytes: {type: 'number'},
+                          remaining_bytes: {type: 'number'},
+                          percent_used: {type: 'number'},
+                          over_limit: {type: 'boolean'},
                           beneficiary_count: {type: 'number'},
                           timed_message_count: {type: 'number'},
+                          time_capsule_count: {type: 'number'},
+                          memory_integration_count: {type: 'number'},
                         },
                       },
                     },
@@ -63,7 +70,21 @@ const billingDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  data: {type: 'object'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      storage_used_bytes: {type: 'number'},
+                      storage_reserved_bytes: {type: 'number'},
+                      storage_limit_bytes: {type: 'number'},
+                      remaining_bytes: {type: 'number'},
+                      percent_used: {type: 'number'},
+                      over_limit: {type: 'boolean'},
+                      beneficiary_count: {type: 'number'},
+                      timed_message_count: {type: 'number'},
+                      time_capsule_count: {type: 'number'},
+                      memory_integration_count: {type: 'number'},
+                    },
+                  },
                 },
               },
             },
@@ -218,7 +239,21 @@ const billingDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  data: {type: 'array', items: {type: 'object'}},
+                  data: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: {type: 'string'},
+                        url: {type: 'string', format: 'uri'},
+                        label: {type: 'string'},
+                        created_at: {type: 'string', format: 'date-time'},
+                        amount: {type: 'number'},
+                        currency: {type: 'string'},
+                        status: {type: 'string'},
+                      },
+                    },
+                  },
                 },
               },
             },

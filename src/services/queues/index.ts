@@ -14,6 +14,8 @@ import {
   initializeFileBackup,
   initializeResetStreak,
   initializeStalePendingRecovery,
+  initializeStorageReservationExpiry,
+  initializeBillingUsageReconciliation,
   systemQueue,
 } from './system';
 import logger from '../../utils/logger';
@@ -60,6 +62,8 @@ export async function initializeScheduler() {
     ['capsule reveal', initializeCapsuleReveal],
     ['stale pending recovery', initializeStalePendingRecovery],
     ['account purge dispatcher', initializeAccountPurgeDispatcher],
+    ['storage reservation expiry', initializeStorageReservationExpiry],
+    ['billing usage reconciliation', initializeBillingUsageReconciliation],
     ['persona summarization', initializePersonaSummarization],
     ['conversation summary', initializeConversationSummary],
   ] as const;

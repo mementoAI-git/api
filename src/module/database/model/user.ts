@@ -82,6 +82,7 @@ export interface IUser {
   newsletter_subscriber: boolean;
   created_at: string;
   storage_limit: number;
+  storage_limit_override_bytes?: number | null;
   primary_conversation_id?: string | null;
   passkeys?: IPasskey[];
 }
@@ -180,6 +181,7 @@ const user = new Schema<IUser>(
       type: Number,
       default: FREE_STORAGE_LIMIT_BYTES,
     },
+    storage_limit_override_bytes: {type: Number, default: null, select: false},
     preferences: {
       communication_style: {
         type: String,

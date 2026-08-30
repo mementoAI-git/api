@@ -10,6 +10,10 @@ import resetStreak from './reset-streak';
 import {quickCaptureQueue} from '../../services/queues/quick-capture';
 import {processPurgeCommand} from '../../services/account-purge';
 import {dispatchPendingAccountPurges} from '../../services/queues/system';
+import {
+  expireStorageReservations,
+  reconcileBillingUsage,
+} from './billing-usage';
 
 /** Sweep for memories stuck at enrichment_status:'pending' for > 15 minutes.
  *  - If the quick-capture queue is available: re-enqueue for proper AI enrichment.
@@ -111,6 +115,19 @@ export default function startSystemWorker(connection: RedisConnection) {
           throw new Error('Unsupported account purge job payload');
         }
         await processPurgeCommand(data.command_id);
+      }
+      if (
+        compareStrings(
+          job.name,
+          queueNames.system.jobs.expireStorageReservations,
+        )
+      ) {
+        await expireStorageReservations();
+      }
+      if (
+        compareStrings(job.name, queueNames.system.jobs.reconcileBillingUsage)
+      ) {
+        await reconcileBillingUsage();
       }
     },
     {

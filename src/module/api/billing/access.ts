@@ -1,6 +1,10 @@
 import dayjs from 'dayjs';
 import {StatusCodes} from 'http-status-codes';
 import {FREE_STORAGE_LIMIT_BYTES} from '../../../utils/constant';
+import {
+  STORAGE_LIMIT_LEGACY_BYTES,
+  STORAGE_LIMIT_PRO_BYTES,
+} from '../../../utils/config';
 import {ServiceError} from '../../../utils/service-error';
 import Subscription, {
   type ISubscription,
@@ -63,9 +67,13 @@ function isPaidTier(tier: SubscriptionTier) {
   return tier === 'pro' || tier === 'legacy';
 }
 
-function resolveTier(subscription: ISubscription | null): SubscriptionTier {
+export function resolveEffectiveTier(
+  subscription: ISubscription | null,
+): SubscriptionTier {
   if (!subscription) return 'free';
   if (isPaidTier(subscription.tier)) {
+    const terminallyEnded =
+      subscription.ended_at && dayjs(subscription.ended_at).isBefore(dayjs());
     const periodEnded =
       subscription.current_period_end &&
       dayjs(subscription.current_period_end).isBefore(dayjs());
@@ -73,9 +81,10 @@ function resolveTier(subscription: ISubscription | null): SubscriptionTier {
       subscription.promo_expires_at &&
       dayjs(subscription.promo_expires_at).isBefore(dayjs());
     if (
-      (subscription.status === 'past_due' ||
+      terminallyEnded ||
+      ((subscription.status === 'past_due' ||
         subscription.status === 'cancelled') &&
-      periodEnded
+        periodEnded)
     ) {
       return 'free';
     }
@@ -91,6 +100,7 @@ function defaultUsage(): IUsage {
     user_id: '',
     storage_used_bytes: 0,
     storage_limit_bytes: FREE_STORAGE_LIMIT_BYTES,
+    storage_reserved_bytes: 0,
     beneficiary_count: 0,
     timed_message_count: 0,
     time_capsule_count: 0,
@@ -134,8 +144,10 @@ export async function checkFeatureAccess(
     Usage.findOne({user_id: userId}).lean(),
   ]);
 
-  const effectiveTier = resolveTier(subscription);
-  if (isPaidTier(effectiveTier)) return {allowed: true};
+  const effectiveTier = resolveEffectiveTier(subscription);
+  if (isPaidTier(effectiveTier) && normalized !== 'storage') {
+    return {allowed: true};
+  }
 
   const usage = {
     ...defaultUsage(),
@@ -153,10 +165,15 @@ export async function checkFeatureAccess(
         reason: FEATURE_MESSAGES[normalized],
       };
     case 'storage': {
-      const limit = usage.storage_limit_bytes || FREE_STORAGE_LIMIT_BYTES;
+      const limit =
+        effectiveTier === 'pro'
+          ? STORAGE_LIMIT_PRO_BYTES
+          : effectiveTier === 'legacy'
+            ? STORAGE_LIMIT_LEGACY_BYTES
+            : FREE_STORAGE_LIMIT_BYTES;
       const usedWithIncoming =
         (usage.storage_used_bytes || 0) + (context.additionalBytes || 0);
-      if (usedWithIncoming >= limit) {
+      if (usedWithIncoming > limit) {
         return {
           allowed: false,
           requiredTier: 'pro',

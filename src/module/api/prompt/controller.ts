@@ -9,6 +9,7 @@ import {
 import * as service from './service';
 import {IRequest} from '../../../utils/interface';
 import redis from '../../../services/redis';
+import {resolveUploadReservationId} from '../file/upload-idempotency';
 
 export async function getPrompts(
   req: IRequest,
@@ -54,6 +55,11 @@ export async function replyPrompt(
       req.body,
       req.auth.id,
       files,
+      resolveUploadReservationId(
+        req.header('Idempotency-Key'),
+        req.context?.requestId,
+        'prompt:reply',
+      ),
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

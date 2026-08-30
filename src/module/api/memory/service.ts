@@ -27,7 +27,6 @@ import {
   emptyPaginatedList,
   isEmpty,
   formatBytes,
-  FREE_STORAGE_LIMIT_BYTES,
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils';
 import Prompt from '../../database/model/prompt';
@@ -37,15 +36,15 @@ import {updateMemoryTitle} from '../ai/utils';
 import ActivePrompt from '../../database/model/active-prompt';
 import {queueStoryInsights} from '../../../services/queues/insights';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
-import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
 import {queueSummarization} from '../../../services/queues/summarization';
-import * as storage from '../../../services/storage';
 import {
   getConversationEnrichment,
   invalidateEnrichmentCache,
 } from '../../../services/enrichment';
 import {assertOwnedMemory, assertReadableMemory} from './access';
 import {assertOwnedFileIds} from '../file/access';
+import {persistUploadedFiles} from '../file/service';
+import {getStorageUsageSummary} from '../billing/storage-quota';
 import {toPublicMemory} from './public-dto';
 
 export {getConversationEnrichment};
@@ -175,10 +174,9 @@ export async function memoryStats(user_id: string) {
     provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
   });
 
-  const user = await User.findById(user_id).select('storage_limit').lean();
-
-  const storage_size = await storage.getUserStorageUsed(user_id);
-  const storage_limit = user?.storage_limit || FREE_STORAGE_LIMIT_BYTES;
+  const storageUsage = await getStorageUsageSummary(user_id);
+  const storage_size = storageUsage.used_bytes;
+  const storage_limit = storageUsage.limit_bytes;
 
   const data = {
     memory_count,
@@ -201,6 +199,7 @@ export async function createMemory(
   payload: ICreateMemoryPayload,
   user_id: string,
   files: Express.Multer.File[] | null = null,
+  reservationId?: string,
 ) {
   const {
     title,
@@ -237,25 +236,11 @@ export async function createMemory(
     payload?.attachments || [],
   );
   if (!isEmpty(files)) {
-    const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
-    await storage.checkStorageQuota(user, additionalBytes);
-    const unsavedFiles = await Promise.all(
-      files.map(file => storage.uploadFile(file, user_id)),
-    );
-
-    const savedFiles = await File.insertMany(unsavedFiles);
-    await Promise.all(
-      savedFiles.map(async file => {
-        if (file.type?.startsWith('video/') && file.status === 'processing') {
-          const queued = await queueAttachmentThumbnailProcessing(file.id);
-          if (!queued) {
-            await File.findByIdAndUpdate(file.id, {
-              status: 'failed',
-              thumbnail: null,
-            });
-          }
-        }
-      }),
+    const savedFiles = await persistUploadedFiles(
+      files,
+      user_id,
+      undefined,
+      reservationId,
     );
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
@@ -329,6 +314,7 @@ export async function quickCaptureMemory(
   payload: IQuickCapturePayload,
   user_id: string,
   files: Express.Multer.File[] | null = null,
+  reservationId?: string,
 ) {
   let body = (payload.body || '').trim();
   const user = await User.findById(user_id);
@@ -414,24 +400,11 @@ export async function quickCaptureMemory(
   attachments = await assertOwnedFileIds(user_id, attachments);
 
   if (!isEmpty(files)) {
-    const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
-    await storage.checkStorageQuota(user, additionalBytes);
-    const unsavedFiles = await Promise.all(
-      files.map(file => storage.uploadFile(file, user_id)),
-    );
-    const savedFiles = await File.insertMany(unsavedFiles);
-    await Promise.all(
-      savedFiles.map(async file => {
-        if (file.type?.startsWith('video/') && file.status === 'processing') {
-          const queued = await queueAttachmentThumbnailProcessing(file.id);
-          if (!queued) {
-            await File.findByIdAndUpdate(file.id, {
-              status: 'failed',
-              thumbnail: null,
-            });
-          }
-        }
-      }),
+    const savedFiles = await persistUploadedFiles(
+      files,
+      user_id,
+      undefined,
+      reservationId,
     );
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }

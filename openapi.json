@@ -2881,6 +2881,31 @@
                   "properties": {
                     "data": {
                       "items": {
+                        "properties": {
+                          "amount": {
+                            "type": "number"
+                          },
+                          "created_at": {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          "currency": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "format": "uri",
+                            "type": "string"
+                          }
+                        },
                         "type": "object"
                       },
                       "type": "array"
@@ -3068,6 +3093,9 @@
                   "properties": {
                     "data": {
                       "properties": {
+                        "cancel_at_period_end": {
+                          "type": "boolean"
+                        },
                         "currency": {
                           "example": "USD",
                           "type": "string"
@@ -3098,10 +3126,28 @@
                             "beneficiary_count": {
                               "type": "number"
                             },
+                            "memory_integration_count": {
+                              "type": "number"
+                            },
+                            "over_limit": {
+                              "type": "boolean"
+                            },
+                            "percent_used": {
+                              "type": "number"
+                            },
+                            "remaining_bytes": {
+                              "type": "number"
+                            },
                             "storage_limit_bytes": {
                               "type": "number"
                             },
+                            "storage_reserved_bytes": {
+                              "type": "number"
+                            },
                             "storage_used_bytes": {
+                              "type": "number"
+                            },
+                            "time_capsule_count": {
                               "type": "number"
                             },
                             "timed_message_count": {
@@ -3146,6 +3192,38 @@
                 "schema": {
                   "properties": {
                     "data": {
+                      "properties": {
+                        "beneficiary_count": {
+                          "type": "number"
+                        },
+                        "memory_integration_count": {
+                          "type": "number"
+                        },
+                        "over_limit": {
+                          "type": "boolean"
+                        },
+                        "percent_used": {
+                          "type": "number"
+                        },
+                        "remaining_bytes": {
+                          "type": "number"
+                        },
+                        "storage_limit_bytes": {
+                          "type": "number"
+                        },
+                        "storage_reserved_bytes": {
+                          "type": "number"
+                        },
+                        "storage_used_bytes": {
+                          "type": "number"
+                        },
+                        "time_capsule_count": {
+                          "type": "number"
+                        },
+                        "timed_message_count": {
+                          "type": "number"
+                        }
+                      },
                       "type": "object"
                     },
                     "status": {

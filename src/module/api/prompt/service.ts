@@ -1,12 +1,10 @@
 import Memory from '../../database/model/memory';
-import File from '../../database/model/file';
 import Prompt, {IPrompt} from '../../database/model/prompt';
 import mongoose from 'mongoose';
 import {NotFoundException} from '../../../utils/service-error';
 import {IReplyPrompt} from './interface';
 import {isEmpty} from '../../../utils/helpers';
 import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
-import * as storage from '../../../services/storage';
 import User from '../../database/model/user';
 import ActivePrompt from '../../database/model/active-prompt';
 import dayjs from 'dayjs';
@@ -20,7 +18,7 @@ import {
   setCachedAiPrompt,
 } from './daily-ai-prompt';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
-import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
+import {persistUploadedFiles} from '../file/service';
 
 dayjs.extend(utc);
 
@@ -272,6 +270,7 @@ export const replyPrompt = async (
   payload: IReplyPrompt,
   user_id: string,
   files: Express.Multer.File[] | null = null,
+  reservationId?: string,
 ) => {
   const {prompt_id, body, tags = [], level = 1} = payload;
 
@@ -287,25 +286,11 @@ export const replyPrompt = async (
 
   let attachments = payload?.attachments || [];
   if (!isEmpty(files)) {
-    const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
-    await storage.checkStorageQuota(user, additionalBytes);
-    const unsavedFiles = await Promise.all(
-      files.map(file => storage.uploadFile(file, user_id)),
-    );
-
-    const savedFiles = await File.insertMany(unsavedFiles);
-    await Promise.all(
-      savedFiles.map(async file => {
-        if (file.type?.startsWith('video/') && file.status === 'processing') {
-          const queued = await queueAttachmentThumbnailProcessing(file.id);
-          if (!queued) {
-            await File.findByIdAndUpdate(file.id, {
-              status: 'failed',
-              thumbnail: null,
-            });
-          }
-        }
-      }),
+    const savedFiles = await persistUploadedFiles(
+      files,
+      user_id,
+      undefined,
+      reservationId,
     );
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }

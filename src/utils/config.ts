@@ -14,6 +14,22 @@ export const MAX_UPLOAD_FILES = Number(process.env.MAX_UPLOAD_FILES || 5);
 export const UPLOAD_FILE_SIZE_LIMIT_MB = Number(
   process.env.UPLOAD_FILE_SIZE_LIMIT_MB || 15,
 );
+export const STORAGE_LIMIT_FREE_BYTES = Number(
+  process.env.STORAGE_LIMIT_FREE_BYTES || 200 * 1024 ** 2,
+);
+export const STORAGE_LIMIT_PRO_BYTES = Number(
+  process.env.STORAGE_LIMIT_PRO_BYTES || 10 * 1024 ** 3,
+);
+export const STORAGE_LIMIT_LEGACY_BYTES = Number(
+  process.env.STORAGE_LIMIT_LEGACY_BYTES || STORAGE_LIMIT_PRO_BYTES,
+);
+export const STORAGE_RESERVATION_TTL_SECONDS = Number(
+  process.env.STORAGE_RESERVATION_TTL_SECONDS || 15 * 60,
+);
+export const STORAGE_QUOTA_ENFORCEMENT_ENABLED =
+  process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED !== undefined
+    ? process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED === 'true'
+    : !IS_PRODUCTION;
 export const CORS_ALLOWED_ORIGINS = (
   process.env.CORS_ALLOWED_ORIGINS ||
   'http://localhost:5173,https://app.mymemento.io,https://dev.mymemento.io,https://www.mymemento.io,https://mymemento.io'

@@ -16,6 +16,8 @@ import {v4 as uuid} from 'uuid';
 import AuthCode from '../../database/model/auth-code';
 import {CreateBeneficiaryBody} from './dto';
 import otp from '../../../services/otp';
+import {acquireUsageSlot, applyUsageDelta} from '../billing/usage-accounting';
+import mongoose from 'mongoose';
 
 export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   const {
@@ -46,16 +48,36 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
 
   const user = await User.findOne({email});
 
-  const data = await Beneficiary.create({
-    email,
-    name,
-    about,
-    avatar_file_id,
-    relationship,
-    due_at: dayjs().add(3, 'days').toDate(),
-    user: user?.id || null,
-    benefactor: user_id,
-  });
+  let data;
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      await acquireUsageSlot(
+        user_id,
+        'beneficiary_count',
+        2,
+        'beneficiaries',
+        session,
+      );
+      [data] = await Beneficiary.create(
+        [
+          {
+            email,
+            name,
+            about,
+            avatar_file_id,
+            relationship,
+            due_at: dayjs().add(3, 'days').toDate(),
+            user: user?.id || null,
+            benefactor: user_id,
+          },
+        ],
+        {session},
+      );
+    });
+  } finally {
+    await session.endSession();
+  }
 
   if (data && groups.length > 0) {
     const userGroups = await Group.find({_id: {$in: groups}, user: user_id});
@@ -146,24 +168,35 @@ export async function list(
 }
 
 export async function del(id: string, user_id: string) {
-  const beneficiary = await Beneficiary.findOne({_id: id, benefactor: user_id});
-  if (!beneficiary) {
-    throw new NotFoundException('Beneficiary not found');
+  const session = await mongoose.startSession();
+  let beneficiary;
+  try {
+    await session.withTransaction(async () => {
+      beneficiary = await Beneficiary.findOneAndDelete(
+        {_id: id, benefactor: user_id},
+        {session},
+      );
+      if (!beneficiary) {
+        throw new NotFoundException('Beneficiary not found');
+      }
+      await applyUsageDelta(user_id, 'beneficiary_count', -1, session);
+    });
+  } finally {
+    await session.endSession();
   }
-  await beneficiary.deleteOne();
 
   await track(
     {
       title: 'Beneficiary Deleted',
-      description: `Deleted beneficiary: "${beneficiary.name}"`,
+      description: `Deleted beneficiary: "${beneficiary!.name}"`,
       type: 'beneficiary',
       action: 'deleted',
-      reference: beneficiary.id,
+      reference: beneficiary!.id,
     },
     user_id,
   );
 
-  return {message: 'Beneficiary deleted successfully', data: beneficiary};
+  return {message: 'Beneficiary deleted successfully', data: beneficiary!};
 }
 
 export async function update(

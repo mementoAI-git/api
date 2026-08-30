@@ -12,8 +12,8 @@ import {StatusCodes} from 'http-status-codes';
 import dayjs from 'dayjs';
 import {pipeline} from 'stream/promises';
 import logger from '../../../utils/logger';
-import {assertAccess} from '../billing/service';
 import {CORS_ALLOWED_ORIGINS} from '../../../utils/config';
+import {resolveUploadReservationId} from './upload-idempotency';
 
 export async function uploadFile(
   req: IRequest,
@@ -22,8 +22,6 @@ export async function uploadFile(
 ) {
   try {
     const files = getFiles(req, true);
-    const additionalBytes = files.reduce((total, file) => total + file.size, 0);
-    await assertAccess(req.auth.id, 'storage', {additionalBytes});
     const clientDuration = req.body?.duration
       ? parseFloat(req.body.duration)
       : undefined;
@@ -31,6 +29,11 @@ export async function uploadFile(
       files,
       req.auth.id,
       clientDuration,
+      resolveUploadReservationId(
+        req.header('Idempotency-Key'),
+        req.context?.requestId,
+        'file',
+      ),
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

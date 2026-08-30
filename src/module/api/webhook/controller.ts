@@ -58,13 +58,23 @@ export async function handlePayments(
         ? req.body
         : Buffer.from(JSON.stringify(req.body || {}));
     const signature = req.headers['polar-signature'] as string | undefined;
-    service.verifyPolarSignature(rawBody, signature);
+    service.verifyPolarSignature(
+      rawBody,
+      req.headers['webhook-signature'] ? req.headers : signature,
+    );
 
     const payload = JSON.parse(rawBody.toString('utf8')) as Record<
       string,
       unknown
     >;
-    const result = await billingService.processPolarWebhook(payload);
+    const deliveryId =
+      typeof req.headers['webhook-id'] === 'string'
+        ? req.headers['webhook-id']
+        : undefined;
+    const result = await billingService.processPolarWebhook(
+      payload,
+      deliveryId,
+    );
     return responsHandler(res, StatusCodes.OK, result.message, result.data);
   } catch (error) {
     next(error);

@@ -35,7 +35,9 @@ export type ErrorCode =
   | 'bad_gateway'
   | 'service_unavailable'
   | 'internal_error'
-  | 'request_failed';
+  | 'request_failed'
+  | 'storage_quota_exceeded'
+  | 'storage_reservation_inactive';
 
 export type ApiError = {
   status: number;

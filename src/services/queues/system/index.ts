@@ -123,6 +123,34 @@ export async function initializeAccountPurgeDispatcher(): Promise<void> {
   );
 }
 
+export async function initializeStorageReservationExpiry(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, storage reservations cannot be expired',
+    );
+    return;
+  }
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.expireStorageReservations,
+    {every: 5 * 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
+export async function initializeBillingUsageReconciliation(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, billing usage cannot be reconciled',
+    );
+    return;
+  }
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.reconcileBillingUsage,
+    {pattern: '30 2 * * *'},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
 export async function dispatchPendingAccountPurges(): Promise<number> {
   if (!systemQueue) return 0;
   const commands = await PurgeCommand.find({

@@ -10,6 +10,8 @@ import {scheduleCapsuleDelivery} from '../../../services/queues/system';
 import {assertOwnedFileIds} from '../file/access';
 import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
 import {normalizeCapsuleRecipients} from './recipients';
+import {acquireUsageSlot, applyUsageDelta} from '../billing/usage-accounting';
+import mongoose from 'mongoose';
 export {
   exchangeExternalViewToken,
   getExternalCapsule,
@@ -99,19 +101,44 @@ export async function createCapsule(
   };
   if (status === 'scheduled') assertSchedulable(candidate);
 
-  const capsule = await Capsule.create({
-    title: candidate.title,
-    body: candidate.body,
-    user: user_id,
-    recipients: legacyIds,
-    recipient_snapshots: snapshots,
-    recipients_snapshot_version: 1,
-    attachments,
-    memories,
-    style: validateStyle(payload.style),
-    ...(candidate.schedule_date && {schedule_date: candidate.schedule_date}),
-    status,
-  });
+  let capsule;
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      if (status === 'scheduled') {
+        await acquireUsageSlot(
+          user_id,
+          'timed_message_count',
+          5,
+          'timed_messages',
+          session,
+        );
+      }
+      [capsule] = await Capsule.create(
+        [
+          {
+            title: candidate.title,
+            body: candidate.body,
+            user: user_id,
+            recipients: legacyIds,
+            recipient_snapshots: snapshots,
+            recipients_snapshot_version: 1,
+            attachments,
+            memories,
+            style: validateStyle(payload.style),
+            ...(candidate.schedule_date && {
+              schedule_date: candidate.schedule_date,
+            }),
+            status,
+          },
+        ],
+        {session},
+      );
+      await applyUsageDelta(user_id, 'time_capsule_count', 1, session);
+    });
+  } finally {
+    await session.endSession();
+  }
 
   if (
     capsule.status === 'scheduled' &&
@@ -225,9 +252,39 @@ export async function updateCapsule(
   };
   if (payload.status === 'scheduled') assertSchedulable(merged);
 
-  const updateCapsule = await Capsule.findByIdAndUpdate(id, updateData, {
-    new: true,
-  });
+  let updateCapsule;
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const current = await Capsule.findOne({_id: id, user: user_id}).session(
+        session,
+      );
+      if (!current) throw new NotFoundException('Capsule not found');
+      const nextStatus = payload.status ?? current.status;
+      const startsScheduling =
+        current.status !== 'scheduled' && nextStatus === 'scheduled';
+      if (startsScheduling) {
+        await acquireUsageSlot(
+          user_id,
+          'timed_message_count',
+          5,
+          'timed_messages',
+          session,
+        );
+      }
+      updateCapsule = await Capsule.findOneAndUpdate(
+        {_id: id, user: user_id, status: current.status},
+        updateData,
+        {new: true, session},
+      );
+      if (!updateCapsule) throw new NotFoundException('Capsule not found');
+      if (current.status === 'scheduled' && nextStatus !== 'scheduled') {
+        await applyUsageDelta(user_id, 'timed_message_count', -1, session);
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
 
   if (payload.status === 'scheduled' && updateCapsule?.schedule_date) {
     await scheduleCapsuleDelivery(
@@ -264,10 +321,45 @@ export async function scheduleCapsule(id: string, userId: string) {
     capsule.recipients_snapshot_version = 1;
   }
   assertSchedulable(capsule);
-  capsule.status = 'scheduled';
-  await capsule.save();
-  await scheduleCapsuleDelivery(capsule.id, capsule.schedule_date!);
-  return {message: 'Capsule scheduled successfully', data: capsule};
+  const session = await mongoose.startSession();
+  let scheduledCapsule;
+  try {
+    await session.withTransaction(async () => {
+      const current = await Capsule.findOne({_id: id, user: userId}).session(
+        session,
+      );
+      if (!current) throw new NotFoundException('Capsule not found');
+      if (current.status !== 'scheduled') {
+        await acquireUsageSlot(
+          userId,
+          'timed_message_count',
+          5,
+          'timed_messages',
+          session,
+        );
+      }
+      scheduledCapsule = await Capsule.findOneAndUpdate(
+        {_id: id, user: userId, status: current.status},
+        {
+          $set: {
+            status: 'scheduled',
+            recipients: capsule.recipients,
+            recipient_snapshots: capsule.recipient_snapshots,
+            recipients_snapshot_version: capsule.recipients_snapshot_version,
+          },
+        },
+        {new: true, session},
+      );
+      if (!scheduledCapsule) throw new NotFoundException('Capsule not found');
+    });
+  } finally {
+    await session.endSession();
+  }
+  await scheduleCapsuleDelivery(
+    scheduledCapsule!.id,
+    scheduledCapsule!.schedule_date!,
+  );
+  return {message: 'Capsule scheduled successfully', data: scheduledCapsule!};
 }
 
 export async function getCapsuleScheduleDate(
@@ -346,24 +438,34 @@ export async function getCapsule(id: string, user: string) {
 }
 
 export async function deleteCapsule(id: string, user: string) {
-  const capsule = await Capsule.findOne({user, _id: id});
-  if (!capsule) {
-    throw new NotFoundException('Capsule not found');
+  const session = await mongoose.startSession();
+  let capsule;
+  try {
+    await session.withTransaction(async () => {
+      capsule = await Capsule.findOneAndDelete({user, _id: id}, {session});
+      if (!capsule) {
+        throw new NotFoundException('Capsule not found');
+      }
+      await applyUsageDelta(user, 'time_capsule_count', -1, session);
+      if (capsule.status === 'scheduled') {
+        await applyUsageDelta(user, 'timed_message_count', -1, session);
+      }
+    });
+  } finally {
+    await session.endSession();
   }
-
-  await capsule.deleteOne();
   await track(
     {
       title: 'Capsule Deleted',
-      description: `Deleted capsule: "${capsule.title}"`,
+      description: `Deleted capsule: "${capsule!.title}"`,
       type: 'capsule',
       action: 'deleted',
-      reference: capsule.id,
+      reference: capsule!.id,
     },
     user,
   );
 
-  return {message: 'Time capsule deleted successfully', data: capsule};
+  return {message: 'Time capsule deleted successfully', data: capsule!};
 }
 
 // export async function getCapsuleStats(user: string) {

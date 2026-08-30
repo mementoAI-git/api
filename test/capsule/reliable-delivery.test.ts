@@ -12,24 +12,28 @@ import {
   scheduleCapsule,
   updateCapsule,
 } from '../../src/module/api/capsule/service';
-import {revealCapsules} from '../../src/workers/system/reveal-capsules';
+import {
+  finalizeCapsuleDelivery,
+  revealCapsules,
+} from '../../src/workers/system/reveal-capsules';
 import {
   clearTestDatabase,
   closeTestDatabase,
-  connectTestDatabase,
+  connectTestReplicaSet,
 } from '../helpers/database';
 import {createUserFixture} from '../helpers/factories';
 import mail from '../../src/module/mail';
 import request from 'supertest';
 import {createTestApp} from '../helpers/app';
 import {backfillCapsuleRecipients} from '../../src/scripts/backfill-capsule-recipients';
+import Usage from '../../src/module/database/model/usage';
 
 vi.mock('../../src/module/mail', () => ({
   default: {sendCapsuleReveal: vi.fn().mockResolvedValue(undefined)},
 }));
 
 describe('reliable capsule delivery', () => {
-  beforeAll(connectTestDatabase);
+  beforeAll(connectTestReplicaSet);
   afterEach(async () => {
     vi.clearAllMocks();
     await clearTestDatabase();
@@ -191,6 +195,11 @@ describe('reliable capsule delivery', () => {
       attachments: [],
       memories: [],
     });
+    await Usage.create({
+      user_id: sender.id,
+      timed_message_count: 1,
+      time_capsule_count: 1,
+    });
 
     await revealCapsules({data: {capsuleId: capsule.id}});
     await revealCapsules({data: {capsuleId: capsule.id}});
@@ -203,6 +212,38 @@ describe('reliable capsule delivery', () => {
     ).toBe(1);
     expect(mail.sendCapsuleReveal).toHaveBeenCalledTimes(2);
     expect((await Capsule.findById(capsule.id))?.status).toBe('delivered');
+    expect(
+      (await Usage.findOne({user_id: sender.id}))?.timed_message_count,
+    ).toBe(0);
+  });
+
+  it('decrements scheduled usage once across concurrent finalization', async () => {
+    const sender = await createUserFixture();
+    const capsule = await Capsule.create({
+      user: sender.id,
+      title: 'Concurrent finalization',
+      body: 'Only account for this once',
+      status: 'scheduled',
+      schedule_date: new Date(Date.now() - 1000),
+      recipients: [],
+      attachments: [],
+      memories: [],
+    });
+    await Usage.create({
+      user_id: sender.id,
+      timed_message_count: 1,
+      time_capsule_count: 1,
+    });
+
+    await Promise.all([
+      finalizeCapsuleDelivery(capsule.id, sender.id, 'delivered'),
+      finalizeCapsuleDelivery(capsule.id, sender.id, 'delivered'),
+    ]);
+
+    expect((await Capsule.findById(capsule.id))?.status).toBe('delivered');
+    expect(
+      (await Usage.findOne({user_id: sender.id}))?.timed_message_count,
+    ).toBe(0);
   });
 
   it('exchanges an external token once and enforces expiring grants', async () => {

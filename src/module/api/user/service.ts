@@ -58,6 +58,8 @@ import PushDevice from '../../database/model/push-device';
 import {PURGE_SCHEMA_VERSION} from '../../../services/account-purge';
 import {publishAccountPurge} from '../../../services/queues/system';
 import logger from '../../../utils/logger';
+import {persistUploadedFiles} from '../file/service';
+import {reconcileStorageUsage} from '../billing/storage-quota';
 
 const ONBOARDING_PROMPT_VERSION = getPromptVersion('onboarding_chat');
 
@@ -269,29 +271,46 @@ export async function updateStreak(user_id: string) {
 export async function uploadPicture(
   payload: Express.Multer.File[],
   user_id: string,
+  reservationId?: string,
 ) {
   const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException('User not found');
   }
 
-  await storage.checkStorageQuota(user, payload[0].size);
-
-  const {name, type, size} = await storage.uploadFile(payload[0], user_id);
-
-  const file = await File.create({
-    name,
-    // base64: data.toString("base64"),
-    size,
-    user: user_id,
-    type,
-  });
-
-  if (user.picture) {
-    await File.deleteOne({name: user.picture});
-  }
-
+  const previousPicture = user.picture;
+  const [file] = await persistUploadedFiles(
+    payload,
+    user_id,
+    undefined,
+    reservationId,
+  );
   await user.updateOne({picture: file.name});
+
+  if (previousPicture && previousPicture !== file.name) {
+    const previousFile = await File.findActiveOne({
+      name: previousPicture,
+      user: user_id,
+    });
+    if (previousFile) {
+      try {
+        await storage.deleteFileEverywhere(
+          previousFile.name,
+          previousFile.provider,
+          previousFile.type,
+          Boolean(previousFile.backup_at),
+        );
+        await previousFile.deleteOne();
+      } catch (error) {
+        logger.warn(
+          {err: error, fileId: previousFile.id, userId: user_id},
+          'Profile picture replacement cleanup deferred',
+        );
+        await previousFile.updateOne({$set: {deleted: true}});
+      }
+      await reconcileStorageUsage(user_id);
+    }
+  }
 
   return {message: 'Profile pics uploaded successfully', data: file};
 }

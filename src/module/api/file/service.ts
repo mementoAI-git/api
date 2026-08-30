@@ -1,7 +1,7 @@
 import * as storage from '../../../services/storage';
 import {filterGenerator} from '../../../utils/helpers';
 import User from '../../database/model/user';
-import File from '../../database/model/file';
+import File, {type IFile} from '../../database/model/file';
 import {
   BadRequestException,
   ForbiddenException,
@@ -29,13 +29,20 @@ import {
 import {parseFileCapabilityQuery} from './request-access';
 import {assertReadableFile, FileDocument} from './access';
 import {applyAttachmentContract} from '../../../utils/attachment-response';
-import {Types} from 'mongoose';
+import mongoose, {Types, type HydratedDocument} from 'mongoose';
 import logger from '../../../utils/logger';
+import {
+  commitStorageReservation,
+  reconcileStorageUsage,
+  releaseStorageReservation,
+  reserveStorage,
+} from '../billing/storage-quota';
 
-export async function uploadFile(
+export async function persistUploadedFiles(
   payload: Express.Multer.File[],
   user_id: string,
   clientDuration?: number,
+  reservationId?: string,
 ) {
   const user = await User.findById(user_id);
   if (!user) {
@@ -43,13 +50,132 @@ export async function uploadFile(
   }
 
   const additionalBytes = payload.reduce((acc, f) => acc + f.size, 0);
-  await storage.checkStorageQuota(user, additionalBytes);
-
-  const files = await Promise.all(
-    payload.map(file => storage.uploadFile(file, user_id, clientDuration)),
+  const requestFingerprint = createHash('sha256')
+    .update(
+      payload
+        .map(file =>
+          [
+            file.originalname,
+            file.mimetype,
+            file.size,
+            createHash('sha256').update(file.buffer).digest('hex'),
+          ].join(':'),
+        )
+        .join('|'),
+    )
+    .digest('hex');
+  const reservation = await reserveStorage(
+    user_id,
+    additionalBytes,
+    reservationId,
+    requestFingerprint,
   );
+  if (!reservation.acquired) {
+    if (reservation.status === 'committed' && reservation.file_ids?.length) {
+      const existing = await File.find({_id: {$in: reservation.file_ids}});
+      return existing;
+    }
+    throw new ServiceError(
+      'Upload is already in progress',
+      StatusCodes.CONFLICT,
+      {
+        code: 'upload_in_progress',
+      },
+    );
+  }
 
-  const data = await File.insertMany(files);
+  const files: Awaited<ReturnType<typeof storage.uploadFile>>[] = [];
+  const data: HydratedDocument<IFile>[] = [];
+  try {
+    const uploadResults = await Promise.allSettled(
+      payload.map(file => storage.uploadFile(file, user_id, clientDuration)),
+    );
+    files.push(
+      ...uploadResults.flatMap(result =>
+        result.status === 'fulfilled' ? [result.value] : [],
+      ),
+    );
+    const failedUpload = uploadResults.find(
+      result => result.status === 'rejected',
+    );
+    if (failedUpload?.status === 'rejected') throw failedUpload.reason;
+
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        data.splice(0, data.length);
+        for (const file of files) {
+          const [created] = await File.create([file], {session});
+          data.push(created);
+        }
+        await commitStorageReservation(
+          reservation.reservation_id,
+          data.reduce((total, file) => total + (file.size || 0), 0),
+          data.map(file => file.id),
+          session,
+        );
+      });
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    if (data.length) {
+      await File.deleteMany({_id: {$in: data.map(file => file.id)}});
+    }
+    await Promise.all(
+      files.flatMap(file => {
+        const deletions: Promise<void>[] = [];
+        if (file.name && file.type) {
+          deletions.push(
+            storage
+              .deleteFileEverywhere(
+                file.name,
+                file.provider ?? DEFAULT_STORAGE_PROVIDER,
+                file.type,
+                false,
+              )
+              .catch(async cleanupError => {
+                logger.error(
+                  {key: file.name, err: cleanupError},
+                  'Failed to roll back uploaded object; queued cleanup retry',
+                );
+                await storage.recordStorageCleanupRetry({
+                  key: file.name!,
+                  user: user_id,
+                  type: file.type!,
+                  provider: file.provider ?? DEFAULT_STORAGE_PROVIDER,
+                });
+              }),
+          );
+        }
+        if (file.thumbnail_key) {
+          deletions.push(
+            storage
+              .deleteFileEverywhere(
+                file.thumbnail_key,
+                DEFAULT_STORAGE_PROVIDER,
+                'image/jpeg',
+                false,
+              )
+              .catch(async cleanupError => {
+                logger.error(
+                  {key: file.thumbnail_key, err: cleanupError},
+                  'Failed to roll back derivative; queued cleanup retry',
+                );
+                await storage.recordStorageCleanupRetry({
+                  key: file.thumbnail_key!,
+                  user: user_id,
+                  type: 'image/jpeg',
+                });
+              }),
+          );
+        }
+        return deletions;
+      }),
+    );
+    await releaseStorageReservation(reservation.reservation_id);
+    throw error;
+  }
 
   await Promise.all(
     data.map(async file => {
@@ -68,6 +194,21 @@ export async function uploadFile(
     }),
   );
 
+  return data;
+}
+
+export async function uploadFile(
+  payload: Express.Multer.File[],
+  userId: string,
+  clientDuration?: number,
+  reservationId?: string,
+) {
+  const data = await persistUploadedFiles(
+    payload,
+    userId,
+    clientDuration,
+    reservationId,
+  );
   return {message: 'File uploaded successfully', data};
 }
 
@@ -117,6 +258,7 @@ export async function removeFile(name: string, user_id: string) {
     );
     await File.deleteOne({name});
   }
+  await reconcileStorageUsage(user_id);
 
   return {data: file, message: 'File deleted successfully'};
 }

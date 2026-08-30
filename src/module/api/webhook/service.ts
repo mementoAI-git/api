@@ -94,7 +94,7 @@ export async function processTallySubmission(
 
 export function verifyPolarSignature(
   rawBody: Buffer,
-  signature: string | undefined,
+  signature: string | undefined | Record<string, string | string[] | undefined>,
 ): void {
   verifyPolarWebhookSignature(rawBody, signature);
 }

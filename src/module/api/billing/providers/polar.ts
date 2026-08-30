@@ -42,12 +42,53 @@ const POLAR_PRODUCTS: Record<
   },
 };
 
+export function resolvePolarProductPlan(
+  productId: string | undefined,
+  metadata: Record<string, unknown>,
+): {tier: 'pro' | 'legacy' | null; interval: Interval | null} {
+  const configured = (
+    Object.entries(POLAR_PRODUCTS) as Array<
+      [Exclude<Tier, 'free'>, Record<Interval, string | undefined>]
+    >
+  ).flatMap(([tier, intervals]) =>
+    (Object.entries(intervals) as Array<[Interval, string | undefined]>)
+      .filter((entry): entry is [Interval, string] => Boolean(entry[1]))
+      .map(([interval, id]) => ({tier, interval, id})),
+  );
+  const match = configured.find(product => product.id === productId);
+  if (match) return {tier: match.tier, interval: match.interval};
+  if (configured.length > 0) {
+    throw new BadRequestException('Unknown Polar product mapping');
+  }
+  const tier =
+    metadata.tier === 'pro' || metadata.tier === 'legacy'
+      ? metadata.tier
+      : null;
+  const interval =
+    metadata.interval === 'monthly' ||
+    metadata.interval === 'annual' ||
+    metadata.interval === 'lifetime'
+      ? metadata.interval
+      : null;
+  return {tier, interval};
+}
+
 function requirePolarAccessToken() {
   if (!POLAR_ACCESS_TOKEN) {
     throw new BadRequestException(
       'Polar access token is not configured (POLAR_ACCESS_TOKEN)',
     );
   }
+}
+
+function polarRequestConfig() {
+  return {
+    headers: {
+      Authorization: `Bearer ${POLAR_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    timeout: 15000,
+  };
 }
 
 function buildCheckoutPayload(input: PolarCheckoutInput) {
@@ -151,6 +192,81 @@ export async function createPolarPortalSession({
   return {portalUrl};
 }
 
+export async function cancelPolarSubscription(subscriptionId: string) {
+  requirePolarAccessToken();
+  const {data} = await axios.patch(
+    `${POLAR_BASE_URL}/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    {cancel_at_period_end: true},
+    polarRequestConfig(),
+  );
+  return data as Record<string, unknown>;
+}
+
+export async function resumePolarSubscription(subscriptionId: string) {
+  requirePolarAccessToken();
+  const {data} = await axios.patch(
+    `${POLAR_BASE_URL}/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    {cancel_at_period_end: false},
+    polarRequestConfig(),
+  );
+  return data as Record<string, unknown>;
+}
+
+type PolarOrder = {
+  id: string;
+  status: string;
+  invoice_number?: string | null;
+  receipt_number?: string | null;
+  created_at: string;
+  total_amount: number;
+  currency: string;
+};
+
+export async function listPolarInvoices(externalCustomerId: string) {
+  requirePolarAccessToken();
+  const {data} = await axios.get(`${POLAR_BASE_URL}/orders/`, {
+    ...polarRequestConfig(),
+    params: {
+      external_customer_id: externalCustomerId,
+      page: 1,
+      limit: 100,
+      sorting: '-created_at',
+    },
+  });
+  const orders = Array.isArray(data?.items)
+    ? (data.items as PolarOrder[]).filter(order => order.status === 'paid')
+    : [];
+  return Promise.all(
+    orders.map(async order => {
+      let url: string | undefined;
+      try {
+        const receipt = await axios.get(
+          `${POLAR_BASE_URL}/orders/${encodeURIComponent(order.id)}/receipt`,
+          polarRequestConfig(),
+        );
+        if (typeof receipt.data?.url === 'string') url = receipt.data.url;
+      } catch (error) {
+        if (
+          !axios.isAxiosError(error) ||
+          ![202, 404].includes(error.response?.status || 0)
+        ) {
+          throw error;
+        }
+      }
+      return {
+        id: order.id,
+        label:
+          order.invoice_number || order.receipt_number || `Order ${order.id}`,
+        ...(url && {url}),
+        created_at: order.created_at,
+        amount: order.total_amount,
+        currency: String(order.currency || '').toUpperCase(),
+        status: order.status,
+      };
+    }),
+  );
+}
+
 /** Delete and GDPR-anonymize a Polar customer using Memento's user id. */
 export async function deletePolarCustomerByExternalId(
   externalCustomerId: string,
@@ -175,18 +291,59 @@ export async function deletePolarCustomerByExternalId(
 
 export function verifyPolarWebhookSignature(
   rawBody: Buffer,
-  signatureHeader: string | undefined,
+  signatureOrHeaders:
+    | string
+    | undefined
+    | Record<string, string | string[] | undefined>,
 ) {
   if (!POLAR_WEBHOOK_SECRET) {
     throw new UnauthorizedException(
       'Polar webhook secret missing (POLAR_WEBHOOK_SECRET)',
     );
   }
-  if (!signatureHeader) {
-    throw new UnauthorizedException('Missing Polar-Signature header');
+  if (!signatureOrHeaders) {
+    throw new UnauthorizedException('Missing Polar webhook signature');
   }
 
   const bodyString = rawBody.toString('utf8');
+  if (typeof signatureOrHeaders !== 'string') {
+    const header = (name: string) => {
+      const value = signatureOrHeaders[name];
+      return Array.isArray(value) ? value[0] : value;
+    };
+    const webhookId = header('webhook-id');
+    const timestamp = header('webhook-timestamp');
+    const signatureHeader = header('webhook-signature');
+    if (!webhookId || !timestamp || !signatureHeader) {
+      throw new UnauthorizedException('Missing Standard Webhooks headers');
+    }
+    const timestampSeconds = Number(timestamp);
+    if (
+      !Number.isFinite(timestampSeconds) ||
+      Math.abs(Date.now() / 1000 - timestampSeconds) > 5 * 60
+    ) {
+      throw new UnauthorizedException('Polar webhook timestamp is stale');
+    }
+    const encodedSecret = POLAR_WEBHOOK_SECRET.startsWith('whsec_')
+      ? POLAR_WEBHOOK_SECRET.slice('whsec_'.length)
+      : POLAR_WEBHOOK_SECRET;
+    const secret = POLAR_WEBHOOK_SECRET.startsWith('whsec_')
+      ? Buffer.from(encodedSecret, 'base64')
+      : Buffer.from(encodedSecret);
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(`${webhookId}.${timestamp}.${bodyString}`)
+      .digest('base64');
+    const signatures = signatureHeader
+      .split(' ')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .map(part => (part.startsWith('v1,') ? part.slice(3) : part));
+    if (signatures.some(signature => safeCompare(expected, signature))) return;
+    throw new UnauthorizedException('Invalid Polar webhook signature');
+  }
+
+  const signatureHeader = signatureOrHeaders;
   const {timestamp, v1} = parseSignatureHeader(signatureHeader);
 
   const direct = crypto
