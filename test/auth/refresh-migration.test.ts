@@ -4,6 +4,7 @@ import {afterAll, afterEach, beforeAll, describe, expect, it} from 'vitest';
 import type {SessionClaims} from '../../src/contracts/session';
 import {createSession} from '../../src/module/api/auth/session-service';
 import AuthSession from '../../src/module/database/model/auth-session';
+import AiMetric from '../../src/module/database/model/ai-metric';
 import User from '../../src/module/database/model/user';
 import {createRefreshToken} from '../../src/utils/helpers';
 import {
@@ -27,6 +28,8 @@ describe('refresh token migration', () => {
     const response = await request(createTestApp())
       .post('/auth/refresh-token')
       .set('X-Memento-Client', 'ios')
+      .set('X-Memento-Version', '4.2.1')
+      .set('X-Memento-Build', '801')
       .send({refresh_token: first.refresh_token});
 
     expect(response.status).toBe(200);
@@ -38,6 +41,13 @@ describe('refresh token migration', () => {
       (decode(response.body.data.refresh_token) as SessionClaims).sid,
     ).toBe(sid);
     expect(await AuthSession.countDocuments({session_id: sid})).toBe(1);
+    await expect
+      .poll(async () =>
+        AiMetric.findOne({event: 'compat.auth.legacy_session_shape'}).lean(),
+      )
+      .toMatchObject({
+        metadata: {client: 'ios', version: '4.2.1', build: '801'},
+      });
 
     const replay = await request(createTestApp())
       .post('/auth/refresh-token')
@@ -57,6 +67,8 @@ describe('refresh token migration', () => {
     const response = await request(createTestApp())
       .post('/auth/refresh-token')
       .set('X-Memento-Client', 'android')
+      .set('X-Memento-Version', '4.2.1')
+      .set('X-Memento-Build', '802')
       .send({refresh_token: legacy});
 
     expect(response.status).toBe(200);
@@ -69,6 +81,13 @@ describe('refresh token migration', () => {
       refresh_token: null,
       refresh_tokens: [untouched],
     });
+    await expect
+      .poll(async () =>
+        AiMetric.findOne({event: 'compat.auth.legacy_refresh'}).lean(),
+      )
+      .toMatchObject({
+        metadata: {client: 'android', version: '4.2.1', build: '802'},
+      });
 
     const replay = await request(createTestApp())
       .post('/auth/refresh-token')

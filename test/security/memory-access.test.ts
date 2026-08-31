@@ -5,6 +5,7 @@ import Bookmark from '../../src/module/database/model/bookmarks';
 import Group from '../../src/module/database/model/group';
 import Memory from '../../src/module/database/model/memory';
 import Message from '../../src/module/database/model/message';
+import Activity from '../../src/module/database/model/activities';
 import * as memoryService from '../../src/module/api/memory/service';
 import {
   clearTestDatabase,
@@ -136,6 +137,31 @@ describe('memory access policy', () => {
 
     expect(await Bookmark.countDocuments()).toBe(0);
     expect(await Message.countDocuments()).toBe(0);
+  });
+
+  it('treats concurrent bookmark retries as one idempotent action', async () => {
+    const owner = await createUserFixture();
+    const memory = await Memory.create({
+      user: owner.id,
+      title: 'Bookmark once',
+      status: 'save',
+    });
+    const results = await Promise.all([
+      memoryService.bookmark(memory.id, owner.id),
+      memoryService.bookmark(memory.id, owner.id),
+    ]);
+
+    expect(results[0].data.id).toBe(results[1].data.id);
+    expect(
+      await Bookmark.countDocuments({user: owner.id, memory: memory.id}),
+    ).toBe(1);
+    expect(
+      await Activity.countDocuments({
+        user: owner.id,
+        reference: memory.id,
+        action: 'bookmarked',
+      }),
+    ).toBe(1);
   });
 
   it('scopes prompt responses to the authenticated user', async () => {

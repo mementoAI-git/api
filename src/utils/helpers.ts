@@ -242,13 +242,28 @@ export const getFiles = (
   return files;
 };
 
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+const MAX_PAGE_NUMBER = 10_000;
+
+function boundedPositiveInteger(
+  value: unknown,
+  fallback: number,
+  maximum: number,
+): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(maximum, Math.floor(parsed));
+}
+
 export const getPagination = (req: Request): IPagination => {
-  let {limit = 25, page = 1} = req.query;
+  const {limit = DEFAULT_PAGE_SIZE, page = 1} = req.query;
 
-  limit = Math.max(Number(limit), 1);
-  page = Math.max(Number(page), 1);
-
-  return {...req.query, limit, page};
+  return {
+    ...req.query,
+    limit: boundedPositiveInteger(limit, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
+    page: boundedPositiveInteger(page, 1, MAX_PAGE_NUMBER),
+  };
 };
 
 export const hashPassword = async (password: string) => {
@@ -364,8 +379,11 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
   for (let i = 0; i < queries.length; i++) {
     if (!allowed.includes(queries[i][0])) continue;
     if (queries[i][0] === 'search' && !isEmpty(queries[i][1])) {
+      const escapedSearch = String(queries[i][1])
+        .slice(0, 256)
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const search_filters: any[] = fields.map(key => ({
-        [key]: {$regex: new RegExp(`${queries[i][1]}`), $options: 'i'},
+        [key]: {$regex: new RegExp(escapedSearch), $options: 'i'},
       }));
       proccessed.push({$or: search_filters});
     } else proccessed.push({[queries[i][0]]: queries[i][1]});

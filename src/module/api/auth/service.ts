@@ -56,6 +56,7 @@ import {
 } from './session-service';
 import {verifyAppleIdentity} from './providers/apple';
 import {invalidateSecurityState} from './security-state';
+import {recordCompatibilityUse} from '../../../services/compatibility-telemetry';
 
 // ---------------------------------------------------------------------------
 // 2FA pending session helpers (Redis, 5-min TTL)
@@ -86,7 +87,10 @@ async function consume2FAPendingToken(token: string) {
   };
 }
 
-const LEGACY_CLIENT: Pick<RequestContext, 'client'> = {
+type AuthClientContext = Pick<RequestContext, 'client'> &
+  Partial<Pick<RequestContext, 'version' | 'build'>>;
+
+const LEGACY_CLIENT: AuthClientContext = {
   client: 'legacy-unknown',
 };
 
@@ -104,7 +108,11 @@ function assertCanAuthenticate(user: {
   }
 }
 
-function withLegacySession(session: SessionPayload) {
+function withLegacySession(
+  session: SessionPayload,
+  context: AuthClientContext,
+) {
+  void recordCompatibilityUse('compat.auth.legacy_session_shape', context);
   return {
     ...session,
     onboarded: session.onboarding_status === 'completed',
@@ -134,7 +142,7 @@ export function generateOauthUrl(provider: string) {
 export async function oauthAuthorization(
   {code, user: appleUser}: IOAuthAuthorization,
   provider: string,
-  context: Pick<RequestContext, 'client'> = LEGACY_CLIENT,
+  context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {token_url, userinfo_url, client_id, client_secret, redirect_uri} =
     OAUTH_PROVIDERS[provider || 'google'];
@@ -193,14 +201,14 @@ export async function oauthAuthorization(
   }
 
   const session = await createSession(user, context);
-  const data = withLegacySession(session);
+  const data = withLegacySession(session, context);
 
   return {data, message: 'User signin is successful'};
 }
 
 export async function login(
   payload: ILogin,
-  context: Pick<RequestContext, 'client'> = LEGACY_CLIENT,
+  context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {email, password, remember_for_30_days = false} = payload;
   const user = await User.findOne({email});
@@ -242,14 +250,14 @@ export async function login(
     accessExpiresIn: access_token_expires_in,
     refreshExpiresIn: refresh_token_expires_in,
   });
-  const data = withLegacySession(session);
+  const data = withLegacySession(session, context);
 
   return {data, message: 'User login is successful'};
 }
 
 export async function verify2FALogin(
   payload: IVerify2FALogin,
-  context: Pick<RequestContext, 'client'> = LEGACY_CLIENT,
+  context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {two_fa_token, code} = payload;
 
@@ -282,7 +290,7 @@ export async function verify2FALogin(
   });
 
   return {
-    data: withLegacySession(session),
+    data: withLegacySession(session, context),
     message: 'Login successful',
   };
 }
@@ -404,7 +412,7 @@ export async function beginPasskeyLogin(payload: IPasskeyLoginBegin) {
 
 export async function completePasskeyLogin(
   payload: IPasskeyLoginComplete,
-  context: Pick<RequestContext, 'client'> = LEGACY_CLIENT,
+  context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {challenge_id, response} = payload;
 
@@ -463,7 +471,7 @@ export async function completePasskeyLogin(
   const session = await createSession(user, context);
 
   return {
-    data: withLegacySession(session),
+    data: withLegacySession(session, context),
     message: 'Login successful',
   };
 }
@@ -503,7 +511,7 @@ export async function sendLink(payload: ISendLink) {
 
 export async function verifyEmail(
   payload: IVerifyEmail,
-  context: Pick<RequestContext, 'client'> = LEGACY_CLIENT,
+  context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {token} = payload;
 
@@ -538,7 +546,7 @@ export async function verifyEmail(
   });
 
   return {
-    data: {...withLegacySession(session), email: user.email},
+    data: {...withLegacySession(session, context), email: user.email},
     message: 'Verification successful',
   };
 }
@@ -635,7 +643,7 @@ async function getOauthUser(
 
 export async function refreshToken(
   payload: IRefreshToken,
-  context: Pick<RequestContext, 'client'> = LEGACY_CLIENT,
+  context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {refresh_token} = payload;
 
@@ -643,7 +651,7 @@ export async function refreshToken(
   if (decoded.sid) {
     const session = await rotateSession(refresh_token);
     return {
-      data: withLegacySession(session),
+      data: withLegacySession(session, context),
       message: 'Tokens refreshed successfully',
     };
   }
@@ -684,10 +692,12 @@ export async function refreshToken(
     throw new UnauthorizedException('Invalid refresh token');
   }
 
+  void recordCompatibilityUse('compat.auth.legacy_refresh', context);
+
   const session = await createSession(user, context);
 
   return {
-    data: withLegacySession(session),
+    data: withLegacySession(session, context),
     message: 'Tokens refreshed successfully',
   };
 }

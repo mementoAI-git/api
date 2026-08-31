@@ -1,6 +1,7 @@
 import User from '../../database/model/user';
 import {reconcileStorageUsage} from './storage-quota';
 import {reconcileUsageCounts} from './usage-accounting';
+import {recordAiMetric} from '../../../services/ai/metrics';
 
 export async function reconcileBillingUsageBatch(
   limit = 500,
@@ -16,17 +17,20 @@ export async function reconcileBillingUsageBatch(
     .limit(boundedLimit + 1)
     .lean();
   const batch = users.slice(0, boundedLimit);
+  let drifted = 0;
 
   for (const user of batch) {
     const userId = String(user._id);
-    await Promise.all([
+    const results = await Promise.all([
       reconcileStorageUsage(userId),
       reconcileUsageCounts(userId),
     ]);
+    if (results.some(Boolean)) drifted++;
   }
 
   return {
     processed: batch.length,
+    drifted,
     has_more: users.length > boundedLimit,
     next_cursor: batch.length ? String(batch[batch.length - 1]._id) : null,
   };
@@ -35,11 +39,18 @@ export async function reconcileBillingUsageBatch(
 export async function reconcileAllBillingUsage(): Promise<number> {
   let cursor: string | undefined;
   let processed = 0;
+  let drifted = 0;
+  let hasMore = false;
   do {
     const page = await reconcileBillingUsageBatch(500, cursor);
     processed += page.processed;
+    drifted += page.drifted;
+    hasMore = page.has_more;
     cursor = page.has_more && page.next_cursor ? page.next_cursor : undefined;
-    if (!page.has_more) return processed;
-  } while (cursor);
+  } while (hasMore && cursor);
+  await recordAiMetric({
+    event: 'billing.usage_reconciliation',
+    metadata: {processed, drifted},
+  });
   return processed;
 }

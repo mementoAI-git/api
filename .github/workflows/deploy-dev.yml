@@ -41,7 +41,7 @@ permissions:
 
 env:
   DEPLOY_ROOT: /opt/memento/backend-dev
-  HEALTH_URL: http://127.0.0.1:3001/health
+  READINESS_URL: http://127.0.0.1:3001/ready
 
 jobs:
   # ────────────────────────────────────────────────────────────
@@ -430,7 +430,7 @@ jobs:
           API_APP="memento-backend-dev"
           WORKER_APP="memento-backend-dev-worker"
 
-          HEALTH_URL="http://127.0.0.1:3001/health"
+          READINESS_URL="http://127.0.0.1:3001/ready"
 
           mkdir -p "$RELEASES"
 
@@ -600,22 +600,52 @@ jobs:
             echo "PM2 reload completed."
           }
 
-          check_health() {
+          run_release_migrations() {
+            echo "Running release database migrations..."
+            cd "$NEW_RELEASE"
+            MIGRATION_STATUS=0
+            DOTENV_CONFIG_PATH="$DEPLOY_ROOT/.env" \
+              NODE_ENV=production \
+              MEMENTO_ENV=dev \
+              npm run migrations:up:prod || MIGRATION_STATUS=$?
+            cd "$DEPLOY_ROOT"
+            return "$MIGRATION_STATUS"
+          }
+
+          check_readiness() {
             LABEL="$1"
             ATTEMPTS="${2:-15}"
+            ALLOW_LEGACY_HEALTH="${3:-0}"
 
             echo "Checking ${LABEL}..."
 
             for attempt in $(seq 1 "$ATTEMPTS"); do
-              if curl \
+              READINESS_STATUS="$(curl \
+                --silent \
+                --max-time 5 \
+                --output /dev/null \
+                --write-out '%{http_code}' \
+                "$READINESS_URL" \
+                2>/dev/null || true)"
+
+              case "$READINESS_STATUS" in
+              2??)
+                echo "${LABEL} passed on attempt ${attempt}"
+                return 0
+                ;;
+              esac
+
+              if [ "$ALLOW_LEGACY_HEALTH" = "1" ] && \
+                { [ "$READINESS_STATUS" = "404" ] || \
+                  [ "$READINESS_STATUS" = "405" ]; } && curl \
                 --fail \
                 --silent \
                 --show-error \
                 --max-time 5 \
-                "$HEALTH_URL" \
+                "${READINESS_URL%/ready}/health" \
                 >/dev/null 2>&1
               then
-                echo "${LABEL} passed on attempt ${attempt}"
+                echo "${LABEL} passed via legacy health endpoint on attempt ${attempt}"
                 return 0
               fi
 
@@ -782,8 +812,8 @@ jobs:
               return 1
             fi
 
-            if ! check_health "Rollback health check" 10; then
-              echo "ERROR: Previous release is still unhealthy."
+            if ! check_readiness "Rollback readiness check" 10 1; then
+              echo "ERROR: Previous release is still not ready."
               return 1
             fi
 
@@ -796,15 +826,19 @@ jobs:
           echo
           echo "Activating new release..."
 
-          if ! switch_release "$NEW_RELEASE"; then
-            echo "ERROR: Unable to activate new release"
-            exit 1
-          fi
-
           # PM2 was guaranteed to exist for this Node version
           # during Prepare release runtime.
           if ! use_release_node "$NEW_RELEASE"; then
-            rollback || true
+            exit 1
+          fi
+
+          if ! run_release_migrations; then
+            echo "ERROR: Release database migrations failed"
+            exit 1
+          fi
+
+          if ! switch_release "$NEW_RELEASE"; then
+            echo "ERROR: Unable to activate new release"
             exit 1
           fi
 
@@ -817,12 +851,12 @@ jobs:
             exit 1
           fi
 
-          if ! check_health "New release health check" 15; then
+          if ! check_readiness "New release readiness check" 15; then
             rollback || true
             exit 1
           fi
 
-          # Only a release that passed its health check receives
+          # Only a release that passed its readiness check receives
           # this marker.
           touch "$NEW_RELEASE/.healthy"
 

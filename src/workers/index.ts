@@ -7,6 +7,7 @@ import startQuickCaptureWorker from './quick-capture';
 import startSummarizationWorker from './summarizarion';
 import startSystemWorker from './system';
 import {logger} from '../utils';
+import {startReadyWorkerHeartbeat} from '../services/worker-heartbeat';
 
 async function startWorkers() {
   await connectMongodb();
@@ -22,20 +23,36 @@ async function startWorkers() {
   const quickCaptureWorker = startQuickCaptureWorker(connection);
   const summarizationWorker = startSummarizationWorker(connection);
   const systemWorker = startSystemWorker(connection);
+  const workers = [
+    insightsWorker,
+    quickCaptureWorker,
+    summarizationWorker,
+    systemWorker,
+  ];
+  const heartbeat = await startReadyWorkerHeartbeat(
+    workers,
+    undefined,
+    error => {
+      logger.error(error, 'Queue worker became unavailable; restarting');
+      process.exit(1); // eslint-disable-line n/no-process-exit
+    },
+  );
 
   logger.info('Workers started');
 
-  process.on('SIGTERM', async () => {
+  let shuttingDown = false;
+  const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     logger.info('Shutting down workers...');
-    await Promise.all([
-      insightsWorker.close(),
-      quickCaptureWorker.close(),
-      summarizationWorker.close(),
-      systemWorker.close(),
-    ]);
+    await heartbeat.stop();
+    await Promise.all(workers.map(worker => worker.close()));
     await mongoose.disconnect();
     process.exit(0); // eslint-disable-line n/no-process-exit
-  });
+  };
+
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 }
 
 startWorkers().catch(error => {

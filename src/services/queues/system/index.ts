@@ -66,6 +66,13 @@ export async function initializeFileBackup(): Promise<void> {
 
 /** Daily at 00:00: finds today's scheduled capsules and enqueues reveal jobs with delay. */
 export async function initializeCapsuleReveal(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, cannot initialize capsule reveal scheduler',
+    );
+    return;
+  }
+
   await systemQueue.upsertJobScheduler(
     queueNames.system.jobs.scheduleCapsuleReveals,
     {pattern: '0 0 * * *'},

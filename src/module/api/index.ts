@@ -20,6 +20,10 @@ import sentryTunnelRoutes from './sentry_tunnel/routes';
 import userRoutes from './user/routes';
 import webhookRoutes from './webhook/routes';
 import {SENTRY_TUNNEL_ENABLED} from '../../utils/config';
+import {getReadiness} from '../../services/readiness';
+import {collectOperationalSignals} from '../../services/operational-signals';
+import gaurd from '../../middleware/gaurd';
+import {requireAdmin} from '../../middleware/admin';
 
 const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
   {path: 'activities', router: activityRoutes},
@@ -55,12 +59,43 @@ function health(_req: Request, res: Response, _next: NextFunction) {
   return responsHandler(res, StatusCodes.OK, 'OK', healthcheck);
 }
 
+async function ready(_req: Request, res: Response) {
+  const readiness = await getReadiness();
+  if (!readiness.ready) {
+    return errorResponsHandler(
+      res,
+      StatusCodes.SERVICE_UNAVAILABLE,
+      'Service is not ready',
+      {
+        code: 'service_unavailable',
+        data: {
+          status: 'not_ready',
+          dependencies: readiness.dependencies,
+        },
+      },
+    );
+  }
+
+  return responsHandler(res, StatusCodes.OK, 'Ready', readiness);
+}
+
+async function metrics(_req: Request, res: Response) {
+  return responsHandler(
+    res,
+    StatusCodes.OK,
+    'Operational signals',
+    await collectOperationalSignals(),
+  );
+}
+
 function router(app: Application) {
   for (const route of API_ROUTES) {
     app.use(`/${route.path}`, route.router);
   }
 
   app.get('/health', health);
+  app.get('/ready', ready);
+  app.get('/metrics', gaurd, requireAdmin, metrics);
   app.use((_req, res, _next) => {
     return errorResponsHandler(
       res,

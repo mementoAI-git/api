@@ -14,6 +14,7 @@ import {pipeline} from 'stream/promises';
 import logger from '../../../utils/logger';
 import {CORS_ALLOWED_ORIGINS} from '../../../utils/config';
 import {resolveUploadReservationId} from './upload-idempotency';
+import {recordCompatibilityUse} from '../../../services/compatibility-telemetry';
 
 export async function uploadFile(
   req: IRequest,
@@ -129,6 +130,13 @@ export async function getFile(req: Request, res: Response, next: NextFunction) {
     const name = String(req.params.name);
     const range = req.headers?.range;
     const resolved = await service.resolveFileRequest(name, req.query);
+    if (resolved.expiresAt === null) {
+      void recordCompatibilityUse(
+        'compat.files.legacy_bare_url',
+        (req as IRequest).context,
+        {file_id: resolved.file.id},
+      );
+    }
 
     const metadata = await service.getResolvedFileMetadata(resolved);
     setFileHeaders(req, res, metadata, resolved.cacheTtl);

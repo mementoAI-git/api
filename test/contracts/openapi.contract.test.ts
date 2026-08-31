@@ -104,4 +104,18 @@ describe('canonical OpenAPI artifact', () => {
       expect(spec.components.schemas).toHaveProperty(reference[1]);
     }
   });
+
+  it('documents liveness, readiness, and aggregate operational signals', () => {
+    const spec = buildOpenApiDocument();
+
+    expect(spec.paths).toHaveProperty('/health');
+    expect(spec.paths).toHaveProperty('/ready');
+    expect(spec.paths).toHaveProperty('/metrics');
+    expect(spec.components.schemas).toHaveProperty('Readiness');
+    expect(spec.components.schemas).toHaveProperty('OperationalSignals');
+    const metrics = spec.paths['/metrics'] as {
+      get: {security: Array<{bearerAuth: never[]}>};
+    };
+    expect(metrics.get.security).toEqual([{bearerAuth: []}]);
+  });
 });

@@ -46,6 +46,7 @@ import {assertOwnedFileIds} from '../file/access';
 import {persistUploadedFiles} from '../file/service';
 import {getStorageUsageSummary} from '../billing/storage-quota';
 import {toPublicMemory} from './public-dto';
+import {withOperationLock} from '../../../services/operation-lock';
 
 export {getConversationEnrichment};
 
@@ -894,22 +895,33 @@ export async function restoreMemory(_id: string, user_id: string) {
 
 export async function bookmark(memory_id: string, user_id: string) {
   const memory = await assertReadableMemory(memory_id, {userId: user_id});
+  const filter = {memory: memory_id, user: user_id};
+  const bookmark = await withOperationLock(
+    `bookmark:${user_id}:${memory_id}`,
+    async () => {
+      const result = await Bookmark.updateOne(
+        filter,
+        {$setOnInsert: filter},
+        {upsert: true},
+      );
+      const saved = await Bookmark.findOne(filter);
+      if (!saved) throw new NotFoundException('Bookmark not found');
 
-  let bookmark = await Bookmark.findOne({memory: memory_id, user: user_id});
-  if (!bookmark) {
-    bookmark = await Bookmark.create({memory: memory_id, user: user_id});
-
-    await track(
-      {
-        title: 'Memory Bookmarked',
-        description: `Bookmarked memory: "${memory.title}"`,
-        type: 'memory',
-        action: 'bookmarked',
-        reference: memory_id,
-      },
-      user_id,
-    );
-  }
+      if (result.upsertedCount === 1) {
+        await track(
+          {
+            title: 'Memory Bookmarked',
+            description: `Bookmarked memory: "${memory.title}"`,
+            type: 'memory',
+            action: 'bookmarked',
+            reference: memory_id,
+          },
+          user_id,
+        );
+      }
+      return saved;
+    },
+  );
 
   return {
     message: 'Memory bookmarked successfully',

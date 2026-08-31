@@ -84,6 +84,53 @@
         "$ref": "#/components/schemas/ApiError",
         "description": "Compatibility name retained for existing endpoint docs."
       },
+      "OperationalSignals": {
+        "properties": {
+          "collected_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "compatibility_events_24h": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "delivery_failures": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "purge_oldest_age_seconds": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "queue_depth": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "queue_failed_jobs": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "usage_drift_records": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "usage_stale_records": {
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "collected_at",
+          "queue_depth",
+          "queue_failed_jobs",
+          "delivery_failures",
+          "purge_oldest_age_seconds",
+          "usage_stale_records",
+          "usage_drift_records",
+          "compatibility_events_24h"
+        ],
+        "type": "object"
+      },
       "PublicPasskey": {
         "properties": {
           "created_at": {
@@ -276,6 +323,62 @@
           "platform",
           "enabled",
           "last_seen_at"
+        ],
+        "type": "object"
+      },
+      "Readiness": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dependencies": {
+            "properties": {
+              "mongo": {
+                "enum": [
+                  "ok",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "redis": {
+                "enum": [
+                  "ok",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "storage": {
+                "enum": [
+                  "ok",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              "worker": {
+                "enum": [
+                  "ok",
+                  "unavailable"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "mongo",
+              "redis",
+              "storage",
+              "worker"
+            ],
+            "type": "object"
+          },
+          "ready": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "checked_at",
+          "dependencies"
         ],
         "type": "object"
       },
@@ -5372,10 +5475,10 @@
       "get": {
         "responses": {
           "200": {
-            "description": "API is healthy"
+            "description": "API process is alive"
           }
         },
-        "summary": "Health check",
+        "summary": "Cheap process liveness check",
         "tags": [
           "Health"
         ]
@@ -6937,6 +7040,24 @@
         ]
       }
     },
+    "/metrics": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Queue, delivery, purge, usage, and compatibility signals"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Aggregate operational signals",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
     "/persona/pending-insights": {
       "get": {
         "description": "Retrieve a list of pending insights extracted from user memories that need approval or rejection",
@@ -7934,6 +8055,36 @@
         "summary": "Register or refresh a push installation",
         "tags": [
           "Push Devices"
+        ]
+      }
+    },
+    "/ready": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "All required dependencies are ready"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "One or more required dependencies are unavailable"
+          }
+        },
+        "summary": "Dependency and worker readiness check",
+        "tags": [
+          "Health"
         ]
       }
     },

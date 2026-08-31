@@ -9,6 +9,7 @@ import {StatusCodes} from 'http-status-codes';
 import {IRequest} from '../../../utils/interface';
 import logger from '../../../utils/logger';
 import {resolveUploadReservationId} from '../file/upload-idempotency';
+import {recordCompatibilityUse} from '../../../services/compatibility-telemetry';
 
 export async function updateProfile(
   req: IRequest,
@@ -25,6 +26,10 @@ export async function updateProfile(
     );
 
     if (req.body.push_token) {
+      void recordCompatibilityUse(
+        'compat.push.legacy_profile_token',
+        req.context,
+      );
       logger.info(
         {
           event: 'compat.push.legacy_profile_token',
@@ -38,6 +43,7 @@ export async function updateProfile(
 
     const deprecatedPost = req.method === 'POST';
     if (deprecatedPost) {
+      void recordCompatibilityUse('compat.users.profile_post', req.context);
       logger.info(
         {
           event: 'compat.users.profile_post',

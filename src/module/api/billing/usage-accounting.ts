@@ -72,13 +72,21 @@ export async function applyUsageDelta(
   );
 }
 
-export async function reconcileUsageCounts(userId: string): Promise<void> {
-  const [beneficiaryCount, timedMessageCount, timeCapsuleCount] =
+export async function reconcileUsageCounts(userId: string): Promise<boolean> {
+  const [beneficiaryCount, timedMessageCount, timeCapsuleCount, current] =
     await Promise.all([
       Beneficiary.countDocuments({benefactor: userId}),
       Capsule.countDocuments({user: userId, status: 'scheduled'}),
       Capsule.countDocuments({user: userId, status: {$ne: 'received'}}),
+      Usage.findOne({user_id: userId})
+        .select('beneficiary_count timed_message_count time_capsule_count')
+        .lean(),
     ]);
+  const drifted =
+    !current ||
+    current.beneficiary_count !== beneficiaryCount ||
+    current.timed_message_count !== timedMessageCount ||
+    current.time_capsule_count !== timeCapsuleCount;
   await Usage.findOneAndUpdate(
     {user_id: userId},
     {
@@ -92,6 +100,7 @@ export async function reconcileUsageCounts(userId: string): Promise<void> {
     },
     {upsert: true},
   );
+  return drifted;
 }
 
 export function usageCountPatch(

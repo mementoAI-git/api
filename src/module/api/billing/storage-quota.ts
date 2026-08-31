@@ -313,8 +313,8 @@ export async function releaseStorageReservation(
   }
 }
 
-export async function reconcileStorageUsage(userId: string): Promise<void> {
-  const [aggregate, reserved, limit] = await Promise.all([
+export async function reconcileStorageUsage(userId: string): Promise<boolean> {
+  const [aggregate, reserved, limit, current] = await Promise.all([
     File.aggregate<{total: number}>([
       {
         $match: {
@@ -336,13 +336,23 @@ export async function reconcileStorageUsage(userId: string): Promise<void> {
       {$group: {_id: null, total: {$sum: '$requested_bytes'}}},
     ]),
     resolveUserStorageLimit(userId),
+    Usage.findOne({user_id: userId})
+      .select('storage_used_bytes storage_reserved_bytes storage_limit_bytes')
+      .lean(),
   ]);
+  const usedBytes = aggregate[0]?.total || 0;
+  const reservedBytes = reserved[0]?.total || 0;
+  const drifted =
+    !current ||
+    current.storage_used_bytes !== usedBytes ||
+    current.storage_reserved_bytes !== reservedBytes ||
+    current.storage_limit_bytes !== limit;
   await Usage.findOneAndUpdate(
     {user_id: userId},
     {
       $set: {
-        storage_used_bytes: aggregate[0]?.total || 0,
-        storage_reserved_bytes: reserved[0]?.total || 0,
+        storage_used_bytes: usedBytes,
+        storage_reserved_bytes: reservedBytes,
         storage_limit_bytes: limit,
         last_updated: new Date(),
       },
@@ -350,6 +360,7 @@ export async function reconcileStorageUsage(userId: string): Promise<void> {
     },
     {upsert: true},
   );
+  return drifted;
 }
 
 export async function releaseExpiredStorageReservations(): Promise<number> {

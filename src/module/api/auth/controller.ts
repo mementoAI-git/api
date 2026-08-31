@@ -6,8 +6,11 @@ import {IRequest} from '../../../utils/interface';
 import {UnauthorizedException} from '../../../utils/service-error';
 
 function clientContext(req: Request) {
+  const context = (req as IRequest).context;
   return {
-    client: (req as IRequest).context?.client || ('legacy-unknown' as const),
+    client: context?.client || ('legacy-unknown' as const),
+    version: context?.version,
+    build: context?.build,
   };
 }
 

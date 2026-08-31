@@ -93,6 +93,47 @@ const schemas: Record<string, OpenApiSchema> = {
       request_id: {type: 'string', format: 'uuid'},
     },
   },
+  Readiness: {
+    type: 'object',
+    required: ['ready', 'checked_at', 'dependencies'],
+    properties: {
+      ready: {type: 'boolean'},
+      checked_at: dateTime,
+      dependencies: {
+        type: 'object',
+        required: ['mongo', 'redis', 'storage', 'worker'],
+        properties: {
+          mongo: {type: 'string', enum: ['ok', 'unavailable']},
+          redis: {type: 'string', enum: ['ok', 'unavailable']},
+          storage: {type: 'string', enum: ['ok', 'unavailable']},
+          worker: {type: 'string', enum: ['ok', 'unavailable']},
+        },
+      },
+    },
+  },
+  OperationalSignals: {
+    type: 'object',
+    required: [
+      'collected_at',
+      'queue_depth',
+      'queue_failed_jobs',
+      'delivery_failures',
+      'purge_oldest_age_seconds',
+      'usage_stale_records',
+      'usage_drift_records',
+      'compatibility_events_24h',
+    ],
+    properties: {
+      collected_at: dateTime,
+      queue_depth: {type: 'integer', nullable: true},
+      queue_failed_jobs: {type: 'integer', nullable: true},
+      delivery_failures: {type: 'integer', nullable: true},
+      purge_oldest_age_seconds: {type: 'integer', nullable: true},
+      usage_stale_records: {type: 'integer', nullable: true},
+      usage_drift_records: {type: 'integer', nullable: true},
+      compatibility_events_24h: {type: 'integer', nullable: true},
+    },
+  },
   PublicPasskey: {
     type: 'object',
     required: ['credential_id', 'device_name'],
@@ -232,8 +273,45 @@ export function buildOpenApiDocument(
       '/health': {
         get: {
           tags: ['Health'],
-          summary: 'Health check',
-          responses: {'200': {description: 'API is healthy'}},
+          summary: 'Cheap process liveness check',
+          responses: {'200': {description: 'API process is alive'}},
+        },
+      },
+      '/ready': {
+        get: {
+          tags: ['Health'],
+          summary: 'Dependency and worker readiness check',
+          responses: {
+            '200': {
+              description: 'All required dependencies are ready',
+              content: {
+                'application/json': {
+                  schema: {$ref: '#/components/schemas/ApiResponse'},
+                },
+              },
+            },
+            '503': {
+              description: 'One or more required dependencies are unavailable',
+              content: {
+                'application/json': {
+                  schema: {$ref: '#/components/schemas/ApiError'},
+                },
+              },
+            },
+          },
+        },
+      },
+      '/metrics': {
+        get: {
+          tags: ['Health'],
+          summary: 'Aggregate operational signals',
+          security: [{bearerAuth: []}],
+          responses: {
+            '200': {
+              description:
+                'Queue, delivery, purge, usage, and compatibility signals',
+            },
+          },
         },
       },
       ...authDocs,

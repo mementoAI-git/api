@@ -5,7 +5,7 @@ import pino from 'pino';
 import {isEmpty, sanitizeData} from '../utils/helpers';
 import {redactSensitiveQuery, sanitizeUrlForLogs} from '../utils/sanitize-url';
 
-const ignorePaths = ['/health', '/favicon.ico', '/metrics'];
+const ignorePaths = ['/health', '/ready', '/favicon.ico', '/metrics'];
 
 export const httpLogger = pinoHttpLogger({
   logger,

@@ -261,7 +261,7 @@ describe('billing usage accounting', () => {
 
     const result = await reconcileBillingUsageBatch(10);
 
-    expect(result).toMatchObject({processed: 2, has_more: false});
+    expect(result).toMatchObject({processed: 2, drifted: 2, has_more: false});
     expect((await Usage.findOne({user_id: first.id}))?.beneficiary_count).toBe(
       1,
     );
