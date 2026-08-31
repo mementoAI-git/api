@@ -4,9 +4,8 @@ import {validateRuntimeConfig} from './utils/runtime-config';
 async function bootstrap(): Promise<void> {
   try {
     validateRuntimeConfig(process.env);
-    const [appModule, databaseModule, redisModule, queuesModule, mailModule] =
+    const [databaseModule, redisModule, queuesModule, mailModule] =
       await Promise.all([
-        import('./app'),
         import('./module/database/connection'),
         import('./services/redis'),
         import('./services/queues'),
@@ -17,6 +16,11 @@ async function bootstrap(): Promise<void> {
     await databaseModule.connectMongodb();
     await redisModule.default.connect();
     await queuesModule.initializeScheduler();
+
+    // Route modules create Redis-backed rate limiters during import. Import the
+    // application only after Redis is ready so those stores never receive
+    // commands through a closed client.
+    const appModule = await import('./app');
 
     mailModule.transport.verify((error, success) => {
       if (error)

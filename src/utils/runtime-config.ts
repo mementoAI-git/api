@@ -50,9 +50,12 @@ export function validateRuntimeConfig(env: Environment): RuntimeConfig {
   const sentryTunnelEnabled = enabled(env, 'SENTRY_TUNNEL_ENABLED');
   const bullBoardEnabled = enabled(env, 'BULL_BOARD_ENABLED');
 
+  // Attachment responses are signed in every environment. Validate the key at
+  // bootstrap instead of allowing the first attachment-bearing request to fail.
+  validateFileSigningKeys(env.FILE_URL_SIGNING_KEYS);
+
   if (isProduction) {
     requireSecret(env, 'JWT_SECRET');
-    validateFileSigningKeys(env.FILE_URL_SIGNING_KEYS);
   }
   if (tallyWebhookEnabled) requireSecret(env, 'TALLY_WEBHOOK_SECRET');
   if (sentryTunnelEnabled) {

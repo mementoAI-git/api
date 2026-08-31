@@ -60,4 +60,14 @@ describe('runtime security configuration', () => {
       bullBoardEnabled: false,
     });
   });
+
+  it('rejects a missing file signing key before development starts', () => {
+    expect(() =>
+      validateRuntimeConfig({
+        ...productionEnv,
+        NODE_ENV: 'development',
+        FILE_URL_SIGNING_KEYS: undefined,
+      }),
+    ).toThrow('FILE_URL_SIGNING_KEYS');
+  });
 });
