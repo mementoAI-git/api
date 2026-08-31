@@ -31,6 +31,7 @@
     "migrations:up:prod": "node build/src/migrations/run.js up",
     "migrations:status:prod": "node build/src/migrations/run.js status",
     "files:audit-access": "ts-node src/scripts/file-access-audit.ts",
+    "compat:report": "ts-node src/scripts/compatibility-report.ts",
     "files:backfill-thumbnails": "ts-node src/scripts/backfill-thumbnail-keys.ts",
     "capsules:backfill-recipients": "ts-node src/scripts/backfill-capsule-recipients.ts",
     "contracts:export": "ts-node src/scripts/export-openapi.ts",

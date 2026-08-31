@@ -3,6 +3,19 @@
 This registry lists temporary compatibility behavior that may be removed only
 after its removal gate is satisfied. New code must use the canonical behavior.
 
+Generate the read-only release evidence with an explicit observation window and
+the exact client versions still supported by the product:
+
+```bash
+yarn compat:report --days 30 --supported web:6.0.0,ios:4.2.1,android:4.2.1
+```
+
+The report groups use by client/version/build and inventories legacy-public
+files and raw refresh tokens. A report never approves deletion: record product
+and platform approval separately for every shim. `AUTH_LEGACY_RESPONSE` reports
+server exposure, not proof that a client reads the old top-level fields, so it
+always requires client-code or release telemetry evidence.
+
 ## Active shims
 
 ### `FILES_LEGACY_BARE_URL`
@@ -30,7 +43,7 @@ bare requests are rejected.
 | Status | Active, temporary |
 | Legacy behavior | Completed authentication responses retain top-level token, expiry, user, and onboarding fields. |
 | Canonical behavior | Clients read the same values from `data.session`, including canonical expiry fields. |
-| Telemetry | Compare request volume by client/version/build; never record tokens. |
+| Telemetry | Event `compat.auth.legacy_session_shape` groups server exposure by client/version/build; never record tokens. |
 | Removal gate | Every supported client reads `data.session` and legacy usage stays below the approved threshold for the observation window. |
 | Rollback restriction | Never weaken revocation, token hashing, or security-state checks for an older client. |
 
