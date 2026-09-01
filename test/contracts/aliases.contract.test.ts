@@ -37,6 +37,9 @@ describe('endpoint compatibility aliases', () => {
     const categories = await request(createTestApp())
       .get('/prompts/categories')
       .set('Authorization', `Bearer ${token}`);
+    const familyPrompts = await request(createTestApp())
+      .get('/prompts/categories/Family')
+      .set('Authorization', `Bearer ${token}`);
 
     expect(context.status).toBe(200);
     expect(context.body.data).toMatchObject({
@@ -45,6 +48,13 @@ describe('endpoint compatibility aliases', () => {
     });
     expect(categories.status).toBe(200);
     expect(categories.body.data.sort()).toEqual(['Family', 'Growth']);
+    expect(familyPrompts.status).toBe(200);
+    expect(familyPrompts.body.data.docs).toHaveLength(2);
+    expect(
+      familyPrompts.body.data.docs.map(
+        (prompt: {title: string}) => prompt.title,
+      ),
+    ).toEqual(expect.arrayContaining(['One', 'Three']));
   });
 
   it('supports deprecated POST profile with safe updated user data', async () => {
