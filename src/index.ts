@@ -1,9 +1,9 @@
 import logger from './utils/logger';
-import {validateRuntimeConfig} from './utils/runtime-config';
+import {loadAndValidateRuntimeConfig} from './utils/runtime-config';
 
 async function bootstrap(): Promise<void> {
   try {
-    validateRuntimeConfig(process.env);
+    loadAndValidateRuntimeConfig(process.env);
     const [databaseModule, redisModule, queuesModule, mailModule] =
       await Promise.all([
         import('./module/database/connection'),

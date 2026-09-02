@@ -1,3 +1,5 @@
+import {config as loadDotenv} from 'dotenv';
+
 export type RuntimeConfig = {
   nodeEnv: string;
   tallyWebhookEnabled: boolean;
@@ -6,6 +8,17 @@ export type RuntimeConfig = {
 };
 
 type Environment = Record<string, string | undefined>;
+
+export function loadAndValidateRuntimeConfig(
+  env: Environment = process.env,
+): RuntimeConfig {
+  const path = env.DOTENV_CONFIG_PATH;
+  loadDotenv({
+    ...(path ? {path} : {}),
+    processEnv: env,
+  });
+  return validateRuntimeConfig(env);
+}
 
 function enabled(env: Environment, name: string): boolean {
   const value = env[name];
