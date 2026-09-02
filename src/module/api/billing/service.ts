@@ -15,9 +15,15 @@ import {
   type FeatureAccessResult,
 } from './access';
 import {
+  cancelPolarSubscription,
   createPolarCheckoutSession,
   createPolarPortalSession,
+  listPolarInvoices,
+  resolvePolarProductPlan,
+  resumePolarSubscription,
 } from './providers/polar';
+import {getStorageUsageSummary} from './storage-quota';
+import mongoose from 'mongoose';
 
 type CheckoutBody = {
   success_url: string;
@@ -27,9 +33,10 @@ type CheckoutBody = {
 };
 
 export async function getSubscriptionSummary(userId: string) {
-  const [subscription, usage] = await Promise.all([
+  const [subscription, usage, storage] = await Promise.all([
     Subscription.findOne({user_id: userId}).lean(),
     Usage.findOne({user_id: userId}).lean(),
+    getStorageUsageSummary(userId),
   ]);
 
   if (!subscription) {
@@ -38,14 +45,16 @@ export async function getSubscriptionSummary(userId: string) {
       data: {
         tier: 'free',
         status: 'active',
-        usage: usage
-          ? {
-              storage_used_bytes: usage.storage_used_bytes,
-              storage_limit_bytes: usage.storage_limit_bytes,
-              beneficiary_count: usage.beneficiary_count,
-              timed_message_count: usage.timed_message_count,
-            }
-          : undefined,
+        usage: {
+          storage_used_bytes: storage.used_bytes,
+          storage_reserved_bytes: storage.reserved_bytes,
+          storage_limit_bytes: storage.limit_bytes,
+          remaining_bytes: storage.remaining_bytes,
+          percent_used: storage.percent_used,
+          over_limit: storage.over_limit,
+          beneficiary_count: usage?.beneficiary_count || 0,
+          timed_message_count: usage?.timed_message_count || 0,
+        },
       },
     };
   }
@@ -56,37 +65,45 @@ export async function getSubscriptionSummary(userId: string) {
       tier: subscription.tier,
       status: subscription.status,
       current_period_end: subscription.current_period_end,
+      cancel_at_period_end: subscription.cancel_at_period_end || false,
       trial_ends_at: subscription.trial_ends_at,
       provider: subscription.payment_provider,
       currency: subscription.currency,
       country: subscription.country,
-      usage: usage
-        ? {
-            storage_used_bytes: usage.storage_used_bytes,
-            storage_limit_bytes: usage.storage_limit_bytes,
-            beneficiary_count: usage.beneficiary_count,
-            timed_message_count: usage.timed_message_count,
-          }
-        : undefined,
+      usage: {
+        storage_used_bytes: storage.used_bytes,
+        storage_reserved_bytes: storage.reserved_bytes,
+        storage_limit_bytes: storage.limit_bytes,
+        remaining_bytes: storage.remaining_bytes,
+        percent_used: storage.percent_used,
+        over_limit: storage.over_limit,
+        beneficiary_count: usage?.beneficiary_count || 0,
+        timed_message_count: usage?.timed_message_count || 0,
+      },
     },
   };
 }
 
 export async function getUsage(userId: string) {
-  const usage = await Usage.findOne({user_id: userId}).lean();
+  const [usage, storage] = await Promise.all([
+    Usage.findOne({user_id: userId}).lean(),
+    getStorageUsageSummary(userId),
+  ]);
   return {
     message: 'Usage fetched',
-    data:
-      usage ??
-      ({
-        user_id: userId,
-        storage_used_bytes: 0,
-        storage_limit_bytes: 5 * 1024 ** 3,
-        beneficiary_count: 0,
-        timed_message_count: 0,
-        time_capsule_count: 0,
-        memory_integration_count: 0,
-      } as const),
+    data: {
+      user_id: userId,
+      beneficiary_count: usage?.beneficiary_count || 0,
+      timed_message_count: usage?.timed_message_count || 0,
+      time_capsule_count: usage?.time_capsule_count || 0,
+      memory_integration_count: usage?.memory_integration_count || 0,
+      storage_used_bytes: storage.used_bytes,
+      storage_reserved_bytes: storage.reserved_bytes,
+      storage_limit_bytes: storage.limit_bytes,
+      remaining_bytes: storage.remaining_bytes,
+      percent_used: storage.percent_used,
+      over_limit: storage.over_limit,
+    },
   };
 }
 
@@ -196,10 +213,11 @@ export async function redeemPromoCode(userId: string, code: string) {
   };
 }
 
-export async function listInvoices(_userId: string) {
+export async function listInvoices(userId: string) {
+  const invoices = await listPolarInvoices(userId);
   return {
     message: 'Invoices fetched',
-    data: [],
+    data: invoices,
   };
 }
 
@@ -209,10 +227,32 @@ export async function cancelSubscription(userId: string) {
   if (subscription.tier === 'free') {
     throw new BadRequestException('Free plan has no cancellation flow');
   }
-  subscription.status = 'cancelled';
-  subscription.cancelled_at = new Date();
+  if (
+    subscription.payment_provider !== 'polar' ||
+    !subscription.provider_subscription_id
+  ) {
+    throw new BadRequestException('Polar subscription is not available');
+  }
+  const provider = await cancelPolarSubscription(
+    subscription.provider_subscription_id,
+  );
+  subscription.status = mapPolarStatus(
+    'subscription.canceled',
+    provider.status,
+  );
+  subscription.cancel_at_period_end = provider.cancel_at_period_end !== false;
+  subscription.cancelled_at = provider.canceled_at
+    ? new Date(String(provider.canceled_at))
+    : new Date();
   await subscription.save();
-  return {message: 'Subscription cancellation scheduled', data: null};
+  return {
+    message: 'Subscription cancellation scheduled',
+    data: {
+      status: subscription.status,
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      current_period_end: subscription.current_period_end,
+    },
+  };
 }
 
 export async function resumeSubscription(userId: string) {
@@ -221,10 +261,21 @@ export async function resumeSubscription(userId: string) {
   if (subscription.tier === 'free') {
     throw new BadRequestException('Free plan has no resumable subscription');
   }
+  if (
+    subscription.payment_provider !== 'polar' ||
+    !subscription.provider_subscription_id
+  ) {
+    throw new BadRequestException('Polar subscription is not available');
+  }
+  await resumePolarSubscription(subscription.provider_subscription_id);
   subscription.status = 'active';
+  subscription.cancel_at_period_end = false;
   subscription.cancelled_at = null;
   await subscription.save();
-  return {message: 'Subscription resumed', data: null};
+  return {
+    message: 'Subscription resumed',
+    data: {status: subscription.status, cancel_at_period_end: false},
+  };
 }
 
 export async function ensureBillingUser(userId: string) {
@@ -251,23 +302,19 @@ export async function assertAccess(
   }
 }
 
-function extractPolarTier(
-  payload: Record<string, unknown>,
-): 'pro' | 'legacy' | null {
-  const direct =
-    typeof payload.tier === 'string'
-      ? payload.tier
-      : typeof payload['product_tier'] === 'string'
-        ? String(payload['product_tier'])
-        : null;
-  if (direct === 'pro' || direct === 'legacy') return direct;
-  return null;
-}
-
 function mapPolarStatus(
   eventType: string,
-): 'active' | 'trialing' | 'past_due' | 'cancelled' {
+  providerStatus?: unknown,
+): 'active' | 'trialing' | 'past_due' | 'cancelled' | 'paused' {
+  if (providerStatus === 'active') return 'active';
+  if (providerStatus === 'trialing') return 'trialing';
+  if (providerStatus === 'past_due') return 'past_due';
+  if (providerStatus === 'paused') return 'paused';
+  if (providerStatus === 'canceled' || providerStatus === 'unpaid') {
+    return 'cancelled';
+  }
   if (eventType.includes('trial')) return 'trialing';
+  if (eventType.includes('paused')) return 'paused';
   if (eventType.includes('past_due') || eventType.includes('payment_failed')) {
     return 'past_due';
   }
@@ -281,10 +328,14 @@ function mapPolarStatus(
   return 'active';
 }
 
-export async function processPolarWebhook(payload: Record<string, unknown>) {
+export async function processPolarWebhook(
+  payload: Record<string, unknown>,
+  deliveryId?: string,
+) {
   const eventId =
     (typeof payload.id === 'string' && payload.id) ||
-    (typeof payload.event_id === 'string' && payload.event_id);
+    (typeof payload.event_id === 'string' && payload.event_id) ||
+    deliveryId;
   const eventType =
     (typeof payload.type === 'string' && payload.type) ||
     (typeof payload.event_type === 'string' && payload.event_type) ||
@@ -292,14 +343,6 @@ export async function processPolarWebhook(payload: Record<string, unknown>) {
 
   if (!eventId) {
     throw new BadRequestException('Missing Polar event id');
-  }
-
-  const alreadyProcessed = await BillingWebhookEvent.findOne({
-    provider: 'polar',
-    event_id: eventId,
-  }).lean();
-  if (alreadyProcessed) {
-    return {message: 'Duplicate webhook ignored', data: {duplicate: true}};
   }
 
   const data =
@@ -311,53 +354,148 @@ export async function processPolarWebhook(payload: Record<string, unknown>) {
       ? (data.metadata as Record<string, unknown>)
       : {};
 
+  const customer =
+    data.customer && typeof data.customer === 'object'
+      ? (data.customer as Record<string, unknown>)
+      : {};
   const userId =
     (typeof data.external_customer_id === 'string' &&
       data.external_customer_id) ||
     (typeof data.user_id === 'string' && data.user_id) ||
-    (typeof metadata.user_id === 'string' && metadata.user_id);
+    (typeof metadata.user_id === 'string' && metadata.user_id) ||
+    (typeof customer.external_id === 'string' && customer.external_id);
+
+  const normalizedEventType = eventType.toLowerCase();
+  const isSubscriptionEvent = normalizedEventType.startsWith('subscription.');
+  const plan = isSubscriptionEvent
+    ? resolvePolarProductPlan(
+        typeof data.product_id === 'string' ? data.product_id : undefined,
+        metadata,
+      )
+    : null;
+  const tier = plan?.tier ?? null;
+  const status = mapPolarStatus(normalizedEventType, data.status);
+  const interval = plan?.interval ?? null;
+  const providerModifiedAtValue = data.modified_at ?? payload.timestamp;
+  const providerModifiedAt = providerModifiedAtValue
+    ? new Date(String(providerModifiedAtValue))
+    : null;
+  const hasValidProviderModifiedAt =
+    providerModifiedAt !== null && !Number.isNaN(providerModifiedAt.getTime());
+  const terminal =
+    normalizedEventType === 'subscription.revoked' || data.status === 'unpaid';
+  const endedAtValue = data.ended_at;
+  const parsedEndedAt = endedAtValue ? new Date(String(endedAtValue)) : null;
+  const endedAt =
+    parsedEndedAt && !Number.isNaN(parsedEndedAt.getTime())
+      ? parsedEndedAt
+      : terminal
+        ? hasValidProviderModifiedAt
+          ? providerModifiedAt
+          : new Date()
+        : null;
+  const session = await mongoose.startSession();
+  let duplicate = false;
+  try {
+    await session.withTransaction(async () => {
+      const existing = await BillingWebhookEvent.exists({
+        provider: 'polar',
+        event_id: eventId,
+      }).session(session);
+      if (existing) {
+        duplicate = true;
+        return;
+      }
+      await BillingWebhookEvent.create(
+        [
+          {
+            provider: 'polar',
+            event_id: eventId,
+            event_type: eventType,
+            user_id: userId || null,
+            provider_customer_id:
+              (typeof data.customer_id === 'string' && data.customer_id) ||
+              null,
+          },
+        ],
+        {session},
+      );
+      if (!userId || !isSubscriptionEvent) return;
+      const currentSubscription = await Subscription.findOne({
+        user_id: userId,
+      })
+        .session(session)
+        .lean();
+      if (
+        hasValidProviderModifiedAt &&
+        currentSubscription?.provider_modified_at &&
+        currentSubscription.provider_modified_at > providerModifiedAt
+      ) {
+        return;
+      }
+      await Subscription.findOneAndUpdate(
+        {user_id: userId},
+        {
+          $setOnInsert: {user_id: userId, has_used_trial: false},
+          $set: {
+            payment_provider: 'polar',
+            ...(tier ? {tier} : {}),
+            ...(interval ? {billing_interval: interval} : {}),
+            status,
+            cancel_at_period_end: data.cancel_at_period_end === true,
+            ended_at: endedAt,
+            ...(hasValidProviderModifiedAt && {
+              provider_modified_at: providerModifiedAt,
+            }),
+            cancelled_at: data.canceled_at
+              ? new Date(String(data.canceled_at))
+              : null,
+            current_period_start: data.current_period_start
+              ? new Date(String(data.current_period_start))
+              : null,
+            current_period_end: data.current_period_end
+              ? new Date(String(data.current_period_end))
+              : null,
+            trial_ends_at: data.trial_end
+              ? new Date(String(data.trial_end))
+              : null,
+            provider_customer_id:
+              (typeof data.customer_id === 'string' && data.customer_id) ||
+              null,
+            provider_subscription_id:
+              (typeof data.id === 'string' && data.id) ||
+              (typeof data.subscription_id === 'string' &&
+                data.subscription_id) ||
+              null,
+          },
+        },
+        {upsert: true, new: true, session},
+      );
+    });
+  } catch (error) {
+    if ((error as {code?: number})?.code === 11000) duplicate = true;
+    else throw error;
+  } finally {
+    await session.endSession();
+  }
+
+  if (duplicate) {
+    return {message: 'Duplicate webhook ignored', data: {duplicate: true}};
+  }
 
   if (!userId) {
-    await BillingWebhookEvent.create({
-      provider: 'polar',
-      event_id: eventId,
-      event_type: eventType,
-    });
     return {
       message: 'Webhook recorded without user mapping',
       data: {eventId, eventType},
     };
   }
 
-  const tier = extractPolarTier({
-    ...data,
-    ...metadata,
-  });
-  const status = mapPolarStatus(eventType.toLowerCase());
-
-  await Subscription.findOneAndUpdate(
-    {user_id: userId},
-    {
-      $setOnInsert: {user_id: userId, has_used_trial: false},
-      $set: {
-        payment_provider: 'polar',
-        ...(tier ? {tier} : {}),
-        status,
-        provider_customer_id:
-          (typeof data.customer_id === 'string' && data.customer_id) || null,
-        provider_subscription_id:
-          (typeof data.subscription_id === 'string' && data.subscription_id) ||
-          null,
-      },
-    },
-    {upsert: true, new: true},
-  );
-
-  await BillingWebhookEvent.create({
-    provider: 'polar',
-    event_id: eventId,
-    event_type: eventType,
-  });
+  if (!isSubscriptionEvent) {
+    return {
+      message: 'Polar event recorded without subscription mutation',
+      data: {eventId, eventType, ignored: true},
+    };
+  }
 
   return {message: 'Polar webhook processed', data: {eventId, eventType}};
 }

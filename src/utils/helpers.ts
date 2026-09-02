@@ -19,6 +19,18 @@ import {getAudioDurationInSeconds} from 'get-audio-duration';
 import mongoose from '../module/database/connection';
 import {SENSITIVE_FIELDS, SUPPORTED_FILE_TYPES} from './constant';
 import {ClientSession} from 'mongoose';
+import {randomUUID} from 'crypto';
+import {
+  CONTRACT_VERSION,
+  defaultErrorCode,
+  type ApiError,
+  type ApiResponse,
+  type ErrorCode,
+  type RequestContext,
+} from '../contracts/response';
+import type {SessionClaims} from '../contracts/session';
+
+type NewSessionClaims = Pick<SessionClaims, 'sid' | 'sv'>;
 
 export const random = (len = 6, type: 'number' | 'alphanumeric' = 'number') => {
   if (type === 'number') {
@@ -88,12 +100,62 @@ export const responsHandler = (
   status: number,
   message: string,
   data: any = null,
+  options: {deprecations?: string[]} = {},
 ) => {
-  res.status(status).json({
-    status: status,
-    message: message,
+  const context = res.locals.requestContext as RequestContext | undefined;
+  const requestId = context?.requestId || randomUUID();
+  if (!res.getHeader('X-Request-Id')) res.setHeader('X-Request-Id', requestId);
+  const response: ApiResponse<unknown> = {
+    status,
+    success: true,
+    message,
     data,
-  });
+    meta: {
+      contract_version: CONTRACT_VERSION,
+      request_id: requestId,
+      ...(options.deprecations?.length
+        ? {deprecations: options.deprecations}
+        : {}),
+    },
+  };
+  res.status(status).json(response);
+};
+
+export const errorResponsHandler = (
+  res: Response,
+  status: number,
+  message: string,
+  options: {
+    code?: ErrorCode;
+    data?: unknown;
+    topLevel?: Record<string, unknown>;
+  } = {},
+) => {
+  const context = res.locals.requestContext as RequestContext | undefined;
+  const requestId = context?.requestId || randomUUID();
+  if (!res.getHeader('X-Request-Id')) res.setHeader('X-Request-Id', requestId);
+
+  const data = options.data ?? null;
+  const details = Array.isArray(data)
+    ? {errors: data}
+    : data && typeof data === 'object'
+      ? (data as Record<string, unknown>)
+      : undefined;
+  const response: ApiError & {
+    data: unknown;
+    [key: string]: unknown;
+  } = {
+    status,
+    success: false,
+    message,
+    code: options.code ?? defaultErrorCode(status),
+    request_id: requestId,
+    ...(details ? {details} : {}),
+    ...(options.topLevel || {}),
+    data,
+  };
+
+  return res.status(status).json(response);
 };
 
 export const validateRequest = (req: Request) => {
@@ -180,13 +242,28 @@ export const getFiles = (
   return files;
 };
 
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+const MAX_PAGE_NUMBER = 10_000;
+
+function boundedPositiveInteger(
+  value: unknown,
+  fallback: number,
+  maximum: number,
+): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(maximum, Math.floor(parsed));
+}
+
 export const getPagination = (req: Request): IPagination => {
-  let {limit = 25, page = 1} = req.query;
+  const {limit = DEFAULT_PAGE_SIZE, page = 1} = req.query;
 
-  limit = Math.max(Number(limit), 1);
-  page = Math.max(Number(page), 1);
-
-  return {...req.query, limit, page};
+  return {
+    ...req.query,
+    limit: boundedPositiveInteger(limit, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
+    page: boundedPositiveInteger(page, 1, MAX_PAGE_NUMBER),
+  };
 };
 
 export const hashPassword = async (password: string) => {
@@ -207,8 +284,9 @@ export const generateKeys = () => {
 export const createAccessToken = (
   id: string,
   expires_in = 24 * 60 * 60 * 1000,
+  claims: NewSessionClaims = {},
 ) => {
-  const access_token = jwt.sign({id}, String(JWT_SECRET), {
+  const access_token = jwt.sign({id, ...claims}, String(JWT_SECRET), {
     audience: 'API',
     issuer: 'Memento',
     expiresIn: expires_in,
@@ -221,12 +299,18 @@ export const createAccessToken = (
 export const createRefreshToken = (
   id: string,
   expires_in = 30 * 24 * 60 * 60 * 1000,
+  claims: NewSessionClaims = {},
 ) => {
-  const refresh_token = jwt.sign({id, type: 'refresh'}, String(JWT_SECRET), {
-    audience: 'API',
-    issuer: 'Memento',
-    expiresIn: expires_in,
-  });
+  const refresh_token = jwt.sign(
+    {id, ...claims, type: 'refresh'},
+    String(JWT_SECRET),
+    {
+      audience: 'API',
+      issuer: 'Memento',
+      expiresIn: expires_in,
+      jwtid: randomUUID(),
+    },
+  );
 
   const expires_at = dayjs().add(expires_in, 'millisecond').toISOString();
   return {refresh_token, expires_at};
@@ -236,13 +320,15 @@ export const createTokenPair = (
   id: string,
   accessExpiresIn = 24 * 60 * 60 * 1000,
   refreshExpiresIn = 30 * 24 * 60 * 60 * 1000,
+  claims: NewSessionClaims = {},
 ) => {
-  const accessToken = createAccessToken(id, accessExpiresIn);
-  const refreshToken = createRefreshToken(id, refreshExpiresIn);
+  const accessToken = createAccessToken(id, accessExpiresIn, claims);
+  const refreshToken = createRefreshToken(id, refreshExpiresIn, claims);
 
   return {
     access_token: accessToken.access_token,
     refresh_token: refreshToken.refresh_token,
+    access_expires_at: accessToken.expires_at,
     expires_at: accessToken.expires_at,
     refresh_expires_at: refreshToken.expires_at,
   };
@@ -256,31 +342,33 @@ export const reconstructFileName = (name: string) => {
   return `${file_name.replace(/\.[^/.]+$/, '')}_${timestamp}.${extension}`.toLowerCase();
 };
 
-export const verifyAccessToken = (token: string): any => {
-  return jwt.verify(token, String(JWT_SECRET), (err, decoded) => {
-    if (err) {
-      if (err.name === 'TokenExpiredError') {
-        throw new SessionTimeout();
-      }
-      throw new UnauthorizedException();
-    }
-    return decoded;
-  });
+export const verifyAccessToken = (token: string): SessionClaims => {
+  try {
+    return jwt.verify(token, String(JWT_SECRET), {
+      audience: 'API',
+      issuer: 'Memento',
+    }) as SessionClaims;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) throw new SessionTimeout();
+    throw new UnauthorizedException();
+  }
 };
 
-export const verifyRefreshToken = (token: string): any => {
-  return jwt.verify(token, String(JWT_SECRET), (err, decoded: any) => {
-    if (err) {
-      if (err.name === 'TokenExpiredError') {
-        throw new SessionTimeout();
-      }
-      throw new UnauthorizedException();
-    }
-    if (decoded.type !== 'refresh') {
-      throw new UnauthorizedException('Invalid token type');
-    }
-    return decoded;
-  });
+export const verifyRefreshToken = (token: string): SessionClaims => {
+  let decoded: SessionClaims;
+  try {
+    decoded = jwt.verify(token, String(JWT_SECRET), {
+      audience: 'API',
+      issuer: 'Memento',
+    }) as SessionClaims;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) throw new SessionTimeout();
+    throw new UnauthorizedException();
+  }
+  if (decoded.type !== 'refresh') {
+    throw new UnauthorizedException('Invalid token type');
+  }
+  return decoded;
 };
 
 export const filterGenerator = (payload: object, fields: string[] = []) => {
@@ -291,8 +379,11 @@ export const filterGenerator = (payload: object, fields: string[] = []) => {
   for (let i = 0; i < queries.length; i++) {
     if (!allowed.includes(queries[i][0])) continue;
     if (queries[i][0] === 'search' && !isEmpty(queries[i][1])) {
+      const escapedSearch = String(queries[i][1])
+        .slice(0, 256)
+        .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const search_filters: any[] = fields.map(key => ({
-        [key]: {$regex: new RegExp(`${queries[i][1]}`), $options: 'i'},
+        [key]: {$regex: new RegExp(escapedSearch), $options: 'i'},
       }));
       proccessed.push({$or: search_filters});
     } else proccessed.push({[queries[i][0]]: queries[i][1]});
@@ -438,15 +529,13 @@ export async function withTransaction<T>(
   callback: (session: ClientSession) => Promise<T>,
 ): Promise<T> {
   const session = await mongoose.startSession();
-  session.startTransaction();
+  let result: T | undefined;
 
   try {
-    const result = await callback(session);
-    await session.commitTransaction();
-    return result;
-  } catch (error) {
-    await session.abortTransaction();
-    throw error;
+    await session.withTransaction(async () => {
+      result = await callback(session);
+    });
+    return result as T;
   } finally {
     await session.endSession();
   }

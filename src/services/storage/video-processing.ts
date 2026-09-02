@@ -64,24 +64,24 @@ export async function getVideoProcessingAvailability(): Promise<boolean> {
   }
 }
 
-async function ensureTempDir(): Promise<string> {
+export async function ensureTempDir(): Promise<string> {
   const dir = path.join(TEMP_PATH, 'memento-media');
   await mkdir(dir, {recursive: true});
   return dir;
 }
 
-type StoredFileRef = {
+export type StoredFileRef = {
   key: string;
   provider: FileStorageProvider;
   mimeType: string;
 };
 
-function extFromFileName(name: string, fallback: string): string {
+export function extFromFileName(name: string, fallback: string): string {
   const ext = path.extname(name).trim();
   return ext || fallback;
 }
 
-async function downloadToTempFile(
+export async function downloadToTempFile(
   fileRef: StoredFileRef,
   ext: string,
 ): Promise<string> {

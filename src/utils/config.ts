@@ -14,6 +14,22 @@ export const MAX_UPLOAD_FILES = Number(process.env.MAX_UPLOAD_FILES || 5);
 export const UPLOAD_FILE_SIZE_LIMIT_MB = Number(
   process.env.UPLOAD_FILE_SIZE_LIMIT_MB || 15,
 );
+export const STORAGE_LIMIT_FREE_BYTES = Number(
+  process.env.STORAGE_LIMIT_FREE_BYTES || 200 * 1024 ** 2,
+);
+export const STORAGE_LIMIT_PRO_BYTES = Number(
+  process.env.STORAGE_LIMIT_PRO_BYTES || 10 * 1024 ** 3,
+);
+export const STORAGE_LIMIT_LEGACY_BYTES = Number(
+  process.env.STORAGE_LIMIT_LEGACY_BYTES || STORAGE_LIMIT_PRO_BYTES,
+);
+export const STORAGE_RESERVATION_TTL_SECONDS = Number(
+  process.env.STORAGE_RESERVATION_TTL_SECONDS || 15 * 60,
+);
+export const STORAGE_QUOTA_ENFORCEMENT_ENABLED =
+  process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED !== undefined
+    ? process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED === 'true'
+    : !IS_PRODUCTION;
 export const CORS_ALLOWED_ORIGINS = (
   process.env.CORS_ALLOWED_ORIGINS ||
   'http://localhost:5173,https://app.mymemento.io,https://dev.mymemento.io,https://www.mymemento.io,https://mymemento.io'
@@ -53,6 +69,10 @@ export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const BACKEND_URL = process.env.BACKEND_URL;
+export const FILE_URL_SIGNING_KEYS = process.env.FILE_URL_SIGNING_KEYS || '';
+export const FILE_URL_TTL_SECONDS = Number(
+  process.env.FILE_URL_TTL_SECONDS || 3600,
+);
 
 export const GEMINI_API_KEY_ALT = process.env.GEMINI_API_KEY_ALT;
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -186,6 +206,11 @@ export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 export const SUPERMEMORY_API_KEY = process.env.SUPERMEMORY_API_KEY;
 
 export const TALLY_WEBHOOK_SECRET = process.env.TALLY_WEBHOOK_SECRET;
+export const TALLY_WEBHOOK_ENABLED =
+  process.env.TALLY_WEBHOOK_ENABLED === 'true';
+export const TALLY_WEBHOOK_RATE_LIMIT_PER_MINUTE = Number(
+  process.env.TALLY_WEBHOOK_RATE_LIMIT_PER_MINUTE || 30,
+);
 export const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 export const POLAR_WEBHOOK_SECRET_DEV = process.env.POLAR_WEBHOOK_SECRET_DEV;
 export const POLAR_WEBHOOK_SECRET_PROD = process.env.POLAR_WEBHOOK_SECRET_PROD;
@@ -211,8 +236,34 @@ export const FEATURE_FLAGS_ADMIN_EMAILS =
   process.env.FEATURE_FLAGS_ADMIN_EMAILS?.split(',')
     .map(v => v.trim().toLowerCase())
     .filter(Boolean) || [];
+export const BULL_BOARD_ENABLED = process.env.BULL_BOARD_ENABLED === 'true';
+export const SENTRY_TUNNEL_ENABLED =
+  process.env.SENTRY_TUNNEL_ENABLED === 'true';
+export const SENTRY_TUNNEL_ALLOWED_HOSTS =
+  process.env.SENTRY_TUNNEL_ALLOWED_HOSTS?.split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean) || [];
+export const SENTRY_TUNNEL_ALLOWED_PROJECT_IDS =
+  process.env.SENTRY_TUNNEL_ALLOWED_PROJECT_IDS?.split(',')
+    .map(value => value.trim())
+    .filter(Boolean) || [];
+export const SENTRY_TUNNEL_MAX_BYTES = Number(
+  process.env.SENTRY_TUNNEL_MAX_BYTES || 1024 * 1024,
+);
+export const SENTRY_TUNNEL_TIMEOUT_MS = Number(
+  process.env.SENTRY_TUNNEL_TIMEOUT_MS || 5000,
+);
+export const SENTRY_TUNNEL_RATE_LIMIT_PER_MINUTE = Number(
+  process.env.SENTRY_TUNNEL_RATE_LIMIT_PER_MINUTE || 60,
+);
 // WebAuthn / Passkeys
 export const WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
 export const WEBAUTHN_RP_NAME = process.env.WEBAUTHN_RP_NAME || 'Memento';
-export const WEBAUTHN_ORIGIN =
-  process.env.WEBAUTHN_ORIGIN || 'http://localhost:5173';
+export const WEBAUTHN_ORIGINS = (
+  process.env.WEBAUTHN_ORIGINS ||
+  process.env.WEBAUTHN_ORIGIN ||
+  'http://localhost:5173'
+)
+  .split(',')
+  .map(v => v.trim())
+  .filter(Boolean);

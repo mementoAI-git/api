@@ -10,14 +10,25 @@ import {BullMQAdapter} from '@bull-board/api/bullMQAdapter';
 import {insightQueue} from './insights';
 import {
   initializeCapsuleReveal,
+  initializeAccountPurgeDispatcher,
   initializeFileBackup,
   initializeResetStreak,
   initializeStalePendingRecovery,
+  initializeStorageReservationExpiry,
+  initializeBillingUsageReconciliation,
   systemQueue,
 } from './system';
 import logger from '../../utils/logger';
+import {BULL_BOARD_ENABLED} from '../../utils/config';
+import gaurd from '../../middleware/gaurd';
+import {requireAdmin} from '../../middleware/admin';
 
-export function setupBullBoard(app: Application) {
+export function setupBullBoard(app: Application): boolean {
+  if (!BULL_BOARD_ENABLED) {
+    logger.info('Bull Board is disabled');
+    return false;
+  }
+
   const serverAdapter = new ExpressAdapter();
 
   const path = '/queues';
@@ -30,7 +41,7 @@ export function setupBullBoard(app: Application) {
 
   if (queues.length === 0) {
     logger.warn('No BullMQ queues available; skipping queue dashboard setup');
-    return;
+    return false;
   }
 
   createBullBoard({
@@ -38,7 +49,8 @@ export function setupBullBoard(app: Application) {
     serverAdapter,
   });
 
-  app.use(path, serverAdapter.getRouter());
+  app.use(path, gaurd, requireAdmin, serverAdapter.getRouter());
+  return true;
 }
 
 export async function initializeScheduler() {
@@ -49,6 +61,9 @@ export async function initializeScheduler() {
     ['file backup', initializeFileBackup],
     ['capsule reveal', initializeCapsuleReveal],
     ['stale pending recovery', initializeStalePendingRecovery],
+    ['account purge dispatcher', initializeAccountPurgeDispatcher],
+    ['storage reservation expiry', initializeStorageReservationExpiry],
+    ['billing usage reconciliation', initializeBillingUsageReconciliation],
     ['persona summarization', initializePersonaSummarization],
     ['conversation summary', initializeConversationSummary],
   ] as const;

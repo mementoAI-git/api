@@ -18,12 +18,10 @@ import type {StorageFileMetadata, StorageGetFileResponse} from './types';
 import type {FileStorageProvider} from '../../module/database/model/file';
 import {
   DEFAULT_STORAGE_PROVIDER,
-  FREE_STORAGE_LIMIT_BYTES,
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../utils/constant';
-import User, {IUser} from '../../module/database/model/user';
 import File from '../../module/database/model/file';
-import {ForbiddenException, NotFoundException} from '../../utils/service-error';
+import {NotFoundException} from '../../utils/service-error';
 import {BACKEND_URL} from '../../utils/config';
 
 function isStorageNotFoundError(error: unknown): boolean {
@@ -50,6 +48,34 @@ function resolvePublicFileUrl(key: string, fallback = ''): string {
     return `${base}/files/${encodeURIComponent(key)}`;
   }
   return fallback;
+}
+
+export async function recordStorageCleanupRetry({
+  key,
+  user,
+  type,
+  provider = DEFAULT_STORAGE_PROVIDER,
+}: {
+  key: string;
+  user: string;
+  type: string;
+  provider?: FileStorageProvider;
+}): Promise<void> {
+  await File.findOneAndUpdate(
+    {name: key},
+    {
+      $set: {
+        user,
+        type,
+        provider,
+        size: 0,
+        deleted: true,
+        status: 'failed',
+        access_mode: 'signed_only',
+      },
+    },
+    {upsert: true},
+  );
 }
 
 export async function uploadFile(
@@ -123,6 +149,7 @@ export async function uploadFile(
   let status: IFile['status'] = 'ready';
 
   let thumbnail: string | null = null;
+  let thumbnailKey: string | null = null;
 
   // ── Extract embedded album art from audio files ────────────────────────────
   // Only for uploaded audio files that may have ID3/iTunes embedded cover art.
@@ -142,6 +169,7 @@ export async function uploadFile(
           Buffer.from(cover.data),
           'image/jpeg',
         );
+        thumbnailKey = thumbKey;
         thumbnail = resolvePublicFileUrl(thumbKey, thumbUpload.location);
       }
     } catch (err) {
@@ -170,6 +198,7 @@ export async function uploadFile(
         previewBuffer,
         'image/jpeg',
       );
+      thumbnailKey = thumbKey;
       thumbnail = resolvePublicFileUrl(thumbKey, thumbUpload.location);
     } catch (err) {
       logger.warn(
@@ -182,11 +211,33 @@ export async function uploadFile(
 
   // Upload to Cloudflare R2 S3-compatible primary storage
   const key = reconstructFileName(originalName);
-  const result = await uploadToS3(key, buffer, mimetype);
+  let result: Awaited<ReturnType<typeof uploadToS3>>;
+  try {
+    result = await uploadToS3(key, buffer, mimetype);
+  } catch (error) {
+    if (thumbnailKey) {
+      try {
+        await deleteFileFromS3(thumbnailKey, 'both');
+      } catch (cleanupError) {
+        logger.error(
+          {key: thumbnailKey, err: cleanupError},
+          'Failed to remove derivative after primary upload failure',
+        );
+        await recordStorageCleanupRetry({
+          key: thumbnailKey,
+          user,
+          type: 'image/jpeg',
+        });
+      }
+    }
+    throw error;
+  }
 
   if (mimetype.startsWith('video/')) {
     status = 'processing';
     thumbnail = null;
+  } else if (mimetype.startsWith('audio/') && !thumbnail) {
+    status = 'processing';
   }
 
   return {
@@ -198,7 +249,9 @@ export async function uploadFile(
     width,
     height,
     status,
-    thumbnail,
+    thumbnail: null,
+    thumbnail_key: thumbnailKey,
+    access_mode: 'signed_only',
     provider: DEFAULT_STORAGE_PROVIDER,
     backup_url: result.location,
   };
@@ -337,6 +390,28 @@ export async function deleteFile(
   return deleteFileFromS3(key);
 }
 
+/** Purge a durable object from primary storage and any configured backup. */
+export async function deleteFileEverywhere(
+  key: string,
+  provider: FileStorageProvider = DEFAULT_STORAGE_PROVIDER,
+  mimeType?: string,
+  hasBackup = false,
+): Promise<void> {
+  if (provider === 's3') {
+    await deleteFileFromS3(key, 'both');
+    return;
+  }
+  await deleteFile(key, provider, mimeType);
+  if (provider === 'gcs' && hasBackup) {
+    if (!mimeType) throw new Error('mimeType is required for backup delete');
+    const publicId = key.includes('/') ? key : `memento/${key}`;
+    await cloudinaryStorage.deleteFile(
+      publicId,
+      cloudinaryStorage.getResourceType(mimeType),
+    );
+  }
+}
+
 export async function getUserStorageUsed(user_id: string): Promise<number> {
   const result = await File.aggregate<{total: number}>([
     {
@@ -349,32 +424,4 @@ export async function getUserStorageUsed(user_id: string): Promise<number> {
     {$group: {_id: null, total: {$sum: '$size'}}},
   ]);
   return result[0]?.total ?? 0;
-}
-
-export async function checkStorageQuota(
-  user: string | IUser,
-  additional_bytes = 0,
-) {
-  let _user: null | IUser = typeof user !== 'string' ? user : null;
-
-  if (!_user) {
-    _user = await User.findById(user).select('storage_limit').lean();
-  }
-
-  const storage_limit = _user?.storage_limit || FREE_STORAGE_LIMIT_BYTES;
-  const used = await getUserStorageUsed(_user?._id);
-
-  const data = {
-    used,
-    limit: storage_limit,
-  };
-
-  if (used + additional_bytes > storage_limit) {
-    throw new ForbiddenException(
-      'Storage limit exceeded. Upgrade for more space.',
-      data,
-    );
-  }
-
-  return data;
 }

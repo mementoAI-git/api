@@ -1,18 +1,28 @@
-import {createServer, startServer} from './app';
 import logger from './utils/logger';
-import {connectMongodb} from './module/database/connection';
-import redis from './services/redis';
-import {initializeScheduler} from './services/queues';
-import {transport} from './module/mail';
+import {loadAndValidateRuntimeConfig} from './utils/runtime-config';
 
 async function bootstrap(): Promise<void> {
   try {
-    // Connect to database
-    await connectMongodb();
-    await redis.connect();
-    await initializeScheduler();
+    loadAndValidateRuntimeConfig(process.env);
+    const [databaseModule, redisModule, queuesModule, mailModule] =
+      await Promise.all([
+        import('./module/database/connection'),
+        import('./services/redis'),
+        import('./services/queues'),
+        import('./module/mail'),
+      ]);
 
-    transport.verify((error, success) => {
+    // Connect to database
+    await databaseModule.connectMongodb();
+    await redisModule.default.connect();
+    await queuesModule.initializeScheduler();
+
+    // Route modules create Redis-backed rate limiters during import. Import the
+    // application only after Redis is ready so those stores never receive
+    // commands through a closed client.
+    const appModule = await import('./app');
+
+    mailModule.transport.verify((error, success) => {
       if (error)
         logger.error(error, 'SMTP transport verification failed at startup');
       else logger.info(success, 'SMTP transport verified successfully');
@@ -33,8 +43,8 @@ async function bootstrap(): Promise<void> {
     });
 
     // Create and start server
-    const app = createServer();
-    startServer(app);
+    const app = appModule.createServer();
+    appModule.startServer(app);
   } catch (error) {
     logger.fatal(error, 'Failed to start server');
     process.exit(1); // eslint-disable-line n/no-process-exit

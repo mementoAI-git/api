@@ -30,12 +30,12 @@ router.get(
   requireFeature('prompts.suggestions'),
   ctrl.getOverviewPrompts,
 );
-// router.get(
-//   '/categories',
-//   gaurd,
-//   requireFeature('prompts.category_explore'),
-//   ctrl.getCategories,
-// );
+router.get(
+  '/categories',
+  gaurd,
+  requireFeature('prompts.category_explore'),
+  ctrl.getCategories,
+);
 router.get(
   '/categories/:id',
   gaurd,

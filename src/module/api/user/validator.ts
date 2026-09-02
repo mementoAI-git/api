@@ -5,9 +5,39 @@ export default {
     body('new_password')
       .notEmpty()
       .withMessage('New Password is required')
-      .isStrongPassword()
-      .withMessage('Password must be strong'),
-    body('old_password').notEmpty().withMessage('Old Password is required'),
+      .isLength({min: 6})
+      .withMessage('New Password must be at least 6 characters'),
+    body('current_password').optional().isString(),
+    body('old_password').optional().isString(),
+    body().custom((_value, {req}) => {
+      const current = req.body.current_password;
+      const legacy = req.body.old_password;
+      if (!current && !legacy) throw new Error('Current Password is required');
+      if (current && legacy && current !== legacy) {
+        throw new Error('Password fields conflict');
+      }
+      req.body.current_password = current || legacy;
+      return true;
+    }),
+  ],
+  profile: [
+    body('first_name').optional().isString().isLength({max: 100}),
+    body('last_name').optional().isString().isLength({max: 100}),
+    body('fullname').optional().isString().isLength({min: 2, max: 200}),
+    body('nickname').optional().isString().isLength({max: 100}),
+    body('phone_number').optional().isString().isLength({max: 40}),
+    body('gender').optional().isString().isLength({max: 50}),
+    body('dob').optional().isISO8601(),
+    body('country').optional().isString().isLength({max: 100}),
+    body('bg_music').optional({nullable: true}).isString(),
+    body('chat_voice').optional({nullable: true}).isString(),
+    body('chat_voice_provider').optional().isString(),
+    body('location').optional().isString().isLength({max: 200}),
+    body('push_token')
+      .optional()
+      .isString()
+      .trim()
+      .isLength({min: 1, max: 4096}),
   ],
   verifyTOTP: body('token').notEmpty().withMessage('Token is required'),
   updateContext: [

@@ -2,7 +2,8 @@ node_modules
 tmp
 .env
 build
-error.log
+*.log
+logs/
 *.DS_Store*
 SWAGGER_DOCS_SETUP_PROMPT.md
 bun.lock

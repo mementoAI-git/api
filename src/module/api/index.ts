@@ -1,9 +1,51 @@
-import {Application, NextFunction, Request, Response} from 'express';
-import {existsSync, readdirSync} from 'fs';
-import {join} from 'path';
-import {responsHandler} from '../../utils/helpers';
+import {Application, IRouter, NextFunction, Request, Response} from 'express';
+import {errorResponsHandler, responsHandler} from '../../utils/helpers';
 import {StatusCodes} from 'http-status-codes';
 import errorHandler from '../../middleware/error-handler';
+import activityRoutes from './activity/routes';
+import aiRoutes from './ai/routes';
+import authRoutes from './auth/routes';
+import beneficiaryRoutes from './beneficiary/routes';
+import billingRoutes from './billing/routes';
+import capsuleRoutes from './capsule/routes';
+import featureFlagRoutes from './feature-flag/routes';
+import feedbackRoutes from './feedback/routes';
+import fileRoutes from './file/routes';
+import groupRoutes from './group/routes';
+import memoryRoutes from './memory/routes';
+import personaRoutes from './persona/routes';
+import promptRoutes from './prompt/routes';
+import pushDeviceRoutes from './push-device/routes';
+import sentryTunnelRoutes from './sentry_tunnel/routes';
+import userRoutes from './user/routes';
+import webhookRoutes from './webhook/routes';
+import {SENTRY_TUNNEL_ENABLED} from '../../utils/config';
+import {getReadiness} from '../../services/readiness';
+import {collectOperationalSignals} from '../../services/operational-signals';
+import gaurd from '../../middleware/gaurd';
+import {requireAdmin} from '../../middleware/admin';
+
+const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
+  {path: 'activities', router: activityRoutes},
+  {path: 'ai', router: aiRoutes},
+  {path: 'auth', router: authRoutes},
+  {path: 'beneficiaries', router: beneficiaryRoutes},
+  {path: 'billing', router: billingRoutes},
+  {path: 'capsule', router: capsuleRoutes},
+  {path: 'feature-flags', router: featureFlagRoutes},
+  {path: 'feedback', router: feedbackRoutes},
+  {path: 'files', router: fileRoutes},
+  {path: 'groups', router: groupRoutes},
+  {path: 'memories', router: memoryRoutes},
+  {path: 'persona', router: personaRoutes},
+  {path: 'prompts', router: promptRoutes},
+  {path: 'push-devices', router: pushDeviceRoutes},
+  ...(SENTRY_TUNNEL_ENABLED
+    ? [{path: 'sentry_tunnel', router: sentryTunnelRoutes}]
+    : []),
+  {path: 'users', router: userRoutes},
+  {path: 'webhooks', router: webhookRoutes},
+];
 
 function health(_req: Request, res: Response, _next: NextFunction) {
   const healthcheck = {
@@ -17,27 +59,49 @@ function health(_req: Request, res: Response, _next: NextFunction) {
   return responsHandler(res, StatusCodes.OK, 'OK', healthcheck);
 }
 
-function router(app: Application) {
-  readdirSync(__dirname)
-    .filter(file => !file.startsWith('.') && !file.includes('index'))
-    .filter(
-      file =>
-        existsSync(join(__dirname, file, 'routes.ts')) ||
-        existsSync(join(__dirname, file, 'routes.js')),
-    )
-    .forEach(file => {
-      const route = require(`./${file}/routes`);
-      const path = route?.name || file.replace(/\.[^/.]+$/, '');
+async function ready(_req: Request, res: Response) {
+  const readiness = await getReadiness();
+  if (!readiness.ready) {
+    return errorResponsHandler(
+      res,
+      StatusCodes.SERVICE_UNAVAILABLE,
+      'Service is not ready',
+      {
+        code: 'service_unavailable',
+        data: {
+          status: 'not_ready',
+          dependencies: readiness.dependencies,
+        },
+      },
+    );
+  }
 
-      app.use(`/${path}`, route.default || route);
-    });
+  return responsHandler(res, StatusCodes.OK, 'Ready', readiness);
+}
+
+async function metrics(_req: Request, res: Response) {
+  return responsHandler(
+    res,
+    StatusCodes.OK,
+    'Operational signals',
+    await collectOperationalSignals(),
+  );
+}
+
+function router(app: Application) {
+  for (const route of API_ROUTES) {
+    app.use(`/${route.path}`, route.router);
+  }
 
   app.get('/health', health);
-  app.use((req, res, next) => {
-    return responsHandler(
+  app.get('/ready', ready);
+  app.get('/metrics', gaurd, requireAdmin, metrics);
+  app.use((_req, res, _next) => {
+    return errorResponsHandler(
       res,
       StatusCodes.NOT_FOUND,
       'Resource does not exist, check endpoint or method',
+      {code: 'not_found'},
     );
   });
 

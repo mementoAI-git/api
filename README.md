@@ -12,6 +12,8 @@ A Node.js/TypeScript backend application built with Express.js, MongoDB, and Red
 - [Docker Setup](#docker-setup)
 - [Project Structure](#project-structure)
 - [API Documentation](#api-documentation)
+- [Production Operations](#production-operations)
+- [Billing and Storage](#billing-and-storage)
 - [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
@@ -149,6 +151,22 @@ Redis runs locally using Docker. See the [Docker Setup](#docker-setup) section b
    # or
    yarn start
    ```
+
+## Production Operations
+
+- `GET /health` is the process liveness check.
+- `GET /ready` verifies required dependencies and should gate traffic during deploys.
+- `GET /metrics` exposes authenticated admin operational signals; it is not public.
+- Run `npm run migrations:status:prod` against the built artifact before switching traffic. A failed or pending required migration blocks the release.
+- Run `npm run compat:report -- --days 30 --supported web:<version>,ios:<version>,android:<version>` before retiring a compatibility shim. The report is read-only and never authorizes removal by itself.
+
+Production configuration, rollback expectations, and compatibility evidence are documented in [the compatibility registry](docs/compatibility-registry.md). Do not remove legacy read paths until the supported-client window, telemetry threshold, and explicit approval are all recorded.
+
+## Billing and Storage
+
+Polar is the only active payment integration. Paystack values remain readable only where older persisted records may contain them; there is no Paystack checkout, portal, invoice, or webhook flow.
+
+The API is authoritative for subscription access and storage usage. Default storage quotas are configurable through `STORAGE_LIMIT_FREE_BYTES`, `STORAGE_LIMIT_PRO_BYTES`, and `STORAGE_LIMIT_LEGACY_BYTES`; the shipped defaults are 200 MiB for Free and 10 GiB for Pro and Legacy. A per-user administrative override takes precedence. See [the billing implementation checklist](BILLING_IMPLEMENTATION_CHECKLIST.md) for contract, reconciliation, deployment, and staging sign-off requirements.
 
 ## Docker Setup
 
@@ -322,3 +340,22 @@ MIT
 ## Support
 
 For issues and questions, please contact the development team or open an issue in the repository.
+## File access rollout operations
+
+Audit active file records without writing:
+
+```bash
+yarn files:audit-access
+yarn files:backfill-thumbnails
+```
+
+The thumbnail backfill is dry-run by default. After reviewing its unmatched
+count, apply only the recoverable thumbnail keys with:
+
+```bash
+yarn files:backfill-thumbnails --commit
+```
+
+This backfill does not change legacy file access modes. Before production
+rollout, configure reverse-proxy and CDN access logs to redact the `sig`,
+`token`, and `code` query parameters just as the application logger does.

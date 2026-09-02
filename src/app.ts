@@ -10,11 +10,14 @@ import {httpLogger} from './middleware/http-logger';
 import {setupBullBoard} from './services/queues';
 import {CORS_ALLOWED_ORIGINS, JSON_BODY_LIMIT, PORT} from './utils/config';
 import {logger} from './utils';
+import {ForbiddenException} from './utils/service-error';
+import requestContext from './middleware/request-context';
 
 export function createServer(): Application {
   const app = express();
 
   app.set('trust proxy', 1);
+  app.use(requestContext);
 
   app.use(helmet());
   app.use(
@@ -28,7 +31,7 @@ export function createServer(): Application {
         logger.warn(
           `CORS rejected origin: "${origin}". Allowed: ${CORS_ALLOWED_ORIGINS.join(', ')}`,
         );
-        callback(new Error('Not allowed by CORS'));
+        callback(new ForbiddenException('Not allowed by CORS'));
       },
       credentials: false,
       optionsSuccessStatus: 200,
@@ -45,6 +48,10 @@ export function createServer(): Application {
     }),
   );
   app.use('/assets', express.static(path.join(process.cwd(), 'public')));
+  app.use(
+    '/.well-known',
+    express.static(path.join(process.cwd(), 'public/.well-known')),
+  );
 
   app.use(httpLogger);
   setupBullBoard(app);

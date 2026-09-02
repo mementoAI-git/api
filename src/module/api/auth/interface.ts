@@ -26,6 +26,11 @@ export interface ISendLink {
 
 export interface IOAuthAuthorization {
   code: string;
+  user?:
+    | string
+    | {
+        name?: {firstName?: string; lastName?: string};
+      };
 }
 
 export interface IRefreshToken {

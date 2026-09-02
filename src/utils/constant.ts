@@ -6,6 +6,7 @@ import {
   GOOGLE_SECRET,
   META_ID,
   META_SECRET,
+  STORAGE_LIMIT_FREE_BYTES,
 } from './config';
 
 const OAUTH_REDIRECT_URL = `${FRONTEND_URL}/oauth/callback`;
@@ -99,6 +100,10 @@ export const queueNames = {
       scheduleCapsuleReveals: 'schedule-capsule-reveals',
       recoverStalePending: 'recover-stale-pending',
       revealCapsules: 'reveal-capsules',
+      dispatchAccountPurges: 'dispatch-account-purges',
+      accountPurge: 'account-purge',
+      expireStorageReservations: 'expire-storage-reservations',
+      reconcileBillingUsage: 'reconcile-billing-usage',
     },
   },
 };
@@ -137,7 +142,7 @@ export const EXCLUDED_STORAGE_PROVIDER =
     ? STORAGE_PROVIDERS.gcs
     : STORAGE_PROVIDERS.s3;
 
-export const FREE_STORAGE_LIMIT_BYTES = 5 * 1024 ** 3; // 5 GB
+export const FREE_STORAGE_LIMIT_BYTES = STORAGE_LIMIT_FREE_BYTES;
 
 /** Predefined tags for story/memory auto-generation (modal + quick-capture enrichment). Only these; AI returns 2–3. */
 export const PREDEFINED_STORY_TAGS = [

@@ -21,6 +21,9 @@ export interface ISubscription {
   trial_ends_at?: Date | null;
   has_used_trial: boolean;
   cancelled_at?: Date | null;
+  cancel_at_period_end?: boolean;
+  ended_at?: Date | null;
+  provider_modified_at?: Date | null;
   payment_provider?: PaymentProvider | null;
   provider_customer_id?: string | null;
   provider_subscription_id?: string | null;
@@ -57,6 +60,9 @@ const subscription = new Schema<ISubscription>(
     trial_ends_at: {type: Date, default: null},
     has_used_trial: {type: Boolean, default: false},
     cancelled_at: {type: Date, default: null},
+    cancel_at_period_end: {type: Boolean, default: false},
+    ended_at: {type: Date, default: null},
+    provider_modified_at: {type: Date, default: null},
     payment_provider: {
       type: String,
       enum: ['paystack', 'polar', null],

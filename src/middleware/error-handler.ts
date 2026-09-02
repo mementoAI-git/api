@@ -1,16 +1,17 @@
 import {NextFunction, Request, Response} from 'express';
 import {StatusCodes} from 'http-status-codes';
 import dayjs from 'dayjs';
-import {responsHandler} from '../utils/helpers';
+import {errorResponsHandler} from '../utils/helpers';
 import {ServiceError} from '../utils/service-error';
 import logger from '../utils/logger';
+import {sanitizeUrlForLogs} from '../utils/sanitize-url';
 
 const errorHandler = (
   err: any,
   req: Request | any,
   res: Response,
   next: NextFunction,
-) => {
+): Response | void => {
   // If headers have already been sent, we can't send an error response
   if (res.headersSent) {
     logger.error(err, 'Error occurred after headers were sent');
@@ -20,7 +21,7 @@ const errorHandler = (
   const {method, url} = req;
 
   const timestamp = dayjs().format('DD/MM/YY HH:mm:ss');
-  const request = `[${timestamp}] ${method.toUpperCase()} ${url}`;
+  const request = `[${timestamp}] ${method.toUpperCase()} ${sanitizeUrlForLogs(url)}`;
 
   const stackLines = err?.stack?.split('\n');
   const path = stackLines?.[1]?.trim() || err;
@@ -54,7 +55,12 @@ const errorHandler = (
           : 'File upload limit exceeded';
 
     logger.warn(error_payload, 'Multer file upload limit exceeded');
-    return responsHandler(res, statusCode, msg);
+    return errorResponsHandler(res, statusCode, msg, {
+      code:
+        statusCode === StatusCodes.REQUEST_TOO_LONG
+          ? 'payload_too_large'
+          : 'bad_request',
+    });
   }
 
   // Log actual unexpected/internal errors as ERROR
@@ -67,14 +73,16 @@ const errorHandler = (
       typeof err.data === 'object'
     ) {
       const gateData = err.data as Record<string, unknown>;
-      return res.status(err.statusCode).json({
-        status: err.statusCode,
-        message: err.message,
-        ...gateData,
+      return errorResponsHandler(res, err.statusCode, err.message, {
+        code: err.code,
         data: gateData,
+        topLevel: gateData,
       });
     }
-    return responsHandler(res, err.statusCode, err?.message, err?.data);
+    return errorResponsHandler(res, err.statusCode, err?.message, {
+      code: err.code,
+      data: err.data,
+    });
   }
 
   // if (compareStrings(NODE_ENV, 'production')) {
@@ -89,10 +97,11 @@ const errorHandler = (
   //   subject: 'Memento error',
   //   text: JSON.stringify(error_payload, null, 2),
   // });
-  return responsHandler(
+  return errorResponsHandler(
     res,
     StatusCodes.INTERNAL_SERVER_ERROR,
     'Internal server error',
+    {code: 'internal_error'},
   );
 };
 

@@ -119,7 +119,7 @@ export async function getEphemeralToken(
 ) {
   try {
     await assertAccess(req.auth.id, 'voice_mode');
-    const {message, data} = await service.createEphemeralToken();
+    const {message, data} = await service.createEphemeralToken(req.auth.id);
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

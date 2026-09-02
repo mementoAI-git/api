@@ -3,6 +3,7 @@ import {
   createUploadedVideoThumbnailArtifact,
   getVideoProcessingAvailability,
 } from '../../services/storage/video-processing';
+import {createUploadedAudioThumbnailArtifact} from '../../services/storage/audio-processing';
 import {getVideoThumbnailUrl} from '../../services/storage/cloudinary';
 import {logger} from '../../utils';
 
@@ -14,6 +15,26 @@ export default async function processAttachmentThumbnail(job: {
 
   if (!file) {
     logger.warn({fileId}, 'Attachment thumbnail job skipped: file not found');
+    return;
+  }
+
+  if (file.type?.startsWith('audio/')) {
+    try {
+      const artifact = await createUploadedAudioThumbnailArtifact({
+        name: file.name,
+        provider: file.provider,
+        type: file.type,
+      });
+      await file.updateOne({
+        thumbnail_key: artifact.thumbnailKey ?? file.thumbnail_key ?? null,
+        thumbnail: null,
+        duration: file.duration ?? artifact.duration ?? undefined,
+        status: 'ready',
+      });
+    } catch (error) {
+      await file.updateOne({status: 'failed'});
+      logger.error({fileId, err: error}, 'Audio thumbnail processing failed');
+    }
     return;
   }
 
@@ -50,7 +71,8 @@ export default async function processAttachmentThumbnail(job: {
       type: file.type,
     });
     await file.updateOne({
-      thumbnail: artifact.thumbnailUrl,
+      thumbnail_key: artifact.thumbnailKey,
+      thumbnail: null,
       width: artifact.width ?? undefined,
       height: artifact.height ?? undefined,
       duration: file.duration ?? artifact.duration ?? undefined,

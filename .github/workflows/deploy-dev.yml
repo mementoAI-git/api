@@ -2,18 +2,21 @@
 # Backend — Deploy to Development
 #
 # Push to dev:
-#   1. Install dependencies once in CI
+#   1. Install once in CI
 #   2. Lint
-#   3. Build
-#   4. Upload immutable release
-#   5. Install runtime dependencies in inactive release
-#   6. Ensure Yarn + PM2 exist for release Node version
-#   7. Atomically switch current symlink
-#   8. Reload PM2
-#   9. Health check
-#  10. Roll back on failure
+#   3. Test
+#   4. Build
+#   5. Create immutable deployment artifact
+#   6. Upload inactive release
+#   7. Install production dependencies
+#   8. Provision Yarn + PM2 for the release's Node version
+#   9. Atomically activate release
+#  10. Reload PM2
+#  11. Health check
+#  12. Roll back automatically on failure
+#  13. Keep current + previous healthy release only
 #
-# Deployment layout:
+# Server layout:
 #
 # /opt/memento/backend-dev/
 #   current -> releases/<release-id>
@@ -26,7 +29,7 @@
 #   releases/
 # ──────────────────────────────────────────────────────────────
 
-name: "Backend: Deploy Dev"
+name: 'Backend: Deploy Dev'
 
 on:
   push:
@@ -38,17 +41,17 @@ permissions:
 
 env:
   DEPLOY_ROOT: /opt/memento/backend-dev
-  HEALTH_URL: http://127.0.0.1:3001/health
+  READINESS_URL: http://127.0.0.1:3001/ready
 
 jobs:
   # ────────────────────────────────────────────────────────────
-  # 1. Lint + Build
+  # 1. Lint + Test + Build
   #
-  # A newer commit may safely cancel an older BUILD.
-  # No server state is being modified yet.
+  # It is safe to cancel an obsolete build because it has not
+  # touched the server yet.
   # ────────────────────────────────────────────────────────────
   build:
-    name: Lint & Build
+    name: Lint, Test & Build
     runs-on: ubuntu-latest
 
     concurrency:
@@ -71,6 +74,12 @@ jobs:
       - name: Run linter
         run: yarn lint
 
+      - name: Run tests
+        run: yarn test
+
+      - name: Verify API contract artifact
+        run: yarn contracts:check
+
       - name: Build
         run: yarn build
 
@@ -92,6 +101,52 @@ jobs:
           FILE_COUNT="$(find build -type f | wc -l | tr -d ' ')"
           echo "Build output OK — ${FILE_COUNT} files"
 
+      # Build an explicit runtime artifact rather than deploying
+      # the repository directly.
+      #
+      # Remove the application's postinstall hook because the
+      # TypeScript application has already been compiled in CI.
+      #
+      # Dependency package install scripts remain enabled later.
+      - name: Prepare deployment artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf release
+          mkdir -p release
+
+          cp -a build release/build
+          cp package.json release/package.json
+          cp yarn.lock release/yarn.lock
+          cp ecosystem.config.js release/ecosystem.config.js
+          cp .nvmrc release/.nvmrc
+          cp openapi.json release/openapi.json
+          cp openapi.sha256 release/openapi.sha256
+
+          node <<'NODE'
+          const fs = require('fs');
+
+          const file = 'release/package.json';
+          const pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+
+          if (pkg.scripts?.postinstall) {
+            console.log(
+              `Removing application postinstall from deployment artifact: ${pkg.scripts.postinstall}`
+            );
+
+            delete pkg.scripts.postinstall;
+          }
+
+          fs.writeFileSync(
+            file,
+            JSON.stringify(pkg, null, 2) + '\n'
+          );
+          NODE
+
+          echo "Deployment artifact prepared:"
+          find release -maxdepth 2 -type f | sort
+
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v4
         with:
@@ -99,21 +154,16 @@ jobs:
           retention-days: 1
           if-no-files-found: error
           include-hidden-files: true
-          path: |
-            build/
-            package.json
-            yarn.lock
-            ecosystem.config.js
-            .nvmrc
+          path: release/
 
   # ────────────────────────────────────────────────────────────
   # 2. Deploy
   #
-  # Never cancel a deployment that has started touching the
-  # server. A newer successful build waits behind it.
+  # Never cancel a deployment once it starts touching the
+  # server.
   #
-  # GitHub concurrency keeps only one running + one pending
-  # deployment for this group.
+  # If several commits arrive rapidly, GitHub keeps the running
+  # deploy and the newest pending deploy.
   # ────────────────────────────────────────────────────────────
   deploy:
     name: Deploy
@@ -142,32 +192,32 @@ jobs:
           path: release
 
       # ────────────────────────────────────────────────────────
-      # SSH setup
+      # SSH
       # ────────────────────────────────────────────────────────
       - name: Setup SSH
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -z "$SSH_HOST" ]; then
+          [ -n "$SSH_HOST" ] || {
             echo "::error::DEPLOY_SSH_HOST is missing"
             exit 1
-          fi
+          }
 
-          if [ -z "$SSH_USER" ]; then
+          [ -n "$SSH_USER" ] || {
             echo "::error::DEPLOY_SSH_USER is missing"
             exit 1
-          fi
+          }
 
-          if [ -z "$SSH_PRIVATE_KEY" ]; then
+          [ -n "$SSH_PRIVATE_KEY" ] || {
             echo "::error::DEPLOY_SSH_KEY is missing"
             exit 1
-          fi
+          }
 
-          if [ -z "$SSH_KNOWN_HOSTS" ]; then
+          [ -n "$SSH_KNOWN_HOSTS" ] || {
             echo "::error::DEPLOY_SSH_KNOWN_HOSTS is missing"
             exit 1
-          fi
+          }
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
@@ -195,7 +245,7 @@ jobs:
             "echo 'SSH connection OK'"
 
       # ────────────────────────────────────────────────────────
-      # Create new inactive release
+      # Upload inactive release
       # ────────────────────────────────────────────────────────
       - name: Create release directory
         shell: bash
@@ -229,17 +279,9 @@ jobs:
             "$SSH_USER@$SSH_HOST:$DEPLOY_ROOT/releases/$RELEASE_ID/"
 
       # ────────────────────────────────────────────────────────
-      # Install runtime dependencies BEFORE making release live
+      # Prepare runtime BEFORE activating anything.
       #
-      # Important:
-      #   NVM keeps global npm packages per Node installation.
-      #
-      # Therefore if .nvmrc moves from Node 22 -> Node 24,
-      # PM2 installed under Node 22 is not automatically
-      # available under Node 24.
-      #
-      # We provision Yarn + PM2 for the selected Node version
-      # before touching the current symlink.
+      # If this fails, the current live release is untouched.
       # ────────────────────────────────────────────────────────
       - name: Prepare release runtime
         shell: bash
@@ -278,75 +320,87 @@ jobs:
             exit 1
           fi
 
-          # nvm is not completely nounset-safe.
+          # nvm itself is not fully compatible with `set -u`.
           set +u
           . "$NVM_DIR/nvm.sh"
 
-          nvm install
-          NVM_INSTALL_STATUS=$?
-
-          if [ "$NVM_INSTALL_STATUS" -eq 0 ]; then
-            nvm use
-            NVM_USE_STATUS=$?
-          else
-            NVM_USE_STATUS=1
+          if ! nvm install; then
+            echo "ERROR: Unable to install Node version from .nvmrc"
+            exit 1
           fi
+
+          if ! nvm use; then
+            echo "ERROR: Unable to activate Node version from .nvmrc"
+            exit 1
+          fi
+
           set -u
 
-          if [ "$NVM_INSTALL_STATUS" -ne 0 ]; then
-            echo "ERROR: Failed to install Node version from .nvmrc"
+          echo "Node: $(node --version)"
+          echo "npm:  $(npm --version)"
+
+          # Verify the deployment copy cannot accidentally rebuild
+          # TypeScript source on the server.
+          POSTINSTALL="$(
+            node -e "
+              const p = require('./package.json');
+              process.stdout.write(p.scripts?.postinstall || '');
+            "
+          )"
+
+          if [ -n "$POSTINSTALL" ]; then
+            echo "ERROR: Deployment package.json contains postinstall:"
+            echo "  $POSTINSTALL"
             exit 1
           fi
 
-          if [ "$NVM_USE_STATUS" -ne 0 ]; then
-            echo "ERROR: Failed to activate Node version from .nvmrc"
-            exit 1
-          fi
-
-          echo "Using Node $(node --version)"
-
-          # This project uses Yarn Classic commands/lockfile.
-          # Ensure the selected NVM Node installation has Yarn 1.
+          # ── Yarn Classic ───────────────────────────────────
           YARN_VERSION="$(yarn --version 2>/dev/null || true)"
 
           case "$YARN_VERSION" in
             1.*)
-              echo "Yarn ${YARN_VERSION} already available"
+              echo "Yarn: $YARN_VERSION"
               ;;
+
             *)
-              echo "Installing Yarn Classic for $(node --version)..."
+              echo "Installing Yarn Classic..."
               npm install --global yarn@1.22.22 --force
+              echo "Yarn: $(yarn --version)"
               ;;
           esac
 
-          echo "Using Yarn $(yarn --version)"
+          # ── Runtime dependencies ───────────────────────────
+          #
+          # Application code was already compiled in CI.
+          # Dependency install scripts are still allowed.
+          yarn install \
+            --production \
+            --frozen-lockfile
 
-          # PM2 installed globally under another NVM Node version
-          # is not necessarily available under this one.
+          # ── PM2 ────────────────────────────────────────────
+          #
+          # NVM keeps global npm packages per Node installation.
+          # A new Node version therefore needs PM2 installed for
+          # that Node version too.
           if ! command -v pm2 >/dev/null 2>&1; then
-            echo "PM2 not available for $(node --version)"
+            echo "PM2 unavailable for $(node --version)"
             echo "Installing PM2..."
+
             npm install --global pm2
           fi
 
           if ! command -v pm2 >/dev/null 2>&1; then
-            echo "ERROR: PM2 is still unavailable after installation"
+            echo "ERROR: PM2 unavailable after installation"
             exit 1
           fi
 
           echo "PM2 executable: $(command -v pm2)"
 
-          # The TypeScript build was already produced in CI.
-          # This installs runtime dependencies only.
-          yarn install \
-            --production \
-            --frozen-lockfile
-
           echo "Release runtime prepared successfully."
           REMOTE
 
       # ────────────────────────────────────────────────────────
-      # Activate release
+      # Atomic activation + rollback
       # ────────────────────────────────────────────────────────
       - name: Activate release
         shell: bash
@@ -376,7 +430,7 @@ jobs:
           API_APP="memento-backend-dev"
           WORKER_APP="memento-backend-dev-worker"
 
-          HEALTH_URL="http://127.0.0.1:3001/health"
+          READINESS_URL="http://127.0.0.1:3001/ready"
 
           mkdir -p "$RELEASES"
 
@@ -389,7 +443,6 @@ jobs:
           # ────────────────────────────────────────────────────
           # Helpers
           # ────────────────────────────────────────────────────
-
           load_nvm() {
             export NVM_DIR="$HOME/.nvm"
 
@@ -400,57 +453,92 @@ jobs:
 
             set +u
             . "$NVM_DIR/nvm.sh"
-            NVM_LOAD_STATUS=$?
             set -u
-
-            return "$NVM_LOAD_STATUS"
           }
 
           use_release_node() {
             RELEASE_DIR="$1"
 
-            if ! load_nvm; then
-              return 1
-            fi
+            load_nvm || return 1
 
             OLD_PWD="$PWD"
             cd "$RELEASE_DIR"
 
             if [ -f ".nvmrc" ]; then
-              echo "Selecting Node version from:"
+              echo "Selecting Node from:"
               echo "  $RELEASE_DIR/.nvmrc"
 
               set +u
-              nvm use
-              NVM_STATUS=$?
+
+              if nvm use; then
+                NVM_OK=1
+              else
+                NVM_OK=0
+              fi
+
               set -u
+
+              if [ "$NVM_OK" -ne 1 ]; then
+                cd "$OLD_PWD"
+                echo "ERROR: Unable to select release Node version"
+                return 1
+              fi
+
             else
-              # Legacy deployment created by the old workflow may
-              # not contain .nvmrc.
-              #
-              # This is intentionally a fallback rather than a
-              # deployment failure.
-              echo "WARNING: No .nvmrc found in legacy release:"
+              # Legacy migration releases may not contain
+              # .nvmrc. Use the new release's Node version as
+              # the PM2 control runtime in that situation.
+              echo "WARNING: Release has no .nvmrc:"
               echo "  $RELEASE_DIR"
-              echo "Trying the NVM default Node version."
+              echo "Using deployment Node as PM2 control runtime."
+
+              cd "$NEW_RELEASE"
 
               set +u
-              nvm use default >/dev/null 2>&1
-              NVM_STATUS=$?
+
+              if nvm use >/dev/null 2>&1; then
+                NVM_OK=1
+              else
+                NVM_OK=0
+              fi
+
               set -u
 
-              if [ "$NVM_STATUS" -ne 0 ]; then
-                echo "WARNING: NVM default is unavailable."
-                echo "Keeping the currently selected Node version."
-                NVM_STATUS=0
+              if [ "$NVM_OK" -ne 1 ]; then
+                cd "$OLD_PWD"
+                echo "ERROR: Unable to select deployment Node"
+                return 1
               fi
             fi
 
             cd "$OLD_PWD"
 
-            if [ "$NVM_STATUS" -ne 0 ]; then
-              echo "ERROR: Failed to select Node version"
-              return 1
+            # A historical release may reference a Node version
+            # where PM2 was never installed. Fall back to the new
+            # release's Node version, where Prepare runtime has
+            # already guaranteed PM2 exists.
+            if ! command -v pm2 >/dev/null 2>&1; then
+              echo "PM2 unavailable under selected Node."
+              echo "Using deployment Node as PM2 control runtime."
+
+              cd "$NEW_RELEASE"
+
+              set +u
+
+              if nvm use >/dev/null 2>&1; then
+                NVM_OK=1
+              else
+                NVM_OK=0
+              fi
+
+              set -u
+
+              cd "$OLD_PWD"
+
+              if [ "$NVM_OK" -ne 1 ]; then
+                echo "ERROR: Could not select deployment Node"
+                return 1
+              fi
             fi
 
             if ! command -v node >/dev/null 2>&1; then
@@ -459,14 +547,12 @@ jobs:
             fi
 
             if ! command -v pm2 >/dev/null 2>&1; then
-              echo "ERROR: PM2 is unavailable for $(node --version)"
+              echo "ERROR: PM2 is unavailable"
               return 1
             fi
 
-            echo "Using Node $(node --version)"
-            echo "Using PM2 at $(command -v pm2)"
-
-            return 0
+            echo "Control Node: $(node --version)"
+            echo "PM2: $(command -v pm2)"
           }
 
           switch_release() {
@@ -480,21 +566,33 @@ jobs:
 
             rm -f "$DEPLOY_ROOT/.current-next"
 
-            ln -s "$TARGET" "$DEPLOY_ROOT/.current-next"
+            ln -s \
+              "$TARGET" \
+              "$DEPLOY_ROOT/.current-next"
 
             # Atomic rename on the same filesystem.
-            mv -Tf "$DEPLOY_ROOT/.current-next" "$CURRENT"
+            mv -Tf \
+              "$DEPLOY_ROOT/.current-next" \
+              "$CURRENT"
           }
 
           reload_apps() {
             cd "$DEPLOY_ROOT"
 
-            echo "Reloading PM2 applications..."
+            echo "Reloading API..."
 
             MEMENTO_ENV=dev \
               pm2 startOrReload \
               "$DEPLOY_ROOT/ecosystem.config.js" \
-              --only "$API_APP,$WORKER_APP" \
+              --only "$API_APP" \
+              --update-env
+
+            echo "Reloading worker..."
+
+            MEMENTO_ENV=dev \
+              pm2 startOrReload \
+              "$DEPLOY_ROOT/ecosystem.config.js" \
+              --only "$WORKER_APP" \
               --update-env
 
             pm2 save
@@ -502,39 +600,65 @@ jobs:
             echo "PM2 reload completed."
           }
 
-          check_health() {
+          run_release_migrations() {
+            echo "Running release database migrations..."
+            cd "$NEW_RELEASE"
+            MIGRATION_STATUS=0
+            DOTENV_CONFIG_PATH="$DEPLOY_ROOT/.env" \
+              NODE_ENV=production \
+              MEMENTO_ENV=dev \
+              npm run migrations:up:prod || MIGRATION_STATUS=$?
+            cd "$DEPLOY_ROOT"
+            return "$MIGRATION_STATUS"
+          }
+
+          check_readiness() {
             LABEL="$1"
             ATTEMPTS="${2:-15}"
+            ALLOW_LEGACY_HEALTH="${3:-0}"
 
-            echo "Checking ${LABEL} health..."
+            echo "Checking ${LABEL}..."
 
             for attempt in $(seq 1 "$ATTEMPTS"); do
-              if curl \
+              READINESS_STATUS="$(curl \
+                --silent \
+                --max-time 5 \
+                --output /dev/null \
+                --write-out '%{http_code}' \
+                "$READINESS_URL" \
+                2>/dev/null || true)"
+
+              case "$READINESS_STATUS" in
+              2??)
+                echo "${LABEL} passed on attempt ${attempt}"
+                return 0
+                ;;
+              esac
+
+              if [ "$ALLOW_LEGACY_HEALTH" = "1" ] && \
+                { [ "$READINESS_STATUS" = "404" ] || \
+                  [ "$READINESS_STATUS" = "405" ]; } && curl \
                 --fail \
                 --silent \
                 --show-error \
                 --max-time 5 \
-                "$HEALTH_URL" \
+                "${READINESS_URL%/ready}/health" \
                 >/dev/null 2>&1
               then
-                echo "${LABEL} health check passed on attempt ${attempt}"
+                echo "${LABEL} passed via legacy health endpoint on attempt ${attempt}"
                 return 0
               fi
 
-              echo "${LABEL} health check attempt ${attempt} failed"
+              echo "${LABEL} attempt ${attempt} failed"
               sleep 2
             done
 
-            echo "${LABEL} health check failed"
+            echo "${LABEL} failed"
             return 1
           }
 
           # ────────────────────────────────────────────────────
-          # One-time migration from the OLD in-place structure.
-          #
-          # The user's existing failed migration already created
-          # "current", so this block will safely be skipped on
-          # subsequent deployments.
+          # One-time migration from the old in-place deployment
           # ────────────────────────────────────────────────────
           if [ ! -L "$CURRENT" ]; then
             if [ -e "$CURRENT" ]; then
@@ -555,8 +679,13 @@ jobs:
               ecosystem.config.js \
               .nvmrc
             do
-              if [ -e "$DEPLOY_ROOT/$item" ] || [ -L "$DEPLOY_ROOT/$item" ]; then
-                mv "$DEPLOY_ROOT/$item" "$LEGACY_RELEASE/$item"
+              if [ -e "$DEPLOY_ROOT/$item" ] || \
+                 [ -L "$DEPLOY_ROOT/$item" ]; then
+
+                mv \
+                  "$DEPLOY_ROOT/$item" \
+                  "$LEGACY_RELEASE/$item"
+
                 LEGACY_FOUND=1
               fi
             done
@@ -565,80 +694,85 @@ jobs:
               echo "Migrated existing deployment to:"
               echo "  $LEGACY_RELEASE"
 
-              ln -s "$LEGACY_RELEASE" "$CURRENT"
+              ln -s \
+                "$LEGACY_RELEASE" \
+                "$CURRENT"
             else
               echo "No existing deployment found."
               rmdir "$LEGACY_RELEASE"
             fi
 
-            # Compatibility links.
-            #
-            # Existing ecosystem.config.js paths such as:
-            #
-            #   /opt/memento/backend-dev/build/src/index.js
-            #
-            # continue to work after switching releases.
-            ln -sfn "current/build" \
+            ln -sfn \
+              "current/build" \
               "$DEPLOY_ROOT/build"
 
-            ln -sfn "current/node_modules" \
+            ln -sfn \
+              "current/node_modules" \
               "$DEPLOY_ROOT/node_modules"
 
-            ln -sfn "current/package.json" \
+            ln -sfn \
+              "current/package.json" \
               "$DEPLOY_ROOT/package.json"
 
-            ln -sfn "current/yarn.lock" \
+            ln -sfn \
+              "current/yarn.lock" \
               "$DEPLOY_ROOT/yarn.lock"
 
-            ln -sfn "current/ecosystem.config.js" \
+            ln -sfn \
+              "current/ecosystem.config.js" \
               "$DEPLOY_ROOT/ecosystem.config.js"
 
-            ln -sfn "current/.nvmrc" \
+            ln -sfn \
+              "current/.nvmrc" \
               "$DEPLOY_ROOT/.nvmrc"
           fi
 
-          # Ensure compatibility links also exist if this is a
-          # retry after the first migration.
+          # Validate the migrated/current structure.
+          if [ ! -L "$CURRENT" ]; then
+            echo "ERROR: current is not a symlink"
+            exit 1
+          fi
+
           if [ ! -L "$DEPLOY_ROOT/build" ]; then
-            echo "ERROR: Expected compatibility link is missing:"
-            echo "  $DEPLOY_ROOT/build"
+            echo "ERROR: build compatibility symlink is missing"
             exit 1
           fi
 
           if [ ! -L "$DEPLOY_ROOT/ecosystem.config.js" ]; then
-            echo "ERROR: Expected compatibility link is missing:"
-            echo "  $DEPLOY_ROOT/ecosystem.config.js"
+            echo "ERROR: ecosystem.config.js compatibility symlink is missing"
             exit 1
           fi
 
-          # ────────────────────────────────────────────────────
-          # Capture currently active release before switching.
-          # ────────────────────────────────────────────────────
-          PREVIOUS_RELEASE=""
+          PREVIOUS_RELEASE="$(
+            readlink -f "$CURRENT" || true
+          )"
 
-          if [ -L "$CURRENT" ]; then
-            PREVIOUS_RELEASE="$(readlink -f "$CURRENT" || true)"
-          fi
-
+          echo
           echo "Previous release:"
           echo "  ${PREVIOUS_RELEASE:-none}"
 
           echo "New release:"
           echo "  $NEW_RELEASE"
 
-          # Tracks whether PM2 may have been modified.
+          # The currently-running release is known-good enough to
+          # be serving traffic, so mark it healthy.
           #
-          # If activation fails before PM2 is touched, rollback
-          # only has to restore the symlink. Existing processes
-          # are still running untouched.
+          # This also migrates deployments created before the
+          # .healthy-marker system.
+          if [ -n "$PREVIOUS_RELEASE" ] && \
+             [ -d "$PREVIOUS_RELEASE" ]; then
+
+            touch "$PREVIOUS_RELEASE/.healthy"
+          fi
+
           PM2_RELOAD_ATTEMPTED=0
 
           rollback() {
             echo
-            echo "Deployment failed."
+            echo "Development deployment failed."
 
             if [ -z "$PREVIOUS_RELEASE" ]; then
-              echo "WARNING: No previous release exists."
+              echo "ERROR: No previous release is available."
               return 1
             fi
 
@@ -648,69 +782,68 @@ jobs:
               return 1
             fi
 
-            echo "Rolling back current symlink to:"
+            echo "Restoring previous release:"
             echo "  $PREVIOUS_RELEASE"
 
             if ! switch_release "$PREVIOUS_RELEASE"; then
-              echo "ERROR: Failed to restore previous symlink."
+              echo "ERROR: Failed restoring previous symlink."
               return 1
             fi
 
-            # PM2 was never touched. The previous app processes
-            # are already running, so DO NOT unnecessarily reload
+            # If PM2 was never touched, the previous processes
+            # are still running. Do not unnecessarily restart
             # them.
             if [ "$PM2_RELOAD_ATTEMPTED" -eq 0 ]; then
-              echo "PM2 was never reloaded."
-              echo "Previous processes are still running."
+              echo "PM2 was never modified."
+              echo "Existing processes remain running."
               echo "Symlink rollback completed."
               return 0
             fi
 
-            echo "PM2 was already touched; restoring previous processes."
+            echo "PM2 was modified; restoring previous processes."
 
             if ! use_release_node "$PREVIOUS_RELEASE"; then
-              echo "ERROR: Previous symlink restored, but Node/PM2 selection failed."
+              echo "ERROR: Symlink restored, but PM2 control failed."
               return 1
             fi
 
             if ! reload_apps; then
-              echo "ERROR: Previous symlink restored, but PM2 rollback failed."
+              echo "ERROR: Symlink restored, but PM2 rollback failed."
               return 1
             fi
 
-            if ! check_health "Rollback" 10; then
-              echo "ERROR: Previous release was restored but is unhealthy."
+            if ! check_readiness "Rollback readiness check" 10 1; then
+              echo "ERROR: Previous release is still not ready."
               return 1
             fi
 
             echo "Rollback completed successfully."
-            return 0
           }
 
           # ────────────────────────────────────────────────────
-          # Switch current -> new release
+          # Activate new release
           # ────────────────────────────────────────────────────
+          echo
           echo "Activating new release..."
 
-          if ! switch_release "$NEW_RELEASE"; then
-            echo "ERROR: Failed to switch current symlink"
-            exit 1
-          fi
-
-          # Select the Node version belonging to the new release.
-          #
-          # PM2 was provisioned for this Node version in the
-          # previous workflow step, before activation.
+          # PM2 was guaranteed to exist for this Node version
+          # during Prepare release runtime.
           if ! use_release_node "$NEW_RELEASE"; then
-            rollback || true
             exit 1
           fi
 
-          # Mark BEFORE attempting PM2 reload.
-          #
-          # startOrReload could partially change processes and then
-          # fail. In that situation rollback should reload the old
-          # release rather than assuming PM2 was untouched.
+          if ! run_release_migrations; then
+            echo "ERROR: Release database migrations failed"
+            exit 1
+          fi
+
+          if ! switch_release "$NEW_RELEASE"; then
+            echo "ERROR: Unable to activate new release"
+            exit 1
+          fi
+
+          # Mark before invoking PM2 because startOrReload could
+          # partially modify one process and then fail.
           PM2_RELOAD_ATTEMPTED=1
 
           if ! reload_apps; then
@@ -718,13 +851,14 @@ jobs:
             exit 1
           fi
 
-          # ────────────────────────────────────────────────────
-          # Health check
-          # ────────────────────────────────────────────────────
-          if ! check_health "New release" 15; then
+          if ! check_readiness "New release readiness check" 15; then
             rollback || true
             exit 1
           fi
+
+          # Only a release that passed its readiness check receives
+          # this marker.
+          touch "$NEW_RELEASE/.healthy"
 
           echo
           echo "Deployment successful."
@@ -732,45 +866,158 @@ jobs:
           echo "  $NEW_RELEASE"
 
           # ────────────────────────────────────────────────────
-          # Keep latest 3 normal dev releases.
+          # Release cleanup
           #
-          # The legacy migration is intentionally retained as an
-          # additional safety net.
+          # 1. Delete failed/incomplete normal releases.
+          # 2. Keep only TWO healthy normal releases:
+          #      - current
+          #      - previous
+          #
+          # Legacy migration release is retained separately for
+          # now.
           # ────────────────────────────────────────────────────
-          mapfile -t OLD_RELEASES < <(
-            find "$RELEASES" \
-              -mindepth 1 \
-              -maxdepth 1 \
-              -type d \
-              ! -name 'legacy-*' \
-              -printf '%T@ %p\n' \
-              | sort -rn \
-              | awk '
-                  NR > 3 {
-                    $1 = ""
-                    sub(/^ /, "")
-                    print
-                  }
-                '
-          )
+          ACTIVE_RELEASE="$(
+            readlink -f "$CURRENT" || true
+          )"
 
-          for old_release in "${OLD_RELEASES[@]}"; do
-            ACTIVE_RELEASE="$(readlink -f "$CURRENT" || true)"
+          echo
+          echo "Removing failed/incomplete releases..."
 
-            if [ "$old_release" = "$ACTIVE_RELEASE" ]; then
+          for candidate in "$RELEASES"/*; do
+            [ -d "$candidate" ] || continue
+
+            NAME="$(basename "$candidate")"
+
+            case "$NAME" in
+              legacy-*)
+                continue
+                ;;
+            esac
+
+            if [ "$candidate" = "$ACTIVE_RELEASE" ]; then
               continue
             fi
 
-            echo "Removing old release:"
-            echo "  $old_release"
+            if [ ! -f "$candidate/.healthy" ]; then
+              echo "Removing unhealthy/incomplete release:"
+              echo "  $candidate"
 
-            rm -rf "$old_release"
+              rm -rf "$candidate"
+            fi
           done
+
+          echo
+          echo "Keeping newest 2 healthy releases..."
+
+          mapfile -t HEALTHY_RELEASES < <(
+            for candidate in "$RELEASES"/*; do
+              [ -d "$candidate" ] || continue
+
+              NAME="$(basename "$candidate")"
+
+              case "$NAME" in
+                legacy-*)
+                  continue
+                  ;;
+              esac
+
+              [ -f "$candidate/.healthy" ] || continue
+
+              printf '%s %s\n' \
+                "$(stat -c '%Y' "$candidate")" \
+                "$candidate"
+            done |
+              sort -rn |
+              cut -d' ' -f2-
+          )
+
+          if [ "${#HEALTHY_RELEASES[@]}" -gt 2 ]; then
+            for old_release in "${HEALTHY_RELEASES[@]:2}"; do
+              if [ "$old_release" = "$ACTIVE_RELEASE" ]; then
+                continue
+              fi
+
+              echo "Removing old healthy release:"
+              echo "  $old_release"
+
+              rm -rf "$old_release"
+            done
+          fi
+
+          echo
+          echo "Remaining releases:"
+          du -sh "$RELEASES"/* 2>/dev/null || true
           REMOTE
 
       # ────────────────────────────────────────────────────────
-      # Always remove temporary SSH credentials
+      # If any deployment step failed, remove the newly-created
+      # release as long as it is NOT the active release.
+      #
+      # This handles failures during:
+      #   - upload
+      #   - yarn install
+      #   - PM2 provisioning
+      #   - activation followed by successful rollback
       # ────────────────────────────────────────────────────────
+      - name: Cleanup failed release
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f ~/.ssh/deploy_key ]; then
+            echo "SSH was not initialized; nothing to clean remotely."
+            exit 0
+          fi
+
+          ssh \
+            -T \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -i ~/.ssh/deploy_key \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "bash -s -- '$RELEASE_ID'" <<'REMOTE'
+          set -euo pipefail
+
+          RELEASE_ID="$1"
+
+          DEPLOY_ROOT="/opt/memento/backend-dev"
+          RELEASE_DIR="$DEPLOY_ROOT/releases/$RELEASE_ID"
+          CURRENT="$DEPLOY_ROOT/current"
+
+          if [ ! -d "$RELEASE_DIR" ]; then
+            echo "Failed release is already absent."
+            exit 0
+          fi
+
+          ACTIVE_RELEASE="$(
+            readlink -f "$CURRENT" 2>/dev/null || true
+          )"
+
+          RELEASE_PATH="$(
+            readlink -f "$RELEASE_DIR" 2>/dev/null || true
+          )"
+
+          if [ -n "$RELEASE_PATH" ] && \
+             [ "$RELEASE_PATH" = "$ACTIVE_RELEASE" ]; then
+
+            echo "Failed release is still active."
+            echo "Refusing to delete:"
+            echo "  $RELEASE_DIR"
+
+            exit 0
+          fi
+
+          echo "Removing failed inactive release:"
+          echo "  $RELEASE_DIR"
+
+          rm -rf "$RELEASE_DIR"
+          REMOTE
+
+      # Always last among SSH-using steps.
       - name: Cleanup SSH credentials
         if: always()
         shell: bash
@@ -781,7 +1028,7 @@ jobs:
   # ────────────────────────────────────────────────────────────
   # 3. Notification
   #
-  # Separate job means build failures are also reported.
+  # Separate job means lint/build failures are reported too.
   # ────────────────────────────────────────────────────────────
   notify:
     name: Notify
@@ -820,20 +1067,17 @@ jobs:
             exit 0
           fi
 
-          # A newer dev commit may intentionally cancel an older
-          # build before deployment starts. Don't generate noisy
-          # failure alerts for those superseded builds.
+          # Obsolete builds can intentionally be cancelled by a
+          # newer dev commit. Do not spam Discord for those.
           if [ "$BUILD_RESULT" = "cancelled" ]; then
-            echo "Build was superseded by a newer commit; skipping notification."
+            echo "Build superseded by newer commit; skipping notification."
             exit 0
           fi
 
           SHORT_SHA="${COMMIT_SHA:0:7}"
 
-          FIRST_LINE="$(
-            printf '%s' "$COMMIT_MSG" |
-              head -n 1
-          )"
+          FIRST_LINE="${COMMIT_MSG%%$'\n'*}"
+          FIRST_LINE="${FIRST_LINE:0:900}"
 
           RUN_URL="${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}"
           COMMIT_URL="${SERVER_URL}/${REPOSITORY}/commit/${COMMIT_SHA}"
@@ -845,9 +1089,8 @@ jobs:
             STATUS="Success"
 
           elif [ "$DEPLOY_RESULT" = "cancelled" ]; then
-            TITLE="⚪ Dev Deploy Superseded"
-            COLOR=9807270
-            STATUS="Superseded"
+            echo "Deploy superseded before activation; skipping notification."
+            exit 0
 
           elif [ "$BUILD_RESULT" = "failure" ]; then
             TITLE="❌ Dev Build Failed"
@@ -896,7 +1139,11 @@ jobs:
                     },
                     {
                       name: "Commit",
-                      value: ("[`" + $sha + "`](" + $commit_url + ")"),
+                      value: (
+                        "[`" + $sha + "`](" +
+                        $commit_url +
+                        ")"
+                      ),
                       inline: true
                     },
                     {
@@ -911,14 +1158,19 @@ jobs:
                     },
                     {
                       name: "Workflow",
-                      value: ("[View run](" + $run_url + ")"),
+                      value: (
+                        "[View run](" +
+                        $run_url +
+                        ")"
+                      ),
                       inline: true
                     },
                     {
                       name: "Pipeline",
                       value: (
                         "Build: `" + $build +
-                        "`\nDeploy: `" + $deploy + "`"
+                        "`\nDeploy: `" + $deploy +
+                        "`"
                       ),
                       inline: false
                     }

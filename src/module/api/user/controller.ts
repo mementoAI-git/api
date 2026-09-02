@@ -7,6 +7,9 @@ import {
 } from '../../../utils/helpers';
 import {StatusCodes} from 'http-status-codes';
 import {IRequest} from '../../../utils/interface';
+import logger from '../../../utils/logger';
+import {resolveUploadReservationId} from '../file/upload-idempotency';
+import {recordCompatibilityUse} from '../../../services/compatibility-telemetry';
 
 export async function updateProfile(
   req: IRequest,
@@ -16,9 +19,45 @@ export async function updateProfile(
   try {
     validateRequest(req);
 
-    const {message, data} = await service.updateProfile(req.body, req.auth.id);
+    const {message, data} = await service.updateProfile(
+      req.body,
+      req.auth.id,
+      req.context?.client || 'legacy-unknown',
+    );
 
-    return responsHandler(res, StatusCodes.OK, message, data);
+    if (req.body.push_token) {
+      void recordCompatibilityUse(
+        'compat.push.legacy_profile_token',
+        req.context,
+      );
+      logger.info(
+        {
+          event: 'compat.push.legacy_profile_token',
+          client: req.context?.client || 'legacy-unknown',
+          version: req.context?.version,
+          build: req.context?.build,
+        },
+        'Legacy profile push token bridge used',
+      );
+    }
+
+    const deprecatedPost = req.method === 'POST';
+    if (deprecatedPost) {
+      void recordCompatibilityUse('compat.users.profile_post', req.context);
+      logger.info(
+        {
+          event: 'compat.users.profile_post',
+          client: req.context?.client || 'legacy-unknown',
+          version: req.context?.version,
+          build: req.context?.build,
+        },
+        'Deprecated profile update alias used',
+      );
+    }
+
+    return responsHandler(res, StatusCodes.OK, message, data, {
+      deprecations: deprecatedPost ? ['USERS_PROFILE_POST'] : undefined,
+    });
   } catch (error) {
     next(error);
   }
@@ -44,9 +83,28 @@ export async function setPassword(
   next: NextFunction,
 ) {
   try {
+    validateRequest(req);
     const {message, data} = await service.setPassword(req.body, req.auth.id);
 
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getContext(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {data} = await service.getPersona(req.auth.id);
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      'User context retrieved successfully',
+      data,
+    );
   } catch (error) {
     next(error);
   }
@@ -59,7 +117,15 @@ export async function uploadPicture(
 ) {
   try {
     const files = getFiles(req, true);
-    const {message, data} = await service.uploadPicture(files, req.auth.id);
+    const {message, data} = await service.uploadPicture(
+      files,
+      req.auth.id,
+      resolveUploadReservationId(
+        req.header('Idempotency-Key'),
+        req.context?.requestId,
+        'user:picture',
+      ),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

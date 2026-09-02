@@ -1,0 +1,95 @@
+import {config as loadDotenv} from 'dotenv';
+
+export type RuntimeConfig = {
+  nodeEnv: string;
+  tallyWebhookEnabled: boolean;
+  sentryTunnelEnabled: boolean;
+  bullBoardEnabled: boolean;
+};
+
+type Environment = Record<string, string | undefined>;
+
+export function loadAndValidateRuntimeConfig(
+  env: Environment = process.env,
+): RuntimeConfig {
+  const path = env.DOTENV_CONFIG_PATH;
+  loadDotenv({
+    ...(path ? {path} : {}),
+    processEnv: env,
+  });
+  return validateRuntimeConfig(env);
+}
+
+function enabled(env: Environment, name: string): boolean {
+  const value = env[name];
+  if (value === undefined || value === 'false') return false;
+  if (value === 'true') return true;
+  throw new Error(`${name} must be "true" or "false"`);
+}
+
+function requireSecret(env: Environment, name: string): string {
+  const value = env[name];
+  if (!value || value.length < 32) {
+    throw new Error(`${name} must be at least 32 characters`);
+  }
+  return value;
+}
+
+function commaSeparated(env: Environment, name: string): string[] {
+  return (env[name] || '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean);
+}
+
+function validateFileSigningKeys(value: string | undefined): void {
+  if (!value) throw new Error('FILE_URL_SIGNING_KEYS is required');
+  const ids = new Set<string>();
+  for (const entry of value.split(',')) {
+    const separator = entry.indexOf(':');
+    const id = entry.slice(0, separator).trim();
+    const secret = entry.slice(separator + 1);
+    if (separator <= 0 || !id || secret.length < 32 || ids.has(id)) {
+      throw new Error('FILE_URL_SIGNING_KEYS is invalid');
+    }
+    ids.add(id);
+  }
+}
+
+export function validateRuntimeConfig(env: Environment): RuntimeConfig {
+  const nodeEnv = env.NODE_ENV || 'development';
+  const isProduction = nodeEnv === 'production';
+  const tallyWebhookEnabled = enabled(env, 'TALLY_WEBHOOK_ENABLED');
+  const sentryTunnelEnabled = enabled(env, 'SENTRY_TUNNEL_ENABLED');
+  const bullBoardEnabled = enabled(env, 'BULL_BOARD_ENABLED');
+
+  // Attachment responses are signed in every environment. Validate the key at
+  // bootstrap instead of allowing the first attachment-bearing request to fail.
+  validateFileSigningKeys(env.FILE_URL_SIGNING_KEYS);
+
+  if (isProduction) {
+    requireSecret(env, 'JWT_SECRET');
+  }
+  if (tallyWebhookEnabled) requireSecret(env, 'TALLY_WEBHOOK_SECRET');
+  if (sentryTunnelEnabled) {
+    if (commaSeparated(env, 'SENTRY_TUNNEL_ALLOWED_HOSTS').length === 0) {
+      throw new Error('SENTRY_TUNNEL_ALLOWED_HOSTS is required');
+    }
+    if (commaSeparated(env, 'SENTRY_TUNNEL_ALLOWED_PROJECT_IDS').length === 0) {
+      throw new Error('SENTRY_TUNNEL_ALLOWED_PROJECT_IDS is required');
+    }
+  }
+  if (
+    bullBoardEnabled &&
+    commaSeparated(env, 'FEATURE_FLAGS_ADMIN_EMAILS').length === 0
+  ) {
+    throw new Error('FEATURE_FLAGS_ADMIN_EMAILS is required');
+  }
+
+  return {
+    nodeEnv,
+    tallyWebhookEnabled,
+    sentryTunnelEnabled,
+    bullBoardEnabled,
+  };
+}

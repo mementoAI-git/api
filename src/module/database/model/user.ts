@@ -57,9 +57,13 @@ export interface IUser {
   context: IUserContext;
   verified: boolean;
   deleted: boolean;
+  disabled?: boolean;
   private_key: string;
   public_key: string;
   refresh_token?: string;
+  refresh_tokens?: string[];
+  session_version?: number;
+  purge_status?: 'active' | 'purge_pending' | 'purged';
   two_factor: {
     secret: string;
     enabled: boolean;
@@ -78,6 +82,7 @@ export interface IUser {
   newsletter_subscriber: boolean;
   created_at: string;
   storage_limit: number;
+  storage_limit_override_bytes?: number | null;
   primary_conversation_id?: string | null;
   passkeys?: IPasskey[];
 }
@@ -99,6 +104,19 @@ const user = new Schema<IUser>(
     private_key: String,
     public_key: String,
     refresh_token: String,
+    refresh_tokens: {
+      type: [String],
+      default: [],
+    },
+    session_version: {
+      type: Number,
+      default: 0,
+    },
+    purge_status: {
+      type: String,
+      enum: ['active', 'purge_pending', 'purged'],
+      default: 'active',
+    },
     bg_music: {
       type: String,
       default: null,
@@ -136,6 +154,10 @@ const user = new Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    disabled: {
+      type: Boolean,
+      default: false,
+    },
     newsletter_subscriber: {
       type: Boolean,
       default: false,
@@ -159,6 +181,7 @@ const user = new Schema<IUser>(
       type: Number,
       default: FREE_STORAGE_LIMIT_BYTES,
     },
+    storage_limit_override_bytes: {type: Number, default: null, select: false},
     preferences: {
       communication_style: {
         type: String,

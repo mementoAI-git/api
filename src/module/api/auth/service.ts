@@ -24,7 +24,6 @@ import {
 import {OAUTH_PROVIDERS} from '../../../utils/constant';
 import {
   compareStrings,
-  createTokenPair,
   generateKeys,
   hashPassword,
   isEmpty,
@@ -44,8 +43,20 @@ import {
   FRONTEND_URL,
   WEBAUTHN_RP_ID,
   WEBAUTHN_RP_NAME,
-  WEBAUTHN_ORIGIN,
+  WEBAUTHN_ORIGINS,
 } from '../../../utils/config';
+import type {RequestContext} from '../../../contracts/response';
+import type {SessionPayload} from '../../../contracts/session';
+import {
+  createSession,
+  revokeAllSessions,
+  revokeOtherSessions,
+  revokeSession,
+  rotateSession,
+} from './session-service';
+import {verifyAppleIdentity} from './providers/apple';
+import {invalidateSecurityState} from './security-state';
+import {recordCompatibilityUse} from '../../../services/compatibility-telemetry';
 
 // ---------------------------------------------------------------------------
 // 2FA pending session helpers (Redis, 5-min TTL)
@@ -76,6 +87,39 @@ async function consume2FAPendingToken(token: string) {
   };
 }
 
+type AuthClientContext = Pick<RequestContext, 'client'> &
+  Partial<Pick<RequestContext, 'version' | 'build'>>;
+
+const LEGACY_CLIENT: AuthClientContext = {
+  client: 'legacy-unknown',
+};
+
+function assertCanAuthenticate(user: {
+  deleted?: boolean;
+  disabled?: boolean;
+  purge_status?: string;
+}): void {
+  if (
+    user.deleted ||
+    user.disabled ||
+    (user.purge_status && user.purge_status !== 'active')
+  ) {
+    throw new BadRequestException('Account is not active');
+  }
+}
+
+function withLegacySession(
+  session: SessionPayload,
+  context: AuthClientContext,
+) {
+  void recordCompatibilityUse('compat.auth.legacy_session_shape', context);
+  return {
+    ...session,
+    onboarded: session.onboarding_status === 'completed',
+    session,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // WebAuthn challenge helpers (Redis, 5-min TTL)
 // ---------------------------------------------------------------------------
@@ -96,8 +140,9 @@ export function generateOauthUrl(provider: string) {
 }
 
 export async function oauthAuthorization(
-  {code}: IOAuthAuthorization,
+  {code, user: appleUser}: IOAuthAuthorization,
   provider: string,
+  context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {token_url, userinfo_url, client_id, client_secret, redirect_uri} =
     OAUTH_PROVIDERS[provider || 'google'];
@@ -109,12 +154,26 @@ export async function oauthAuthorization(
     redirect_uri,
     grant_type: 'authorization_code',
   };
-  const {data: result} = await axios.post(token_url, payload);
+  const appleTokenPayload = new URLSearchParams();
+  for (const [key, value] of Object.entries(payload)) {
+    if (typeof value === 'string') appleTokenPayload.append(key, value);
+  }
+  const tokenPayload = compareStrings(provider, 'apple')
+    ? appleTokenPayload
+    : payload;
+  const {data: result} = await axios.post(
+    token_url,
+    tokenPayload,
+    compareStrings(provider, 'apple')
+      ? {headers: {'Content-Type': 'application/x-www-form-urlencoded'}}
+      : undefined,
+  );
 
   const userinfo = await getOauthUser(
     userinfo_url,
-    result.access_token,
+    result,
     provider,
+    appleUser,
   );
   if (!userinfo) {
     throw new UnauthorizedException();
@@ -134,38 +193,29 @@ export async function oauthAuthorization(
     });
   }
 
-  // Check if user is deleted
-  if (user.deleted) {
-    throw new BadRequestException('Account has been deleted');
-  }
+  assertCanAuthenticate(user);
 
   if (!user.providers.includes(userinfo.provider)) {
-    await user.updateOne({$addToSet: {providers: userinfo.provider}});
+    user.providers.push(userinfo.provider);
+    await user.save();
   }
 
-  const tokens = createTokenPair(user.id);
-
-  // Store refresh token in database
-  await user.updateOne({refresh_token: tokens.refresh_token});
-
-  const data = {
-    ...tokens,
-    onboarding_status: user?.onboarding_status ?? 'never',
-    onboarded: user?.onboarding_status === 'completed',
-  };
+  const session = await createSession(user, context);
+  const data = withLegacySession(session, context);
 
   return {data, message: 'User signin is successful'};
 }
 
-export async function login(payload: ILogin) {
+export async function login(
+  payload: ILogin,
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {email, password, remember_for_30_days = false} = payload;
   const user = await User.findOne({email});
   if (!user) {
     throw new NotFoundException('User not found');
   }
-  if (user.deleted) {
-    throw new BadRequestException('Account has been deleted');
-  }
+  assertCanAuthenticate(user);
   if (isEmpty(user.password)) {
     throw new NotFoundException('Please set your password');
   }
@@ -196,25 +246,19 @@ export async function login(payload: ILogin) {
   const expires_in = remember_for_30_days ? 30 : 7;
   const access_token_expires_in = expires_in * 24 * 60 * 60 * 1000;
   const refresh_token_expires_in = 30 * 24 * 60 * 60 * 1000;
-  const tokens = createTokenPair(
-    user.id,
-    access_token_expires_in,
-    refresh_token_expires_in,
-  );
-
-  // Store refresh token in database
-  await user.updateOne({refresh_token: tokens.refresh_token});
-
-  const data = {
-    ...tokens,
-    onboarding_status: user?.onboarding_status ?? 'never',
-    onboarded: user?.onboarding_status === 'completed',
-  };
+  const session = await createSession(user, context, {
+    accessExpiresIn: access_token_expires_in,
+    refreshExpiresIn: refresh_token_expires_in,
+  });
+  const data = withLegacySession(session, context);
 
   return {data, message: 'User login is successful'};
 }
 
-export async function verify2FALogin(payload: IVerify2FALogin) {
+export async function verify2FALogin(
+  payload: IVerify2FALogin,
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {two_fa_token, code} = payload;
 
   const pending = await consume2FAPendingToken(two_fa_token);
@@ -226,6 +270,7 @@ export async function verify2FALogin(payload: IVerify2FALogin) {
 
   const user = await User.findById(pending.userId);
   if (!user) throw new NotFoundException('User not found');
+  assertCanAuthenticate(user);
   if (!user.two_factor?.enabled || !user.two_factor.secret) {
     throw new BadRequestException('2FA is not enabled on this account');
   }
@@ -239,19 +284,13 @@ export async function verify2FALogin(payload: IVerify2FALogin) {
   if (!isValid) throw new BadRequestException('Invalid 2FA code');
 
   const expires_in = pending.remember_for_30_days ? 30 : 7;
-  const tokens = createTokenPair(
-    user.id,
-    expires_in * 24 * 60 * 60 * 1000,
-    30 * 24 * 60 * 60 * 1000,
-  );
-  await user.updateOne({refresh_token: tokens.refresh_token});
+  const session = await createSession(user, context, {
+    accessExpiresIn: expires_in * 24 * 60 * 60 * 1000,
+    refreshExpiresIn: 30 * 24 * 60 * 60 * 1000,
+  });
 
   return {
-    data: {
-      ...tokens,
-      onboarding_status: user.onboarding_status ?? 'never',
-      onboarded: user.onboarding_status === 'completed',
-    },
+    data: withLegacySession(session, context),
     message: 'Login successful',
   };
 }
@@ -306,7 +345,7 @@ export async function completePasskeyRegistration(
         typeof verifyRegistrationResponse
       >[0]['response'],
       expectedChallenge: expectedChallenge.toString(),
-      expectedOrigin: WEBAUTHN_ORIGIN,
+      expectedOrigin: WEBAUTHN_ORIGINS,
       expectedRPID: WEBAUTHN_RP_ID,
     });
   } catch {
@@ -371,7 +410,10 @@ export async function beginPasskeyLogin(payload: IPasskeyLoginBegin) {
   };
 }
 
-export async function completePasskeyLogin(payload: IPasskeyLoginComplete) {
+export async function completePasskeyLogin(
+  payload: IPasskeyLoginComplete,
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {challenge_id, response} = payload;
 
   const expectedChallenge = await redis.get(`${WA_PREFIX}auth:${challenge_id}`);
@@ -385,6 +427,7 @@ export async function completePasskeyLogin(payload: IPasskeyLoginComplete) {
 
   const user = await User.findOne({'passkeys.credential_id': credentialId});
   if (!user) throw new NotFoundException('Passkey not recognised');
+  assertCanAuthenticate(user);
 
   const passkey = user.passkeys?.find(pk => pk.credential_id === credentialId);
   if (!passkey) throw new NotFoundException('Passkey not found');
@@ -402,7 +445,7 @@ export async function completePasskeyLogin(payload: IPasskeyLoginComplete) {
         typeof verifyAuthenticationResponse
       >[0]['response'],
       expectedChallenge: expectedChallenge.toString(),
-      expectedOrigin: WEBAUTHN_ORIGIN,
+      expectedOrigin: WEBAUTHN_ORIGINS,
       expectedRPID: WEBAUTHN_RP_ID,
       credential: {
         id: passkey.credential_id,
@@ -425,15 +468,10 @@ export async function completePasskeyLogin(payload: IPasskeyLoginComplete) {
     {$set: {'passkeys.$.counter': verification.authenticationInfo.newCounter}},
   );
 
-  const tokens = createTokenPair(user.id);
-  await user.updateOne({refresh_token: tokens.refresh_token});
+  const session = await createSession(user, context);
 
   return {
-    data: {
-      ...tokens,
-      onboarding_status: user.onboarding_status ?? 'never',
-      onboarded: user.onboarding_status === 'completed',
-    },
+    data: withLegacySession(session, context),
     message: 'Login successful',
   };
 }
@@ -471,7 +509,10 @@ export async function sendLink(payload: ISendLink) {
   };
 }
 
-export async function verifyEmail(payload: IVerifyEmail) {
+export async function verifyEmail(
+  payload: IVerifyEmail,
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {token} = payload;
 
   const result = await otp.verify(token, 'verify');
@@ -496,16 +537,16 @@ export async function verifyEmail(payload: IVerifyEmail) {
 
   await otp.markUsed(token, 'verify');
 
-  // Update user and create tokens
-  const tokens = createTokenPair(
-    user.id,
-    1 * 60 * 60 * 1000,
-    30 * 24 * 60 * 60 * 1000,
-  );
-  await user.updateOne({verified: true, refresh_token: tokens.refresh_token});
+  assertCanAuthenticate(user);
+  user.verified = true;
+  await user.save();
+  const session = await createSession(user, context, {
+    accessExpiresIn: 1 * 60 * 60 * 1000,
+    refreshExpiresIn: 30 * 24 * 60 * 60 * 1000,
+  });
 
   return {
-    data: {...tokens, email: user.email},
+    data: {...withLegacySession(session, context), email: user.email},
     message: 'Verification successful',
   };
 }
@@ -523,19 +564,30 @@ export async function setPassword(payload: ISetPassword) {
 
   const password = await hashPassword(payload.password);
 
-  await User.updateOne({email: result.email}, {password});
+  const user = await User.findOneAndUpdate(
+    {email: result.email},
+    {
+      $set: {password, refresh_token: null, refresh_tokens: []},
+      $inc: {session_version: 1},
+    },
+    {new: true},
+  );
+  if (!user) throw new NotFoundException('User not found');
+  await revokeAllSessions(user.id);
+  await invalidateSecurityState(user.id);
 
   return {data: null, message: 'Password reset successful'};
 }
 
 async function getOauthUser(
   userinfo_url: string,
-  token: string,
+  tokenResult: {access_token?: string; id_token?: string},
   provider: string,
+  appleUser?: IOAuthAuthorization['user'],
 ) {
   if (compareStrings(provider, 'google')) {
     const {data} = await axios.get(userinfo_url, {
-      headers: {Authorization: `Bearer ${token}`},
+      headers: {Authorization: `Bearer ${tokenResult.access_token}`},
     });
 
     return {
@@ -547,7 +599,7 @@ async function getOauthUser(
   }
   if (compareStrings(provider, 'facebook')) {
     const {data} = await axios.get(userinfo_url, {
-      params: {access_token: token},
+      params: {access_token: tokenResult.access_token},
     });
 
     const [first_name, last_name] = (data?.name ?? '').split(' ');
@@ -560,49 +612,185 @@ async function getOauthUser(
   }
 
   if (compareStrings(provider, 'apple')) {
-    // TODO: Test for apple oauth jwt.decode(token)
+    if (!tokenResult.id_token) throw new UnauthorizedException();
+    const identity = await verifyAppleIdentity(tokenResult.id_token);
+    let first_name: string | undefined;
+    let last_name: string | undefined;
+    let parsedUser = typeof appleUser === 'object' ? appleUser : undefined;
+    if (typeof appleUser === 'string') {
+      try {
+        parsedUser = JSON.parse(appleUser) as Exclude<
+          IOAuthAuthorization['user'],
+          string
+        >;
+      } catch {
+        throw new BadRequestException('Invalid Apple user data');
+      }
+    }
+    if (parsedUser && typeof parsedUser === 'object') {
+      first_name = parsedUser.name?.firstName;
+      last_name = parsedUser.name?.lastName;
+    }
+    return {
+      provider: `apple:${identity.providerId}`,
+      email: identity.email,
+      first_name,
+      last_name,
+    };
   }
   return null;
 }
 
-export async function refreshToken(payload: IRefreshToken) {
+export async function refreshToken(
+  payload: IRefreshToken,
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {refresh_token} = payload;
 
-  // Verify the refresh token
   const decoded = verifyRefreshToken(refresh_token);
+  if (decoded.sid) {
+    const session = await rotateSession(refresh_token);
+    return {
+      data: withLegacySession(session, context),
+      message: 'Tokens refreshed successfully',
+    };
+  }
 
-  // Find the user and check if the refresh token matches
   const user = await User.findById(decoded.id);
   if (!user) {
     throw new NotFoundException('User not found');
   }
-  if (user.deleted) {
-    throw new BadRequestException('Account has been deleted');
-  }
+  assertCanAuthenticate(user);
 
-  if (user.refresh_token !== refresh_token) {
+  const consumed = await User.updateOne(
+    {
+      _id: user.id,
+      $or: [{refresh_token}, {refresh_tokens: refresh_token}],
+    },
+    [
+      {
+        $set: {
+          refresh_token: {
+            $cond: [
+              {$eq: ['$refresh_token', refresh_token]},
+              null,
+              '$refresh_token',
+            ],
+          },
+          refresh_tokens: {
+            $filter: {
+              input: {$ifNull: ['$refresh_tokens', []]},
+              as: 'storedToken',
+              cond: {$ne: ['$$storedToken', refresh_token]},
+            },
+          },
+        },
+      },
+    ],
+  );
+  if (consumed.modifiedCount !== 1) {
     throw new UnauthorizedException('Invalid refresh token');
   }
 
-  // Generate new token pair
-  const tokens = createTokenPair(user.id);
+  void recordCompatibilityUse('compat.auth.legacy_refresh', context);
 
-  // Update the user's refresh token
-  await user.updateOne({refresh_token: tokens.refresh_token});
+  const session = await createSession(user, context);
 
   return {
-    data: tokens,
+    data: withLegacySession(session, context),
     message: 'Tokens refreshed successfully',
   };
 }
 
-export async function logout(userId: string) {
-  // Clear the refresh token from the database
-  await User.findByIdAndUpdate(userId, {refresh_token: null});
+export async function logout(
+  userId: string,
+  sessionId?: string,
+  refreshToken?: string,
+) {
+  if (sessionId) {
+    if (refreshToken) {
+      const claims = verifyRefreshToken(refreshToken);
+      if (claims.id !== userId || claims.sid !== sessionId) {
+        throw new UnauthorizedException('Refresh token does not match session');
+      }
+    }
+    if (!(await revokeSession(userId, sessionId))) {
+      throw new UnauthorizedException('Session is no longer active');
+    }
+  } else if (refreshToken) {
+    const claims = verifyRefreshToken(refreshToken);
+    if (claims.id !== userId || claims.sid) {
+      throw new UnauthorizedException('Refresh token does not match session');
+    }
+    await User.updateOne({_id: userId}, [
+      {
+        $set: {
+          refresh_token: {
+            $cond: [
+              {$eq: ['$refresh_token', refreshToken]},
+              null,
+              '$refresh_token',
+            ],
+          },
+          refresh_tokens: {
+            $filter: {
+              input: {$ifNull: ['$refresh_tokens', []]},
+              as: 'storedToken',
+              cond: {$ne: ['$$storedToken', refreshToken]},
+            },
+          },
+        },
+      },
+    ]);
+  } else {
+    await User.findByIdAndUpdate(userId, {
+      refresh_token: null,
+      refresh_tokens: [],
+    });
+  }
 
   return {
     data: null,
     message: 'Logout successful',
+  };
+}
+
+export async function logoutOther(
+  userId: string,
+  currentSessionId?: string,
+  currentRefreshToken?: string,
+) {
+  if (currentSessionId) {
+    if (currentRefreshToken) {
+      const claims = verifyRefreshToken(currentRefreshToken);
+      if (claims.id !== userId || claims.sid !== currentSessionId) {
+        throw new UnauthorizedException('Refresh token does not match session');
+      }
+    }
+    await revokeOtherSessions(userId, currentSessionId);
+  } else if (!currentRefreshToken) {
+    throw new BadRequestException('Current refresh token is required');
+  } else {
+    const claims = verifyRefreshToken(currentRefreshToken);
+    const user = await User.findOne({
+      _id: userId,
+      $or: [
+        {refresh_token: currentRefreshToken},
+        {refresh_tokens: currentRefreshToken},
+      ],
+    });
+    if (!user || claims.id !== userId || claims.sid) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    await User.findByIdAndUpdate(userId, {
+      refresh_token: currentRefreshToken,
+      refresh_tokens: [currentRefreshToken],
+    });
+  }
+
+  return {
+    data: null,
+    message: 'Other devices logged out successfully',
   };
 }
 

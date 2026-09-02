@@ -48,6 +48,18 @@ import {
   getJumpPills,
 } from '../../../services/enrichment';
 import {getMemorySpotlightForUser} from '../../../services/enrichment/memory-spotlight';
+import {PUBLIC_USER_SELECT, toPublicUser} from '../../../contracts/public-user';
+import AuthSession from '../../database/model/auth-session';
+import {invalidateSecurityState} from '../auth/security-state';
+import type {MementoClient} from '../../../contracts/response';
+import {registerLegacyProfileToken} from '../push-device/service';
+import PurgeCommand from '../../database/model/purge-command';
+import PushDevice from '../../database/model/push-device';
+import {PURGE_SCHEMA_VERSION} from '../../../services/account-purge';
+import {publishAccountPurge} from '../../../services/queues/system';
+import logger from '../../../utils/logger';
+import {persistUploadedFiles} from '../file/service';
+import {reconcileStorageUsage} from '../billing/storage-quota';
 
 const ONBOARDING_PROMPT_VERSION = getPromptVersion('onboarding_chat');
 
@@ -62,13 +74,17 @@ const onboardingTrailerSchema = z.object({
 });
 
 export async function setPassword(payload: ISetPassword, user_id: string) {
-  const {new_password, old_password} = payload;
+  const {new_password} = payload;
+  const currentPassword = payload.current_password || payload.old_password;
   const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException('User not found');
   }
 
-  const is_match = await bcrypt.compare(old_password, `${user?.password}`);
+  const is_match = await bcrypt.compare(
+    String(currentPassword),
+    `${user?.password}`,
+  );
   if (!is_match) {
     throw new BadRequestException('Incorrect password');
   }
@@ -80,9 +96,7 @@ export async function setPassword(payload: ISetPassword, user_id: string) {
 }
 
 export async function getProfile(user_id: string) {
-  const user = await User.findById(user_id)
-    .select('-password -providers -two_factor.secret -context')
-    .lean();
+  const user = await User.findById(user_id).select(PUBLIC_USER_SELECT).lean();
   if (!user) {
     throw new NotFoundException('User not found', null);
   }
@@ -91,14 +105,10 @@ export async function getProfile(user_id: string) {
     user: user_id,
   });
 
-  // Manually compute virtual fields stripped by .lean()
-  const fullname = concatStrings(user.first_name, user.last_name, ' ').trim();
-
   return {
     message: 'User profile retrieved successfully',
     data: {
-      ...user,
-      fullname: fullname || null,
+      ...toPublicUser(user),
       pending_insights_count,
     },
   };
@@ -173,10 +183,13 @@ export async function getMemoryInsightsSummary(
   };
 }
 
-export async function updateProfile(payload: Partial<IUser>, user_id: string) {
-  const user = await User.findById(user_id).select('-password -providers');
-  if (!user) {
-    throw new NotFoundException('User not found', null);
+export async function updateProfile(
+  payload: Partial<IUser> & {push_token?: string},
+  user_id: string,
+  client: MementoClient = 'legacy-unknown',
+) {
+  if (payload.push_token) {
+    await registerLegacyProfileToken(user_id, payload.push_token, client);
   }
   const updateableFields = new Set([
     'first_name',
@@ -192,18 +205,35 @@ export async function updateProfile(payload: Partial<IUser>, user_id: string) {
     'location',
   ]);
 
-  const updatePayload = Object.entries(payload).reduce((acc, p) => {
-    if (updateableFields.has(p[0])) {
-      acc[p[0]] = p[1];
-    }
-    return acc;
-  }, {});
+  const updatePayload = Object.entries(payload).reduce<Record<string, unknown>>(
+    (acc, p) => {
+      if (updateableFields.has(p[0])) {
+        acc[p[0]] = p[1];
+      }
+      return acc;
+    },
+    {},
+  );
+
+  if (
+    typeof payload.fullname === 'string' &&
+    payload.first_name === undefined &&
+    payload.last_name === undefined
+  ) {
+    const [firstName, ...lastName] = payload.fullname.trim().split(/\s+/);
+    updatePayload.first_name = firstName;
+    updatePayload.last_name = lastName.join(' ');
+  }
 
   const data = await User.findByIdAndUpdate(user_id, updatePayload, {
     new: true,
-  }).select('-password -providers -public_key -private_key');
+  }).select(PUBLIC_USER_SELECT);
+  if (!data) throw new NotFoundException('User not found', null);
 
-  return {message: 'User profile updated successfully', data: null};
+  return {
+    message: 'User profile updated successfully',
+    data: toPublicUser(data.toObject({virtuals: true})),
+  };
 }
 
 export async function updateStreak(user_id: string) {
@@ -241,29 +271,46 @@ export async function updateStreak(user_id: string) {
 export async function uploadPicture(
   payload: Express.Multer.File[],
   user_id: string,
+  reservationId?: string,
 ) {
   const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException('User not found');
   }
 
-  await storage.checkStorageQuota(user, payload[0].size);
-
-  const {name, type, size} = await storage.uploadFile(payload[0], user_id);
-
-  const file = await File.create({
-    name,
-    // base64: data.toString("base64"),
-    size,
-    user: user_id,
-    type,
-  });
-
-  if (user.picture) {
-    await File.deleteOne({name: user.picture});
-  }
-
+  const previousPicture = user.picture;
+  const [file] = await persistUploadedFiles(
+    payload,
+    user_id,
+    undefined,
+    reservationId,
+  );
   await user.updateOne({picture: file.name});
+
+  if (previousPicture && previousPicture !== file.name) {
+    const previousFile = await File.findActiveOne({
+      name: previousPicture,
+      user: user_id,
+    });
+    if (previousFile) {
+      try {
+        await storage.deleteFileEverywhere(
+          previousFile.name,
+          previousFile.provider,
+          previousFile.type,
+          Boolean(previousFile.backup_at),
+        );
+        await previousFile.deleteOne();
+      } catch (error) {
+        logger.warn(
+          {err: error, fileId: previousFile.id, userId: user_id},
+          'Profile picture replacement cleanup deferred',
+        );
+        await previousFile.updateOne({$set: {deleted: true}});
+      }
+      await reconcileStorageUsage(user_id);
+    }
+  }
 
   return {message: 'Profile pics uploaded successfully', data: file};
 }
@@ -492,16 +539,62 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
 }
 
 export async function deleteUser(user_id: string) {
-  const user = await User.findById(user_id);
-  if (!user) {
-    throw new NotFoundException('User not found');
-  }
+  const commandId = await withTransaction(async session => {
+    const user = await User.findById(user_id).session(session);
+    if (!user) throw new NotFoundException('User not found');
 
-  // Mark user as deleted (soft delete) and clear refresh token
-  await User.findByIdAndUpdate(user_id, {
-    deleted: true,
-    refresh_token: null,
+    const firstRequest =
+      user.purge_status !== 'purge_pending' && user.purge_status !== 'purged';
+    await User.findByIdAndUpdate(
+      user_id,
+      {
+        $set: {
+          deleted: true,
+          purge_status:
+            user.purge_status === 'purged' ? 'purged' : 'purge_pending',
+          refresh_token: null,
+          refresh_tokens: [],
+        },
+        ...(firstRequest ? {$inc: {session_version: 1}} : {}),
+      },
+      {session},
+    );
+    await AuthSession.updateMany(
+      {user_id, revoked_at: null},
+      {$set: {revoked_at: new Date()}},
+      {session},
+    );
+    await PushDevice.updateMany(
+      {user_id, enabled: true},
+      {$set: {enabled: false}},
+      {session},
+    );
+    const command = await PurgeCommand.findOneAndUpdate(
+      {user_id},
+      {
+        $setOnInsert: {
+          user_id,
+          email: user.email,
+          schema_version: PURGE_SCHEMA_VERSION,
+          status: 'pending',
+          available_at: new Date(),
+        },
+      },
+      {upsert: true, new: true, session},
+    );
+    return command.id;
   });
+  await invalidateSecurityState(user_id);
+
+  // Best effort only: the committed PurgeCommand is the durable outbox.
+  try {
+    await publishAccountPurge(commandId);
+  } catch (error) {
+    logger.warn(
+      {commandId, errorCode: error instanceof Error ? error.name : 'unknown'},
+      'Account purge publication deferred to dispatcher',
+    );
+  }
 
   return {
     data: null,

@@ -1,11 +1,30 @@
-import {body, param, query} from 'express-validator';
+import {body, query} from 'express-validator';
+import {isValidObjectId} from 'mongoose';
+
+function isRecipient(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return isValidObjectId(value) || /^\S+@\S+\.\S+$/.test(value);
+  }
+  if (!value || typeof value !== 'object') return false;
+  const recipient = value as {beneficiary_id?: unknown; email?: unknown};
+  return Boolean(
+    (typeof recipient.beneficiary_id === 'string' &&
+      isValidObjectId(recipient.beneficiary_id)) ||
+      (typeof recipient.email === 'string' &&
+        /^\S+@\S+\.\S+$/.test(recipient.email)),
+  );
+}
 
 export default {
   createCapsule: [
-    body('recipients').isArray().withMessage('Invalid recipients'),
-    body('recipients.*').isEmail().withMessage('Invalid email address'),
-    body('title').notEmpty().withMessage('Title is required'),
-    body('body').notEmpty().withMessage('Body is required'),
+    body('recipients').optional().isArray().withMessage('Invalid recipients'),
+    body('recipients.*')
+      .optional()
+      .custom(isRecipient)
+      .withMessage('Invalid recipient'),
+    body('title').optional().isString().isLength({max: 300}),
+    body('body').optional().isString().isLength({max: 100000}),
+    body('status').optional().isIn(['draft', 'scheduled']),
     body('schedule_date')
       .optional()
       .isISO8601()
@@ -34,8 +53,8 @@ export default {
       .withMessage('Recipients must be an array'),
     body('recipients.*')
       .optional()
-      .isEmail()
-      .withMessage('Each recipient must be a valid email'),
+      .custom(isRecipient)
+      .withMessage('Each recipient must be a valid beneficiary ID or email'),
     body('schedule_date')
       .optional()
       .isISO8601()
@@ -56,6 +75,10 @@ export default {
       .optional()
       .isIn(['scheduled', 'draft', 'pause'])
       .withMessage('Invalid status'),
+    body('style').optional().isObject(),
+  ],
+  externalTokenExchange: [
+    body('token').isString().isLength({min: 32, max: 256}),
   ],
   getCapsules: [
     query('status')

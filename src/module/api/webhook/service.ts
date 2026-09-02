@@ -1,4 +1,4 @@
-import {createHmac} from 'crypto';
+import {createHmac, timingSafeEqual} from 'crypto';
 import {TALLY_WEBHOOK_SECRET} from '../../../utils/config';
 import {UnauthorizedException} from '../../../utils/service-error';
 import type {ITallyWebhookPayload, ITallySubmissionData} from './interface';
@@ -7,21 +7,22 @@ import {compareStrings} from '../../../utils';
 import {verifyPolarWebhookSignature} from '../billing/providers/polar';
 
 export function verifyTallySignature(
-  rawBody: ITallyWebhookPayload,
+  rawBody: Buffer,
   signature: string | undefined,
+  secret: string | undefined = TALLY_WEBHOOK_SECRET,
 ): void {
-  if (!TALLY_WEBHOOK_SECRET) {
-    return;
-  }
+  if (!secret)
+    throw new UnauthorizedException('Tally webhook is not configured');
   if (!signature) {
     throw new UnauthorizedException('Missing Tally-Signature header');
   }
 
-  const calculatedSignature = createHmac('sha256', TALLY_WEBHOOK_SECRET)
-    .update(JSON.stringify(rawBody))
-    .digest('base64');
+  const expected = Buffer.from(
+    createHmac('sha256', secret).update(rawBody).digest('base64'),
+  );
+  const actual = Buffer.from(signature);
 
-  if (signature !== calculatedSignature) {
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
     throw new UnauthorizedException('Invalid Tally webhook signature');
   }
 }
@@ -93,7 +94,7 @@ export async function processTallySubmission(
 
 export function verifyPolarSignature(
   rawBody: Buffer,
-  signature: string | undefined,
+  signature: string | undefined | Record<string, string | string[] | undefined>,
 ): void {
   verifyPolarWebhookSignature(rawBody, signature);
 }

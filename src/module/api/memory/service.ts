@@ -27,7 +27,6 @@ import {
   emptyPaginatedList,
   isEmpty,
   formatBytes,
-  FREE_STORAGE_LIMIT_BYTES,
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils';
 import Prompt from '../../database/model/prompt';
@@ -37,10 +36,17 @@ import {updateMemoryTitle} from '../ai/utils';
 import ActivePrompt from '../../database/model/active-prompt';
 import {queueStoryInsights} from '../../../services/queues/insights';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
-import {queueAttachmentThumbnailProcessing} from '../../../services/queues/system';
 import {queueSummarization} from '../../../services/queues/summarization';
-import * as storage from '../../../services/storage';
-import {getConversationEnrichment} from '../../../services/enrichment';
+import {
+  getConversationEnrichment,
+  invalidateEnrichmentCache,
+} from '../../../services/enrichment';
+import {assertOwnedMemory, assertReadableMemory} from './access';
+import {assertOwnedFileIds} from '../file/access';
+import {persistUploadedFiles} from '../file/service';
+import {getStorageUsageSummary} from '../billing/storage-quota';
+import {toPublicMemory} from './public-dto';
+import {withOperationLock} from '../../../services/operation-lock';
 
 export {getConversationEnrichment};
 
@@ -169,10 +175,9 @@ export async function memoryStats(user_id: string) {
     provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
   });
 
-  const user = await User.findById(user_id).select('storage_limit').lean();
-
-  const storage_size = await storage.getUserStorageUsed(user_id);
-  const storage_limit = user?.storage_limit || FREE_STORAGE_LIMIT_BYTES;
+  const storageUsage = await getStorageUsageSummary(user_id);
+  const storage_size = storageUsage.used_bytes;
+  const storage_limit = storageUsage.limit_bytes;
 
   const data = {
     memory_count,
@@ -195,6 +200,7 @@ export async function createMemory(
   payload: ICreateMemoryPayload,
   user_id: string,
   files: Express.Multer.File[] | null = null,
+  reservationId?: string,
 ) {
   const {
     title,
@@ -226,27 +232,16 @@ export async function createMemory(
     validBeneficiaryIds = beneficiaries.map(b => b.id);
   }
 
-  let attachments = payload?.attachments || [];
+  let attachments = await assertOwnedFileIds(
+    user_id,
+    payload?.attachments || [],
+  );
   if (!isEmpty(files)) {
-    const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
-    await storage.checkStorageQuota(user, additionalBytes);
-    const unsavedFiles = await Promise.all(
-      files.map(file => storage.uploadFile(file, user_id)),
-    );
-
-    const savedFiles = await File.insertMany(unsavedFiles);
-    await Promise.all(
-      savedFiles.map(async file => {
-        if (file.type?.startsWith('video/') && file.status === 'processing') {
-          const queued = await queueAttachmentThumbnailProcessing(file.id);
-          if (!queued) {
-            await File.findByIdAndUpdate(file.id, {
-              status: 'failed',
-              thumbnail: null,
-            });
-          }
-        }
-      }),
+    const savedFiles = await persistUploadedFiles(
+      files,
+      user_id,
+      undefined,
+      reservationId,
     );
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
@@ -302,6 +297,11 @@ export async function createMemory(
 
   void updateStreak(user_id);
 
+  // Bust enrichment cache so next stats call recomputes with the new memory/story
+  if (isStory && status === 'save') {
+    void invalidateEnrichmentCache(user_id);
+  }
+
   return {
     message: 'Memory created successfully',
     data: memory,
@@ -315,6 +315,7 @@ export async function quickCaptureMemory(
   payload: IQuickCapturePayload,
   user_id: string,
   files: Express.Multer.File[] | null = null,
+  reservationId?: string,
 ) {
   let body = (payload.body || '').trim();
   const user = await User.findById(user_id);
@@ -397,26 +398,14 @@ export async function quickCaptureMemory(
   } else if (Array.isArray(rawAtt)) {
     attachments = rawAtt.filter(Boolean);
   }
+  attachments = await assertOwnedFileIds(user_id, attachments);
 
   if (!isEmpty(files)) {
-    const additionalBytes = files.reduce((acc, f) => acc + f.size, 0);
-    await storage.checkStorageQuota(user, additionalBytes);
-    const unsavedFiles = await Promise.all(
-      files.map(file => storage.uploadFile(file, user_id)),
-    );
-    const savedFiles = await File.insertMany(unsavedFiles);
-    await Promise.all(
-      savedFiles.map(async file => {
-        if (file.type?.startsWith('video/') && file.status === 'processing') {
-          const queued = await queueAttachmentThumbnailProcessing(file.id);
-          if (!queued) {
-            await File.findByIdAndUpdate(file.id, {
-              status: 'failed',
-              thumbnail: null,
-            });
-          }
-        }
-      }),
+    const savedFiles = await persistUploadedFiles(
+      files,
+      user_id,
+      undefined,
+      reservationId,
     );
     attachments = [...attachments, ...savedFiles.map(f => f.id)];
   }
@@ -595,14 +584,24 @@ export async function getConversationMemories(
   return {data, message: 'Conversation memories retrieved successfully'};
 }
 
-export async function getStoryMemories(payload: IPagination, user_id: string) {
-  const {page, limit, search, bookmarked = false, deleted = false} = payload;
+export async function getStoryMemories(
+  payload: IPagination & {status?: string},
+  user_id: string,
+) {
+  const {
+    page,
+    limit,
+    search,
+    bookmarked = false,
+    deleted = false,
+    status,
+  } = payload;
 
   const filters = filterGenerator({search}, ['title', 'body', 'tags']);
   filters.push({
     user: user_id,
     type: 'story',
-    status: deleted ? 'deleted' : {$nin: ['draft', 'deleted']},
+    status: status || (deleted ? 'deleted' : {$nin: ['draft', 'deleted']}),
   });
 
   const data = await paginateMemories({$and: filters}, user_id, {
@@ -615,21 +614,16 @@ export async function getStoryMemories(payload: IPagination, user_id: string) {
 }
 
 export async function getMemory(_id: string, user_id: string = null) {
-  const memory = await Memory.findOne({
-    _id,
-    status: {$nin: ['draft', 'deleted']},
-  })
-    .populate({
+  const memory = await assertReadableMemory(_id, {userId: user_id});
+  await memory.populate([
+    {
       path: 'attachments',
       select: '-base64',
       match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
-    })
-    .populate({path: 'groups', select: 'name description'})
-    .populate({path: 'beneficiaries', select: 'name email relationship'});
-
-  if (!memory) {
-    throw new NotFoundException('Memory not found');
-  }
+    },
+    {path: 'groups', select: 'name description'},
+    {path: 'beneficiaries', select: 'name email relationship'},
+  ]);
 
   const bookmark_count = await Bookmark.countDocuments({
     memory: memory.id,
@@ -641,6 +635,26 @@ export async function getMemory(_id: string, user_id: string = null) {
   return {data, message: 'User memory retrieved successfully'};
 }
 
+export async function getPublicMemory(_id: string) {
+  const memory = await Memory.findOne({
+    _id,
+    visibility: MEMORY_VISIBILITY.EVERYONE,
+    status: {$nin: ['draft', 'deleted']},
+  }).populate({
+    path: 'attachments',
+    match: {
+      deleted: {$ne: true},
+      provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
+    },
+  });
+  if (!memory) throw new NotFoundException('Memory not found');
+
+  return {
+    data: toPublicMemory(memory),
+    message: 'Public memory retrieved successfully',
+  };
+}
+
 export async function getMemoryByPrompt(
   prompt_id: string,
   user_id: string = null,
@@ -648,6 +662,7 @@ export async function getMemoryByPrompt(
   let memory = null;
   memory = await Memory.findOne({
     prompt: prompt_id,
+    user: user_id,
     status: {$nin: ['draft', 'deleted']},
   });
 
@@ -686,6 +701,10 @@ export async function updateMemory(
   if (!memory) {
     throw new NotFoundException('Memory not found');
   }
+  const validatedAttachmentIds = await assertOwnedFileIds(
+    user_id,
+    attachments.map(String),
+  );
 
   let resolvedGroupIds: string[] | undefined;
   if (groupIds !== undefined) {
@@ -755,8 +774,8 @@ export async function updateMemory(
     _id,
     {
       $set: setPayload,
-      ...(attachments.length > 0 && {
-        $addToSet: {attachments: {$each: attachments}},
+      ...(validatedAttachmentIds.length > 0 && {
+        $addToSet: {attachments: {$each: validatedAttachmentIds}},
       }),
     },
     {new: true},
@@ -858,6 +877,7 @@ export async function restoreMemory(_id: string, user_id: string) {
 
   // Restore to 'save' status (or you could restore to previous status if you track it)
   await memory.updateOne({status: 'save'});
+  void invalidateEnrichmentCache(user_id);
 
   await track(
     {
@@ -874,26 +894,34 @@ export async function restoreMemory(_id: string, user_id: string) {
 }
 
 export async function bookmark(memory_id: string, user_id: string) {
-  const memory = await Memory.findById(memory_id);
-  if (!memory) {
-    throw new NotFoundException('Memory not found');
-  }
+  const memory = await assertReadableMemory(memory_id, {userId: user_id});
+  const filter = {memory: memory_id, user: user_id};
+  const bookmark = await withOperationLock(
+    `bookmark:${user_id}:${memory_id}`,
+    async () => {
+      const result = await Bookmark.updateOne(
+        filter,
+        {$setOnInsert: filter},
+        {upsert: true},
+      );
+      const saved = await Bookmark.findOne(filter);
+      if (!saved) throw new NotFoundException('Bookmark not found');
 
-  let bookmark = await Bookmark.findOne({memory: memory_id, user: user_id});
-  if (!bookmark) {
-    bookmark = await Bookmark.create({memory: memory_id, user: user_id});
-
-    await track(
-      {
-        title: 'Memory Bookmarked',
-        description: `Bookmarked memory: "${memory.title}"`,
-        type: 'memory',
-        action: 'bookmarked',
-        reference: memory_id,
-      },
-      user_id,
-    );
-  }
+      if (result.upsertedCount === 1) {
+        await track(
+          {
+            title: 'Memory Bookmarked',
+            description: `Bookmarked memory: "${memory.title}"`,
+            type: 'memory',
+            action: 'bookmarked',
+            reference: memory_id,
+          },
+          user_id,
+        );
+      }
+      return saved;
+    },
+  );
 
   return {
     message: 'Memory bookmarked successfully',
@@ -925,19 +953,30 @@ export async function unbookmark(memory_id: string, user_id: string) {
 }
 
 export async function removeFileFromMemory(file_id: string, user_id: string) {
-  const file = await File.findOne({_id: file_id, user: user_id});
-  if (!file) {
-    throw new NotFoundException('File not found');
-  }
+  await assertOwnedFileIds(user_id, [file_id]);
 
   const memory = await Memory.findOne({user: user_id, attachments: file_id});
-  if (memory) {
-    await memory.updateOne({$pull: {attachments: file_id}});
-  }
+  if (!memory) throw new NotFoundException('Memory not found');
+
+  return removeFileFromSpecificMemory(memory.id, file_id, user_id);
+}
+
+export async function removeFileFromSpecificMemory(
+  memory_id: string,
+  file_id: string,
+  user_id: string,
+) {
+  await assertOwnedFileIds(user_id, [file_id]);
+  const memory = await Memory.findOneAndUpdate(
+    {_id: memory_id, user: user_id, attachments: file_id},
+    {$pull: {attachments: file_id}},
+    {new: true},
+  );
+  if (!memory) throw new NotFoundException('Memory not found');
 
   return {
     data: memory,
-    message: 'File removed and deleted from memory successfully',
+    message: 'File detached from memory successfully',
   };
 }
 
@@ -945,8 +984,10 @@ export async function addMessageToMemory(
   payload: IAddMessageToMemory,
   user_id: string,
 ) {
-  let memory = await Memory.findById(payload.memory_id);
-  if (!memory) {
+  let memory = payload.memory_id
+    ? await assertOwnedMemory(payload.memory_id, user_id)
+    : null;
+  if (!memory && !payload.memory_id) {
     memory = await Memory.findOne({
       session_id: payload.session_id,
       user: user_id,

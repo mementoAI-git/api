@@ -3,6 +3,8 @@ import {logger, queueNames} from '../../../utils';
 import {getRedisConnection} from '../../redis';
 import {IS_PRODUCTION} from '../../../utils/config';
 import dayjs from 'dayjs';
+import PurgeCommand from '../../../module/database/model/purge-command';
+import {PURGE_SCHEMA_VERSION} from '../../account-purge';
 
 const connection = getRedisConnection();
 
@@ -64,6 +66,13 @@ export async function initializeFileBackup(): Promise<void> {
 
 /** Daily at 00:00: finds today's scheduled capsules and enqueues reveal jobs with delay. */
 export async function initializeCapsuleReveal(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, cannot initialize capsule reveal scheduler',
+    );
+    return;
+  }
+
   await systemQueue.upsertJobScheduler(
     queueNames.system.jobs.scheduleCapsuleReveals,
     {pattern: '0 0 * * *'},
@@ -105,6 +114,98 @@ export async function initializeStalePendingRecovery(): Promise<void> {
   );
 }
 
+/** Durable purge commands are polled because Redis publication is not the outbox. */
+export async function initializeAccountPurgeDispatcher(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, account purge commands remain pending',
+    );
+    return;
+  }
+
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.dispatchAccountPurges,
+    {every: 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
+export async function initializeStorageReservationExpiry(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, storage reservations cannot be expired',
+    );
+    return;
+  }
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.expireStorageReservations,
+    {every: 5 * 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
+export async function initializeBillingUsageReconciliation(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, billing usage cannot be reconciled',
+    );
+    return;
+  }
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.reconcileBillingUsage,
+    {pattern: '30 2 * * *'},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
+export async function dispatchPendingAccountPurges(): Promise<number> {
+  if (!systemQueue) return 0;
+  const commands = await PurgeCommand.find({
+    available_at: {$lte: new Date()},
+    $or: [
+      {status: {$in: ['pending', 'failed']}},
+      {
+        status: 'running',
+        started_at: {$lte: new Date(Date.now() - 15 * 60 * 1000)},
+      },
+    ],
+  })
+    .sort({created_at: 1})
+    .limit(50)
+    .lean();
+
+  for (const command of commands) {
+    await systemQueue.add(
+      queueNames.system.jobs.accountPurge,
+      {schema_version: command.schema_version, command_id: String(command._id)},
+      {
+        jobId: `account-purge-${command._id}`,
+        attempts: 10,
+        backoff: {type: 'exponential', delay: 5000},
+        removeOnComplete: 100,
+        removeOnFail: true,
+      },
+    );
+  }
+  return commands.length;
+}
+
+export async function publishAccountPurge(commandId: string): Promise<boolean> {
+  if (!systemQueue) return false;
+  await systemQueue.add(
+    queueNames.system.jobs.accountPurge,
+    {schema_version: PURGE_SCHEMA_VERSION, command_id: commandId},
+    {
+      jobId: `account-purge-${commandId}`,
+      attempts: 10,
+      backoff: {type: 'exponential', delay: 5000},
+      removeOnComplete: 100,
+      removeOnFail: true,
+    },
+  );
+  return true;
+}
+
 export async function scheduleCapsuleDelivery(
   capsule_id: string,
   schedule_date: string,
@@ -113,10 +214,26 @@ export async function scheduleCapsuleDelivery(
   const scheduleDate = dayjs(schedule_date);
   const delayMs = Math.max(0, scheduleDate.valueOf() - now.valueOf());
 
+  if (!systemQueue) {
+    logger.warn({capsule_id}, 'System queue unavailable for capsule delivery');
+    return;
+  }
+  const jobId = `capsule-reveal-${capsule_id}`;
+  const existing = await systemQueue.getJob(jobId);
+  if (existing && ['delayed', 'waiting'].includes(await existing.getState())) {
+    await existing.remove();
+  }
   await systemQueue.add(
     queueNames.system.jobs.revealCapsules,
-    {capsuleId: capsule_id},
-    {delay: delayMs, removeOnComplete: true, removeOnFail: 3},
+    {schema_version: 1, capsuleId: capsule_id},
+    {
+      jobId,
+      delay: delayMs,
+      attempts: 5,
+      backoff: {type: 'exponential', delay: 5000},
+      removeOnComplete: true,
+      removeOnFail: true,
+    },
   );
 }
 

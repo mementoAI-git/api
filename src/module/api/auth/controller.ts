@@ -5,6 +5,15 @@ import {StatusCodes} from 'http-status-codes';
 import {IRequest} from '../../../utils/interface';
 import {UnauthorizedException} from '../../../utils/service-error';
 
+function clientContext(req: Request) {
+  const context = (req as IRequest).context;
+  return {
+    client: context?.client || ('legacy-unknown' as const),
+    version: context?.version,
+    build: context?.build,
+  };
+}
+
 export function generateOauthUrl(
   req: Request,
   res: Response,
@@ -31,6 +40,7 @@ export async function authorization(
     const {message, data} = await service.oauthAuthorization(
       req.body,
       String(req.params.provider),
+      clientContext(req),
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
@@ -41,7 +51,7 @@ export async function authorization(
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
     validateRequest(req);
-    const {message, data} = await service.login(req.body);
+    const {message, data} = await service.login(req.body, clientContext(req));
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -83,7 +93,10 @@ export async function verifyEmail(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.verifyEmail(req.body);
+    const {message, data} = await service.verifyEmail(
+      req.body,
+      clientContext(req),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -111,7 +124,10 @@ export async function refreshToken(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.refreshToken(req.body);
+    const {message, data} = await service.refreshToken(
+      req.body,
+      clientContext(req),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -124,7 +140,34 @@ export async function logout(req: IRequest, res: Response, next: NextFunction) {
     if (!userId) {
       throw new UnauthorizedException('User not authenticated');
     }
-    const {message, data} = await service.logout(userId);
+    const refreshToken = req.body?.refresh_token;
+    const {message, data} = await service.logout(
+      userId,
+      req.auth?.sid,
+      refreshToken,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function logoutOther(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const userId = req.auth?.id;
+    if (!userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+    const currentRefreshToken = req.body?.refresh_token;
+    const {message, data} = await service.logoutOther(
+      userId,
+      req.auth?.sid,
+      currentRefreshToken,
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -152,7 +195,10 @@ export async function verify2FALogin(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.verify2FALogin(req.body);
+    const {message, data} = await service.verify2FALogin(
+      req.body,
+      clientContext(req),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -213,7 +259,10 @@ export async function completePasskeyLogin(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.completePasskeyLogin(req.body);
+    const {message, data} = await service.completePasskeyLogin(
+      req.body,
+      clientContext(req),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

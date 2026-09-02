@@ -8,6 +8,7 @@ import {
 } from '../../../utils/helpers';
 import * as service from './service';
 import {IRequest} from '../../../utils/interface';
+import {resolveUploadReservationId} from '../file/upload-idempotency';
 
 export async function memoryStats(
   req: IRequest,
@@ -50,6 +51,11 @@ export async function createMemory(
       req.body,
       req.auth.id,
       files,
+      resolveUploadReservationId(
+        req.header('Idempotency-Key'),
+        req.context?.requestId,
+        'memory:create',
+      ),
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
@@ -69,6 +75,11 @@ export async function quickCaptureMemory(
       req.body,
       req.auth.id,
       files,
+      resolveUploadReservationId(
+        req.header('Idempotency-Key'),
+        req.context?.requestId,
+        'memory:quick-capture',
+      ),
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
@@ -134,6 +145,22 @@ export async function getMemory(
     const {message, data} = await service.getMemory(
       String(req.params.id),
       req.auth?.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPublicMemory(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const {message, data} = await service.getPublicMemory(
+      String(req.params.id),
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
@@ -235,6 +262,24 @@ export async function removeFileFromMemory(
     validateRequest(req);
     const {message, data} = await service.removeFileFromMemory(
       String(req.params.id),
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function detachFileFromMemory(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    validateRequest(req);
+    const {message, data} = await service.removeFileFromSpecificMemory(
+      String(req.params.memoryId),
+      String(req.params.fileId),
       req.auth.id,
     );
     return responsHandler(res, StatusCodes.OK, message, data);

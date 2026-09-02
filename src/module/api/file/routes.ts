@@ -3,6 +3,7 @@ import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
 import {requireFeature} from '../../../middleware/feature-gate';
+import valid from './validator';
 
 const router: IRouter = Router();
 
@@ -14,6 +15,7 @@ router.post(
   ctrl.uploadFile,
 );
 router.get('/', gaurd, ctrl.getUserFiles);
+router.post('/:id/access', gaurd, valid.refreshAccess, ctrl.refreshFileAccess);
 router.get('/:name(*)', ctrl.getFile);
 router.delete('/:name(*)', gaurd, ctrl.removeFile);
 

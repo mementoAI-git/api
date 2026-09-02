@@ -1,4 +1,6 @@
 import {Request} from 'express';
+import type {RequestContext} from '../contracts/response';
+import type {SessionClaims} from '../contracts/session';
 
 export interface IPagination {
   page: number;
@@ -11,7 +13,6 @@ export interface IPagination {
 }
 
 export interface IRequest extends Request {
-  auth?: {
-    id: string;
-  };
+  context?: RequestContext;
+  auth?: SessionClaims | null;
 }

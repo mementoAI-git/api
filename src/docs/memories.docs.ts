@@ -1,4 +1,48 @@
 const memoriesDocs = {
+  '/memories/public/{id}': {
+    get: {
+      tags: ['Memories'],
+      summary: 'Get a public memory',
+      description:
+        'Returns the safe anonymous projection of a published public memory.',
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Public memory retrieved successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'number', example: 200},
+                  message: {type: 'string'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      _id: {type: 'string'},
+                      title: {type: 'string'},
+                      body: {type: 'string'},
+                      tags: {type: 'array', items: {type: 'string'}},
+                      created_at: {type: 'string', format: 'date-time'},
+                      attachments: {type: 'array', items: {type: 'object'}},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        404: {description: 'Memory not found or not public'},
+      },
+    },
+  },
   '/memories': {
     post: {
       tags: ['Memories'],
