@@ -11,9 +11,20 @@ export async function findReadableMemory(
   memoryId: string,
   principal: MemoryPrincipal,
 ): Promise<MemoryDocument | null> {
-  const accessBranches: FilterQuery<IMemory>[] = [{visibility: 'everyone'}];
+  const branches: FilterQuery<IMemory>[] = [
+    {
+      visibility: 'everyone',
+      status: {$nin: ['draft', 'deleted']},
+    },
+  ];
 
   if (principal.userId) {
+    // Memory owner can access their own memories including drafts (as long as not deleted)
+    branches.push({
+      user: principal.userId,
+      status: {$ne: 'deleted'},
+    });
+
     const beneficiaries = await Beneficiary.find({
       user: principal.userId,
       status: 'accepted',
@@ -24,17 +35,23 @@ export async function findReadableMemory(
     );
     const groupIds = groups.map(group => group.id);
 
-    accessBranches.push(
-      {user: principal.userId},
-      {beneficiaries: {$in: beneficiaryIds}},
-      {groups: {$in: groupIds}},
-    );
+    if (beneficiaryIds.length > 0) {
+      branches.push({
+        beneficiaries: {$in: beneficiaryIds},
+        status: {$nin: ['draft', 'deleted']},
+      });
+    }
+    if (groupIds.length > 0) {
+      branches.push({
+        groups: {$in: groupIds},
+        status: {$nin: ['draft', 'deleted']},
+      });
+    }
   }
 
   return Memory.findOne({
     _id: memoryId,
-    status: {$nin: ['draft', 'deleted']},
-    $or: accessBranches,
+    $or: branches,
   });
 }
 

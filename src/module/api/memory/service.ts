@@ -270,17 +270,19 @@ export async function createMemory(
       tags.length === 0 && {enrichment_status: 'pending'}),
   });
 
-  // Track activity
-  await track(
-    {
-      title: 'Memory Created',
-      description: `Created memory: "${title}"`,
-      type: 'memory',
-      action: 'created',
-      reference: memory.id,
-    },
-    user_id,
-  );
+  // Track activity only if published
+  if (status !== MEMORY_STATUS.DRAFT) {
+    await track(
+      {
+        title: 'Memory Created',
+        description: `Created memory: "${title}"`,
+        type: 'memory',
+        action: 'created',
+        reference: memory.id,
+      },
+      user_id,
+    );
+  }
 
   // Queue story insights extraction if it's a story with body content and status is "save"
   const isStory = !memory.type || memory.type === 'story';
@@ -804,16 +806,18 @@ export async function updateMemory(
     }
   }
 
-  await track(
-    {
-      title: 'Memory Updated',
-      description: `Updated memory: "${memory.title}"`,
-      type: 'memory',
-      action: 'updated',
-      reference: memory.id,
-    },
-    user_id,
-  );
+  if (updatedMemory?.status !== MEMORY_STATUS.DRAFT) {
+    await track(
+      {
+        title: 'Memory Updated',
+        description: `Updated memory: "${updatedMemory?.title || memory.title}"`,
+        type: 'memory',
+        action: 'updated',
+        reference: memory.id,
+      },
+      user_id,
+    );
+  }
 
   return {data: memory, message: 'Memory updated successfully'};
 }
@@ -850,16 +854,18 @@ export async function deleteMemory(
     // Soft delete - just mark as deleted
     await memory.updateOne({status: 'deleted'});
 
-    await track(
-      {
-        title: 'Memory Deleted',
-        description: `Deleted memory: "${memory.title}"`,
-        type: 'memory',
-        action: 'deleted',
-        reference: memory.id,
-      },
-      user_id,
-    );
+    if (memory.status !== MEMORY_STATUS.DRAFT) {
+      await track(
+        {
+          title: 'Memory Deleted',
+          description: `Deleted memory: "${memory.title}"`,
+          type: 'memory',
+          action: 'deleted',
+          reference: memory.id,
+        },
+        user_id,
+      );
+    }
   }
 
   return {data: memory, message: 'Memory deleted successfully'};
