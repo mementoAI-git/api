@@ -218,7 +218,10 @@ describe('memory access policy', () => {
     expect(await Activity.countDocuments({user: owner.id})).toBe(0);
 
     // Deleting a draft should not create an activity entry
-    await memoryService.deleteMemory({memory_id: draft.id, delete_permanently: false}, owner.id);
+    await memoryService.deleteMemory(
+      {memory_id: draft.id, delete_permanently: false},
+      owner.id,
+    );
     expect(await Activity.countDocuments({user: owner.id})).toBe(0);
   });
 });
