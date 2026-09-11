@@ -545,13 +545,23 @@ async function paginateMemories(
   };
 }
 
-export async function getMemories(payload: IPagination, user_id: string) {
-  const {page, limit, search, bookmarked = false, deleted = false} = payload;
+export async function getMemories(
+  payload: IPagination & {status?: string},
+  user_id: string,
+) {
+  const {
+    page,
+    limit,
+    search,
+    bookmarked = false,
+    deleted = false,
+    status,
+  } = payload;
   const filters = filterGenerator({search}, ['title', 'body', 'tags']);
 
   filters.push({
     user: user_id,
-    status: deleted ? 'deleted' : {$nin: ['draft', 'deleted']},
+    status: status || (deleted ? 'deleted' : {$nin: ['draft', 'deleted']}),
   });
 
   const data = await paginateMemories({$and: filters}, user_id, {
@@ -819,7 +829,10 @@ export async function updateMemory(
     );
   }
 
-  return {data: memory, message: 'Memory updated successfully'};
+  return {
+    data: updatedMemory ?? memory,
+    message: 'Memory updated successfully',
+  };
 }
 
 export async function deleteMemory(
