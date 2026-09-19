@@ -175,6 +175,20 @@ export async function memoryStats(user_id: string) {
     provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
   });
 
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diffToMonday = (dayOfWeek + 6) % 7;
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const week_count = await Memory.countDocuments({
+    user: user_id,
+    type: 'story',
+    status: {$nin: ['draft', 'deleted']},
+    created_at: {$gte: startOfWeek},
+  });
+
   const storageUsage = await getStorageUsageSummary(user_id);
   const storage_size = storageUsage.used_bytes;
   const storage_limit = storageUsage.limit_bytes;
@@ -182,6 +196,8 @@ export async function memoryStats(user_id: string) {
   const data = {
     memory_count,
     stories_count,
+    week_count,
+    weekly_count: week_count,
     stories_bookmarked_count,
     stories_deleted_count,
     bookmark_count,

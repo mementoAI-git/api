@@ -108,13 +108,40 @@ class MailService {
     }
   }
 
-  async sendLink(email: string, name = '', type: 'reset' | 'verify' = 'reset') {
+  async sendLink(
+    email: string,
+    name = '',
+    type: 'reset' | 'verify' = 'reset',
+    delivery: 'link' | 'code' = 'link',
+  ) {
     const otpType: OtpType = type === 'verify' ? 'verify' : 'reset';
+    const isCode = delivery === 'code';
 
-    // Create OTP using the centralized service
-    const code = await otp.create(email, otpType);
+    // Create OTP using the centralized service (numeric for code delivery)
+    const code = await otp.create(
+      email,
+      otpType,
+      isCode ? { format: 'numeric', length: 6 } : undefined,
+    );
     const ttlSeconds = otp.getTtl(otpType);
     const expires_at = dayjs().add(ttlSeconds, 'seconds').toISOString();
+
+    if (isCode) {
+      const template =
+        type === 'reset' ? 'reset-password-otp' : 'email-verification-otp';
+      const subject =
+        type === 'reset'
+          ? 'Your Memento Password Reset Code'
+          : 'Your Memento Verification Code';
+
+      const html = await this.renderTemplate(template, {name, code, email});
+      await this.send({to: email, subject, html});
+
+      return {
+        code,
+        expires_at,
+      };
+    }
 
     const template = type === 'reset' ? 'reset-password' : 'email-verification';
     const subject =

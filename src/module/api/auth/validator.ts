@@ -38,6 +38,10 @@ export default {
       .withMessage('Password is required')
       .isLength({min: 6})
       .withMessage('Password must be at least 6 characters'),
+    body('delivery')
+      .optional()
+      .isIn(['link', 'code'])
+      .withMessage('Invalid delivery format'),
   ],
   sendLink: [
     emailValidator,
@@ -47,18 +51,38 @@ export default {
       .default('reset')
       .isIn(['reset', 'verify'])
       .withMessage('Invalid request type'),
+    body('delivery')
+      .optional()
+      .isIn(['reset', 'verify', 'link', 'code'])
+      .withMessage('Invalid delivery format'),
   ],
-  verifyEmail: body('token')
-    .notEmpty()
-    .withMessage('Verification code is required')
-    .isUUID()
-    .withMessage('Invalid token'),
+  verifyEmail: [
+    body('token')
+      .notEmpty()
+      .withMessage('Verification code is required')
+      .custom((value) => /^\d{6}$/.test(String(value).trim()) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value).trim()))
+      .withMessage('Invalid token or code'),
+    body('email')
+      .optional()
+      .isEmail()
+      .withMessage('Invalid email address')
+      .toLowerCase(),
+    body('type')
+      .optional()
+      .isIn(['verify', 'reset'])
+      .withMessage('Invalid type'),
+  ],
   setPassword: [
     body('token')
       .notEmpty()
       .withMessage('Verification code is required')
-      .isUUID()
-      .withMessage('Invalid token'),
+      .custom((value) => /^\d{6}$/.test(String(value).trim()) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value).trim()))
+      .withMessage('Invalid token or code'),
+    body('email')
+      .optional()
+      .isEmail()
+      .withMessage('Invalid email address')
+      .toLowerCase(),
     body('password')
       .notEmpty()
       .withMessage('Password is required')

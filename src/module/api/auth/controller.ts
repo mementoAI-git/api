@@ -65,7 +65,7 @@ export async function register(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.register(req.body);
+    const {message, data} = await service.register(req.body, clientContext(req));
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -79,7 +79,7 @@ export async function sendLink(
 ) {
   try {
     validateRequest(req);
-    const {message, data} = await service.sendLink(req.body);
+    const {message, data} = await service.sendLink(req.body, clientContext(req));
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

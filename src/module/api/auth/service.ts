@@ -476,7 +476,7 @@ export async function completePasskeyLogin(
   };
 }
 
-export async function register(payload: IRegister) {
+export async function register(payload: IRegister, context: AuthClientContext = LEGACY_CLIENT) {
   const {email, first_name, last_name} = payload;
   const user = await User.findOne({email});
   if (user) {
@@ -487,25 +487,41 @@ export async function register(payload: IRegister) {
   const keys = generateKeys();
 
   await User.create({last_name, first_name, password, email, ...keys});
-  await mail.sendLink(email, first_name || last_name || '', 'verify');
+  const deliveryMode =
+    (payload as any).delivery === 'code' ||
+    context.client === 'ios' ||
+    context.client === 'android'
+      ? 'code'
+      : 'link';
+  await mail.sendLink(email, first_name || last_name || '', 'verify', deliveryMode);
 
   const data = {requires_verification: true, email};
 
   return {data, message: 'User registration successful'};
 }
 
-export async function sendLink(payload: ISendLink) {
+export async function sendLink(
+  payload: ISendLink & { delivery?: 'link' | 'code' },
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {email, type = 'reset'} = payload;
   const user = await User.findOne({email});
   if (!user) {
     throw new NotFoundException('User not found');
   }
 
-  await mail.sendLink(email, user.first_name, type);
+  const deliveryMode =
+    payload.delivery === 'code' ||
+    context.client === 'ios' ||
+    context.client === 'android'
+      ? 'code'
+      : 'link';
+
+  await mail.sendLink(email, user.first_name, type, deliveryMode);
 
   return {
-    message: `${type === 'reset' ? 'Reset' : 'Verification'} link has been sent successfully`,
-    data: {email},
+    message: `${type === 'reset' ? (deliveryMode === 'code' ? 'Password reset code' : 'Reset link') : (deliveryMode === 'code' ? 'Verification code' : 'Verification link')} has been sent successfully`,
+    data: {email, delivery: deliveryMode},
   };
 }
 
@@ -514,8 +530,25 @@ export async function verifyEmail(
   context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {token} = payload;
+  const email = (payload as any).email;
+  const type = (payload as any).type || 'verify';
 
-  const result = await otp.verify(token, 'verify');
+  if (type === 'reset') {
+    const result = await otp.verify(token, 'reset', email);
+    if (!result.valid) {
+      throw new BadRequestException('Invalid or expired code');
+    }
+    const user = await User.findOne({email: result.email});
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      data: {valid: true, email: user.email},
+      message: 'Reset code is valid',
+    };
+  }
+
+  const result = await otp.verify(token, 'verify', email);
   if (!result.valid) {
     throw new BadRequestException('Invalid or expired link');
   }
