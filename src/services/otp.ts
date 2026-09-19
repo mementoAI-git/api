@@ -63,14 +63,14 @@ class OtpService {
   async create(
     email: string,
     type: OtpType,
-    options?: { format?: OtpFormat; length?: number },
+    options?: {format?: OtpFormat; length?: number},
   ): Promise<string> {
     const config = OTP_CONFIG[type];
     const format = options?.format || config.format;
     const length = options?.length || config.length || 6;
 
-    let code: string = '';
-    let key: string = '';
+    let code = '';
+    let key = '';
     let attempts = 0;
 
     do {
@@ -118,7 +118,11 @@ class OtpService {
 
     const data: OtpData = JSON.parse(dataStr.toString());
 
-    if (email && data.email && data.email.toLowerCase() !== email.toLowerCase()) {
+    if (
+      email &&
+      data.email &&
+      data.email.toLowerCase() !== email.toLowerCase()
+    ) {
       return {valid: false};
     }
 

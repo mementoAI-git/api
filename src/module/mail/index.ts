@@ -121,7 +121,7 @@ class MailService {
     const code = await otp.create(
       email,
       otpType,
-      isCode ? { format: 'numeric', length: 6 } : undefined,
+      isCode ? {format: 'numeric', length: 6} : undefined,
     );
     const ttlSeconds = otp.getTtl(otpType);
     const expires_at = dayjs().add(ttlSeconds, 'seconds').toISOString();

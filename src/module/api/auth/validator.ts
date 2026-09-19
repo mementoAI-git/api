@@ -60,7 +60,13 @@ export default {
     body('token')
       .notEmpty()
       .withMessage('Verification code is required')
-      .custom((value) => /^\d{6}$/.test(String(value).trim()) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value).trim()))
+      .custom(
+        value =>
+          /^\d{6}$/.test(String(value).trim()) ||
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            String(value).trim(),
+          ),
+      )
       .withMessage('Invalid token or code'),
     body('email')
       .optional()
@@ -76,7 +82,13 @@ export default {
     body('token')
       .notEmpty()
       .withMessage('Verification code is required')
-      .custom((value) => /^\d{6}$/.test(String(value).trim()) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(value).trim()))
+      .custom(
+        value =>
+          /^\d{6}$/.test(String(value).trim()) ||
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            String(value).trim(),
+          ),
+      )
       .withMessage('Invalid token or code'),
     body('email')
       .optional()

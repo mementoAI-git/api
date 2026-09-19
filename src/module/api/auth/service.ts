@@ -476,7 +476,10 @@ export async function completePasskeyLogin(
   };
 }
 
-export async function register(payload: IRegister, context: AuthClientContext = LEGACY_CLIENT) {
+export async function register(
+  payload: IRegister,
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {email, first_name, last_name} = payload;
   const user = await User.findOne({email});
   if (user) {
@@ -493,7 +496,12 @@ export async function register(payload: IRegister, context: AuthClientContext = 
     context.client === 'android'
       ? 'code'
       : 'link';
-  await mail.sendLink(email, first_name || last_name || '', 'verify', deliveryMode);
+  await mail.sendLink(
+    email,
+    first_name || last_name || '',
+    'verify',
+    deliveryMode,
+  );
 
   const data = {requires_verification: true, email};
 
@@ -501,7 +509,7 @@ export async function register(payload: IRegister, context: AuthClientContext = 
 }
 
 export async function sendLink(
-  payload: ISendLink & { delivery?: 'link' | 'code' },
+  payload: ISendLink & {delivery?: 'link' | 'code'},
   context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {email, type = 'reset'} = payload;
@@ -520,7 +528,7 @@ export async function sendLink(
   await mail.sendLink(email, user.first_name, type, deliveryMode);
 
   return {
-    message: `${type === 'reset' ? (deliveryMode === 'code' ? 'Password reset code' : 'Reset link') : (deliveryMode === 'code' ? 'Verification code' : 'Verification link')} has been sent successfully`,
+    message: `${type === 'reset' ? (deliveryMode === 'code' ? 'Password reset code' : 'Reset link') : deliveryMode === 'code' ? 'Verification code' : 'Verification link'} has been sent successfully`,
     data: {email, delivery: deliveryMode},
   };
 }
