@@ -546,3 +546,8 @@ export async function withTransaction<T>(
     await session.endSession();
   }
 }
+
+export const generateDefaultAvatarUrl = (seed?: string): string => {
+  const normalized = (seed || 'memento').trim().toLowerCase();
+  return `https://api.dicebear.com/9.x/adventurer/png?seed=${encodeURIComponent(normalized)}&backgroundColor=fefbf8`;
+};

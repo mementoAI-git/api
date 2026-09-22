@@ -24,6 +24,7 @@ import {
 import {OAUTH_PROVIDERS} from '../../../utils/constant';
 import {
   compareStrings,
+  generateDefaultAvatarUrl,
   generateKeys,
   hashPassword,
   isEmpty,
@@ -230,12 +231,14 @@ export async function oauthAuthorization(
   if (!user) {
     const keys = generateKeys();
 
+    const picture = userinfo.picture || generateDefaultAvatarUrl(userinfo.email);
     user = await User.create({
       email: userinfo.email,
       first_name: userinfo.first_name,
       last_name: userinfo.last_name,
       verified: true,
       providers: [userinfo.provider],
+      picture,
       ...keys,
     });
   }
@@ -536,7 +539,8 @@ export async function register(
   const password = await hashPassword(payload.password);
   const keys = generateKeys();
 
-  await User.create({last_name, first_name, password, email, ...keys});
+  const picture = generateDefaultAvatarUrl(email);
+  await User.create({last_name, first_name, password, email, picture, ...keys});
   const deliveryMode =
     (payload as any).delivery === 'code' ||
     context.client === 'ios' ||
