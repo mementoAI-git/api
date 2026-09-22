@@ -314,8 +314,14 @@ export async function prompt(
 
   const sessionTurnCount = getSessionTurnCount(messages);
 
-  const content: PartListUnion = [];
   const userText = (payload.text ?? '').trim();
+  const hasAttachments = !isEmpty(payload?.attachments);
+
+  if (!userText && !hasAttachments) {
+    throw new BadRequestException('Prompt must contain text or attachments');
+  }
+
+  const content: PartListUnion = [];
   if (userText) {
     content.push(userText);
   }
@@ -342,7 +348,7 @@ export async function prompt(
     prompt_version: chatPrimaryPromptVersion,
   });
 
-  if (!isEmpty(payload?.attachments)) {
+  if (hasAttachments) {
     const chat = gemini.chats.create({
       model: GEMINI_MODEL,
       config: {systemInstruction},
@@ -374,10 +380,10 @@ export async function prompt(
   const routing = await streamCriticalChatResponse({
     userId: user_id,
     requestStart,
-    userTextForGroqRouting: payload.text,
+    userTextForGroqRouting: userText || payload.text,
     systemInstruction,
     groqHistory,
-    latestUserText: payload.text,
+    latestUserText: userText || payload.text,
     task: 'chat_primary',
     metricsEndpoint: '/ai/prompt',
     memoryIdForMetrics: payload.memory,
@@ -387,7 +393,9 @@ export async function prompt(
         config: {systemInstruction},
         history: createChatHistory(messages),
       });
-      return chat.sendMessageStream({message: content});
+      const messageContent: PartListUnion =
+        content.length > 0 ? content : [userText || 'Hello'];
+      return chat.sendMessageStream({message: messageContent});
     },
     buildOpenRouterMessages: (): OpenRouterMessage[] => [
       {role: 'system', content: systemInstruction},
@@ -396,7 +404,7 @@ export async function prompt(
           message.role === 'model' ? ('assistant' as const) : ('user' as const),
         content: message.parts?.[0]?.text || '',
       })),
-      {role: 'user', content: payload.text},
+      {role: 'user', content: userText || payload.text || 'Hello'},
     ],
   });
 
@@ -730,12 +738,19 @@ export async function startConversation(
     user: user_id,
     prompt_version: chatBootstrapPromptVersion,
   });
-  const content: PartListUnion = [];
-  if (payload.text) {
-    content.push(payload.text);
+  const userText = (payload.text ?? '').trim();
+  const hasAttachments = !isEmpty(payload?.attachments);
+
+  if (!userText && !hasAttachments) {
+    throw new BadRequestException('Prompt must contain text or attachments');
   }
 
-  if (!isEmpty(payload?.attachments)) {
+  const content: PartListUnion = [];
+  if (userText) {
+    content.push(userText);
+  }
+
+  if (hasAttachments) {
     const chat = gemini.chats.create({
       model: GEMINI_MODEL,
       config: {systemInstruction},
@@ -849,7 +864,9 @@ export async function startConversation(
       history: createChatHistory(history),
     });
     try {
-      const response = await chat.sendMessage({message: content});
+      const messageContent: PartListUnion =
+        content.length > 0 ? content : [userText || 'Hello'];
+      const response = await chat.sendMessage({message: messageContent});
       responseText = response.text;
       console.log('AI routing', {
         task: 'chat_bootstrap',

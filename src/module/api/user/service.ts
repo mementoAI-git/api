@@ -934,17 +934,22 @@ function buildGeminiOnboardingHistory(
 ) {
   if (!Array.isArray(transcript) || transcript.length <= 1) return [];
   const historyItems = transcript.slice(0, -1);
-  return historyItems.map(item => ({
-    role: item.role === 'assistant' ? 'model' : 'user',
-    parts: [
-      {
-        text:
-          item.role === 'assistant'
-            ? sanitizeMementoText(item.content)
-            : item.content,
-      },
-    ],
-  }));
+  return historyItems
+    .map(item => {
+      const rawText =
+        item.role === 'assistant'
+          ? sanitizeMementoText(item.content)
+          : item.content;
+      return {
+        role: item.role === 'assistant' ? ('model' as const) : ('user' as const),
+        text: (rawText || '').trim(),
+      };
+    })
+    .filter(item => item.text.length > 0)
+    .map(item => ({
+      role: item.role,
+      parts: [{text: item.text}],
+    }));
 }
 
 async function getOrCreatePrimaryConversation(user_id: string) {
@@ -1047,10 +1052,9 @@ export async function streamOnboardingChatPrompt(
           transcript as Array<{role: 'user' | 'assistant'; content: string}>,
         ),
       });
-      const latestPrompt = shouldBootstrap
-        ? bootstrapUserLine
-        : latestUserMessage ||
-          'Continue the onboarding conversation naturally.';
+      const latestPrompt =
+        (shouldBootstrap ? bootstrapUserLine : latestUserMessage)?.trim() ||
+        'Continue the onboarding conversation naturally.';
       return chat.sendMessageStream({
         message: latestPrompt,
       });
