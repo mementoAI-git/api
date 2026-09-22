@@ -32,6 +32,7 @@ import {
 import {
   BadRequestException,
   NotFoundException,
+  ServiceError,
   UnauthorizedException,
 } from '../../../utils/service-error';
 import axios from 'axios';
@@ -140,41 +141,80 @@ export function generateOauthUrl(provider: string) {
 }
 
 export async function oauthAuthorization(
-  {code, user: appleUser}: IOAuthAuthorization,
+  {code, id_token, user: appleUser}: IOAuthAuthorization,
   provider: string,
   context: AuthClientContext = LEGACY_CLIENT,
 ) {
-  const {token_url, userinfo_url, client_id, client_secret, redirect_uri} =
-    OAUTH_PROVIDERS[provider || 'google'];
+  let userinfo: {
+    provider: string;
+    email: string;
+    first_name?: string;
+    last_name?: string;
+  } | undefined;
 
-  const payload = {
-    code,
-    client_id,
-    client_secret,
-    redirect_uri,
-    grant_type: 'authorization_code',
-  };
-  const appleTokenPayload = new URLSearchParams();
-  for (const [key, value] of Object.entries(payload)) {
-    if (typeof value === 'string') appleTokenPayload.append(key, value);
+  if (id_token) {
+    if (compareStrings(provider, 'google')) {
+      try {
+        const {data} = await axios.get('https://oauth2.googleapis.com/tokeninfo', {
+          params: {id_token},
+        });
+        if (!data?.email || !data?.sub) {
+          throw new UnauthorizedException('Invalid Google ID token');
+        }
+        const firstName = data.given_name || (data.name ? data.name.split(' ')[0] : 'User');
+        const lastName = data.family_name || (data.name ? data.name.split(' ').slice(1).join(' ') : '');
+        userinfo = {
+          provider: `google:${data.sub}`,
+          email: data.email.toLowerCase(),
+          first_name: firstName,
+          last_name: lastName,
+        };
+      } catch (err: any) {
+        if (err instanceof ServiceError) throw err;
+        throw new UnauthorizedException('Invalid Google ID token');
+      }
+    } else if (compareStrings(provider, 'apple')) {
+      userinfo = await getOauthUser('', {id_token}, provider, appleUser);
+    } else {
+      throw new BadRequestException(`Provider ${provider} does not support id_token authorization`);
+    }
+  } else {
+    if (!code) {
+      throw new BadRequestException('Authorization code or id_token is required');
+    }
+    const {token_url, userinfo_url, client_id, client_secret, redirect_uri} =
+      OAUTH_PROVIDERS[provider || 'google'];
+
+    const payload = {
+      code,
+      client_id,
+      client_secret,
+      redirect_uri,
+      grant_type: 'authorization_code',
+    };
+    const appleTokenPayload = new URLSearchParams();
+    for (const [key, value] of Object.entries(payload)) {
+      if (typeof value === 'string') appleTokenPayload.append(key, value);
+    }
+    const tokenPayload = compareStrings(provider, 'apple')
+      ? appleTokenPayload
+      : payload;
+    const {data: result} = await axios.post(
+      token_url,
+      tokenPayload,
+      compareStrings(provider, 'apple')
+        ? {headers: {'Content-Type': 'application/x-www-form-urlencoded'}}
+        : undefined,
+    );
+
+    userinfo = await getOauthUser(
+      userinfo_url,
+      result,
+      provider,
+      appleUser,
+    );
   }
-  const tokenPayload = compareStrings(provider, 'apple')
-    ? appleTokenPayload
-    : payload;
-  const {data: result} = await axios.post(
-    token_url,
-    tokenPayload,
-    compareStrings(provider, 'apple')
-      ? {headers: {'Content-Type': 'application/x-www-form-urlencoded'}}
-      : undefined,
-  );
 
-  const userinfo = await getOauthUser(
-    userinfo_url,
-    result,
-    provider,
-    appleUser,
-  );
   if (!userinfo) {
     throw new UnauthorizedException();
   }

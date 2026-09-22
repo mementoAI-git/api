@@ -34,9 +34,9 @@ type NewSessionClaims = Pick<SessionClaims, 'sid' | 'sv'>;
 
 export const random = (len = 6, type: 'number' | 'alphanumeric' = 'number') => {
   if (type === 'number') {
-    return Math.floor(
-      Math.random() * (10 ** len - 1) + 10 ** (len - 1),
-    )?.toString();
+    const min = 10 ** (len - 1);
+    const max = 10 ** len - 1;
+    return Math.floor(Math.random() * (max - min + 1) + min).toString();
   }
 
   const characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -532,6 +532,12 @@ export async function withTransaction<T>(
   let result: T | undefined;
 
   try {
+    const isReplicaSet = Boolean(
+      (mongoose.connection as any)?.client?.topology?.description?.setName,
+    );
+    if (!isReplicaSet) {
+      return await callback(session);
+    }
     await session.withTransaction(async () => {
       result = await callback(session);
     });

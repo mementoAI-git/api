@@ -710,9 +710,13 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'age_range',
   ]);
 
-  const updatePayload = Object.entries(payload).reduce((acc, p) => {
-    if (allowedFields.has(p[0])) {
-      acc[p[0]] = p[1];
+  const updatePayload = Object.entries(payload).reduce<Record<string, unknown>>((acc, p) => {
+    if (
+      allowedFields.has(p[0]) &&
+      p[1] !== undefined &&
+      (typeof p[1] !== 'string' || p[1].trim().length > 0)
+    ) {
+      acc[p[0]] = typeof p[1] === 'string' ? p[1].trim() : p[1];
     }
     return acc;
   }, {});
@@ -751,12 +755,16 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'sharing_intent',
   ]);
 
-  const preferencesUpdate = Object.entries(payload).reduce((acc, p) => {
-    if (allowedPreferencesFields.has(p[0])) {
-      acc[`preferences.${p[0]}`] = p[1];
+  const preferencesUpdate = Object.entries(payload).reduce<Record<string, unknown>>((acc, p) => {
+    if (
+      allowedPreferencesFields.has(p[0]) &&
+      p[1] !== undefined &&
+      (typeof p[1] !== 'string' || p[1].trim().length > 0)
+    ) {
+      acc[`preferences.${p[0]}`] = typeof p[1] === 'string' ? p[1].trim() : p[1];
     }
     return acc;
-  }, {} as any);
+  }, {});
 
   await withTransaction(async session => {
     await User.findByIdAndUpdate(

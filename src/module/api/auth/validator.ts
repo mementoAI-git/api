@@ -18,7 +18,14 @@ export default {
   generateOauthUrl: providerValidator,
   authorization: [
     providerValidator,
-    body('code').notEmpty().withMessage('Authorization code is required'),
+    body('code').optional().isString(),
+    body('id_token').optional().isString(),
+    body().custom(body => {
+      if (!body.code && !body.id_token) {
+        throw new Error('Either authorization code or id_token is required');
+      }
+      return true;
+    }),
     body('user')
       .optional()
       .custom(value => typeof value === 'string' || typeof value === 'object')
