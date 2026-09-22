@@ -941,7 +941,8 @@ function buildGeminiOnboardingHistory(
           ? sanitizeMementoText(item.content)
           : item.content;
       return {
-        role: item.role === 'assistant' ? ('model' as const) : ('user' as const),
+        role:
+          item.role === 'assistant' ? ('model' as const) : ('user' as const),
         text: (rawText || '').trim(),
       };
     })
