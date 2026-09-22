@@ -231,7 +231,8 @@ export async function oauthAuthorization(
   if (!user) {
     const keys = generateKeys();
 
-    const picture = userinfo.picture || generateDefaultAvatarUrl(userinfo.email);
+    const picture =
+      userinfo.picture || generateDefaultAvatarUrl(userinfo.email);
     user = await User.create({
       email: userinfo.email,
       first_name: userinfo.first_name,

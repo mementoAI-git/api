@@ -1,5 +1,10 @@
 import mail from '../../mail';
-import {compareStrings, filterGenerator, generateDefaultAvatarUrl, isEmpty} from '../../../utils/helpers';
+import {
+  compareStrings,
+  filterGenerator,
+  generateDefaultAvatarUrl,
+  isEmpty,
+} from '../../../utils/helpers';
 import {IPagination} from '../../../utils/interface';
 import {
   BadRequestException,

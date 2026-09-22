@@ -1,7 +1,11 @@
 import dayjs from 'dayjs';
 import {model, Schema} from 'mongoose';
 import {BACKEND_URL} from '../../../utils/config';
-import {concatStrings, generateDefaultAvatarUrl, isEmpty} from '../../../utils/helpers';
+import {
+  concatStrings,
+  generateDefaultAvatarUrl,
+  isEmpty,
+} from '../../../utils/helpers';
 import {FREE_STORAGE_LIMIT_BYTES} from '../../../utils/constant';
 
 // Add to User model
@@ -243,12 +247,17 @@ const user = new Schema<IUser>(
 
 user.virtual('picture_url').get(function () {
   if (this.picture) {
-    if (this.picture.startsWith('http://') || this.picture.startsWith('https://')) {
+    if (
+      this.picture.startsWith('http://') ||
+      this.picture.startsWith('https://')
+    ) {
       return this.picture;
     }
     return `${BACKEND_URL}/files/${this.picture}`;
   }
-  return generateDefaultAvatarUrl(this.email || (this._id ? this._id.toString() : 'memento'));
+  return generateDefaultAvatarUrl(
+    this.email || (this._id ? this._id.toString() : 'memento'),
+  );
 });
 user.virtual('fullname').get(function () {
   return concatStrings(this.first_name, this.last_name, ' ').trim();
