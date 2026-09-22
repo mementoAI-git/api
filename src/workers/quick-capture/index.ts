@@ -1,14 +1,14 @@
-import { Worker } from 'bullmq';
+import {Worker} from 'bullmq';
 import dayjs from 'dayjs';
-import type { RedisConnection } from '../../services/redis';
+import type {RedisConnection} from '../../services/redis';
 import Memory from '../../module/database/model/memory';
 import Message from '../../module/database/model/message';
-import { extractJson, logger } from '../../utils';
-import { generateTextWithProviderFallback } from '../../services/ai/nonstream-fallback';
-import { queueStoryInsights } from '../../services/queues/insights';
-import { queueSummarization } from '../../services/queues/summarization';
-import type { QuickCaptureEnrichmentJobData } from '../../services/queues/quick-capture';
-import { isActiveAccount } from '../../services/account-purge/account-state';
+import {extractJson, logger} from '../../utils';
+import {generateTextWithProviderFallback} from '../../services/ai/nonstream-fallback';
+import {queueStoryInsights} from '../../services/queues/insights';
+import {queueSummarization} from '../../services/queues/summarization';
+import type {QuickCaptureEnrichmentJobData} from '../../services/queues/quick-capture';
+import {isActiveAccount} from '../../services/account-purge/account-state';
 import {
   buildTagsJsonInstructions,
   ensureStoryAutogenTagCount,
@@ -178,9 +178,7 @@ function parseEnrichment(raw: string): {
         : undefined,
 
       category:
-        typeof parsed.category === 'string'
-          ? parsed.category
-          : undefined,
+        typeof parsed.category === 'string' ? parsed.category : undefined,
 
       transcript_unclear:
         typeof parsed.transcript_unclear === 'boolean'
@@ -216,46 +214,31 @@ async function insertTranscriptNote(
   });
 
   await Memory.findByIdAndUpdate(memoryId, {
-    $inc: { message_count: 1 },
-    $set: { last_active: dayjs().toDate() },
+    $inc: {message_count: 1},
+    $set: {last_active: dayjs().toDate()},
   });
 }
 
-function queueSavedStoryJobs(
-  userId: string,
-  memoryId: string,
-): void {
-  void Promise.resolve(
-    queueStoryInsights(userId, memoryId),
-  ).catch(error => {
+function queueSavedStoryJobs(userId: string, memoryId: string): void {
+  void Promise.resolve(queueStoryInsights(userId, memoryId)).catch(error => {
     logger.error(
       error,
       'Quick capture enrichment: story insights queue failed',
     );
   });
 
-  void Promise.resolve(
-    queueSummarization(memoryId, 'story'),
-  ).catch(error => {
-    logger.error(
-      error,
-      'Quick capture enrichment: summarization queue failed',
-    );
+  void Promise.resolve(queueSummarization(memoryId, 'story')).catch(error => {
+    logger.error(error, 'Quick capture enrichment: summarization queue failed');
   });
 }
 
-export default function startQuickCaptureWorker(
-  connection: RedisConnection,
-) {
+export default function startQuickCaptureWorker(connection: RedisConnection) {
   return new Worker(
     'quick-capture-enrichment',
 
     async job => {
-      const {
-        user_id,
-        memory_id,
-        transcript_uncertain,
-      } = job.data as QuickCaptureEnrichmentJobData;
+      const {user_id, memory_id, transcript_uncertain} =
+        job.data as QuickCaptureEnrichmentJobData;
 
       if (!(await isActiveAccount(user_id))) {
         return;
@@ -267,19 +250,14 @@ export default function startQuickCaptureWorker(
       });
 
       if (!memory) {
-        logger.warn(
-          { memory_id },
-          'Quick capture enrichment: memory not found',
-        );
+        logger.warn({memory_id}, 'Quick capture enrichment: memory not found');
 
         return;
       }
 
-      const isQuickCapture =
-        memory.capture_source === 'quick';
+      const isQuickCapture = memory.capture_source === 'quick';
 
-      const isStory =
-        !memory.type || memory.type === 'story';
+      const isStory = !memory.type || memory.type === 'story';
 
       if (!isStory) {
         return;
@@ -303,152 +281,116 @@ ${plain || '(empty)'}
         .join('\n\n');
 
       try {
-        const result =
-          await generateTextWithProviderFallback({
-            task: 'quick_capture_enrich',
+        const result = await generateTextWithProviderFallback({
+          task: 'quick_capture_enrich',
 
-            messages: [
-              {
-                role: 'system',
-                content: ENRICHMENT_SYSTEM,
-              },
-              {
-                role: 'user',
-                content: userContent,
-              },
-            ],
+          messages: [
+            {
+              role: 'system',
+              content: ENRICHMENT_SYSTEM,
+            },
+            {
+              role: 'user',
+              content: userContent,
+            },
+          ],
 
-            temperature: 0.45,
-          });
+          temperature: 0.45,
+        });
 
         const parsed = parseEnrichment(result.text);
 
-        const tagContext = [
-          plain,
-          memory.prompt_text?.trim() || '',
-        ]
+        const tagContext = [plain, memory.prompt_text?.trim() || '']
           .filter(Boolean)
           .join('\n');
 
-        const generatedTags =
-          ensureStoryAutogenTagCount(
-            normalizeAutogeneratedStoryTags(
-              parsed?.tags || [],
-            ),
-            tagContext,
-          );
+        const generatedTags = ensureStoryAutogenTagCount(
+          normalizeAutogeneratedStoryTags(parsed?.tags || []),
+          tagContext,
+        );
 
         const tags =
-          isQuickCapture ||
-            (memory.tags?.length || 0) === 0
+          isQuickCapture || (memory.tags?.length || 0) === 0
             ? generatedTags
             : memory.tags;
 
-        const nextQuickCaptureTitle =
-          resolveEnrichmentTitle(
-            parsed?.title,
-            memory.title || '',
-            plain,
-          );
+        const nextQuickCaptureTitle = resolveEnrichmentTitle(
+          parsed?.title,
+          memory.title || '',
+          plain,
+        );
 
         const shouldSetQuickCaptureTitle =
           isQuickCapture &&
-          shouldOverwriteQuickCaptureTitle(
-            memory.title || '',
-          );
+          shouldOverwriteQuickCaptureTitle(memory.title || '');
 
-        const category =
-          normalizeCategory(parsed?.category);
+        const category = normalizeCategory(parsed?.category);
 
         const unclear =
-          Boolean(transcript_uncertain) ||
-          Boolean(parsed?.transcript_unclear);
+          Boolean(transcript_uncertain) || Boolean(parsed?.transcript_unclear);
 
         if (!(await isActiveAccount(user_id))) {
           return;
         }
 
-        await Memory.findByIdAndUpdate(
-          memory_id,
-          {
-            ...(shouldSetQuickCaptureTitle && {
-              title: nextQuickCaptureTitle,
-            }),
+        await Memory.findByIdAndUpdate(memory_id, {
+          ...(shouldSetQuickCaptureTitle && {
+            title: nextQuickCaptureTitle,
+          }),
 
-            ...(tags.length > 0 && {
-              tags,
-            }),
+          ...(tags.length > 0 && {
+            tags,
+          }),
 
-            ...(isQuickCapture &&
-              category && {
+          ...(isQuickCapture &&
+            category && {
               category,
             }),
 
-            enrichment_status: 'complete',
-          },
-        );
+          enrichment_status: 'complete',
+        });
 
         if (isQuickCapture && unclear) {
-          await insertTranscriptNote(
-            user_id,
-            memory_id,
-          );
+          await insertTranscriptNote(user_id, memory_id);
         }
 
-        const updated =
-          await Memory.findById(memory_id);
+        const updated = await Memory.findById(memory_id);
 
         if (
           updated &&
-          (!updated.type ||
-            updated.type === 'story') &&
+          (!updated.type || updated.type === 'story') &&
           updated.status === 'save' &&
           updated.body &&
           updated.body.trim().length > 0
         ) {
-          queueSavedStoryJobs(
-            user_id,
-            memory_id,
-          );
+          queueSavedStoryJobs(user_id, memory_id);
         }
       } catch (error) {
-        logger.error(
-          error,
-          'Quick capture enrichment failed',
-        );
+        logger.error(error, 'Quick capture enrichment failed');
 
         if (!(await isActiveAccount(user_id))) {
           return;
         }
 
-        const fallback =
-          await Memory.findById(memory_id);
+        const fallback = await Memory.findById(memory_id);
 
         const fallbackIsStory =
-          fallback &&
-          (!fallback.type ||
-            fallback.type === 'story');
+          fallback && (!fallback.type || fallback.type === 'story');
 
         if (!fallbackIsStory) {
           return;
         }
 
-        await Memory.findByIdAndUpdate(
-          memory_id,
-          {
-            enrichment_status: 'complete',
-          },
-        );
+        await Memory.findByIdAndUpdate(memory_id, {
+          enrichment_status: 'complete',
+        });
 
         if (
           fallback.status === 'save' &&
           fallback.body &&
           fallback.body.trim().length > 0
         ) {
-          queueSavedStoryJobs(
-            user_id,
-            memory_id,
-          );
+          queueSavedStoryJobs(user_id, memory_id);
         }
       }
     },

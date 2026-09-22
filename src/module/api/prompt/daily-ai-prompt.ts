@@ -1,12 +1,10 @@
-import { createUserContent } from '@google/genai';
+import {createUserContent} from '@google/genai';
 import Memory from '../../database/model/memory';
 import Message from '../../database/model/message';
 import User from '../../database/model/user';
 import Prompt from '../../database/model/prompt';
 import DailyAiPromptCache from '../../database/model/daily-ai-prompt-cache';
-import gemini, {
-  GEMINI_MODEL,
-} from '../../../services/gemini';
+import gemini, {GEMINI_MODEL} from '../../../services/gemini';
 import {
   CATEGORY_LABELS,
   computeEnrichmentScore,
@@ -41,9 +39,7 @@ RULES:
 
 Return plain text only.`;
 
-export function stripHtmlSnippet(
-  html: string,
-): string {
+export function stripHtmlSnippet(html: string): string {
   if (!html) return '';
 
   return html
@@ -52,18 +48,9 @@ export function stripHtmlSnippet(
     .trim();
 }
 
-function withTimeout<T>(
-  p: Promise<T>,
-  ms: number,
-): Promise<T> {
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(
-      () =>
-        reject(
-          new Error('daily_prompt_timeout'),
-        ),
-      ms,
-    );
+    const t = setTimeout(() => reject(new Error('daily_prompt_timeout')), ms);
 
     p.then(
       value => {
@@ -79,22 +66,11 @@ function withTimeout<T>(
   });
 }
 
-export function normalizePromptSentence(
-  raw: string,
-): string {
+export function normalizePromptSentence(raw: string): string {
   let t = (raw || '')
-    .replace(
-      /^[\s"'“”]+|[\s"'“”]+$/g,
-      '',
-    )
-    .replace(
-      /^(question:|reflection:)\s*/i,
-      '',
-    )
-    .replace(
-      /[\u2014\u2013]/g,
-      '-',
-    )
+    .replace(/^[\s"'“”]+|[\s"'“”]+$/g, '')
+    .replace(/^(question:|reflection:)\s*/i, '')
+    .replace(/[\u2014\u2013]/g, '-')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -102,39 +78,28 @@ export function normalizePromptSentence(
     return '';
   }
 
-  const firstQuestionMark =
-    t.indexOf('?');
+  const firstQuestionMark = t.indexOf('?');
 
   if (firstQuestionMark >= 0) {
-    t = t.slice(
-      0,
-      firstQuestionMark + 1,
-    );
+    t = t.slice(0, firstQuestionMark + 1);
   } else {
-    t =
-      `${t.replace(/[.!]+$/, '')}?`;
+    t = `${t.replace(/[.!]+$/, '')}?`;
   }
 
   if (t.length > 320) {
     t = t.slice(0, 319).trim();
 
-    t =
-      `${t.replace(/[?.!]+$/, '')}?`;
+    t = `${t.replace(/[?.!]+$/, '')}?`;
   }
 
   return t;
 }
 
-export function normalizeForDedupe(
-  s: string,
-): string {
+export function normalizeForDedupe(s: string): string {
   return s
     .trim()
     .toLowerCase()
-    .replace(
-      /[\u2014\u2013]/g,
-      '-',
-    )
+    .replace(/[\u2014\u2013]/g, '-')
     .replace(/\s+/g, ' ');
 }
 
@@ -167,9 +132,7 @@ export async function loadAnsweredDedupeSet(
     .sort({
       created_at: -1,
     })
-    .select(
-      'prompt prompt_text',
-    )
+    .select('prompt prompt_text')
     .lean();
 
   const ids = [
@@ -183,23 +146,19 @@ export async function loadAnsweredDedupeSet(
 
   const prompts = ids.length
     ? await Prompt.find({
-      _id: {
-        $in: ids,
-      },
-    })
-      .select('title')
-      .lean()
+        _id: {
+          $in: ids,
+        },
+      })
+        .select('title')
+        .lean()
     : [];
 
-  const promptTitleById =
-    new Map<string, string>();
+  const promptTitleById = new Map<string, string>();
 
   for (const prompt of prompts) {
     if (prompt.title) {
-      promptTitleById.set(
-        String(prompt._id),
-        prompt.title,
-      );
+      promptTitleById.set(String(prompt._id), prompt.title);
     }
   }
 
@@ -207,24 +166,15 @@ export async function loadAnsweredDedupeSet(
 
   for (const memory of memories) {
     if (memory.prompt) {
-      const title =
-        promptTitleById.get(
-          String(memory.prompt),
-        );
+      const title = promptTitleById.get(String(memory.prompt));
 
       if (title) {
-        set.add(
-          normalizeForDedupe(title),
-        );
+        set.add(normalizeForDedupe(title));
       }
     }
 
     if (memory.prompt_text) {
-      set.add(
-        normalizeForDedupe(
-          String(memory.prompt_text),
-        ),
-      );
+      set.add(normalizeForDedupe(String(memory.prompt_text)));
     }
   }
 
@@ -235,17 +185,13 @@ export async function isDuplicateAnsweredPrompt(
   userId: string,
   text: string,
 ): Promise<boolean> {
-  const normalized =
-    normalizeForDedupe(text);
+  const normalized = normalizeForDedupe(text);
 
   if (!normalized) {
     return true;
   }
 
-  const answered =
-    await loadAnsweredDedupeSet(
-      userId,
-    );
+  const answered = await loadAnsweredDedupeSet(userId);
 
   return answered.has(normalized);
 }
@@ -256,165 +202,101 @@ export async function buildDailyPromptUserPayload(
   let enrichmentBlock = '';
 
   try {
-    const enrichment =
-      await computeEnrichmentScore(
-        userId,
-      );
+    const enrichment = await computeEnrichmentScore(userId);
 
-    const lowestCoverage = [
-      ...enrichment.category_scores,
-    ]
-      .filter(
-        category =>
-          category.unlocked,
-      )
-      .sort(
-        (a, b) =>
-          a.score - b.score,
-      )
+    const lowestCoverage = [...enrichment.category_scores]
+      .filter(category => category.unlocked)
+      .sort((a, b) => a.score - b.score)
       .slice(0, 3);
 
     if (lowestCoverage.length) {
-      enrichmentBlock =
-        lowestCoverage
-          .map(
-            category =>
-              `- ${CATEGORY_LABELS[
-              category.key
-              ]
-              }`,
-          )
-          .join('\n');
+      enrichmentBlock = lowestCoverage
+        .map(category => `- ${CATEGORY_LABELS[category.key]}`)
+        .join('\n');
     }
   } catch {
     // New user or enrichment computation unavailable.
   }
 
-  const memories =
-    await Memory.find({
-      user: userId,
+  const memories = await Memory.find({
+    user: userId,
 
-      status: {
-        $nin: [
-          'draft',
-          'deleted',
-        ],
+    status: {
+      $nin: ['draft', 'deleted'],
+    },
+
+    $or: [
+      {
+        type: 'story',
       },
+      {
+        type: {
+          $exists: false,
+        },
+      },
+      {
+        type: null,
+      },
+    ],
+  })
+    .sort({
+      created_at: -1,
+    })
+    .limit(5)
+    .select('title body category')
+    .lean();
 
-      $or: [
-        {
-          type: 'story',
-        },
-        {
-          type: {
-            $exists: false,
-          },
-        },
-        {
-          type: null,
-        },
-      ],
+  const memoryBlock = memories.length
+    ? memories
+        .map((memory, index) => {
+          const snippet = stripHtmlSnippet(String(memory.body || '')).slice(
+            0,
+            140,
+          );
+
+          const category = memory.category ? ` [${memory.category}]` : '';
+
+          return `${index + 1}. "${memory.title || 'Untitled'}"${category}${
+            snippet ? `: ${snippet}` : ''
+          }`;
+        })
+        .join('\n')
+    : '';
+
+  let chatBlock = '';
+
+  const user = await User.findById(userId)
+    .select('primary_conversation_id')
+    .lean();
+
+  if (user?.primary_conversation_id) {
+    const messages = await Message.find({
+      memory: user.primary_conversation_id,
+      role: 'user',
     })
       .sort({
         created_at: -1,
       })
-      .limit(5)
-      .select(
-        'title body category',
-      )
+      .limit(3)
+      .select('text')
       .lean();
 
-  const memoryBlock =
-    memories.length
-      ? memories
-        .map(
-          (
-            memory,
-            index,
-          ) => {
-            const snippet =
-              stripHtmlSnippet(
-                String(
-                  memory.body ||
-                  '',
-                ),
-              ).slice(
-                0,
-                140,
-              );
-
-            const category =
-              memory.category
-                ? ` [${memory.category}]`
-                : '';
-
-            return `${index + 1}. "${memory.title ||
-              'Untitled'
-              }"${category}${snippet
-                ? `: ${snippet}`
-                : ''
-              }`;
-          },
-        )
-        .join('\n')
-      : '';
-
-  let chatBlock = '';
-
-  const user =
-    await User.findById(
-      userId,
-    )
-      .select(
-        'primary_conversation_id',
-      )
-      .lean();
-
-  if (
-    user?.primary_conversation_id
-  ) {
-    const messages =
-      await Message.find({
-        memory:
-          user.primary_conversation_id,
-        role: 'user',
-      })
-        .sort({
-          created_at: -1,
-        })
-        .limit(3)
-        .select('text')
-        .lean();
-
-    const ordered =
-      [...messages].reverse();
+    const ordered = [...messages].reverse();
 
     if (ordered.length) {
       chatBlock = ordered
         .map(
-          (
-            message,
-            index,
-          ) =>
-            `${index + 1}. ${String(
-              message.text || '',
-            ).slice(0, 300)}`,
+          (message, index) =>
+            `${index + 1}. ${String(message.text || '').slice(0, 300)}`,
         )
         .join('\n');
     }
   }
 
-  const answered =
-    await loadAnsweredDedupeSet(
-      userId,
-    );
+  const answered = await loadAnsweredDedupeSet(userId);
 
   const avoidList =
-    answered.size > 0
-      ? [...answered]
-        .slice(0, 40)
-        .join(' | ')
-      : 'None.';
+    answered.size > 0 ? [...answered].slice(0, 40).join(' | ') : 'None.';
 
   const parts: string[] = [];
 
@@ -455,66 +337,46 @@ ${parts.join('\n\n')}
 </reflection_context>`;
 }
 
-async function runLlm(
-  userPayload: string,
-): Promise<string> {
-  const userMessage =
-    `${userPayload}
+async function runLlm(userPayload: string): Promise<string> {
+  const userMessage = `${userPayload}
 
 Write one reflection question.`;
 
-  if (
-    isNonStreamingProviderFallbackConfigured()
-  ) {
-    const result =
-      await generateTextWithProviderFallback(
+  if (isNonStreamingProviderFallbackConfigured()) {
+    const result = await generateTextWithProviderFallback({
+      task: 'daily_prompt_generate',
+
+      messages: [
         {
-          task:
-            'daily_prompt_generate',
-
-          messages: [
-            {
-              role: 'system',
-              content:
-                SYSTEM_INSTRUCTION,
-            },
-            {
-              role: 'user',
-              content:
-                userMessage,
-            },
-          ],
-
-          temperature: 0.75,
+          role: 'system',
+          content: SYSTEM_INSTRUCTION,
         },
-      );
+        {
+          role: 'user',
+          content: userMessage,
+        },
+      ],
+
+      temperature: 0.75,
+    });
 
     return result.text;
   }
 
-  const response =
-    await gemini.models.generateContent(
-      {
-        model: GEMINI_MODEL,
+  const response = await gemini.models.generateContent({
+    model: GEMINI_MODEL,
 
-        contents:
-          createUserContent([
-            userMessage,
-          ]),
+    contents: createUserContent([userMessage]),
 
-        config: {
-          systemInstruction:
-            SYSTEM_INSTRUCTION,
-        },
-      },
-    );
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+    },
+  });
 
   const text = response.text;
 
   if (!text?.trim()) {
-    throw new Error(
-      'empty_llm_response',
-    );
+    throw new Error('empty_llm_response');
   }
 
   return text;
@@ -523,35 +385,23 @@ Write one reflection question.`;
 export async function generateDailyAiQuestionWithRetry(
   userId: string,
 ): Promise<string | null> {
-  const payload =
-    await buildDailyPromptUserPayload(
-      userId,
-    );
+  const payload = await buildDailyPromptUserPayload(userId);
 
-  const attempt = async (
-    avoid?: string,
-  ): Promise<string | null> => {
+  const attempt = async (avoid?: string): Promise<string | null> => {
     try {
-      const retryInstruction =
-        avoid
-          ? `
+      const retryInstruction = avoid
+        ? `
 
 Do not ask this rejected question or a close paraphrase of it:
 ${JSON.stringify(avoid)}`
-          : '';
+        : '';
 
-      const raw =
-        await withTimeout(
-          runLlm(
-            `${payload}${retryInstruction}`,
-          ),
-          LLM_TIMEOUT_MS,
-        );
+      const raw = await withTimeout(
+        runLlm(`${payload}${retryInstruction}`),
+        LLM_TIMEOUT_MS,
+      );
 
-      const question =
-        normalizePromptSentence(
-          raw,
-        );
+      const question = normalizePromptSentence(raw);
 
       return question || null;
     } catch {
@@ -561,23 +411,11 @@ ${JSON.stringify(avoid)}`
 
   let text = await attempt();
 
-  if (
-    text &&
-    (await isDuplicateAnsweredPrompt(
-      userId,
-      text,
-    ))
-  ) {
+  if (text && (await isDuplicateAnsweredPrompt(userId, text))) {
     text = await attempt(text);
   }
 
-  if (
-    text &&
-    (await isDuplicateAnsweredPrompt(
-      userId,
-      text,
-    ))
-  ) {
+  if (text && (await isDuplicateAnsweredPrompt(userId, text))) {
     return null;
   }
 
@@ -588,15 +426,12 @@ export async function getCachedAiPrompt(
   userId: string,
   dateKey: string,
 ): Promise<string | null> {
-  const doc =
-    await DailyAiPromptCache.findOne(
-      {
-        user: userId,
-        date_key: dateKey,
-      },
-    )
-      .select('prompt_text')
-      .lean();
+  const doc = await DailyAiPromptCache.findOne({
+    user: userId,
+    date_key: dateKey,
+  })
+    .select('prompt_text')
+    .lean();
 
   return doc?.prompt_text ?? null;
 }
@@ -606,14 +441,7 @@ export async function setCachedAiPrompt(
   dateKey: string,
   promptText: string,
 ): Promise<void> {
-  const expiresAt =
-    new Date(
-      Date.now() +
-      24 *
-      60 *
-      60 *
-      1000,
-    );
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
   await DailyAiPromptCache.findOneAndUpdate(
     {

@@ -1,7 +1,5 @@
 /** Single user message for {@link import('../../services/ai').default.generateText}. */
-export function buildMemoryInsightsSummaryRequest(
-  pack: string,
-): string {
+export function buildMemoryInsightsSummaryRequest(pack: string): string {
   return `Write a short first-person profile using only well-supported information from the source material.
 
 SOURCE HANDLING:
@@ -32,109 +30,59 @@ END SOURCE MATERIAL
 Return only the two paragraphs with one blank line between them.`;
 }
 
-function cleanGeneratedParagraph(
-  text: string,
-): string {
+function cleanGeneratedParagraph(text: string): string {
   return text
-    .replace(
-      /[\u2014]/g,
-      ',',
-    )
-    .replace(
-      /[\u2013]/g,
-      '-',
-    )
+    .replace(/[\u2014]/g, ',')
+    .replace(/[\u2013]/g, '-')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-function splitSingleParagraph(
-  text: string,
-): string[] {
+function splitSingleParagraph(text: string): string[] {
   const sentences =
-    text
-      .match(
-        /[^.!?]+[.!?]+|[^.!?]+$/g,
-      )
-      ?.map(sentence =>
-        sentence.trim(),
-      ) || [];
+    text.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map(sentence => sentence.trim()) ||
+    [];
 
   if (sentences.length < 2) {
     return [text];
   }
 
-  const midpoint =
-    Math.ceil(
-      sentences.length / 2,
-    );
+  const midpoint = Math.ceil(sentences.length / 2);
 
   return [
-    sentences
-      .slice(0, midpoint)
-      .join(' ')
-      .trim(),
+    sentences.slice(0, midpoint).join(' ').trim(),
 
-    sentences
-      .slice(midpoint)
-      .join(' ')
-      .trim(),
+    sentences.slice(midpoint).join(' ').trim(),
   ].filter(Boolean);
 }
 
-function trimToWordLimit(
-  paragraphs: string[],
-  maxWords: number,
-): string[] {
+function trimToWordLimit(paragraphs: string[], maxWords: number): string[] {
   let remaining = maxWords;
 
   const result: string[] = [];
 
-  for (
-    const paragraph
-    of paragraphs
-  ) {
+  for (const paragraph of paragraphs) {
     if (remaining <= 0) {
       break;
     }
 
-    const words =
-      paragraph
-        .split(/\s+/)
-        .filter(Boolean);
+    const words = paragraph.split(/\s+/).filter(Boolean);
 
-    if (
-      words.length <=
-      remaining
-    ) {
+    if (words.length <= remaining) {
       result.push(paragraph);
 
-      remaining -=
-        words.length;
+      remaining -= words.length;
 
       continue;
     }
 
-    const truncated =
-      words
-        .slice(
-          0,
-          remaining,
-        )
-        .join(' ')
-        .replace(
-          /[,:;]+$/,
-          '',
-        );
+    const truncated = words
+      .slice(0, remaining)
+      .join(' ')
+      .replace(/[,:;]+$/, '');
 
     if (truncated) {
-      result.push(
-        /[.!?]$/.test(
-          truncated,
-        )
-          ? truncated
-          : `${truncated}.`,
-      );
+      result.push(/[.!?]$/.test(truncated) ? truncated : `${truncated}.`);
     }
 
     remaining = 0;
@@ -143,65 +91,28 @@ function trimToWordLimit(
   return result;
 }
 
-export function normalizeMemoryInsightsSummaryOutput(
-  raw: string,
-): string {
-  let text = (raw || '')
-    .replace(
-      /\r\n/g,
-      '\n',
-    )
-    .trim();
+export function normalizeMemoryInsightsSummaryOutput(raw: string): string {
+  let text = (raw || '').replace(/\r\n/g, '\n').trim();
 
   text = text
-    .replace(
-      /^```[\w-]*\n?/i,
-      '',
-    )
-    .replace(
-      /\n?```$/i,
-      '',
-    )
+    .replace(/^```[\w-]*\n?/i, '')
+    .replace(/\n?```$/i, '')
     .trim();
 
-  text = text.replace(
-    /\n{3,}/g,
-    '\n\n',
-  );
+  text = text.replace(/\n{3,}/g, '\n\n');
 
   let paragraphs = text
     .split(/\n\s*\n/)
-    .map(
-      cleanGeneratedParagraph,
-    )
+    .map(cleanGeneratedParagraph)
     .filter(Boolean);
 
-  if (
-    paragraphs.length === 1
-  ) {
-    paragraphs =
-      splitSingleParagraph(
-        paragraphs[0],
-      );
-  } else if (
-    paragraphs.length > 2
-  ) {
-    paragraphs = [
-      paragraphs[0],
-
-      paragraphs
-        .slice(1)
-        .join(' '),
-    ];
+  if (paragraphs.length === 1) {
+    paragraphs = splitSingleParagraph(paragraphs[0]);
+  } else if (paragraphs.length > 2) {
+    paragraphs = [paragraphs[0], paragraphs.slice(1).join(' ')];
   }
 
-  paragraphs =
-    trimToWordLimit(
-      paragraphs,
-      130,
-    );
+  paragraphs = trimToWordLimit(paragraphs, 130);
 
-  return paragraphs
-    .join('\n\n')
-    .trim();
+  return paragraphs.join('\n\n').trim();
 }

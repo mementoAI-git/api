@@ -1,13 +1,13 @@
 import dayjs from 'dayjs';
-import User, { IUser } from '../../module/database/model/user';
-import { isEmpty } from '../helpers';
-import Persona, { IPersona } from '../../module/database/model/persona';
-import { IPrompt } from '../../module/database/model/prompt';
+import User, {IUser} from '../../module/database/model/user';
+import {isEmpty} from '../helpers';
+import Persona, {IPersona} from '../../module/database/model/persona';
+import {IPrompt} from '../../module/database/model/prompt';
 import Memory from '../../module/database/model/memory';
-import { getMemorySummaries } from '../../module/api/ai/utils';
-import { buildTagsJsonInstructions } from '../story-tags';
-import { buildPendingInsightsPromptSection } from './pending-insights-prompt';
-import { computeEnrichmentScore } from '../../services/enrichment';
+import {getMemorySummaries} from '../../module/api/ai/utils';
+import {buildTagsJsonInstructions} from '../story-tags';
+import {buildPendingInsightsPromptSection} from './pending-insights-prompt';
+import {computeEnrichmentScore} from '../../services/enrichment';
 
 function stripTagsLight(html: string): string {
   if (!html) return '';
@@ -21,11 +21,11 @@ async function getRecentReflectionsContext(userId: string): Promise<string> {
   const since = dayjs().subtract(48, 'hour').toDate();
   const rows = await Memory.find({
     user: userId,
-    prompt_type: { $in: ['static', 'ai-generated'] },
-    status: { $ne: 'draft' },
-    created_at: { $gte: since },
+    prompt_type: {$in: ['static', 'ai-generated']},
+    status: {$ne: 'draft'},
+    created_at: {$gte: since},
   })
-    .sort({ created_at: -1 })
+    .sort({created_at: -1})
     .limit(6)
     .select('title body prompt_text prompt_type')
     .lean();
@@ -39,8 +39,9 @@ async function getRecentReflectionsContext(userId: string): Promise<string> {
         ? String(m.prompt_text || '').slice(0, 160)
         : 'themed prompt';
 
-    return `${i + 1}. Prompt: ${promptLabel}. Entry: "${m.title || 'Untitled'}"${snip ? ` | ${snip}` : ''
-      }`;
+    return `${i + 1}. Prompt: ${promptLabel}. Entry: "${m.title || 'Untitled'}"${
+      snip ? ` | ${snip}` : ''
+    }`;
   });
 
   return `
@@ -52,14 +53,15 @@ ${lines.join('\n')}
 }
 
 function buildMemoriesContext(
-  summaries: Array<{ title: string; summary: string; topics: string[] }>,
+  summaries: Array<{title: string; summary: string; topics: string[]}>,
 ): string {
   if (!summaries || summaries.length === 0) return '';
 
   const summariesText = summaries
     .map(
       (s, i) =>
-        `${i + 1}. "${s.title}": ${s.summary}${s.topics?.length ? ` (Topics: ${s.topics.join(', ')})` : ''
+        `${i + 1}. "${s.title}": ${s.summary}${
+          s.topics?.length ? ` (Topics: ${s.topics.join(', ')})` : ''
         }`,
     )
     .join('\n');
@@ -81,7 +83,7 @@ async function createSystemContext(
 ): Promise<string> {
   let userContext = persona || ({} as IPersona);
   if (!persona) {
-    userContext = await Persona.findOne({ user: user._id });
+    userContext = await Persona.findOne({user: user._id});
   }
 
   const userPreferences = user.preferences || {};
@@ -255,10 +257,9 @@ HOST INFORMATION (private context):
 - Nickname: ${userName}
 - Country: ${user?.country || 'Not specified'}
 - Timezone: ${userTimezone}
-- Date of birth: ${user?.dob
-      ? dayjs(user?.dob).toDate().toLocaleDateString()
-      : 'Not specified'
-    }
+- Date of birth: ${
+    user?.dob ? dayjs(user?.dob).toDate().toLocaleDateString() : 'Not specified'
+  }
 
 Use identity details only when relevant. Do not recite them back to the host.
 `.trim();
@@ -267,13 +268,15 @@ Use identity details only when relevant. Do not recite them back to the host.
 HOST PREFERENCES (private context):
 - Reason for using Memento: ${userContext?.motivation || 'Still learning'}
 - Age bracket: ${userPreferences?.age_bracket || 'Not specified'}
-- Priority life dimensions: ${userPreferences?.priority_dimensions?.join(', ') || 'Still learning'
-    }
+- Priority life dimensions: ${
+    userPreferences?.priority_dimensions?.join(', ') || 'Still learning'
+  }
 - Preferred expression mode: ${userPreferences?.expression_mode || 'text'}
 - Communication style: ${userPreferences?.communication_style || 'friendly'}
 - Conversation tone: ${userPreferences?.conversation_tone || 'warm'}
-- Topics of interest: ${userPreferences?.topics_of_interest?.join(', ') || 'Still learning'
-    }
+- Topics of interest: ${
+    userPreferences?.topics_of_interest?.join(', ') || 'Still learning'
+  }
 
 These preferences may shape vocabulary and presentation. They are not topics Memento needs to bring up. Never mention the age bracket directly unless the host asks about it.
 `.trim();
@@ -282,26 +285,30 @@ These preferences may shape vocabulary and presentation. They are not topics Mem
 STORED HOST CONTEXT (private data):
 
 Explicit or durable notes:
-${userContext?.important_notes?.map((note: string) => `- ${note}`).join('\n') ||
-    '- None stored'
-    }
+${
+  userContext?.important_notes?.map((note: string) => `- ${note}`).join('\n') ||
+  '- None stored'
+}
 
 Preferences:
-${userContext?.key_preferences?.map((pref: string) => `- ${pref}`).join('\n') ||
-    '- None stored'
-    }
+${
+  userContext?.key_preferences?.map((pref: string) => `- ${pref}`).join('\n') ||
+  '- None stored'
+}
 
 Goals and aspirations:
-${userContext?.goals_and_aspirations
-      ?.map((goal: string) => `- ${goal}`)
-      .join('\n') || '- None stored'
-    }
+${
+  userContext?.goals_and_aspirations
+    ?.map((goal: string) => `- ${goal}`)
+    .join('\n') || '- None stored'
+}
 
 Possible emotional patterns:
-${userContext?.emotional_state_trends
-      ?.map((trend: string) => `- ${trend}`)
-      .join('\n') || '- None stored'
-    }
+${
+  userContext?.emotional_state_trends
+    ?.map((trend: string) => `- ${trend}`)
+    .join('\n') || '- None stored'
+}
 
 Treat "Possible emotional patterns" as tentative hypotheses. They may be wrong or outdated. Never use them to override the host's current words or to diagnose them.
 `.trim();
@@ -434,10 +441,11 @@ export async function createSystemContextWithPrompt(
   context += `\n\nACTIVE PROMPT CONTEXT (private data):
 The host is responding to a prompt titled: "${prompt.title}".
 Category: ${prompt.type || 'general'}.
-${prompt.tags && prompt.tags.length > 0
-      ? `Related topics: ${prompt.tags.join(', ')}.`
-      : ''
-    }
+${
+  prompt.tags && prompt.tags.length > 0
+    ? `Related topics: ${prompt.tags.join(', ')}.`
+    : ''
+}
 
 Use this only to understand the host's response. The host's current message still controls the conversation. Do not force the reply back toward the prompt if they move elsewhere.`;
 
@@ -649,14 +657,14 @@ export async function getSessionContext(
   userId: string,
 ): Promise<ISessionContext> {
   const user = await User.findById(userId).lean();
-  const persona = await Persona.findOne({ user: userId }).lean();
+  const persona = await Persona.findOne({user: userId}).lean();
 
   const priorityDimensions =
     (user?.preferences as any)?.priority_dimensions || [];
   const openThreads = (persona?.open_threads as string[]) || [];
 
-  const conversations = await Memory.find({ user: userId, type: 'conversation' })
-    .sort({ created_at: -1 })
+  const conversations = await Memory.find({user: userId, type: 'conversation'})
+    .sort({created_at: -1})
     .lean();
 
   const sessionCount = conversations.length;
@@ -722,23 +730,23 @@ function buildSessionContextPrompt(ctx: ISessionContext): string {
     ? 'No previous conversation sessions are recorded.'
     : hasUsableLatestSummary
       ? [
-        `Latest conversation date: ${dayjs(ctx.lastSession!.date).format(
-          'MMMM D, YYYY',
-        )}`,
-        `Latest conversation summary: ${ctx.lastSession!.summary}`,
-        ctx.lastSession!.topics.length > 0
-          ? `Latest conversation topics: ${ctx.lastSession!.topics.join(', ')}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join('\n')
+          `Latest conversation date: ${dayjs(ctx.lastSession!.date).format(
+            'MMMM D, YYYY',
+          )}`,
+          `Latest conversation summary: ${ctx.lastSession!.summary}`,
+          ctx.lastSession!.topics.length > 0
+            ? `Latest conversation topics: ${ctx.lastSession!.topics.join(', ')}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n')
       : 'Previous conversation sessions exist, but the newest session does not have a usable summary yet.';
 
   const openThreadsBlock =
     ctx.openThreads?.length > 0
       ? `Possible unfinished threads:\n${ctx.openThreads
-        .map(t => `- ${t}`)
-        .join('\n')}`
+          .map(t => `- ${t}`)
+          .join('\n')}`
       : 'Possible unfinished threads: none stored.';
 
   const gapBlock =
@@ -781,10 +789,11 @@ Return only valid JSON:
 }
 
 EXISTING THREADS. DO NOT DUPLICATE THEM:
-${existingThreads && existingThreads.length > 0
-      ? existingThreads.map(t => `- ${t}`).join('\n')
-      : 'None'
-    }
+${
+  existingThreads && existingThreads.length > 0
+    ? existingThreads.map(t => `- ${t}`).join('\n')
+    : 'None'
+}
 
 RULES:
 - Be specific enough that the thread is recognizable later.
@@ -869,7 +878,10 @@ function formatPersonaSnapshotForInsightsSummary(
   dump('Important notes', persona.important_notes);
   dump('Key preferences', persona.key_preferences);
   dump('Goals and aspirations', persona.goals_and_aspirations);
-  dump('Possible emotional patterns (tentative)', persona.emotional_state_trends);
+  dump(
+    'Possible emotional patterns (tentative)',
+    persona.emotional_state_trends,
+  );
   if (persona.open_threads?.length) {
     lines.push(
       `Open threads:\n${persona.open_threads.map(t => `- ${t}`).join('\n')}`,
@@ -892,7 +904,7 @@ export async function gatherMemoryInsightsSummaryContext(
   const summaries = await getMemorySummaries(userId);
   const pastContext = buildMemoriesContext(summaries);
 
-  const persona = await Persona.findOne({ user: userId }).lean();
+  const persona = await Persona.findOne({user: userId}).lean();
   const personaBlock = formatPersonaSnapshotForInsightsSummary(
     persona as IPersona | null,
   );
@@ -921,7 +933,7 @@ export async function gatherMemoryInsightsSummaryContext(
     !!recentReflectionsContext.trim() ||
     !!(sessionCtx.lastSession && sessionCtx.lastSession.summary?.trim());
 
-  return { pack, hasSignal };
+  return {pack, hasSignal};
 }
 
 const prompts = {
