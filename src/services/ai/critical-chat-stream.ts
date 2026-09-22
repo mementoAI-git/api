@@ -24,43 +24,126 @@ import {
 } from './groq-chat-messages';
 import type {AiTask} from './model-routing';
 
+type ChatStreamChunk = {text?: string};
+
+/**
+ * Hard output-level writing constraints for Memento chat.
+ *
+ * Prompt instructions are probabilistic. This runs after generation so
+ * prohibited dash punctuation never reaches the client through this stream.
+ *
+ * Em dash:
+ *   "word \u2014 word" -> "word, word"
+ *   "word\u2014word"   -> "word, word"
+ *
+ * En dash:
+ *   spaced prose use -> comma
+ *   compact range use, e.g. "3\u20135" -> "3-5"
+ */
+export function sanitizeMementoText(text: string): string {
+  if (!text) return text;
+
+  return (
+    text
+      // Em dash used as prose punctuation.
+      // Use horizontal whitespace only so paragraph/newline structure is preserved.
+      .replace(/[ \t]*\u2014[ \t]*/g, ', ')
+
+      // Spaced en dash used as prose punctuation.
+      .replace(/[ \t]+\u2013[ \t]+/g, ', ')
+
+      // Remaining en dashes are most likely compact ranges.
+      .replace(/\u2013/g, '-')
+
+      // Clean artifacts caused by punctuation replacement.
+      .replace(/[ \t]+,/g, ',')
+      .replace(/,[ \t]*,+/g, ', ')
+      .replace(/[ \t]{2,}/g, ' ')
+  );
+}
+
+/**
+ * Provider-independent output boundary for Memento's streamed chat text.
+ *
+ * Keep all hard response-format constraints here rather than duplicating them
+ * across Groq, DeepSeek, Gemini, and OpenRouter integrations.
+ */
+async function* sanitizeMementoStream(
+  stream: AsyncGenerator<ChatStreamChunk, void, unknown>,
+): AsyncGenerator<ChatStreamChunk, void, unknown> {
+  for await (const chunk of stream) {
+    if (!chunk.text) {
+      yield chunk;
+      continue;
+    }
+
+    yield {
+      ...chunk,
+      text: sanitizeMementoText(chunk.text),
+    };
+  }
+}
+
 async function* createSafeFallbackStream(
   message: string,
-): AsyncGenerator<{text?: string}, void, unknown> {
+): AsyncGenerator<ChatStreamChunk, void, unknown> {
   yield {text: message};
+}
+
+function createSanitizedSafeFallbackStream(
+  message: string,
+): AsyncGenerator<ChatStreamChunk, void, unknown> {
+  return sanitizeMementoStream(createSafeFallbackStream(message));
 }
 
 export interface CriticalChatStreamParams {
   userId: string;
   requestStart: number;
-  /** Latest user message text — drives Groq fast-mode selection */
+
+  /** Latest user message text. Drives Groq fast-mode selection. */
   userTextForGroqRouting: string;
+
   systemInstruction: string;
-  /** Prior turns only (user + assistant), excluding the latest user message */
+
+  /** Prior turns only (user + assistant), excluding the latest user message. */
   groqHistory: GroqMessage[];
+
   latestUserText: string;
   task: AiTask;
   metricsEndpoint: string;
   memoryIdForMetrics: string;
-  /** Gemini streaming attempt after Groq fails or is unavailable */
+
+  /** Gemini streaming attempt after Groq and DeepSeek fail or are unavailable. */
   createGeminiStream: () => Promise<
-    AsyncGenerator<{text?: string}, void, unknown>
+    AsyncGenerator<ChatStreamChunk, void, unknown>
   >;
-  /** OpenRouter messages when Gemini fails */
+
+  /** OpenRouter messages when Gemini fails. */
   buildOpenRouterMessages: () => OpenRouterMessage[];
 }
 
 /**
  * Single provider cascade used by main host chat and onboarding chat:
- * Groq (primary → fallback per env) → Gemini → OpenRouter (task routing) → safe message.
- * Keeps model order aligned when either flow changes.
+ *
+ * Groq (primary -> fallback per env)
+ * -> DeepSeek
+ * -> Gemini
+ * -> OpenRouter (task routing)
+ * -> safe fallback message
+ *
+ * Every successful provider stream passes through sanitizeMementoStream before
+ * it is returned to the caller.
  */
 export async function streamCriticalChatResponse(
   params: CriticalChatStreamParams,
 ): Promise<{
-  stream: AsyncGenerator<{text?: string}, void, unknown>;
+  stream: AsyncGenerator<ChatStreamChunk, void, unknown>;
   modelLabel: string;
-  /** When false, caller must not persist the user turn (matches `/ai/prompt` backoff behavior). */
+
+  /**
+   * When false, caller must not persist the user turn.
+   * Matches `/ai/prompt` backoff behavior.
+   */
   recordUserMessageInDb: boolean;
 }> {
   const {
@@ -77,16 +160,21 @@ export async function streamCriticalChatResponse(
     buildOpenRouterMessages,
   } = params;
 
-  if (getUserBackoffRemainingMs(userId) > 0) {
+  const backoffRemainingMs = getUserBackoffRemainingMs(userId);
+
+  if (backoffRemainingMs > 0) {
     void recordAiMetric({
       event: 'user_backoff_short_circuit',
       task,
       endpoint: metricsEndpoint,
       user: userId,
-      metadata: {remainingMs: getUserBackoffRemainingMs(userId)},
+      metadata: {
+        remainingMs: backoffRemainingMs,
+      },
     });
+
     return {
-      stream: createSafeFallbackStream(
+      stream: createSanitizedSafeFallbackStream(
         'I am recovering from temporary AI capacity limits. Please retry in a few seconds.',
       ),
       modelLabel: 'fallback:backoff',
@@ -99,6 +187,7 @@ export async function streamCriticalChatResponse(
     history: groqHistory,
     userText: latestUserText,
   });
+
   const groqModels = getGroqModelsForPrompt(userTextForGroqRouting);
 
   if (groqClient.isConfigured()) {
@@ -120,6 +209,7 @@ export async function streamCriticalChatResponse(
         fastMode: groqModels.fastMode,
         streamConnectMs: Date.now() - requestStart,
       });
+
       void recordAiMetric({
         event: 'ai_route',
         task,
@@ -132,39 +222,52 @@ export async function streamCriticalChatResponse(
         stream_connect_ms: Date.now() - requestStart,
         fast_mode: groqModels.fastMode,
       });
+
       return {
-        stream,
+        stream: sanitizeMementoStream(stream),
         modelLabel: `groq:${effectiveModel}`,
         recordUserMessageInDb: true,
       };
     } catch (error) {
-      if (isProviderRateLimited(error)) setUserBackoffWindow(userId);
+      if (isProviderRateLimited(error)) {
+        setUserBackoffWindow(userId);
+      }
+
       console.error('AI routing fallback', {
         task,
         from: 'groq',
-        to: 'gemini',
+        to: 'deepseek',
         reason: (error as Error)?.message,
       });
     }
   }
 
-  // DeepSeek — between Groq and Gemini (key-gated, skipped if not configured)
+  // DeepSeek sits between Groq and Gemini.
+  // It is key-gated and skipped when not configured.
   if (deepSeekClient.isConfigured()) {
     try {
       const deepSeekMessages: DeepSeekMessage[] = [
-        {role: 'system', content: systemInstruction},
-        ...groqHistory.map(m => ({
-          role: m.role as 'system' | 'user' | 'assistant',
-          content: m.content,
+        {
+          role: 'system',
+          content: systemInstruction,
+        },
+        ...groqHistory.map(message => ({
+          role: message.role as 'system' | 'user' | 'assistant',
+          content: message.content,
         })),
-        {role: 'user', content: latestUserText},
+        {
+          role: 'user',
+          content: latestUserText,
+        },
       ];
+
       const {stream, effectiveModel, usedFallback} =
         await streamTextWithDeepSeekFallback({
           messages: deepSeekMessages,
           temperature: 0.7,
           timeoutMs: 15_000,
         });
+
       console.log('AI routing', {
         task,
         provider: 'deepseek',
@@ -172,6 +275,7 @@ export async function streamCriticalChatResponse(
         usedFallback,
         streamConnectMs: Date.now() - requestStart,
       });
+
       void recordAiMetric({
         event: 'ai_route',
         task,
@@ -183,13 +287,17 @@ export async function streamCriticalChatResponse(
         used_fallback: usedFallback,
         stream_connect_ms: Date.now() - requestStart,
       });
+
       return {
-        stream,
+        stream: sanitizeMementoStream(stream),
         modelLabel: `deepseek:${effectiveModel}`,
         recordUserMessageInDb: true,
       };
     } catch (deepSeekError) {
-      if (isProviderRateLimited(deepSeekError)) setUserBackoffWindow(userId);
+      if (isProviderRateLimited(deepSeekError)) {
+        setUserBackoffWindow(userId);
+      }
+
       console.error('AI routing fallback', {
         task,
         from: 'deepseek',
@@ -201,11 +309,13 @@ export async function streamCriticalChatResponse(
 
   try {
     const response = await createGeminiStream();
+
     console.log('AI routing', {
       task,
       provider: 'gemini',
       streamConnectMs: Date.now() - requestStart,
     });
+
     void recordAiMetric({
       event: 'ai_route',
       task,
@@ -216,16 +326,20 @@ export async function streamCriticalChatResponse(
       memory: memoryIdForMetrics,
       stream_connect_ms: Date.now() - requestStart,
       metadata: {
-        reason: 'groq_failed_or_not_configured',
+        reason: 'groq_and_deepseek_failed_or_not_configured',
       },
     });
+
     return {
-      stream: response,
+      stream: sanitizeMementoStream(response),
       modelLabel: `gemini:${GEMINI_MODEL}`,
       recordUserMessageInDb: true,
     };
   } catch (geminiError) {
-    if (isProviderRateLimited(geminiError)) setUserBackoffWindow(userId);
+    if (isProviderRateLimited(geminiError)) {
+      setUserBackoffWindow(userId);
+    }
+
     console.error('AI routing fallback', {
       task,
       from: 'gemini',
@@ -249,6 +363,7 @@ export async function streamCriticalChatResponse(
           usedFallback,
           streamConnectMs: Date.now() - requestStart,
         });
+
         void recordAiMetric({
           event: 'ai_route',
           task,
@@ -260,19 +375,23 @@ export async function streamCriticalChatResponse(
           used_fallback: usedFallback,
           stream_connect_ms: Date.now() - requestStart,
         });
+
         return {
-          stream,
+          stream: sanitizeMementoStream(stream),
           modelLabel: `openrouter:${effectiveModel}`,
           recordUserMessageInDb: true,
         };
       } catch (openrouterError) {
-        if (isProviderRateLimited(openrouterError))
+        if (isProviderRateLimited(openrouterError)) {
           setUserBackoffWindow(userId);
+        }
+
         console.error('AI routing exhausted', {
           task,
           provider: 'openrouter',
           reason: (openrouterError as Error)?.message,
         });
+
         void recordAiMetric({
           event: 'ai_route_error',
           task,
@@ -286,7 +405,7 @@ export async function streamCriticalChatResponse(
     }
 
     return {
-      stream: createSafeFallbackStream(
+      stream: createSanitizedSafeFallbackStream(
         'I am hitting temporary capacity limits right now. Please try again in about a minute.',
       ),
       modelLabel: 'fallback:capacity',
