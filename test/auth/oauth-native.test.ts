@@ -121,14 +121,19 @@ describe('Native OAuth id_token authorization', () => {
       .send({});
 
     expect(response.status).toBe(422);
-    expect(response.body.message).toMatch(/Either authorization code or id_token is required/i);
+    expect(response.body.message).toMatch(
+      /Either authorization code or id_token is required/i,
+    );
   });
 
   it('rejects with 401 when Google tokeninfo fails', async () => {
     vi.spyOn(axios, 'get').mockImplementation(async (url: string) => {
       if (url.includes('oauth2.googleapis.com/tokeninfo')) {
         const error: any = new Error('Invalid Value');
-        error.response = {status: 400, data: {error_description: 'Invalid Value'}};
+        error.response = {
+          status: 400,
+          data: {error_description: 'Invalid Value'},
+        };
         throw error;
       }
       throw new Error(`Unexpected URL ${url}`);

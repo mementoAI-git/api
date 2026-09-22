@@ -145,24 +145,32 @@ export async function oauthAuthorization(
   provider: string,
   context: AuthClientContext = LEGACY_CLIENT,
 ) {
-  let userinfo: {
-    provider: string;
-    email: string;
-    first_name?: string;
-    last_name?: string;
-  } | undefined;
+  let userinfo:
+    | {
+        provider: string;
+        email: string;
+        first_name?: string;
+        last_name?: string;
+      }
+    | undefined;
 
   if (id_token) {
     if (compareStrings(provider, 'google')) {
       try {
-        const {data} = await axios.get('https://oauth2.googleapis.com/tokeninfo', {
-          params: {id_token},
-        });
+        const {data} = await axios.get(
+          'https://oauth2.googleapis.com/tokeninfo',
+          {
+            params: {id_token},
+          },
+        );
         if (!data?.email || !data?.sub) {
           throw new UnauthorizedException('Invalid Google ID token');
         }
-        const firstName = data.given_name || (data.name ? data.name.split(' ')[0] : 'User');
-        const lastName = data.family_name || (data.name ? data.name.split(' ').slice(1).join(' ') : '');
+        const firstName =
+          data.given_name || (data.name ? data.name.split(' ')[0] : 'User');
+        const lastName =
+          data.family_name ||
+          (data.name ? data.name.split(' ').slice(1).join(' ') : '');
         userinfo = {
           provider: `google:${data.sub}`,
           email: data.email.toLowerCase(),
@@ -176,11 +184,15 @@ export async function oauthAuthorization(
     } else if (compareStrings(provider, 'apple')) {
       userinfo = await getOauthUser('', {id_token}, provider, appleUser);
     } else {
-      throw new BadRequestException(`Provider ${provider} does not support id_token authorization`);
+      throw new BadRequestException(
+        `Provider ${provider} does not support id_token authorization`,
+      );
     }
   } else {
     if (!code) {
-      throw new BadRequestException('Authorization code or id_token is required');
+      throw new BadRequestException(
+        'Authorization code or id_token is required',
+      );
     }
     const {token_url, userinfo_url, client_id, client_secret, redirect_uri} =
       OAUTH_PROVIDERS[provider || 'google'];
@@ -207,12 +219,7 @@ export async function oauthAuthorization(
         : undefined,
     );
 
-    userinfo = await getOauthUser(
-      userinfo_url,
-      result,
-      provider,
-      appleUser,
-    );
+    userinfo = await getOauthUser(userinfo_url, result, provider, appleUser);
   }
 
   if (!userinfo) {

@@ -34,7 +34,8 @@ export async function verifyAppleIdentity(
   const allowedAudiences = options.audience
     ? [options.audience]
     : ([APPLE_ID, 'io.mymemento.app'].filter(Boolean) as string[]);
-  if (!allowedAudiences.length) throw new UnauthorizedException('Apple OAuth is unavailable');
+  if (!allowedAudiences.length)
+    throw new UnauthorizedException('Apple OAuth is unavailable');
 
   try {
     const unverified = decode(idToken, {complete: true});
@@ -50,7 +51,10 @@ export async function verifyAppleIdentity(
     const claims = verify(idToken, publicKey, {
       algorithms: ['RS256'],
       issuer: APPLE_ISSUER,
-      audience: allowedAudiences.length === 1 ? allowedAudiences[0] : (allowedAudiences as [string, ...string[]]),
+      audience:
+        allowedAudiences.length === 1
+          ? allowedAudiences[0]
+          : (allowedAudiences as [string, ...string[]]),
     }) as JwtPayload;
     if (typeof claims.sub !== 'string' || typeof claims.email !== 'string') {
       throw new Error('Apple identity is incomplete');
