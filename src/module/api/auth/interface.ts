@@ -25,7 +25,8 @@ export interface ISendLink {
 }
 
 export interface IOAuthAuthorization {
-  code: string;
+  code?: string;
+  id_token?: string;
   user?:
     | string
     | {

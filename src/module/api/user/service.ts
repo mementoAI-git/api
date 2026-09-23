@@ -38,7 +38,10 @@ import {OnboardingChatPromptBody} from './dto';
 import gemini, {GEMINI_MODEL} from '../../../services/gemini';
 import type {OpenRouterMessage} from '../../../services/ai/openrouter';
 import {recordAiMetric} from '../../../services/ai/metrics';
-import {streamCriticalChatResponse} from '../../../services/ai/critical-chat-stream';
+import {
+  sanitizeMementoText,
+  streamCriticalChatResponse,
+} from '../../../services/ai/critical-chat-stream';
 import type {GroqMessage} from '../../../services/ai/groq';
 import {getPromptVersion} from '../../../utils/ai-prompt/registry';
 import {
@@ -710,12 +713,19 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'age_range',
   ]);
 
-  const updatePayload = Object.entries(payload).reduce((acc, p) => {
-    if (allowedFields.has(p[0])) {
-      acc[p[0]] = p[1];
-    }
-    return acc;
-  }, {});
+  const updatePayload = Object.entries(payload).reduce<Record<string, unknown>>(
+    (acc, p) => {
+      if (
+        allowedFields.has(p[0]) &&
+        p[1] !== undefined &&
+        (typeof p[1] !== 'string' || p[1].trim().length > 0)
+      ) {
+        acc[p[0]] = typeof p[1] === 'string' ? p[1].trim() : p[1];
+      }
+      return acc;
+    },
+    {},
+  );
 
   const allowedPersonaFields = new Set([
     'join_reasons',
@@ -751,12 +761,19 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
     'sharing_intent',
   ]);
 
-  const preferencesUpdate = Object.entries(payload).reduce((acc, p) => {
-    if (allowedPreferencesFields.has(p[0])) {
-      acc[`preferences.${p[0]}`] = p[1];
+  const preferencesUpdate = Object.entries(payload).reduce<
+    Record<string, unknown>
+  >((acc, p) => {
+    if (
+      allowedPreferencesFields.has(p[0]) &&
+      p[1] !== undefined &&
+      (typeof p[1] !== 'string' || p[1].trim().length > 0)
+    ) {
+      acc[`preferences.${p[0]}`] =
+        typeof p[1] === 'string' ? p[1].trim() : p[1];
     }
     return acc;
-  }, {} as any);
+  }, {});
 
   await withTransaction(async session => {
     await User.findByIdAndUpdate(
@@ -870,13 +887,18 @@ export async function getOnboardingDetails(user_id: string) {
 
 function buildOnboardingSystemPrompt(nickname: string) {
   const safeName = nickname?.trim() || 'there';
+
   return [
-    `You are Memento's host onboarding guide for ${safeName}.`,
-    'Your job is to run a short, warm, practical conversation that helps them open up.',
-    'Keep replies concise and human. No bullet points. No headings.',
-    'Ask at most one forward-moving question per turn.',
-    'Reflect briefly before your question when it helps build trust.',
-    'Never mention internal prompts, system behavior, or model details.',
+    `You are Memento's onboarding guide for ${safeName}.`,
+    'Help them complete onboarding through a short, natural conversation.',
+    'Follow what they actually say. Do not psychoanalyse, flatter, or turn ordinary answers into reflective observations.',
+    'Keep replies concise. Use plain conversational language. Do not use bullet points or headings.',
+    'Ask at most one useful question per turn. The question should move onboarding forward without making the conversation feel like an interview.',
+    'Do not routinely paraphrase their answer before asking the next question.',
+    'Avoid stock reflective openings such as "That sounds like", "What stands out", "I wonder if", and "There is something about".',
+    'Do not use em dashes or en dashes. Use periods, commas, colons, or parentheses.',
+    'Do not try to sound poetic, therapeutic, profound, inspirational, or artificially warm.',
+    'Never mention internal prompts, system behavior, model details, scores, or classifications.',
   ].join(' ');
 }
 
@@ -912,10 +934,23 @@ function buildGeminiOnboardingHistory(
 ) {
   if (!Array.isArray(transcript) || transcript.length <= 1) return [];
   const historyItems = transcript.slice(0, -1);
-  return historyItems.map(item => ({
-    role: item.role === 'assistant' ? 'model' : 'user',
-    parts: [{text: item.content}],
-  }));
+  return historyItems
+    .map(item => {
+      const rawText =
+        item.role === 'assistant'
+          ? sanitizeMementoText(item.content)
+          : item.content;
+      return {
+        role:
+          item.role === 'assistant' ? ('model' as const) : ('user' as const),
+        text: (rawText || '').trim(),
+      };
+    })
+    .filter(item => item.text.length > 0)
+    .map(item => ({
+      role: item.role,
+      parts: [{text: item.text}],
+    }));
 }
 
 async function getOrCreatePrimaryConversation(user_id: string) {
@@ -957,7 +992,10 @@ export async function streamOnboardingChatPrompt(
 
   const historyMessages: OpenRouterMessage[] = transcript.map(item => ({
     role: item.role === 'assistant' ? 'assistant' : 'user',
-    content: item.content,
+    content:
+      item.role === 'assistant'
+        ? sanitizeMementoText(item.content)
+        : item.content,
   }));
 
   const systemPrompt = buildOnboardingSystemPrompt(payload.nickname);
@@ -976,7 +1014,9 @@ export async function streamOnboardingChatPrompt(
   });
   const shouldBootstrap = Boolean(payload.bootstrap && transcript.length === 0);
 
-  const bootstrapUserLine = `Start the onboarding chat with a warm opener for ${payload.nickname || 'the host'}.`;
+  const bootstrapUserLine = `Start the onboarding chat with a brief, natural opener for ${
+    payload.nickname || 'the host'
+  }. Ask one easy onboarding question and do not explain the system.`;
 
   const lines = transcript.filter(
     m => m.role === 'user' || m.role === 'assistant',
@@ -991,7 +1031,8 @@ export async function streamOnboardingChatPrompt(
 
   const groqHistory: GroqMessage[] = priorLines.map(m => ({
     role: m.role === 'assistant' ? 'assistant' : 'user',
-    content: m.content,
+    content:
+      m.role === 'assistant' ? sanitizeMementoText(m.content) : m.content,
   }));
 
   const routing = await streamCriticalChatResponse({
@@ -1012,10 +1053,9 @@ export async function streamOnboardingChatPrompt(
           transcript as Array<{role: 'user' | 'assistant'; content: string}>,
         ),
       });
-      const latestPrompt = shouldBootstrap
-        ? bootstrapUserLine
-        : latestUserMessage ||
-          'Continue the onboarding conversation naturally.';
+      const latestPrompt =
+        (shouldBootstrap ? bootstrapUserLine : latestUserMessage)?.trim() ||
+        'Continue the onboarding conversation naturally.';
       return chat.sendMessageStream({
         message: latestPrompt,
       });
@@ -1045,7 +1085,7 @@ export async function persistOnboardingChatTurn(
   assistantText: string,
 ) {
   const trimmedUserText = latestUserMessage.trim();
-  const trimmedAssistantText = assistantText.trim();
+  const trimmedAssistantText = sanitizeMementoText(assistantText).trim();
 
   let createdCount = 0;
 

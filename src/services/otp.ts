@@ -60,10 +60,31 @@ class OtpService {
    * @param type - The type of OTP (verify, reset, invite, etc.)
    * @returns The generated code
    */
-  async create(email: string, type: OtpType): Promise<string> {
+  async create(
+    email: string,
+    type: OtpType,
+    options?: {format?: OtpFormat; length?: number},
+  ): Promise<string> {
     const config = OTP_CONFIG[type];
-    const code = this.generateCode(type);
-    const key = this.buildKey(type, code);
+    const format = options?.format || config.format;
+    const length = options?.length || config.length || 6;
+
+    let code = '';
+    let key = '';
+    let attempts = 0;
+
+    do {
+      code = format === 'uuid' ? uuid() : random(length, 'number');
+      key = this.buildKey(type, code);
+      attempts++;
+      if (format === 'uuid') break;
+      try {
+        const exists = await redis.get(key);
+        if (!exists) break;
+      } catch {
+        break;
+      }
+    } while (attempts < 5);
 
     const data: OtpData = {
       email,
@@ -83,7 +104,11 @@ class OtpService {
    * @param type - The type of OTP
    * @returns Verification result with email if valid
    */
-  async verify(code: string, type: OtpType): Promise<OtpVerifyResult> {
+  async verify(
+    code: string,
+    type: OtpType,
+    email?: string,
+  ): Promise<OtpVerifyResult> {
     const key = this.buildKey(type, code);
     const dataStr = await redis.get(key);
 
@@ -92,6 +117,14 @@ class OtpService {
     }
 
     const data: OtpData = JSON.parse(dataStr.toString());
+
+    if (
+      email &&
+      data.email &&
+      data.email.toLowerCase() !== email.toLowerCase()
+    ) {
+      return {valid: false};
+    }
 
     // Check if already used - return success but flag it
     if (data.used) {

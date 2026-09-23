@@ -124,6 +124,10 @@ export default {
       .optional()
       .isIn(['private', 'everyone'])
       .withMessage("visibility must be 'private' or 'everyone'"),
+    body('status')
+      .optional()
+      .isIn(['draft', 'save'])
+      .withMessage("Status must be 'draft' or 'save'"),
   ],
   updateMemory: [
     param('id')
@@ -133,8 +137,8 @@ export default {
       .withMessage('Invalid memory ID'),
     body('status')
       .optional()
-      .isIn(['save'])
-      .withMessage("Status must be 'save'"),
+      .isIn(['draft', 'save'])
+      .withMessage("Status must be 'draft' or 'save'"),
     body('attachments')
       .optional({nullable: true})
       .customSanitizer(value => {

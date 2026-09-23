@@ -24,6 +24,7 @@ import {
 import {OAUTH_PROVIDERS} from '../../../utils/constant';
 import {
   compareStrings,
+  generateDefaultAvatarUrl,
   generateKeys,
   hashPassword,
   isEmpty,
@@ -32,6 +33,7 @@ import {
 import {
   BadRequestException,
   NotFoundException,
+  ServiceError,
   UnauthorizedException,
 } from '../../../utils/service-error';
 import axios from 'axios';
@@ -140,41 +142,88 @@ export function generateOauthUrl(provider: string) {
 }
 
 export async function oauthAuthorization(
-  {code, user: appleUser}: IOAuthAuthorization,
+  {code, id_token, user: appleUser}: IOAuthAuthorization,
   provider: string,
   context: AuthClientContext = LEGACY_CLIENT,
 ) {
-  const {token_url, userinfo_url, client_id, client_secret, redirect_uri} =
-    OAUTH_PROVIDERS[provider || 'google'];
+  let userinfo:
+    | {
+        provider: string;
+        email: string;
+        first_name?: string;
+        last_name?: string;
+        picture?: string;
+      }
+    | undefined;
 
-  const payload = {
-    code,
-    client_id,
-    client_secret,
-    redirect_uri,
-    grant_type: 'authorization_code',
-  };
-  const appleTokenPayload = new URLSearchParams();
-  for (const [key, value] of Object.entries(payload)) {
-    if (typeof value === 'string') appleTokenPayload.append(key, value);
+  if (id_token) {
+    if (compareStrings(provider, 'google')) {
+      try {
+        const {data} = await axios.get(
+          'https://oauth2.googleapis.com/tokeninfo',
+          {
+            params: {id_token},
+          },
+        );
+        if (!data?.email || !data?.sub) {
+          throw new UnauthorizedException('Invalid Google ID token');
+        }
+        const firstName =
+          data.given_name || (data.name ? data.name.split(' ')[0] : 'User');
+        const lastName =
+          data.family_name ||
+          (data.name ? data.name.split(' ').slice(1).join(' ') : '');
+        userinfo = {
+          provider: `google:${data.sub}`,
+          email: data.email.toLowerCase(),
+          first_name: firstName,
+          last_name: lastName,
+        };
+      } catch (err: any) {
+        if (err instanceof ServiceError) throw err;
+        throw new UnauthorizedException('Invalid Google ID token');
+      }
+    } else if (compareStrings(provider, 'apple')) {
+      userinfo = await getOauthUser('', {id_token}, provider, appleUser);
+    } else {
+      throw new BadRequestException(
+        `Provider ${provider} does not support id_token authorization`,
+      );
+    }
+  } else {
+    if (!code) {
+      throw new BadRequestException(
+        'Authorization code or id_token is required',
+      );
+    }
+    const {token_url, userinfo_url, client_id, client_secret, redirect_uri} =
+      OAUTH_PROVIDERS[provider || 'google'];
+
+    const payload = {
+      code,
+      client_id,
+      client_secret,
+      redirect_uri,
+      grant_type: 'authorization_code',
+    };
+    const appleTokenPayload = new URLSearchParams();
+    for (const [key, value] of Object.entries(payload)) {
+      if (typeof value === 'string') appleTokenPayload.append(key, value);
+    }
+    const tokenPayload = compareStrings(provider, 'apple')
+      ? appleTokenPayload
+      : payload;
+    const {data: result} = await axios.post(
+      token_url,
+      tokenPayload,
+      compareStrings(provider, 'apple')
+        ? {headers: {'Content-Type': 'application/x-www-form-urlencoded'}}
+        : undefined,
+    );
+
+    userinfo = await getOauthUser(userinfo_url, result, provider, appleUser);
   }
-  const tokenPayload = compareStrings(provider, 'apple')
-    ? appleTokenPayload
-    : payload;
-  const {data: result} = await axios.post(
-    token_url,
-    tokenPayload,
-    compareStrings(provider, 'apple')
-      ? {headers: {'Content-Type': 'application/x-www-form-urlencoded'}}
-      : undefined,
-  );
 
-  const userinfo = await getOauthUser(
-    userinfo_url,
-    result,
-    provider,
-    appleUser,
-  );
   if (!userinfo) {
     throw new UnauthorizedException();
   }
@@ -183,12 +232,15 @@ export async function oauthAuthorization(
   if (!user) {
     const keys = generateKeys();
 
+    const picture =
+      userinfo.picture || generateDefaultAvatarUrl(userinfo.email);
     user = await User.create({
       email: userinfo.email,
       first_name: userinfo.first_name,
       last_name: userinfo.last_name,
       verified: true,
       providers: [userinfo.provider],
+      picture,
       ...keys,
     });
   }
@@ -476,7 +528,10 @@ export async function completePasskeyLogin(
   };
 }
 
-export async function register(payload: IRegister) {
+export async function register(
+  payload: IRegister,
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {email, first_name, last_name} = payload;
   const user = await User.findOne({email});
   if (user) {
@@ -486,26 +541,48 @@ export async function register(payload: IRegister) {
   const password = await hashPassword(payload.password);
   const keys = generateKeys();
 
-  await User.create({last_name, first_name, password, email, ...keys});
-  await mail.sendLink(email, first_name || last_name || '', 'verify');
+  const picture = generateDefaultAvatarUrl(email);
+  await User.create({last_name, first_name, password, email, picture, ...keys});
+  const deliveryMode =
+    (payload as any).delivery === 'code' ||
+    context.client === 'ios' ||
+    context.client === 'android'
+      ? 'code'
+      : 'link';
+  await mail.sendLink(
+    email,
+    first_name || last_name || '',
+    'verify',
+    deliveryMode,
+  );
 
   const data = {requires_verification: true, email};
 
   return {data, message: 'User registration successful'};
 }
 
-export async function sendLink(payload: ISendLink) {
+export async function sendLink(
+  payload: ISendLink & {delivery?: 'link' | 'code'},
+  context: AuthClientContext = LEGACY_CLIENT,
+) {
   const {email, type = 'reset'} = payload;
   const user = await User.findOne({email});
   if (!user) {
     throw new NotFoundException('User not found');
   }
 
-  await mail.sendLink(email, user.first_name, type);
+  const deliveryMode =
+    payload.delivery === 'code' ||
+    context.client === 'ios' ||
+    context.client === 'android'
+      ? 'code'
+      : 'link';
+
+  await mail.sendLink(email, user.first_name, type, deliveryMode);
 
   return {
-    message: `${type === 'reset' ? 'Reset' : 'Verification'} link has been sent successfully`,
-    data: {email},
+    message: `${type === 'reset' ? (deliveryMode === 'code' ? 'Password reset code' : 'Reset link') : deliveryMode === 'code' ? 'Verification code' : 'Verification link'} has been sent successfully`,
+    data: {email, delivery: deliveryMode},
   };
 }
 
@@ -514,8 +591,25 @@ export async function verifyEmail(
   context: AuthClientContext = LEGACY_CLIENT,
 ) {
   const {token} = payload;
+  const email = (payload as any).email;
+  const type = (payload as any).type || 'verify';
 
-  const result = await otp.verify(token, 'verify');
+  if (type === 'reset') {
+    const result = await otp.verify(token, 'reset', email);
+    if (!result.valid) {
+      throw new BadRequestException('Invalid or expired code');
+    }
+    const user = await User.findOne({email: result.email});
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return {
+      data: {valid: true, email: user.email},
+      message: 'Reset code is valid',
+    };
+  }
+
+  const result = await otp.verify(token, 'verify', email);
   if (!result.valid) {
     throw new BadRequestException('Invalid or expired link');
   }

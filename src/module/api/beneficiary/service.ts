@@ -1,5 +1,10 @@
 import mail from '../../mail';
-import {compareStrings, filterGenerator, isEmpty} from '../../../utils/helpers';
+import {
+  compareStrings,
+  filterGenerator,
+  generateDefaultAvatarUrl,
+  isEmpty,
+} from '../../../utils/helpers';
 import {IPagination} from '../../../utils/interface';
 import {
   BadRequestException,
@@ -295,11 +300,13 @@ export async function acceptInvite(payload: IAcceptInivite) {
 
   let user = await User.findOne({email});
   if (isEmpty(user)) {
+    const picture = generateDefaultAvatarUrl(email);
     user = await User.create({
       first_name,
       last_name,
       dob,
       email,
+      picture,
     });
 
     // Generate reset token using Redis OTP service

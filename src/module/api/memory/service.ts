@@ -175,6 +175,20 @@ export async function memoryStats(user_id: string) {
     provider: {$ne: EXCLUDED_STORAGE_PROVIDER},
   });
 
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diffToMonday = (dayOfWeek + 6) % 7;
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - diffToMonday);
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const week_count = await Memory.countDocuments({
+    user: user_id,
+    type: 'story',
+    status: {$nin: ['draft', 'deleted']},
+    created_at: {$gte: startOfWeek},
+  });
+
   const storageUsage = await getStorageUsageSummary(user_id);
   const storage_size = storageUsage.used_bytes;
   const storage_limit = storageUsage.limit_bytes;
@@ -182,6 +196,8 @@ export async function memoryStats(user_id: string) {
   const data = {
     memory_count,
     stories_count,
+    week_count,
+    weekly_count: week_count,
     stories_bookmarked_count,
     stories_deleted_count,
     bookmark_count,
@@ -270,17 +286,19 @@ export async function createMemory(
       tags.length === 0 && {enrichment_status: 'pending'}),
   });
 
-  // Track activity
-  await track(
-    {
-      title: 'Memory Created',
-      description: `Created memory: "${title}"`,
-      type: 'memory',
-      action: 'created',
-      reference: memory.id,
-    },
-    user_id,
-  );
+  // Track activity only if published
+  if (status !== MEMORY_STATUS.DRAFT) {
+    await track(
+      {
+        title: 'Memory Created',
+        description: `Created memory: "${title}"`,
+        type: 'memory',
+        action: 'created',
+        reference: memory.id,
+      },
+      user_id,
+    );
+  }
 
   // Queue story insights extraction if it's a story with body content and status is "save"
   const isStory = !memory.type || memory.type === 'story';
@@ -543,13 +561,23 @@ async function paginateMemories(
   };
 }
 
-export async function getMemories(payload: IPagination, user_id: string) {
-  const {page, limit, search, bookmarked = false, deleted = false} = payload;
+export async function getMemories(
+  payload: IPagination & {status?: string},
+  user_id: string,
+) {
+  const {
+    page,
+    limit,
+    search,
+    bookmarked = false,
+    deleted = false,
+    status,
+  } = payload;
   const filters = filterGenerator({search}, ['title', 'body', 'tags']);
 
   filters.push({
     user: user_id,
-    status: deleted ? 'deleted' : {$nin: ['draft', 'deleted']},
+    status: status || (deleted ? 'deleted' : {$nin: ['draft', 'deleted']}),
   });
 
   const data = await paginateMemories({$and: filters}, user_id, {
@@ -804,18 +832,23 @@ export async function updateMemory(
     }
   }
 
-  await track(
-    {
-      title: 'Memory Updated',
-      description: `Updated memory: "${memory.title}"`,
-      type: 'memory',
-      action: 'updated',
-      reference: memory.id,
-    },
-    user_id,
-  );
+  if (updatedMemory?.status !== MEMORY_STATUS.DRAFT) {
+    await track(
+      {
+        title: 'Memory Updated',
+        description: `Updated memory: "${updatedMemory?.title || memory.title}"`,
+        type: 'memory',
+        action: 'updated',
+        reference: memory.id,
+      },
+      user_id,
+    );
+  }
 
-  return {data: memory, message: 'Memory updated successfully'};
+  return {
+    data: updatedMemory ?? memory,
+    message: 'Memory updated successfully',
+  };
 }
 
 export async function deleteMemory(
@@ -850,16 +883,18 @@ export async function deleteMemory(
     // Soft delete - just mark as deleted
     await memory.updateOne({status: 'deleted'});
 
-    await track(
-      {
-        title: 'Memory Deleted',
-        description: `Deleted memory: "${memory.title}"`,
-        type: 'memory',
-        action: 'deleted',
-        reference: memory.id,
-      },
-      user_id,
-    );
+    if (memory.status !== MEMORY_STATUS.DRAFT) {
+      await track(
+        {
+          title: 'Memory Deleted',
+          description: `Deleted memory: "${memory.title}"`,
+          type: 'memory',
+          action: 'deleted',
+          reference: memory.id,
+        },
+        user_id,
+      );
+    }
   }
 
   return {data: memory, message: 'Memory deleted successfully'};

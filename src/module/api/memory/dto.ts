@@ -76,6 +76,7 @@ export const createMemorySchema = z.object({
     title: z.string().optional(),
     body: z.string().optional(),
     level: z.coerce.number().int().min(1).optional().default(1),
+    status: z.enum(['draft', 'save']).optional(),
     attachments: attachmentsSchema,
     tags: tagsSchema,
     groups: groupsSchema,
@@ -90,7 +91,7 @@ export const updateMemorySchema = z.object({
     id: mongoIdSchema,
   }),
   body: z.strictObject({
-    status: z.literal('save').optional(),
+    status: z.enum(['draft', 'save']).optional(),
     attachments: attachmentsSchema,
     tags: tagsSchema,
     level: z.coerce.number().int().min(1).optional(),

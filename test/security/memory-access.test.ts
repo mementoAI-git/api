@@ -179,4 +179,49 @@ describe('memory access policy', () => {
       memoryService.getMemoryByPrompt(promptId, attacker.id),
     ).rejects.toMatchObject({statusCode: 404});
   });
+
+  it('allows owner to read their own draft memory while hiding it from others', async () => {
+    const owner = await createUserFixture();
+    const reader = await createUserFixture();
+    const draftMemory = await Memory.create({
+      user: owner.id,
+      title: 'Draft story',
+      body: 'Work in progress',
+      status: 'draft',
+      visibility: 'everyone',
+    });
+
+    await expect(
+      memoryService.getMemory(draftMemory.id, owner.id),
+    ).resolves.toMatchObject({data: {title: 'Draft story'}});
+
+    await expect(
+      memoryService.getMemory(draftMemory.id, reader.id),
+    ).rejects.toMatchObject({statusCode: 404});
+  });
+
+  it('does not create activity feed entries for draft operations', async () => {
+    const owner = await createUserFixture();
+    const draft = await Memory.create({
+      user: owner.id,
+      title: 'Draft scratch',
+      body: 'Scratchpad',
+      status: 'draft',
+    });
+
+    // Updating a draft should not create an activity entry
+    await memoryService.updateMemory(
+      draft.id,
+      {title: 'Draft scratch updated', body: 'More text'},
+      owner.id,
+    );
+    expect(await Activity.countDocuments({user: owner.id})).toBe(0);
+
+    // Deleting a draft should not create an activity entry
+    await memoryService.deleteMemory(
+      {memory_id: draft.id, delete_permanently: false},
+      owner.id,
+    );
+    expect(await Activity.countDocuments({user: owner.id})).toBe(0);
+  });
 });
