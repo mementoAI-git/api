@@ -358,7 +358,9 @@ export async function prompt(
     const result = await processFiles(payload.attachments);
     content.push(...result);
     if (content.length === 0) {
-      throw new BadRequestException('Prompt must contain text or attachments');
+      throw new BadRequestException(
+        'Could not process the attached file(s). Please try re-uploading.',
+      );
     }
     const response = await chat.sendMessageStream({message: content});
     await Message.create({
@@ -759,7 +761,9 @@ export async function startConversation(
     const result = await processFiles(payload.attachments);
     content.push(...result);
     if (content.length === 0) {
-      throw new BadRequestException('Prompt must contain text or attachments');
+      throw new BadRequestException(
+        'Could not process the attached file(s). Please try re-uploading.',
+      );
     }
     const response = await chat.sendMessage({message: content});
     const responseText = sanitizeMementoText(response.text ?? '').trim();
