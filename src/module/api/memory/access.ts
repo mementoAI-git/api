@@ -28,24 +28,42 @@ export async function findReadableMemory(
     const beneficiaries = await Beneficiary.find({
       user: principal.userId,
       status: 'accepted',
-    }).select('_id');
-    const beneficiaryIds = beneficiaries.map(beneficiary => beneficiary.id);
-    const groups = await Group.find({members: {$in: beneficiaryIds}}).select(
-      '_id',
-    );
-    const groupIds = groups.map(group => group.id);
+      $or: [
+        {access_scope: {$in: ['full_vault', 'memories_only']}},
+        {access_scope: {$exists: false}},
+        {access_scope: null},
+      ],
+    }).select('_id benefactor');
 
-    if (beneficiaryIds.length > 0) {
+    const beneficiaryIds = beneficiaries.map(b => b.id);
+    const benefactorIds = Array.from(
+      new Set(
+        beneficiaries
+          .map(b => (b.benefactor ? String(b.benefactor) : null))
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+
+    if (beneficiaryIds.length > 0 && benefactorIds.length > 0) {
+      const groups = await Group.find({
+        user: {$in: benefactorIds},
+        members: {$in: beneficiaryIds},
+      }).select('_id');
+      const groupIds = groups.map(group => group.id);
+
       branches.push({
+        user: {$in: benefactorIds},
         beneficiaries: {$in: beneficiaryIds},
         status: {$nin: ['draft', 'deleted']},
       });
-    }
-    if (groupIds.length > 0) {
-      branches.push({
-        groups: {$in: groupIds},
-        status: {$nin: ['draft', 'deleted']},
-      });
+
+      if (groupIds.length > 0) {
+        branches.push({
+          user: {$in: benefactorIds},
+          groups: {$in: groupIds},
+          status: {$nin: ['draft', 'deleted']},
+        });
+      }
     }
   }
 

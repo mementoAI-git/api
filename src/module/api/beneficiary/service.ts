@@ -31,6 +31,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
     about = '',
     relationship = 'friend',
     avatar_file_id = null,
+    access_scope = 'full_vault',
   } = payload;
   const groups =
     payload.groups && payload.groups.length > 0
@@ -72,6 +73,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
             about,
             avatar_file_id,
             relationship,
+            access_scope,
             due_at: dayjs().add(3, 'days').toDate(),
             user: user?.id || null,
             benefactor: user_id,
@@ -206,7 +208,7 @@ export async function del(id: string, user_id: string) {
 
 export async function update(
   id: string,
-  payload: Partial<IBeneficiary>,
+  payload: Partial<IBeneficiary> & {groups?: string[]; group_ids?: string[]},
   user_id: string,
 ) {
   const user = await User.findOne({_id: user_id});
@@ -228,15 +230,40 @@ export async function update(
     throw new BadRequestException(`Invite has been ${beneficiary.status}`);
   }
 
+  const updateFields: Partial<IBeneficiary> = {};
+  if (payload.email !== undefined) updateFields.email = payload.email;
+  if (payload.name !== undefined) updateFields.name = payload.name;
+  if (payload.about !== undefined) updateFields.about = payload.about;
+  if (payload.relationship !== undefined)
+    updateFields.relationship = payload.relationship;
+  if (payload.access_scope !== undefined)
+    updateFields.access_scope = payload.access_scope;
+  if (payload.level !== undefined) updateFields.level = payload.level;
+  if (payload.avatar_file_id !== undefined)
+    updateFields.avatar_file_id = payload.avatar_file_id;
+
   const data = await Beneficiary.findByIdAndUpdate(
     id,
-    {
-      email: payload?.email || beneficiary?.email,
-      level: payload?.level || beneficiary?.level,
-      relationship: payload?.relationship || beneficiary?.relationship,
-    },
+    {$set: updateFields},
     {new: true},
   );
+
+  const groups =
+    payload.groups && payload.groups.length > 0
+      ? payload.groups
+      : (payload as any).group_ids;
+  if (Array.isArray(groups)) {
+    await Group.updateMany(
+      {user: user_id, members: id},
+      {$pull: {members: id}},
+    );
+    if (groups.length > 0) {
+      await Group.updateMany(
+        {_id: {$in: groups}, user: user_id},
+        {$addToSet: {members: id}},
+      );
+    }
+  }
 
   await track(
     {

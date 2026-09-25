@@ -5,7 +5,10 @@ import type {
   ICapsuleRecipientInput,
   ICapsuleRecipientSnapshot,
 } from '../../database/model/capsule';
-import {NotFoundException} from '../../../utils/service-error';
+import {
+  BadRequestException,
+  NotFoundException,
+} from '../../../utils/service-error';
 
 export type RecipientInput = string | ICapsuleRecipientInput;
 
@@ -76,6 +79,16 @@ export async function normalizeCapsuleRecipients(
         });
         continue;
       }
+    }
+
+    if (
+      beneficiary &&
+      beneficiary.access_scope &&
+      !['full_vault', 'capsules_only'].includes(beneficiary.access_scope)
+    ) {
+      throw new BadRequestException(
+        `Beneficiary "${beneficiary.name || beneficiary.email}" does not have capsule access permissions (${beneficiary.access_scope}).`,
+      );
     }
 
     const snapshot = snapshotFromBeneficiary(beneficiary);
