@@ -1,7 +1,7 @@
 import {model, PaginateModel, Schema, Types} from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
-const FEEDBACK_TYPES = [
+export const FEEDBACK_TYPES = [
   'Bug',
   'Feature Request',
   'UI/UX Issue',
@@ -16,6 +16,7 @@ export interface IFeedback {
   message: string;
   email?: string;
   screenshot?: string;
+  screenshots?: string[];
   user?: Types.ObjectId;
   created_at: Date;
 }
@@ -41,6 +42,7 @@ const feedback = new Schema<IFeedback>(
       required: true,
     },
     screenshot: String,
+    screenshots: [String],
     user: {
       type: Schema.Types.ObjectId,
       ref: 'user',

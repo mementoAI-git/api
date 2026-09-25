@@ -11,7 +11,8 @@ const feedbackDocs = {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['type', 'message'],
+              additionalProperties: false,
+              required: ['type', 'email', 'message'],
               properties: {
                 type: {
                   type: 'string',
@@ -41,6 +42,17 @@ const feedbackDocs = {
                   type: 'string',
                   description: 'Optional file ID of a screenshot attachment',
                   example: '507f1f77bcf86cd799439011',
+                },
+                screenshots: {
+                  type: 'array',
+                  maxItems: 5,
+                  uniqueItems: true,
+                  items: {
+                    type: 'string',
+                    pattern: '^[a-fA-F0-9]{24}$',
+                  },
+                  description:
+                    'Up to five image file IDs owned by the authenticated user',
                 },
               },
             },
