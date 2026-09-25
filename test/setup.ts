@@ -1,4 +1,7 @@
 process.env.NODE_ENV = 'test';
+// Unit tests must not inherit a developer machine's Redis URL from .env.
+// Tests that intentionally exercise Redis can set this explicitly before import.
+process.env.REDIS_URL = '';
 process.env.JWT_SECRET = 'test-jwt-secret-at-least-32-characters';
 process.env.FILE_URL_SIGNING_KEYS =
   'test-v1:test-file-signing-secret-at-least-32-characters,' +
