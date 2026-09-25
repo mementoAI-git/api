@@ -9,7 +9,13 @@ import {revealCapsules, scheduleCapsuleReveals} from './reveal-capsules';
 import resetStreak from './reset-streak';
 import {quickCaptureQueue} from '../../services/queues/quick-capture';
 import {processPurgeCommand} from '../../services/account-purge';
-import {dispatchPendingAccountPurges} from '../../services/queues/system';
+import {
+  dispatchPendingAccountPurges,
+  dispatchPendingStoreNotifications,
+  dispatchPendingArchiveExports,
+} from '../../services/queues/system';
+import {retryStoreNotificationEvent} from '../../module/api/billing/store-notification-service';
+import {buildArchiveExport} from '../../module/api/archive/service';
 import {
   expireStorageReservations,
   reconcileBillingUsage,
@@ -128,6 +134,35 @@ export default function startSystemWorker(connection: RedisConnection) {
         compareStrings(job.name, queueNames.system.jobs.reconcileBillingUsage)
       ) {
         await reconcileBillingUsage();
+      }
+      if (
+        compareStrings(
+          job.name,
+          queueNames.system.jobs.dispatchStoreNotifications,
+        )
+      ) {
+        await dispatchPendingStoreNotifications();
+      }
+      if (
+        compareStrings(
+          job.name,
+          queueNames.system.jobs.processStoreNotification,
+        )
+      ) {
+        const data = job.data as {eventId?: string};
+        if (!data.eventId)
+          throw new Error('Store notification event id is required');
+        await retryStoreNotificationEvent(data.eventId);
+      }
+      if (compareStrings(job.name, queueNames.system.jobs.archiveExport)) {
+        const data = job.data as {exportId?: string};
+        if (!data.exportId) throw new Error('Archive export id is required');
+        await buildArchiveExport(data.exportId);
+      }
+      if (
+        compareStrings(job.name, queueNames.system.jobs.dispatchArchiveExports)
+      ) {
+        await dispatchPendingArchiveExports();
       }
     },
     {

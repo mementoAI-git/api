@@ -16,6 +16,8 @@ import {
   initializeStalePendingRecovery,
   initializeStorageReservationExpiry,
   initializeBillingUsageReconciliation,
+  initializeStoreNotificationDispatcher,
+  initializeArchiveExportDispatcher,
   systemQueue,
 } from './system';
 import logger from '../../utils/logger';
@@ -64,6 +66,8 @@ export async function initializeScheduler() {
     ['account purge dispatcher', initializeAccountPurgeDispatcher],
     ['storage reservation expiry', initializeStorageReservationExpiry],
     ['billing usage reconciliation', initializeBillingUsageReconciliation],
+    ['store notification dispatcher', initializeStoreNotificationDispatcher],
+    ['archive export dispatcher', initializeArchiveExportDispatcher],
     ['persona summarization', initializePersonaSummarization],
     ['conversation summary', initializeConversationSummary],
   ] as const;

@@ -1,7 +1,19 @@
+import {
+  verifyAppleStoreKit2Jws,
+  verifyLegacyAppleReceipt,
+  verifyGooglePlayPurchase,
+  type VerifiedStorePurchase,
+} from './providers/iap-verifier';
+import axios from 'axios';
+import jsonwebtoken from 'jsonwebtoken';
+import type {IapVerifyBody} from './dto';
 import dayjs from 'dayjs';
 import {
+  ServiceError,
   BadRequestException,
   NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
 } from '../../../utils/service-error';
 import Subscription from '../../database/model/subscription';
 import Usage from '../../database/model/usage';
@@ -24,6 +36,8 @@ import {
 } from './providers/polar';
 import {getStorageUsageSummary} from './storage-quota';
 import mongoose from 'mongoose';
+import {randomUUID} from 'crypto';
+import {applyStoreSubscriptionSnapshot} from './store-entitlement-service';
 
 type CheckoutBody = {
   success_url: string;
@@ -33,30 +47,31 @@ type CheckoutBody = {
 };
 
 export async function getSubscriptionSummary(userId: string) {
-  const [subscription, usage, storage] = await Promise.all([
-    Subscription.findOne({user_id: userId}).lean(),
+  const [initialSubscription, usage, storage] = await Promise.all([
+    Subscription.findOne({user_id: userId}),
     Usage.findOne({user_id: userId}).lean(),
     getStorageUsageSummary(userId),
   ]);
 
+  let subscription = initialSubscription;
+
   if (!subscription) {
-    return {
-      message: 'Subscription summary fetched',
-      data: {
-        tier: 'free',
-        status: 'active',
-        usage: {
-          storage_used_bytes: storage.used_bytes,
-          storage_reserved_bytes: storage.reserved_bytes,
-          storage_limit_bytes: storage.limit_bytes,
-          remaining_bytes: storage.remaining_bytes,
-          percent_used: storage.percent_used,
-          over_limit: storage.over_limit,
-          beneficiary_count: usage?.beneficiary_count || 0,
-          timed_message_count: usage?.timed_message_count || 0,
+    subscription = await Subscription.findOneAndUpdate(
+      {user_id: userId},
+      {
+        $setOnInsert: {
+          user_id: userId,
+          has_used_trial: false,
+          store_account_token: randomUUID(),
+          tier: 'free',
+          status: 'active',
         },
       },
-    };
+      {upsert: true, new: true},
+    );
+  } else if (!subscription.store_account_token) {
+    subscription.store_account_token = randomUUID();
+    await subscription.save();
   }
 
   return {
@@ -68,6 +83,7 @@ export async function getSubscriptionSummary(userId: string) {
       cancel_at_period_end: subscription.cancel_at_period_end || false,
       trial_ends_at: subscription.trial_ends_at,
       provider: subscription.payment_provider,
+      store_account_token: subscription.store_account_token,
       currency: subscription.currency,
       country: subscription.country,
       usage: {
@@ -221,7 +237,10 @@ export async function listInvoices(userId: string) {
   };
 }
 
-export async function cancelSubscription(userId: string) {
+export async function cancelSubscription(
+  userId: string,
+  feedback?: {reason?: string; details?: string},
+) {
   const subscription = await Subscription.findOne({user_id: userId});
   if (!subscription) throw new NotFoundException('Subscription not found');
   if (subscription.tier === 'free') {
@@ -244,6 +263,12 @@ export async function cancelSubscription(userId: string) {
   subscription.cancelled_at = provider.canceled_at
     ? new Date(String(provider.canceled_at))
     : new Date();
+  if (feedback?.reason) {
+    subscription.cancellation_reason = String(feedback.reason);
+  }
+  if (feedback?.details) {
+    subscription.cancellation_details = String(feedback.details);
+  }
   await subscription.save();
   return {
     message: 'Subscription cancellation scheduled',
@@ -281,6 +306,17 @@ export async function resumeSubscription(userId: string) {
 export async function ensureBillingUser(userId: string) {
   const user = await User.findById(userId, {_id: 1}).lean();
   if (!user) throw new NotFoundException('User not found');
+  return Subscription.findOneAndUpdate(
+    {user_id: userId},
+    {
+      $setOnInsert: {
+        user_id: userId,
+        has_used_trial: false,
+        store_account_token: randomUUID(),
+      },
+    },
+    {upsert: true, new: true},
+  );
 }
 
 export async function checkAccess(
@@ -498,4 +534,101 @@ export async function processPolarWebhook(
   }
 
   return {message: 'Polar webhook processed', data: {eventId, eventType}};
+}
+
+const ALLOWED_IAP_SKUS: Record<
+  string,
+  {interval: 'monthly' | 'annual'; platform: 'ios' | 'android'}
+> = {
+  'io.mymemento.app.pro.monthly': {interval: 'monthly', platform: 'ios'},
+  'io.mymemento.app.pro.annual': {interval: 'annual', platform: 'ios'},
+  memento_pro_monthly: {interval: 'monthly', platform: 'android'},
+  memento_pro_annual: {interval: 'annual', platform: 'android'},
+};
+
+export async function verifyIapPurchase(userId: string, body: IapVerifyBody) {
+  const {platform, productId, transactionId, receiptData, purchaseToken} = body;
+
+  const skuConfig = ALLOWED_IAP_SKUS[productId];
+  if (!skuConfig || skuConfig.platform !== platform) {
+    throw new BadRequestException(
+      `Unrecognized or unsupported in-app purchase product: ${productId} for platform ${platform}`,
+    );
+  }
+
+  const provider: 'apple' | 'google' = platform === 'ios' ? 'apple' : 'google';
+
+  // 1. Cryptographic / Store-Backed Verification (Fail-Closed)
+  let verified: VerifiedStorePurchase;
+
+  if (platform === 'ios') {
+    const rawReceipt = (receiptData || purchaseToken || '').trim();
+    if (!rawReceipt) {
+      throw new BadRequestException(
+        'StoreKit receiptData or purchaseToken is required for iOS verification',
+      );
+    }
+
+    try {
+      verified = await verifyAppleStoreKit2Jws(rawReceipt, productId);
+    } catch (jwsErr: any) {
+      const looksLikeJws = rawReceipt.split('.').length === 3;
+      if (!looksLikeJws && process.env.APPLE_SHARED_SECRET) {
+        verified = await verifyLegacyAppleReceipt(rawReceipt, productId);
+      } else {
+        throw jwsErr;
+      }
+    }
+  } else {
+    // Android / Google Play Billing
+    const token = (purchaseToken || receiptData || '').trim();
+    if (!token) {
+      throw new BadRequestException(
+        'Google Play purchaseToken is required for Android verification',
+      );
+    }
+
+    verified = await verifyGooglePlayPurchase(token, productId);
+  }
+
+  const {subscription, alreadyApplied} = await applyStoreSubscriptionSnapshot({
+    userId,
+    snapshot: {
+      provider,
+      environment: verified.environment ?? 'Production',
+      transactionId: verified.verifiedTransactionId,
+      chainAliases: verified.chainAliases ?? [
+        verified.originalTransactionId ?? verified.verifiedTransactionId,
+      ],
+      storeAccountToken: verified.storeAccountToken,
+      productId,
+      billingInterval: skuConfig.interval,
+      purchaseDate: verified.purchaseDate,
+      expiresAt: verified.expiresAt,
+      entitlementStatus: 'active',
+      entitlementActive: true,
+      autoRenewEnabled: verified.autoRenewEnabled,
+      providerModifiedAt: verified.providerModifiedAt ?? verified.expiresAt,
+      eventType: 'CLIENT_VERIFICATION',
+      sanitizedMetadata: verified.rawPayload,
+    },
+  });
+
+  if (!subscription) {
+    throw new ServiceUnavailableException(
+      'Failed to activate subscription after store verification',
+    );
+  }
+
+  return {
+    message: alreadyApplied
+      ? 'Transaction already verified'
+      : 'In-app purchase verified successfully',
+    data: {
+      success: true,
+      tier: subscription.tier,
+      status: subscription.status,
+      expiresAt: verified.expiresAt.toISOString(),
+    },
+  };
 }

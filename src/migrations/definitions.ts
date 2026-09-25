@@ -1,5 +1,6 @@
 import type {mongo} from 'mongoose';
 import type {DatabaseMigration} from './index';
+import {createHash, randomUUID} from 'crypto';
 
 type Db = mongo.Db;
 type ObjectId = mongo.ObjectId;
@@ -71,6 +72,136 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
           },
           {name: 'metric_event_client_version_created_at_desc'},
         ),
+        db
+          .collection('archive_exports')
+          .createIndex(
+            {user_id: 1, created_at: -1},
+            {name: 'archive_export_user_created_desc'},
+          ),
+        db
+          .collection('archive_exports')
+          .createIndex({expires_at: 1}, {name: 'archive_export_expiry'}),
+      ]);
+    },
+  },
+  {
+    id: '202609240001_store_billing_identity_and_ownership_indexes',
+    up: async db => {
+      const subscriptions = db.collection('subscriptions');
+      const cursor = subscriptions.find({
+        $or: [
+          {store_account_token: {$exists: false}},
+          {store_account_token: null},
+          {store_account_token: ''},
+        ],
+      });
+      for await (const subscription of cursor) {
+        await subscriptions.updateOne(
+          {_id: subscription._id},
+          {$set: {store_account_token: randomUUID()}},
+        );
+      }
+
+      const transactions = db.collection('iap_transactions');
+      const ownershipConflicts = await transactions
+        .aggregate([
+          {
+            $group: {
+              _id: {
+                provider: '$provider',
+                original_transaction_id: '$original_transaction_id',
+              },
+              users: {$addToSet: {$toString: '$user_id'}},
+            },
+          },
+          {$match: {'users.1': {$exists: true}}},
+          {$limit: 1},
+        ])
+        .toArray();
+      if (ownershipConflicts.length > 0) {
+        throw new Error(
+          'IAP subscription-chain ownership conflict requires manual resolution',
+        );
+      }
+      const transactionCursor = transactions.find({});
+      for await (const transaction of transactionCursor) {
+        const transactionId = String(transaction.transaction_id || '');
+        const originalId = String(
+          transaction.original_transaction_id || transactionId,
+        );
+        if (!transactionId || !originalId || !transaction.provider) continue;
+        const transactionKey = createHash('sha256')
+          .update(`${transaction.provider}:${transactionId}`)
+          .digest('hex');
+        const aliasKey = createHash('sha256')
+          .update(`${transaction.provider}:${originalId}`)
+          .digest('hex');
+        const chainId = transaction.chain_id || randomUUID();
+        await transactions.updateOne(
+          {_id: transaction._id},
+          {
+            $set: {
+              transaction_id: transactionKey,
+              transaction_key: transactionKey,
+              original_transaction_id: aliasKey,
+              chain_id: chainId,
+            },
+          },
+        );
+        await db.collection('iap_chain_aliases').updateOne(
+          {provider: transaction.provider, alias_key: aliasKey},
+          {
+            $setOnInsert: {
+              provider: transaction.provider,
+              alias_key: aliasKey,
+              chain_id: chainId,
+              user_id: String(transaction.user_id),
+              created_at: new Date(),
+            },
+          },
+          {upsert: true},
+        );
+      }
+
+      await Promise.all([
+        subscriptions.createIndex(
+          {store_account_token: 1},
+          {name: 'subscription_store_account_token_unique', unique: true},
+        ),
+        db
+          .collection('iap_subscription_chains')
+          .createIndex(
+            {chain_id: 1},
+            {name: 'iap_chain_id_unique', unique: true},
+          ),
+        db
+          .collection('iap_subscription_chains')
+          .createIndex(
+            {provider: 1, user_id: 1},
+            {name: 'iap_chain_provider_user'},
+          ),
+        db
+          .collection('iap_chain_aliases')
+          .createIndex(
+            {provider: 1, alias_key: 1},
+            {name: 'iap_chain_alias_unique', unique: true},
+          ),
+        transactions.createIndex(
+          {provider: 1, transaction_key: 1},
+          {name: 'iap_transaction_provider_key_unique', unique: true},
+        ),
+        db
+          .collection('store_notification_events')
+          .createIndex(
+            {provider: 1, event_id: 1},
+            {name: 'store_notification_provider_event_unique', unique: true},
+          ),
+        db
+          .collection('store_notification_events')
+          .createIndex(
+            {status: 1, received_at: 1},
+            {name: 'store_notification_status_received'},
+          ),
       ]);
     },
   },

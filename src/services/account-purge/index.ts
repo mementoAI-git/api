@@ -1,10 +1,15 @@
 import ActivePrompt from '../../module/database/model/active-prompt';
+import ArchiveExport from '../../module/database/model/archive-export';
 import Activity from '../../module/database/model/activities';
 import AiMetric from '../../module/database/model/ai-metric';
 import AuthCode from '../../module/database/model/auth-code';
 import AuthSession from '../../module/database/model/auth-session';
 import Beneficiary from '../../module/database/model/beneficiary';
 import BillingWebhookEvent from '../../module/database/model/billing-webhook-event';
+import IapChainAlias from '../../module/database/model/iap-chain-alias';
+import IapSubscriptionChain from '../../module/database/model/iap-subscription-chain';
+import IapTransaction from '../../module/database/model/iap-transaction';
+import StoreNotificationEvent from '../../module/database/model/store-notification-event';
 import Bookmark from '../../module/database/model/bookmarks';
 import Capsule from '../../module/database/model/capsule';
 import CapsuleDelivery from '../../module/database/model/capsule-delivery';
@@ -40,11 +45,16 @@ const ANONYMOUS_ACCOUNT = 'deleted-account';
 export const PURGE_MANIFEST = [
   {model: 'ActivePrompt', disposition: 'delete'},
   {model: 'Activity', disposition: 'delete'},
+  {model: 'ArchiveExport', disposition: 'provider-delete'},
   {model: 'AiMetric', disposition: 'delete'},
   {model: 'AuthCode', disposition: 'delete'},
   {model: 'AuthSession', disposition: 'delete'},
   {model: 'Beneficiary', disposition: 'delete'},
   {model: 'BillingWebhookEvent', disposition: 'anonymize'},
+  {model: 'IapChainAlias', disposition: 'delete'},
+  {model: 'IapSubscriptionChain', disposition: 'delete'},
+  {model: 'IapTransaction', disposition: 'delete'},
+  {model: 'StoreNotificationEvent', disposition: 'anonymize'},
   {model: 'Bookmark', disposition: 'delete'},
   {model: 'Capsule', disposition: 'delete-or-anonymize'},
   {model: 'CapsuleDelivery', disposition: 'delete-or-anonymize'},
@@ -100,6 +110,21 @@ async function deleteStorageObject(
 
 async function cleanupProviders(command: IPurgeCommand): Promise<void> {
   // Provider calls happen before database rows are removed so retries retain keys.
+  const archiveExports = await ArchiveExport.find({user_id: command.user_id})
+    .select('+object_key')
+    .lean();
+  for (const archiveExport of archiveExports) {
+    if (archiveExport.object_key) {
+      await deleteStorageObject(
+        archiveExport.object_key,
+        's3',
+        'application/zip',
+        false,
+      );
+    }
+    await ArchiveExport.deleteOne({_id: archiveExport._id});
+  }
+
   for (;;) {
     const files = await File.find({user: command.user_id})
       .select('+backup_at')
@@ -291,6 +316,7 @@ async function deleteDomainRecords(command: IPurgeCommand): Promise<void> {
   const deletions: Deletion[] = [
     {model: ActivePrompt, filter: {user: userId}},
     {model: Activity, filter: {user: userId}},
+    {model: ArchiveExport, filter: {user_id: userId}},
     {model: AiMetric, filter: {user: userId}},
     ...(email ? [{model: AuthCode, filter: {email}}] : []),
     {model: AuthSession, filter: {user_id: userId}},
@@ -309,6 +335,9 @@ async function deleteDomainRecords(command: IPurgeCommand): Promise<void> {
       filter: {$or: [{user: userId}, ...(email ? [{email}] : [])]},
     },
     {model: Group, filter: {user: userId}},
+    {model: IapChainAlias, filter: {user_id: userId}},
+    {model: IapSubscriptionChain, filter: {user_id: userId}},
+    {model: IapTransaction, filter: {user_id: userId}},
     {model: Message, filter: {user: userId}},
     {model: PendingInsight, filter: {user: userId}},
     {model: Persona, filter: {user: userId}},
@@ -342,6 +371,16 @@ async function anonymizeAuditRecords(command: IPurgeCommand): Promise<void> {
   await BillingWebhookEvent.updateMany(
     {user_id: userId},
     {$set: {user_id: null, provider_customer_id: null}},
+  );
+  await StoreNotificationEvent.updateMany(
+    {user_id: userId},
+    {
+      $set: {
+        user_id: null,
+        normalized_payload: null,
+        encrypted_provider_token: null,
+      },
+    },
   );
 }
 

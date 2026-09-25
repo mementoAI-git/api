@@ -186,6 +186,85 @@ const billingDocs = {
       },
     },
   },
+  '/billing/iap/verify': {
+    post: {
+      tags: ['Billing'],
+      summary: 'Verify a native store subscription',
+      description:
+        'Cryptographically verifies an Apple StoreKit transaction or queries Google Play, atomically claims its subscription chain for the authenticated account, and projects the resulting entitlement. Replays by the same account are idempotent.',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['platform', 'productId', 'transactionId'],
+              properties: {
+                platform: {type: 'string', enum: ['ios', 'android']},
+                productId: {type: 'string', minLength: 1},
+                transactionId: {
+                  type: 'string',
+                  minLength: 1,
+                  description:
+                    'Client transaction identifier for diagnostics; the verified provider identifier is authoritative.',
+                },
+                receiptData: {
+                  type: 'string',
+                  description: 'StoreKit signed transaction or legacy receipt.',
+                },
+                purchaseToken: {
+                  type: 'string',
+                  description:
+                    'Google Play purchase token or StoreKit signed transaction.',
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Store entitlement verified and durably applied',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  message: {type: 'string'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      success: {type: 'boolean'},
+                      tier: {type: 'string', enum: ['free', 'pro', 'legacy']},
+                      status: {
+                        type: 'string',
+                        enum: [
+                          'active',
+                          'trialing',
+                          'past_due',
+                          'cancelled',
+                          'paused',
+                        ],
+                      },
+                      expiresAt: {type: 'string', format: 'date-time'},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        400: {
+          description:
+            'Invalid product, receipt, or subscription ownership conflict',
+        },
+        401: {description: 'Store verification failed'},
+        503: {description: 'Store verification provider unavailable'},
+      },
+    },
+  },
   '/billing/promo/redeem': {
     post: {
       tags: ['Billing'],

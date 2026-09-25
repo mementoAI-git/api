@@ -4,6 +4,11 @@ import {responsHandler} from '../../../utils/helpers';
 import * as service from './service';
 import type {ITallyWebhookPayload} from './interface';
 import * as billingService from '../billing/service';
+import {
+  processAppleStoreNotification,
+  processGooglePlayNotification,
+  verifyGooglePubSubRequest,
+} from '../billing/store-notification-service';
 
 export async function handleTally(
   req: Request,
@@ -32,7 +37,7 @@ export async function handleTally(
 
     return responsHandler(res, StatusCodes.OK, result.message, result.data);
   } catch (error) {
-    next(error);
+    return next(error);
   }
 }
 
@@ -77,6 +82,35 @@ export async function handlePayments(
     );
     return responsHandler(res, StatusCodes.OK, result.message, result.data);
   } catch (error) {
-    next(error);
+    return next(error);
+  }
+}
+
+export async function handleAppleStore(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const result = await processAppleStoreNotification(
+      typeof req.body?.signedPayload === 'string' ? req.body.signedPayload : '',
+    );
+    return res.status(StatusCodes.NO_CONTENT).send(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function handleGooglePlay(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await verifyGooglePubSubRequest(req.headers.authorization);
+    const result = await processGooglePlayNotification(req.body);
+    return res.status(StatusCodes.NO_CONTENT).send(result);
+  } catch (error) {
+    return next(error);
   }
 }

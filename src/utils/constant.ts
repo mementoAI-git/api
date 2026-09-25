@@ -104,6 +104,10 @@ export const queueNames = {
       accountPurge: 'account-purge',
       expireStorageReservations: 'expire-storage-reservations',
       reconcileBillingUsage: 'reconcile-billing-usage',
+      dispatchStoreNotifications: 'dispatch-store-notifications',
+      processStoreNotification: 'process-store-notification',
+      archiveExport: 'archive-export',
+      dispatchArchiveExports: 'dispatch-archive-exports',
     },
   },
 };

@@ -4,6 +4,7 @@ import aiDocs from '../docs/ai.docs';
 import authDocs from '../docs/auth.docs';
 import beneficiariesDocs from '../docs/beneficiaries.docs';
 import billingDocs from '../docs/billing.docs';
+import archiveDocs from '../docs/archive.docs';
 import capsulesDocs from '../docs/capsules.docs';
 import feedbackDocs from '../docs/feedback.docs';
 import filesDocs from '../docs/files.docs';
@@ -326,6 +327,7 @@ export function buildOpenApiDocument(
       ...activitiesDocs,
       ...feedbackDocs,
       ...billingDocs,
+      ...archiveDocs,
       ...personaDocs,
       '/push-devices/{installationId}': {
         put: {

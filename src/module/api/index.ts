@@ -3,6 +3,7 @@ import {errorResponsHandler, responsHandler} from '../../utils/helpers';
 import {StatusCodes} from 'http-status-codes';
 import errorHandler from '../../middleware/error-handler';
 import activityRoutes from './activity/routes';
+import archiveRoutes from './archive/routes';
 import aiRoutes from './ai/routes';
 import authRoutes from './auth/routes';
 import beneficiaryRoutes from './beneficiary/routes';
@@ -27,6 +28,7 @@ import {requireAdmin} from '../../middleware/admin';
 
 const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
   {path: 'activities', router: activityRoutes},
+  {path: 'exports', router: archiveRoutes},
   {path: 'ai', router: aiRoutes},
   {path: 'auth', router: authRoutes},
   {path: 'beneficiaries', router: beneficiaryRoutes},

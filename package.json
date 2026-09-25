@@ -16,7 +16,7 @@
   "scripts": {
     "start": "node --dns-result-order=ipv4first build/src/index.js",
     "dev": "NODE_OPTIONS=--dns-result-order=ipv4first nodemon src/index.ts",
-    "build": "npm run clean && npm run compile && cp -R views build/ && cp -R public build/",
+    "build": "npm run clean && npm run compile && cp -R views build/ && cp -R public build/ && cp -R src/module/api/billing/providers/certs build/src/module/api/billing/providers/",
     "lint": "gts lint",
     "test": "vitest run --sequence.concurrent=false",
     "test:watch": "vitest",
@@ -40,6 +40,7 @@
   "author": "Frank",
   "license": "MIT",
   "devDependencies": {
+    "@types/archiver": "^8.0.0",
     "@types/bcrypt": "^5.0.2",
     "@types/compression": "^1.7.5",
     "@types/cors": "^2.8.17",
@@ -64,6 +65,7 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "^3.1.0",
     "@aws-sdk/client-s3": "^3.901.0",
     "@aws-sdk/s3-request-presigner": "^3.901.0",
     "@bull-board/api": "^6.16.2",
@@ -72,6 +74,7 @@
     "@google/genai": "^1.20.0",
     "@simplewebauthn/server": "^13.3.0",
     "@types/ejs": "^3.1.5",
+    "archiver": "^8.0.0",
     "axios": "^1.8.4",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.66.4",
@@ -86,6 +89,7 @@
     "express-rate-limit": "^7.5.0",
     "express-validator": "^7.2.1",
     "get-audio-duration": "^4.0.1",
+    "google-auth-library": "^9.0.0",
     "helmet": "^8.1.0",
     "http-status-codes": "^2.3.0",
     "jsonwebtoken": "^9.0.2",

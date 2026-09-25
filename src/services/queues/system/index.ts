@@ -5,6 +5,8 @@ import {IS_PRODUCTION} from '../../../utils/config';
 import dayjs from 'dayjs';
 import PurgeCommand from '../../../module/database/model/purge-command';
 import {PURGE_SCHEMA_VERSION} from '../../account-purge';
+import StoreNotificationEvent from '../../../module/database/model/store-notification-event';
+import ArchiveExport from '../../../module/database/model/archive-export';
 
 const connection = getRedisConnection();
 
@@ -156,6 +158,80 @@ export async function initializeBillingUsageReconciliation(): Promise<void> {
     {pattern: '30 2 * * *'},
     {opts: {removeOnComplete: true, removeOnFail: 10}},
   );
+}
+
+export async function initializeStoreNotificationDispatcher(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, store notifications remain pending',
+    );
+    return;
+  }
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.dispatchStoreNotifications,
+    {every: 5 * 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
+export async function dispatchPendingStoreNotifications(): Promise<number> {
+  if (!systemQueue) return 0;
+  const events = await StoreNotificationEvent.find({
+    status: {$in: ['pending', 'failed', 'unmapped']},
+  })
+    .sort({received_at: 1})
+    .limit(100)
+    .select('_id')
+    .lean();
+  for (const event of events) {
+    await systemQueue.add(
+      queueNames.system.jobs.processStoreNotification,
+      {eventId: String(event._id)},
+      {
+        jobId: `store-notification-${event._id}`,
+        attempts: 10,
+        backoff: {type: 'exponential', delay: 5000},
+        removeOnComplete: 100,
+        removeOnFail: 100,
+      },
+    );
+  }
+  return events.length;
+}
+
+export async function queueArchiveExport(exportId: string): Promise<boolean> {
+  if (!systemQueue) return false;
+  await systemQueue.add(
+    queueNames.system.jobs.archiveExport,
+    {exportId},
+    {
+      jobId: `archive-export-${exportId}`,
+      attempts: 3,
+      backoff: {type: 'exponential', delay: 5000},
+      removeOnComplete: 100,
+      removeOnFail: 100,
+    },
+  );
+  return true;
+}
+
+export async function initializeArchiveExportDispatcher(): Promise<void> {
+  if (!systemQueue) return;
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.dispatchArchiveExports,
+    {every: 5 * 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
+export async function dispatchPendingArchiveExports(): Promise<number> {
+  const jobs = await ArchiveExport.find({status: 'pending'})
+    .sort({created_at: 1})
+    .limit(20)
+    .select('_id')
+    .lean();
+  for (const job of jobs) await queueArchiveExport(String(job._id));
+  return jobs.length;
 }
 
 export async function dispatchPendingAccountPurges(): Promise<number> {
