@@ -28,6 +28,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '../../../../utils/service-error';
+import {IS_DEV_ENV} from '../../../../utils/config';
 
 export interface VerifiedStorePurchase {
   /**
@@ -84,6 +85,7 @@ function getAppleRootCAs(): Buffer[] {
 
 let _verifierProd: SignedDataVerifier | null = null;
 let _verifierSandbox: SignedDataVerifier | null = null;
+let _verifierXcode: SignedDataVerifier | null = null;
 
 export function getAppleVerifier(env: Environment): SignedDataVerifier {
   const enableOnlineChecks = env === Environment.PRODUCTION;
@@ -97,7 +99,7 @@ export function getAppleVerifier(env: Environment): SignedDataVerifier {
       );
     }
     return _verifierProd;
-  } else {
+  } else if (env === Environment.SANDBOX) {
     if (!_verifierSandbox) {
       _verifierSandbox = new SignedDataVerifier(
         getAppleRootCAs(),
@@ -108,6 +110,25 @@ export function getAppleVerifier(env: Environment): SignedDataVerifier {
     }
     return _verifierSandbox;
   }
+
+  if (env === Environment.XCODE && IS_DEV_ENV) {
+    if (!_verifierXcode) {
+      // Apple's library deliberately skips certificate-chain verification for
+      // Xcode StoreKit transactions because they are locally generated and not
+      // signed by the App Store. This verifier is unreachable in production.
+      _verifierXcode = new SignedDataVerifier(
+        [],
+        false,
+        Environment.XCODE,
+        'io.mymemento.app',
+      );
+    }
+    return _verifierXcode;
+  }
+
+  throw new UnauthorizedException(
+    `Apple verification environment is not enabled: ${env}`,
+  );
 }
 
 export interface VerifiedAppleNotification {
@@ -173,7 +194,12 @@ export async function verifyAppleStoreKit2Jws(
   let tx;
   let verifiedEnvironment: Environment | null = null;
   let lastVerificationError: unknown;
-  for (const environment of [Environment.PRODUCTION, Environment.SANDBOX]) {
+  const verificationEnvironments = [
+    Environment.PRODUCTION,
+    Environment.SANDBOX,
+    ...(IS_DEV_ENV ? [Environment.XCODE] : []),
+  ];
+  for (const environment of verificationEnvironments) {
     try {
       tx =
         await getAppleVerifier(environment).verifyAndDecodeTransaction(rawJws);
@@ -238,7 +264,11 @@ export async function verifyAppleStoreKit2Jws(
       originalTransactionId: tx.originalTransactionId,
     },
     environment:
-      verifiedEnvironment === Environment.PRODUCTION ? 'Production' : 'Sandbox',
+      verifiedEnvironment === Environment.PRODUCTION
+        ? 'Production'
+        : verifiedEnvironment === Environment.SANDBOX
+          ? 'Sandbox'
+          : 'Test',
     storeAccountToken: tx.appAccountToken,
     chainAliases: [originalTransactionId],
     providerModifiedAt: tx.signedDate
