@@ -28,7 +28,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '../../../../utils/service-error';
-import {IS_DEV_ENV} from '../../../../utils/config';
+import {IS_DEV_DEPLOYMENT} from '../../../../utils/config';
 
 export interface VerifiedStorePurchase {
   /**
@@ -111,7 +111,7 @@ export function getAppleVerifier(env: Environment): SignedDataVerifier {
     return _verifierSandbox;
   }
 
-  if (env === Environment.XCODE && IS_DEV_ENV) {
+  if (env === Environment.XCODE && IS_DEV_DEPLOYMENT) {
     if (!_verifierXcode) {
       // Apple's library deliberately skips certificate-chain verification for
       // Xcode StoreKit transactions because they are locally generated and not
@@ -197,7 +197,7 @@ export async function verifyAppleStoreKit2Jws(
   const verificationEnvironments = [
     Environment.PRODUCTION,
     Environment.SANDBOX,
-    ...(IS_DEV_ENV ? [Environment.XCODE] : []),
+    ...(IS_DEV_DEPLOYMENT ? [Environment.XCODE] : []),
   ];
   for (const environment of verificationEnvironments) {
     try {

@@ -32,8 +32,9 @@ describe('Xcode StoreKit transaction verification', () => {
     vi.resetModules();
   });
 
-  it('accepts Xcode-local transactions only in the development environment', async () => {
-    vi.stubEnv('NODE_ENV', 'development');
+  it('accepts Xcode-local transactions on the dev deployment even with production Node mode', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('MEMENTO_ENV', 'dev');
     const {verifyAppleStoreKit2Jws} = await import(
       '../../src/module/api/billing/providers/iap-verifier'
     );
@@ -49,6 +50,7 @@ describe('Xcode StoreKit transaction verification', () => {
 
   it('rejects Xcode-local transactions in production', async () => {
     vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('MEMENTO_ENV', 'prod');
     const {verifyAppleStoreKit2Jws} = await import(
       '../../src/module/api/billing/providers/iap-verifier'
     );

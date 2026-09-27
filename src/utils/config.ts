@@ -8,6 +8,10 @@ export const IS_PRODUCTION = NODE_ENV === 'production';
 export const IS_DEV_ENV = ['development', 'dev', 'local'].includes(
   NODE_ENV.toLowerCase(),
 );
+export const MEMENTO_ENV = process.env.MEMENTO_ENV?.toLowerCase();
+export const IS_DEV_DEPLOYMENT = MEMENTO_ENV
+  ? MEMENTO_ENV === 'dev'
+  : IS_DEV_ENV;
 export const PORT = process.env.PORT || 5000;
 export const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '10mb';
 export const MAX_UPLOAD_FILES = Number(process.env.MAX_UPLOAD_FILES || 5);

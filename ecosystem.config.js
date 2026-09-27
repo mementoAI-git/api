@@ -54,6 +54,7 @@ module.exports = {
       max_memory_restart: '800M',
       env: {
         NODE_ENV: 'production',
+        MEMENTO_ENV: ENV,
         PORT: port,
       },
       // Workers may run long jobs — give them time to finish
