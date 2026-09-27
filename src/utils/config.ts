@@ -87,8 +87,7 @@ export const GEMINI_API_KEY_EFFECTIVE = GEMINI_API_KEY_ALT || GEMINI_API_KEY;
 export const GEMINI_MODEL_VERSION =
   process.env.GEMINI_MODEL_VERSION || 'gemini-2.5-flash';
 export const GEMINI_LIVE_MODEL_VERSION =
-  process.env.GEMINI_LIVE_MODEL_VERSION ||
-  'gemini-2.5-flash-native-audio-preview-09-2025';
+  process.env.GEMINI_LIVE_MODEL_VERSION || 'gemini-3.8-live';
 
 export const VOICE_PROVIDER_DEFAULT = (
   process.env.VOICE_PROVIDER_DEFAULT || 'gemini'

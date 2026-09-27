@@ -43,6 +43,7 @@ import {
   groqClient,
   generateTextWithGroqFallback,
 } from '../../../services/ai/groq';
+import {buildLiveSessionDescriptor} from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
 import {
   shouldRunAsrShadow,
@@ -1037,20 +1038,26 @@ export async function createEphemeralToken(userId: string) {
   // even on slow networks or after a brief app backgrounding.
   const newSessionExpireTime = dayjs().add(10, 'minutes').toDate();
 
+  const live = buildLiveSessionDescriptor(GEMINI_LIVE_MODEL, {
+    id: voiceId,
+    name: voiceName,
+    provider: 'gemini',
+  });
+
   const token = await geminiAuthClient.authTokens.create({
     config: {
       uses: 1,
       expireTime: expireTime.toISOString(),
       newSessionExpireTime: newSessionExpireTime.toISOString(),
       liveConnectConstraints: {
-        model: GEMINI_LIVE_MODEL,
+        model: live.model,
         config: {
           sessionResumption: {},
           responseModalities: [Modality.AUDIO],
           // Apply the user's chosen Gemini voice to the live session
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: {voiceName},
+              prebuiltVoiceConfig: {voiceName: live.voice.name},
             },
           },
         },
@@ -1067,11 +1074,8 @@ export async function createEphemeralToken(userId: string) {
       token: token.name,
       expiresAt: expireTime.toISOString(),
       // Return the resolved voice so the client can display which voice is active
-      voice: {
-        id: voiceId,
-        name: voiceName,
-        provider: 'gemini',
-      },
+      voice: live.voice,
+      live,
     },
   };
 }
