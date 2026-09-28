@@ -1,3 +1,12 @@
+export const BENEFICIARY_ACCESS_SCOPES = [
+  'full_vault',
+  'memories_only',
+  'capsules_only',
+  'documents_only',
+] as const;
+
+export type BeneficiaryAccessScope = (typeof BENEFICIARY_ACCESS_SCOPES)[number];
+
 import {model, PaginateModel, Schema} from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 
@@ -6,6 +15,7 @@ export interface IBeneficiary {
   name: string;
   email: string;
   relationship: string;
+  access_scope?: BeneficiaryAccessScope;
   about?: string;
   avatar_file_id?: string | null;
   status: string; // pending accepted rejected
@@ -40,6 +50,11 @@ const beneficiary = new Schema<IBeneficiary>(
       default: 'pending',
     },
     relationship: String,
+    access_scope: {
+      type: String,
+      enum: BENEFICIARY_ACCESS_SCOPES,
+      default: 'full_vault',
+    },
     level: {
       type: Number,
       default: 1,

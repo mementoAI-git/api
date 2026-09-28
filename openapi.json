@@ -2973,6 +2973,121 @@
         ]
       }
     },
+    "/billing/iap/verify": {
+      "post": {
+        "description": "Cryptographically verifies an Apple StoreKit transaction or queries Google Play, atomically claims its subscription chain for the authenticated account, and projects the resulting entitlement. Replays by the same account are idempotent.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "platform": {
+                    "enum": [
+                      "ios",
+                      "android"
+                    ],
+                    "type": "string"
+                  },
+                  "productId": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "purchaseToken": {
+                    "description": "Google Play purchase token or StoreKit signed transaction.",
+                    "type": "string"
+                  },
+                  "receiptData": {
+                    "description": "StoreKit signed transaction or legacy receipt.",
+                    "type": "string"
+                  },
+                  "transactionId": {
+                    "description": "Client transaction identifier for diagnostics; the verified provider identifier is authoritative.",
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "platform",
+                  "productId",
+                  "transactionId"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "expiresAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "status": {
+                          "enum": [
+                            "active",
+                            "trialing",
+                            "past_due",
+                            "cancelled",
+                            "paused"
+                          ],
+                          "type": "string"
+                        },
+                        "success": {
+                          "type": "boolean"
+                        },
+                        "tier": {
+                          "enum": [
+                            "free",
+                            "pro",
+                            "legacy"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Store entitlement verified and durably applied"
+          },
+          "400": {
+            "description": "Invalid product, receipt, or subscription ownership conflict"
+          },
+          "401": {
+            "description": "Store verification failed"
+          },
+          "503": {
+            "description": "Store verification provider unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Verify a native store subscription",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
     "/billing/invoices": {
       "get": {
         "description": "Retrieve a list of past invoices/receipts",
@@ -4367,6 +4482,89 @@
         ]
       }
     },
+    "/exports/archive": {
+      "post": {
+        "responses": {
+          "202": {
+            "description": "Archive export queued"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create a complete vault archive",
+        "tags": [
+          "Exports"
+        ]
+      }
+    },
+    "/exports/archive/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive status and progress"
+          },
+          "404": {
+            "description": "Archive export not found for this account"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get archive export status",
+        "tags": [
+          "Exports"
+        ]
+      }
+    },
+    "/exports/archive/{id}/download": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Short-lived signed ZIP download URL"
+          },
+          "404": {
+            "description": "Archive is unavailable, expired, or not owned"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create a short-lived archive download URL",
+        "tags": [
+          "Exports"
+        ]
+      }
+    },
     "/feedback": {
       "post": {
         "description": "Submit user feedback, bug reports, or feature requests",
@@ -4374,6 +4572,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": false,
                 "properties": {
                   "email": {
                     "description": "User email for follow-up",
@@ -4392,6 +4591,16 @@
                     "example": "507f1f77bcf86cd799439011",
                     "type": "string"
                   },
+                  "screenshots": {
+                    "description": "Up to five image file IDs owned by the authenticated user",
+                    "items": {
+                      "pattern": "^[a-fA-F0-9]{24}$",
+                      "type": "string"
+                    },
+                    "maxItems": 5,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
                   "type": {
                     "description": "Type of feedback",
                     "enum": [
@@ -4407,6 +4616,7 @@
                 },
                 "required": [
                   "type",
+                  "email",
                   "message"
                 ],
                 "type": "object"

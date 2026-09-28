@@ -23,6 +23,8 @@ const productionEnv = {
   TALLY_WEBHOOK_ENABLED: 'false',
   SENTRY_TUNNEL_ENABLED: 'false',
   BULL_BOARD_ENABLED: 'false',
+  APPLE_IAP_NOTIFICATIONS_ENABLED: 'false',
+  GOOGLE_PLAY_RTDN_ENABLED: 'false',
 };
 
 describe('runtime security configuration', () => {
@@ -80,6 +82,16 @@ describe('runtime security configuration', () => {
       'enabled Bull Board without administrators',
       {BULL_BOARD_ENABLED: 'true', FEATURE_FLAGS_ADMIN_EMAILS: undefined},
       'FEATURE_FLAGS_ADMIN_EMAILS',
+    ],
+    [
+      'enabled Google RTDN without authenticated push configuration',
+      {GOOGLE_PLAY_RTDN_ENABLED: 'true'},
+      'GOOGLE_PLAY_RTDN_AUDIENCE',
+    ],
+    [
+      'enabled Apple notifications without encrypted replay storage',
+      {APPLE_IAP_NOTIFICATIONS_ENABLED: 'true'},
+      'IAP_TOKEN_ENCRYPTION_KEY',
     ],
   ])('rejects %s in production', (_label, overrides, expected) => {
     expect(() =>

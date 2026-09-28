@@ -62,6 +62,11 @@ export function validateRuntimeConfig(env: Environment): RuntimeConfig {
   const tallyWebhookEnabled = enabled(env, 'TALLY_WEBHOOK_ENABLED');
   const sentryTunnelEnabled = enabled(env, 'SENTRY_TUNNEL_ENABLED');
   const bullBoardEnabled = enabled(env, 'BULL_BOARD_ENABLED');
+  const appleIapNotificationsEnabled = enabled(
+    env,
+    'APPLE_IAP_NOTIFICATIONS_ENABLED',
+  );
+  const googlePlayRtdnEnabled = enabled(env, 'GOOGLE_PLAY_RTDN_ENABLED');
 
   // Attachment responses are signed in every environment. Validate the key at
   // bootstrap instead of allowing the first attachment-bearing request to fail.
@@ -71,6 +76,25 @@ export function validateRuntimeConfig(env: Environment): RuntimeConfig {
     requireSecret(env, 'JWT_SECRET');
   }
   if (tallyWebhookEnabled) requireSecret(env, 'TALLY_WEBHOOK_SECRET');
+  if (googlePlayRtdnEnabled) {
+    if (!env.GOOGLE_PLAY_RTDN_AUDIENCE) {
+      throw new Error('GOOGLE_PLAY_RTDN_AUDIENCE is required');
+    }
+    if (!env.GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL) {
+      throw new Error('GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL is required');
+    }
+    if (!env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY) {
+      throw new Error('GOOGLE_PLAY_SERVICE_ACCOUNT_KEY is required');
+    }
+  }
+  if (appleIapNotificationsEnabled || googlePlayRtdnEnabled) {
+    const encryptionKey = env.IAP_TOKEN_ENCRYPTION_KEY;
+    if (!encryptionKey || Buffer.from(encryptionKey, 'base64').length !== 32) {
+      throw new Error(
+        'IAP_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
+      );
+    }
+  }
   if (sentryTunnelEnabled) {
     if (commaSeparated(env, 'SENTRY_TUNNEL_ALLOWED_HOSTS').length === 0) {
       throw new Error('SENTRY_TUNNEL_ALLOWED_HOSTS is required');

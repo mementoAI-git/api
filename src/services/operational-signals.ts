@@ -3,6 +3,7 @@ import CapsuleDelivery from '../module/database/model/capsule-delivery';
 import PurgeCommand from '../module/database/model/purge-command';
 import Usage from '../module/database/model/usage';
 import AiMetric from '../module/database/model/ai-metric';
+import StoreNotificationEvent from '../module/database/model/store-notification-event';
 import {insightQueue} from './queues/insights';
 import {quickCaptureQueue} from './queues/quick-capture';
 import {summarizationQueue} from './queues/summarization';
@@ -23,6 +24,10 @@ export type OperationalSignals = {
   usage_stale_records: NullableMetric;
   usage_drift_records: NullableMetric;
   compatibility_events_24h: NullableMetric;
+  store_notification_pending: NullableMetric;
+  store_notification_failed: NullableMetric;
+  store_notification_unmapped: NullableMetric;
+  store_notification_oldest_age_seconds: NullableMetric;
 };
 
 async function queueCounts(
@@ -77,6 +82,10 @@ async function collectDatabaseSignals(): Promise<
     | 'usage_stale_records'
     | 'usage_drift_records'
     | 'compatibility_events_24h'
+    | 'store_notification_pending'
+    | 'store_notification_failed'
+    | 'store_notification_unmapped'
+    | 'store_notification_oldest_age_seconds'
   >
 > {
   if (mongoose.connection.readyState !== 1) {
@@ -86,6 +95,10 @@ async function collectDatabaseSignals(): Promise<
       usage_stale_records: null,
       usage_drift_records: null,
       compatibility_events_24h: null,
+      store_notification_pending: null,
+      store_notification_failed: null,
+      store_notification_unmapped: null,
+      store_notification_oldest_age_seconds: null,
     };
   }
 
@@ -99,6 +112,10 @@ async function collectDatabaseSignals(): Promise<
       staleUsage,
       latestUsageReconciliation,
       compatibilityEvents,
+      pendingStoreNotifications,
+      failedStoreNotifications,
+      unmappedStoreNotifications,
+      oldestStoreNotification,
     ] = await Promise.all([
       CapsuleDelivery.countDocuments({status: 'failed'}),
       PurgeCommand.findOne({
@@ -123,6 +140,15 @@ async function collectDatabaseSignals(): Promise<
         event: {$regex: '^compat\\.'},
         created_at: {$gte: compatibilityCutoff},
       }),
+      StoreNotificationEvent.countDocuments({status: 'pending'}),
+      StoreNotificationEvent.countDocuments({status: 'failed'}),
+      StoreNotificationEvent.countDocuments({status: 'unmapped'}),
+      StoreNotificationEvent.findOne({
+        status: {$in: ['pending', 'failed', 'unmapped']},
+      })
+        .sort({received_at: 1})
+        .select('received_at')
+        .lean(),
     ]);
 
     return {
@@ -139,6 +165,18 @@ async function collectDatabaseSignals(): Promise<
           ? latestUsageReconciliation.metadata.drifted
           : null,
       compatibility_events_24h: compatibilityEvents,
+      store_notification_pending: pendingStoreNotifications,
+      store_notification_failed: failedStoreNotifications,
+      store_notification_unmapped: unmappedStoreNotifications,
+      store_notification_oldest_age_seconds:
+        oldestStoreNotification?.received_at
+          ? Math.max(
+              0,
+              Math.floor(
+                (now - oldestStoreNotification.received_at.getTime()) / 1000,
+              ),
+            )
+          : 0,
     };
   } catch {
     return {
@@ -147,6 +185,10 @@ async function collectDatabaseSignals(): Promise<
       usage_stale_records: null,
       usage_drift_records: null,
       compatibility_events_24h: null,
+      store_notification_pending: null,
+      store_notification_failed: null,
+      store_notification_unmapped: null,
+      store_notification_oldest_age_seconds: null,
     };
   }
 }

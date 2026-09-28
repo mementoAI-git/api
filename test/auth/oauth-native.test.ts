@@ -55,6 +55,9 @@ describe('Native OAuth id_token authorization', () => {
             given_name: 'Google',
             family_name: 'Native',
             email_verified: 'true',
+            iss: 'https://accounts.google.com',
+            exp: Math.floor(Date.now() / 1000) + 3600,
+            aud: '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com',
           },
         } as any;
       }

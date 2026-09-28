@@ -8,6 +8,7 @@
 //   MEMENTO_ENV=prod pm2 start ecosystem.config.js
 //   MEMENTO_ENV=dev  pm2 start ecosystem.config.js
 // ──────────────────────────────────────────────────────────────
+require('dotenv').config();
 
 const ENV = process.env.MEMENTO_ENV || 'prod';
 
@@ -29,6 +30,7 @@ module.exports = {
       max_memory_restart: '1G',
       env: {
         NODE_ENV: 'production',
+        MEMENTO_ENV: ENV,
         PORT: port,
       },
       // Graceful shutdown
@@ -52,6 +54,7 @@ module.exports = {
       max_memory_restart: '800M',
       env: {
         NODE_ENV: 'production',
+        MEMENTO_ENV: ENV,
         PORT: port,
       },
       // Workers may run long jobs — give them time to finish

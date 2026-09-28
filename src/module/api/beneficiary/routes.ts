@@ -20,7 +20,7 @@ router.put(
   '/:id',
   gaurd,
   requireFeature('beneficiary.update'),
-  valid.updateBeneficiary,
+  validate(dto.updateBeneficiarySchema),
   ctrl.update,
 );
 router.delete('/:id', gaurd, requireFeature('beneficiary.delete'), ctrl.del);

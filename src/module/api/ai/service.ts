@@ -43,6 +43,7 @@ import {
   groqClient,
   generateTextWithGroqFallback,
 } from '../../../services/ai/groq';
+import {buildLiveSessionDescriptor} from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
 import {
   shouldRunAsrShadow,
@@ -1022,20 +1023,41 @@ function resolveGeminiVoiceName(
     : {voiceName: DEFAULT.voiceName, voiceId: DEFAULT.id};
 }
 
-export async function createEphemeralToken(userId: string) {
-  // Resolve the user's preferred voice
-  const user = await User.findById(userId)
-    .select('chat_voice chat_voice_provider')
-    .lean();
+export async function createEphemeralToken(userId: string, memoryId?: string) {
+  // Resolve the user with profile and voice preferences
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+
   const {voiceName, voiceId} = resolveGeminiVoiceName(
-    user?.chat_voice ?? undefined,
-    user?.chat_voice_provider ?? undefined,
+    user.chat_voice ?? undefined,
+    user.chat_voice_provider ?? undefined,
   );
+
+  let systemInstruction = '';
+  try {
+    systemInstruction = await prompts.createSystemContext(
+      user,
+      memoryId,
+      null,
+      '',
+      0,
+    );
+  } catch (error) {
+    console.error('Failed to create system context for voice mode:', error);
+  }
 
   const expireTime = dayjs().add(30, 'minute').toDate();
   // 10 min gives mobile clients a realistic window to establish the WebSocket
   // even on slow networks or after a brief app backgrounding.
   const newSessionExpireTime = dayjs().add(10, 'minutes').toDate();
+
+  const live = buildLiveSessionDescriptor(GEMINI_LIVE_MODEL, {
+    id: voiceId,
+    name: voiceName,
+    provider: 'gemini',
+  });
 
   const token = await geminiAuthClient.authTokens.create({
     config: {
@@ -1043,14 +1065,14 @@ export async function createEphemeralToken(userId: string) {
       expireTime: expireTime.toISOString(),
       newSessionExpireTime: newSessionExpireTime.toISOString(),
       liveConnectConstraints: {
-        model: GEMINI_LIVE_MODEL,
+        model: live.model,
         config: {
           sessionResumption: {},
           responseModalities: [Modality.AUDIO],
           // Apply the user's chosen Gemini voice to the live session
           speechConfig: {
             voiceConfig: {
-              prebuiltVoiceConfig: {voiceName},
+              prebuiltVoiceConfig: {voiceName: live.voice.name},
             },
           },
         },
@@ -1067,11 +1089,9 @@ export async function createEphemeralToken(userId: string) {
       token: token.name,
       expiresAt: expireTime.toISOString(),
       // Return the resolved voice so the client can display which voice is active
-      voice: {
-        id: voiceId,
-        name: voiceName,
-        provider: 'gemini',
-      },
+      voice: live.voice,
+      live,
+      systemInstruction,
     },
   };
 }

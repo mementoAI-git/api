@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   HeadObjectCommand,
 } from '@aws-sdk/client-s3';
+import type {Readable} from 'stream';
 import {getSignedUrl} from '@aws-sdk/s3-request-presigner';
 import {
   CLOUDFLARE_R2_ACCOUNT_ID,
@@ -79,10 +80,11 @@ export function getStorageTarget(target: 'primary' | 'backup' = 'primary') {
  */
 export async function uploadToS3(
   key: string,
-  body: Buffer | Uint8Array | string,
+  body: Buffer | Uint8Array | string | Readable,
   contentType: string,
   metadata?: Record<string, string>,
   target: 'primary' | 'backup' = 'primary',
+  contentLength?: number,
 ): Promise<S3UploadResult> {
   const {client, bucket} = getStorageTarget(target);
 
@@ -92,6 +94,7 @@ export async function uploadToS3(
     Body: body,
     ContentType: contentType,
     Metadata: metadata,
+    ContentLength: contentLength,
   });
 
   const result = await client.send(command);

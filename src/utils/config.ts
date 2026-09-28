@@ -8,6 +8,10 @@ export const IS_PRODUCTION = NODE_ENV === 'production';
 export const IS_DEV_ENV = ['development', 'dev', 'local'].includes(
   NODE_ENV.toLowerCase(),
 );
+export const MEMENTO_ENV = process.env.MEMENTO_ENV?.toLowerCase();
+export const IS_DEV_DEPLOYMENT = MEMENTO_ENV
+  ? MEMENTO_ENV === 'dev'
+  : IS_DEV_ENV;
 export const PORT = process.env.PORT || 5000;
 export const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT || '10mb';
 export const MAX_UPLOAD_FILES = Number(process.env.MAX_UPLOAD_FILES || 5);
@@ -83,8 +87,7 @@ export const GEMINI_API_KEY_EFFECTIVE = GEMINI_API_KEY_ALT || GEMINI_API_KEY;
 export const GEMINI_MODEL_VERSION =
   process.env.GEMINI_MODEL_VERSION || 'gemini-2.5-flash';
 export const GEMINI_LIVE_MODEL_VERSION =
-  process.env.GEMINI_LIVE_MODEL_VERSION ||
-  'gemini-2.5-flash-native-audio-preview-09-2025';
+  process.env.GEMINI_LIVE_MODEL_VERSION || 'gemini-3.8-live';
 
 export const VOICE_PROVIDER_DEFAULT = (
   process.env.VOICE_PROVIDER_DEFAULT || 'gemini'
@@ -227,6 +230,13 @@ export const POLAR_PRODUCT_LEGACY_ANNUAL =
   process.env.POLAR_PRODUCT_LEGACY_ANNUAL;
 export const POLAR_PRODUCT_LEGACY_LIFETIME =
   process.env.POLAR_PRODUCT_LEGACY_LIFETIME;
+export const APPLE_IAP_NOTIFICATIONS_ENABLED =
+  process.env.APPLE_IAP_NOTIFICATIONS_ENABLED === 'true';
+export const GOOGLE_PLAY_RTDN_ENABLED =
+  process.env.GOOGLE_PLAY_RTDN_ENABLED === 'true';
+export const GOOGLE_PLAY_RTDN_AUDIENCE = process.env.GOOGLE_PLAY_RTDN_AUDIENCE;
+export const GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL =
+  process.env.GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT_EMAIL;
 
 export const DISCORD_FEEDBACK_WEBHOOK_URL =
   process.env.DISCORD_FEEDBACK_WEBHOOK_URL;

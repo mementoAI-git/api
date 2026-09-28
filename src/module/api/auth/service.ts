@@ -168,6 +168,59 @@ export async function oauthAuthorization(
         if (!data?.email || !data?.sub) {
           throw new UnauthorizedException('Invalid Google ID token');
         }
+
+        // 1. Issuer verification
+        const validIssuers = [
+          'https://accounts.google.com',
+          'accounts.google.com',
+        ];
+        if (!data.iss || !validIssuers.includes(data.iss)) {
+          throw new UnauthorizedException('Invalid Google token issuer');
+        }
+
+        // 2. Expiration verification
+        const expSeconds = Number(data.exp);
+        if (!expSeconds || expSeconds * 1000 <= Date.now()) {
+          throw new UnauthorizedException('Google ID token has expired');
+        }
+
+        // 3. Email verified verification
+        const emailVerified =
+          data.email_verified === true || data.email_verified === 'true';
+        if (!emailVerified) {
+          throw new UnauthorizedException(
+            'Google account email is not verified',
+          );
+        }
+
+        // 4. Strict Audience (aud) and Authorized Party (azp) validation
+        const envClientIds = [
+          process.env.GOOGLE_ID,
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_WEB_CLIENT_ID,
+          process.env.GOOGLE_IOS_CLIENT_ID,
+          process.env.GOOGLE_ANDROID_CLIENT_ID,
+        ].filter(Boolean) as string[];
+
+        const allowedClientIds =
+          envClientIds.length > 0
+            ? envClientIds
+            : [
+                '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com',
+                '680261459129-nupaa1nhgpkolmiicmcho7ffipl939lf.apps.googleusercontent.com',
+              ];
+
+        // aud MUST match an authorized client ID
+        if (!data.aud || !allowedClientIds.includes(data.aud)) {
+          throw new UnauthorizedException('Google ID token audience mismatch');
+        }
+
+        // If azp is present, azp MUST also match an authorized client ID
+        if (data.azp && !allowedClientIds.includes(data.azp)) {
+          throw new UnauthorizedException(
+            'Google ID token authorized party mismatch',
+          );
+        }
         const firstName =
           data.given_name || (data.name ? data.name.split(' ')[0] : 'User');
         const lastName =

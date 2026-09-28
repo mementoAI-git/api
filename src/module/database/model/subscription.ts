@@ -1,4 +1,5 @@
 import {model, Schema} from 'mongoose';
+import {randomUUID} from 'crypto';
 
 export type SubscriptionTier = 'free' | 'pro' | 'legacy';
 export type SubscriptionStatus =
@@ -8,11 +9,12 @@ export type SubscriptionStatus =
   | 'cancelled'
   | 'paused';
 export type BillingInterval = 'monthly' | 'annual' | 'lifetime' | null;
-export type PaymentProvider = 'paystack' | 'polar';
+export type PaymentProvider = 'paystack' | 'polar' | 'apple' | 'google';
 export type SubscriptionCurrency = 'USD' | 'NGN';
 
 export interface ISubscription {
   user_id: string;
+  store_account_token: string;
   tier: SubscriptionTier;
   status: SubscriptionStatus;
   billing_interval: BillingInterval;
@@ -21,6 +23,8 @@ export interface ISubscription {
   trial_ends_at?: Date | null;
   has_used_trial: boolean;
   cancelled_at?: Date | null;
+  cancellation_reason?: string | null;
+  cancellation_details?: string | null;
   cancel_at_period_end?: boolean;
   ended_at?: Date | null;
   provider_modified_at?: Date | null;
@@ -38,6 +42,12 @@ export interface ISubscription {
 const subscription = new Schema<ISubscription>(
   {
     user_id: {type: String, required: true, index: true, unique: true},
+    store_account_token: {
+      type: String,
+      required: true,
+      unique: true,
+      default: () => randomUUID(),
+    },
     tier: {
       type: String,
       enum: ['free', 'pro', 'legacy'],
@@ -60,12 +70,14 @@ const subscription = new Schema<ISubscription>(
     trial_ends_at: {type: Date, default: null},
     has_used_trial: {type: Boolean, default: false},
     cancelled_at: {type: Date, default: null},
+    cancellation_reason: {type: String, default: null},
+    cancellation_details: {type: String, default: null},
     cancel_at_period_end: {type: Boolean, default: false},
     ended_at: {type: Date, default: null},
     provider_modified_at: {type: Date, default: null},
     payment_provider: {
       type: String,
-      enum: ['paystack', 'polar', null],
+      enum: ['paystack', 'polar', 'apple', 'google', null],
       default: null,
     },
     provider_customer_id: {type: String, default: null},
