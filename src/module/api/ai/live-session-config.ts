@@ -26,8 +26,11 @@ export function buildLiveConnectConfig(
         prebuiltVoiceConfig: {voiceName},
       },
     },
-    inputAudioTranscription: {languageCodes: ['en-US', 'en']},
-    outputAudioTranscription: {languageCodes: ['en-US', 'en']},
+    // Presence enables transcription. The Gemini Developer API rejects
+    // languageCodes during ephemeral-token serialization, so use automatic
+    // language detection instead of SDK fields supported only by other APIs.
+    inputAudioTranscription: {},
+    outputAudioTranscription: {},
     realtimeInputConfig: {
       automaticActivityDetection: {
         disabled: false,
