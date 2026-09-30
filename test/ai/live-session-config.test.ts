@@ -1,5 +1,10 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {GoogleGenAI, Modality} from '@google/genai';
+import {
+  EndSensitivity,
+  GoogleGenAI,
+  Modality,
+  StartSensitivity,
+} from '@google/genai';
 import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
@@ -28,6 +33,7 @@ describe('Gemini Live session descriptor', () => {
       buildLiveConnectConfig('Fenrir', ' Always answer in English. '),
     ).toEqual({
       sessionResumption: {},
+      contextWindowCompression: {slidingWindow: {}},
       responseModalities: [Modality.AUDIO],
       systemInstruction: 'Always answer in English.',
       speechConfig: {
@@ -41,7 +47,9 @@ describe('Gemini Live session descriptor', () => {
       realtimeInputConfig: {
         automaticActivityDetection: {
           disabled: false,
-          prefixPaddingMs: 20,
+          startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+          endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_UNSPECIFIED,
+          prefixPaddingMs: 200,
           silenceDurationMs: 800,
         },
       },
@@ -86,6 +94,9 @@ describe('Gemini Live session descriptor', () => {
     expect(body.bidiGenerateContentSetup).toMatchObject({
       inputAudioTranscription: {},
       outputAudioTranscription: {},
+    });
+    expect(body.bidiGenerateContentSetup).toMatchObject({
+      contextWindowCompression: {slidingWindow: {}},
     });
   });
 });

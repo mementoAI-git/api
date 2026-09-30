@@ -1,4 +1,20 @@
-import {LiveConnectConfig, Modality} from '@google/genai';
+import {
+  EndSensitivity,
+  LiveConnectConfig,
+  Modality,
+  StartSensitivity,
+} from '@google/genai';
+
+// Starting values. Tune from the mobile voice session metrics
+// (false interruptions per 10 min, end-of-speech to first audio p50/p95).
+export const VOICE_TURN_DETECTION = {
+  startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+  endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_UNSPECIFIED,
+  // Speech must last this long before Gemini treats it as the user talking.
+  // 20 ms made echo and room noise trigger interruptions.
+  prefixPaddingMs: 200,
+  silenceDurationMs: 800,
+} as const;
 
 export type GeminiVoiceDescriptor = {
   id: string;
@@ -19,6 +35,8 @@ export function buildLiveConnectConfig(
 ): LiveConnectConfig {
   const config: LiveConnectConfig = {
     sessionResumption: {},
+    // Without compression Gemini caps audio sessions at 15 minutes.
+    contextWindowCompression: {slidingWindow: {}},
     responseModalities: [Modality.AUDIO],
     speechConfig: {
       languageCode: 'en-US',
@@ -34,8 +52,7 @@ export function buildLiveConnectConfig(
     realtimeInputConfig: {
       automaticActivityDetection: {
         disabled: false,
-        prefixPaddingMs: 20,
-        silenceDurationMs: 800,
+        ...VOICE_TURN_DETECTION,
       },
     },
   };
