@@ -115,7 +115,9 @@ export function buildVoiceTools(options: VoiceToolOptions): Tool[] | undefined {
     ...(options.memoryTool ? (VOICE_TOOLS[0].functionDeclarations ?? []) : []),
     ...(options.callActions ? CALL_ACTION_DECLARATIONS : []),
   ];
-  return declarations.length ? [{functionDeclarations: declarations}] : undefined;
+  return declarations.length
+    ? [{functionDeclarations: declarations}]
+    : undefined;
 }
 
 // Starting values. Tune from the mobile voice session metrics

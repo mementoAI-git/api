@@ -74,6 +74,8 @@ describe('voice prompt', () => {
     expect(section).toContain('call end_call');
     expect(section).toContain('set_microphone');
     expect(section).toMatch(/keep talking while they look or wrap up/);
-    expect(buildVoiceSystemInstruction('BASE', {callActions: true})).toContain('CALL ACTIONS');
+    expect(buildVoiceSystemInstruction('BASE', {callActions: true})).toContain(
+      'CALL ACTIONS',
+    );
   });
 });

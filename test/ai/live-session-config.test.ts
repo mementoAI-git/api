@@ -147,7 +147,9 @@ describe('Gemini Live session descriptor', () => {
   });
 
   it('declares call actions only when requested, in the same tool as memory search', async () => {
-    const memoryOnly = buildLiveConnectConfig('Fenrir', 'hi', undefined, {memoryTool: true});
+    const memoryOnly = buildLiveConnectConfig('Fenrir', 'hi', undefined, {
+      memoryTool: true,
+    });
     expect(memoryOnly.tools).toEqual(VOICE_TOOLS);
 
     const both = buildLiveConnectConfig('Fenrir', 'hi', undefined, {
@@ -155,20 +157,31 @@ describe('Gemini Live session descriptor', () => {
       callActions: true,
     });
     expect(both.tools).toHaveLength(1);
-    const declarations = both.tools?.[0] as {functionDeclarations: {name: string; parameters?: any}[]};
+    const declarations = both.tools?.[0] as {
+      functionDeclarations: {name: string; parameters?: any}[];
+    };
     expect(declarations.functionDeclarations.map(d => d.name)).toEqual([
       SEARCH_MEMORIES_TOOL_NAME,
       ...CALL_ACTION_TOOL_NAMES,
     ]);
-    const openScreen = declarations.functionDeclarations.find(d => d.name === 'open_screen');
-    expect(openScreen?.parameters.properties.destination.enum).toEqual(VOICE_SCREEN_DESTINATIONS);
-    expect(openScreen?.parameters.required).toEqual(['destination', 'keep_talking']);
+    const openScreen = declarations.functionDeclarations.find(
+      d => d.name === 'open_screen',
+    );
+    expect(openScreen?.parameters.properties.destination.enum).toEqual(
+      VOICE_SCREEN_DESTINATIONS,
+    );
+    expect(openScreen?.parameters.required).toEqual([
+      'destination',
+      'keep_talking',
+    ]);
 
-    const actionsOnly = buildLiveConnectConfig('Fenrir', 'hi', undefined, {callActions: true});
+    const actionsOnly = buildLiveConnectConfig('Fenrir', 'hi', undefined, {
+      callActions: true,
+    });
     expect(
-      (actionsOnly.tools?.[0] as {functionDeclarations: {name: string}[]}).functionDeclarations.map(
-        d => d.name,
-      ),
+      (
+        actionsOnly.tools?.[0] as {functionDeclarations: {name: string}[]}
+      ).functionDeclarations.map(d => d.name),
     ).toEqual(CALL_ACTION_TOOL_NAMES);
 
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -182,11 +195,15 @@ describe('Gemini Live session descriptor', () => {
       httpOptions: {apiVersion: 'v1alpha', baseUrl: 'https://gemini.test'},
     });
     await client.authTokens.create({
-      config: {uses: 1, liveConnectConstraints: {model: 'gemini-test-live', config: both}},
+      config: {
+        uses: 1,
+        liveConnectConstraints: {model: 'gemini-test-live', config: both},
+      },
     });
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
     const serialized = JSON.stringify(body.bidiGenerateContentSetup);
-    for (const name of CALL_ACTION_TOOL_NAMES) expect(serialized).toContain(name);
+    for (const name of CALL_ACTION_TOOL_NAMES)
+      expect(serialized).toContain(name);
     expect(serialized).toContain('time_capsules');
   });
 });
