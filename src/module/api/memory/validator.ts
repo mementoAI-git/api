@@ -189,7 +189,13 @@ export default {
   publicMemory: [param('id').isMongoId().withMessage('Invalid memory ID')],
   addMessageToMemory: [
     body('messages').notEmpty().withMessage('Messages are reqired'),
-    body('messages.*.text').notEmpty().withMessage('Text is reqired'),
+    body('messages.*.text')
+      .isString()
+      .withMessage('Text must be a string')
+      .bail()
+      .trim()
+      .notEmpty()
+      .withMessage('Text is reqired'),
     body('messages.*.role').notEmpty().withMessage('Role is reqired'),
     body('messages.*.is_voice')
       .optional()
