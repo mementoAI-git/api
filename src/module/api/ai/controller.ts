@@ -5,6 +5,7 @@ import {IRequest} from '../../../utils/interface';
 import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
 import * as voiceTurns from './voice/turns';
+import {searchMemoriesForVoice} from './voice/memory-search';
 
 export async function autogenerateTags(
   req: IRequest,
@@ -152,6 +153,22 @@ export async function recordVoiceTurns(
       req.body,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function searchVoiceMemories(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await assertAccess(req.auth.id, 'voice_mode');
+    const result = await searchMemoriesForVoice(req.auth.id, req.body.query);
+    return responsHandler(res, StatusCodes.OK, 'Memory search complete', {
+      result,
+    });
   } catch (error) {
     next(error);
   }

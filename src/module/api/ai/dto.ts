@@ -139,6 +139,12 @@ export const voiceTurnsSchema = z.object({
   }),
 });
 
+export const voiceMemorySearchSchema = z.object({
+  body: z.strictObject({
+    query: z.string().trim().min(1, 'Query is required').max(200),
+  }),
+});
+
 // Type exports
 export type PromptBody = z.infer<typeof promptSchema>['body'];
 export type StartConversationBody = z.infer<

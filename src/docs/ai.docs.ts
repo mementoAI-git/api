@@ -690,6 +690,48 @@ const aiDocs = {
       },
     },
   },
+  '/ai/voice/memory-search': {
+    post: {
+      tags: ['AI'],
+      summary: 'Voice Memory Search',
+      description:
+        "Backs the Gemini Live search_memories tool. The app relays the model's tool call here and returns `result` as the tool response. Requires voice mode access.",
+      security: [{bearerAuth: []}],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['query'],
+              properties: {query: {type: 'string', maxLength: 200}},
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Search result as speakable text',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {
+                    type: 'object',
+                    properties: {result: {type: 'string'}},
+                  },
+                },
+              },
+            },
+          },
+        },
+        402: {description: 'Voice mode requires Pro or Legacy'},
+        422: {description: 'Invalid query'},
+      },
+    },
+  },
   '/ai/voices': {
     get: {
       tags: ['AI'],

@@ -67,6 +67,12 @@ router.post(
   validate(dto.voiceTurnsSchema),
   ctrl.recordVoiceTurns,
 );
+router.post(
+  '/voice/memory-search',
+  gaurd,
+  validate(dto.voiceMemorySearchSchema),
+  ctrl.searchVoiceMemories,
+);
 router.get(
   '/voices',
   gaurd,
