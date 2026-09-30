@@ -663,16 +663,20 @@ export async function getSessionContext(
     (user?.preferences as any)?.priority_dimensions || [];
   const openThreads = (persona?.open_threads as string[]) || [];
 
-  const conversations = await Memory.find({user: userId, type: 'conversation'})
-    .sort({created_at: -1})
-    .lean();
-
-  const sessionCount = conversations.length;
+  const conversationFilter = {user: userId, type: 'conversation'};
+  const [sessionCount, newestConversation, discussedDimensions] =
+    await Promise.all([
+      Memory.countDocuments(conversationFilter),
+      Memory.findOne(conversationFilter)
+        .sort({created_at: -1})
+        .select('summary topics created_at')
+        .lean(),
+      Memory.distinct('dimensions', conversationFilter),
+    ]);
 
   // Only call something the last session if it is actually the newest conversation.
   // If the newest conversation is not summarized yet, return null instead of
   // silently presenting an older summary as the latest session.
-  const newestConversation = conversations[0];
   let lastSession = null;
 
   if (newestConversation?.summary) {
@@ -685,8 +689,8 @@ export async function getSessionContext(
     };
   }
 
-  const allDiscussedDimensions = Array.from(
-    new Set(conversations.flatMap(c => (c.dimensions as string[]) || [])),
+  const allDiscussedDimensions = (discussedDimensions as unknown[]).filter(
+    (value): value is string => typeof value === 'string' && value.length > 0,
   );
 
   const gapDimensions = computeGapDimensions(
