@@ -11,6 +11,7 @@ import {
   formatTranscriptLines,
   getRecentConversationLines,
 } from './transcript-context';
+import {withTimeout} from './with-timeout';
 
 const DEFAULT_LONG_TERM_TIMEOUT_MS = 1_500;
 const MAX_TRANSCRIPT_LINES = 20;
@@ -21,22 +22,6 @@ export type VoiceSessionContext = {
   greetingInstruction: string;
   memoryId?: string;
 };
-
-async function withTimeout<T>(
-  work: Promise<T>,
-  timeoutMs: number,
-  fallback: T,
-): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<T>(resolve => {
-    timer = setTimeout(() => resolve(fallback), timeoutMs);
-  });
-  try {
-    return await Promise.race([work.catch(() => fallback), timeout]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
 
 function stripHtml(value: string): string {
   return value
