@@ -52,4 +52,16 @@ describe('createEphemeralToken', () => {
     expect(data.promptVersion).toMatch(/^voice-/);
     expect(data).not.toHaveProperty('systemInstruction');
   });
+
+  it('locks the resume handle into the token when reconnecting', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/resume'} as any);
+    const user = await createUserFixture();
+
+    await createEphemeralToken(user.id, undefined, 'handle-abc');
+
+    const locked = create.mock.calls[0][0].config.liveConnectConstraints.config;
+    expect(locked.sessionResumption).toEqual({handle: 'handle-abc'});
+  });
 });

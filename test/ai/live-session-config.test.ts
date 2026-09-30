@@ -62,6 +62,15 @@ describe('Gemini Live session descriptor', () => {
     );
   });
 
+  it('locks a resume handle into the session when one is given', () => {
+    expect(
+      buildLiveConnectConfig('Fenrir', 'hi', 'handle-123').sessionResumption,
+    ).toEqual({handle: 'handle-123'});
+    expect(buildLiveConnectConfig('Fenrir', 'hi').sessionResumption).toEqual(
+      {},
+    );
+  });
+
   it('serializes transcription markers through the Gemini token client', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({name: 'authTokens/test'}), {

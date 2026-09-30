@@ -32,9 +32,11 @@ export function buildLiveSessionDescriptor(
 export function buildLiveConnectConfig(
   voiceName: string,
   systemInstruction?: string,
+  resumeHandle?: string,
 ): LiveConnectConfig {
   const config: LiveConnectConfig = {
-    sessionResumption: {},
+    // A handle resumes the same Gemini session after goAway or a network drop.
+    sessionResumption: resumeHandle ? {handle: resumeHandle} : {},
     // Without compression Gemini caps audio sessions at 15 minutes.
     contextWindowCompression: {slidingWindow: {}},
     responseModalities: [Modality.AUDIO],

@@ -1028,7 +1028,11 @@ function resolveGeminiVoiceName(
     : {voiceName: DEFAULT.voiceName, voiceId: DEFAULT.id};
 }
 
-export async function createEphemeralToken(userId: string, memoryId?: string) {
+export async function createEphemeralToken(
+  userId: string,
+  memoryId?: string,
+  resumeHandle?: string,
+) {
   // Resolve the user with profile and voice preferences
   const user = await User.findById(userId);
   if (!user) {
@@ -1065,6 +1069,7 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
         config: buildLiveConnectConfig(
           live.voice.name,
           voiceContext.systemInstruction,
+          resumeHandle,
         ),
       },
       httpOptions: {

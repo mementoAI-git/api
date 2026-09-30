@@ -588,6 +588,14 @@ const aiDocs = {
           description:
             'Conversation or story the call continues. Ignored if not owned by the caller.',
         },
+        {
+          name: 'resume_handle',
+          in: 'query',
+          required: false,
+          schema: {type: 'string'},
+          description:
+            'Latest sessionResumptionUpdate.newHandle from the previous connection. Resumes the same conversation after goAway or a network drop. Valid for 2 hours.',
+        },
       ],
       responses: {
         200: {

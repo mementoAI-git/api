@@ -124,9 +124,16 @@ export async function getEphemeralToken(
       typeof req.query.memory_id === 'string' && req.query.memory_id.trim()
         ? req.query.memory_id.trim()
         : undefined;
+    const resumeHandle =
+      typeof req.query.resume_handle === 'string' &&
+      req.query.resume_handle.trim() &&
+      req.query.resume_handle.length <= 4096
+        ? req.query.resume_handle.trim()
+        : undefined;
     const {message, data} = await service.createEphemeralToken(
       req.auth.id,
       memoryId,
+      resumeHandle,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
