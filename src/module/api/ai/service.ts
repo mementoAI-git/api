@@ -1,6 +1,6 @@
 import {Response} from 'express';
 import {FilterQuery} from 'mongoose';
-import {createUserContent, Modality, PartListUnion} from '@google/genai';
+import {createUserContent, PartListUnion} from '@google/genai';
 import axios from 'axios';
 import {z} from 'zod';
 import Message, {IMessage} from '../../database/model/message';
@@ -43,7 +43,10 @@ import {
   groqClient,
   generateTextWithGroqFallback,
 } from '../../../services/ai/groq';
-import {buildLiveSessionDescriptor} from './live-session-config';
+import {
+  buildLiveConnectConfig,
+  buildLiveSessionDescriptor,
+} from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
 import {
   shouldRunAsrShadow,
@@ -1066,16 +1069,10 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
       newSessionExpireTime: newSessionExpireTime.toISOString(),
       liveConnectConstraints: {
         model: live.model,
-        config: {
-          sessionResumption: {},
-          responseModalities: [Modality.AUDIO],
-          // Apply the user's chosen Gemini voice to the live session
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {voiceName: live.voice.name},
-            },
-          },
-        },
+        // Supplying token constraints locks the complete Live config. Keep
+        // transcription and turn detection here because client overrides are
+        // ignored for constrained ephemeral tokens.
+        config: buildLiveConnectConfig(live.voice.name, systemInstruction),
       },
       httpOptions: {
         apiVersion: 'v1alpha',
