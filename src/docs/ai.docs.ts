@@ -579,6 +579,16 @@ const aiDocs = {
       description:
         'Get an ephemeral token for real-time AI interactions (e.g., LiveKit/WebRTC).',
       security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'memory_id',
+          in: 'query',
+          required: false,
+          schema: {type: 'string'},
+          description:
+            'Conversation or story the call continues. Ignored if not owned by the caller.',
+        },
+      ],
       responses: {
         200: {
           description: 'Token retrieved',
@@ -588,7 +598,22 @@ const aiDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  data: {type: 'object', properties: {token: {type: 'string'}}},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      token: {type: 'string'},
+                      expiresAt: {type: 'string', format: 'date-time'},
+                      voice: {type: 'object'},
+                      live: {type: 'object'},
+                      greetingInstruction: {
+                        type: 'string',
+                        description:
+                          'Send as the first client text turn to start the call.',
+                      },
+                      memoryId: {type: 'string', nullable: true},
+                      promptVersion: {type: 'string'},
+                    },
+                  },
                 },
               },
             },

@@ -48,6 +48,8 @@ import {
   buildLiveSessionDescriptor,
 } from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
+import {buildVoiceSessionContext} from './voice/session-context';
+import {VOICE_PROMPT_VERSION} from '../../../utils/ai-prompt/voice';
 import {
   shouldRunAsrShadow,
   transcribeWithConfiguredAsr,
@@ -1038,18 +1040,7 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
     user.chat_voice_provider ?? undefined,
   );
 
-  let systemInstruction = '';
-  try {
-    systemInstruction = await prompts.createSystemContext(
-      user,
-      memoryId,
-      null,
-      '',
-      0,
-    );
-  } catch (error) {
-    console.error('Failed to create system context for voice mode:', error);
-  }
+  const voiceContext = await buildVoiceSessionContext(user, memoryId);
 
   const expireTime = dayjs().add(30, 'minute').toDate();
   // 10 min gives mobile clients a realistic window to establish the WebSocket
@@ -1069,10 +1060,12 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
       newSessionExpireTime: newSessionExpireTime.toISOString(),
       liveConnectConstraints: {
         model: live.model,
-        // Supplying token constraints locks the complete Live config. Keep
-        // transcription and turn detection here because client overrides are
-        // ignored for constrained ephemeral tokens.
-        config: buildLiveConnectConfig(live.voice.name, systemInstruction),
+        // Constraints lock every LiveConnectConfig field. Client config is
+        // ignored, so all voice context must be built here.
+        config: buildLiveConnectConfig(
+          live.voice.name,
+          voiceContext.systemInstruction,
+        ),
       },
       httpOptions: {
         apiVersion: 'v1alpha',
@@ -1080,15 +1073,24 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
     },
   });
 
+  void recordAiMetric({
+    event: 'prompt_version_used',
+    task: 'voice_session',
+    endpoint: '/ai/ephemeral-token',
+    user: userId,
+    prompt_version: VOICE_PROMPT_VERSION,
+  });
+
   return {
     message: 'Ephemeral token created successfully',
     data: {
       token: token.name,
       expiresAt: expireTime.toISOString(),
-      // Return the resolved voice so the client can display which voice is active
       voice: live.voice,
       live,
-      systemInstruction,
+      greetingInstruction: voiceContext.greetingInstruction,
+      memoryId: voiceContext.memoryId ?? null,
+      promptVersion: VOICE_PROMPT_VERSION,
     },
   };
 }
