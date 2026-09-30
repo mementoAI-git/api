@@ -56,4 +56,14 @@ describe('voice prompt', () => {
     expect(first).toMatch(/^Greet the host/);
     expect(first).toMatch(/one short/i);
   });
+
+  it('adds memory tool guidance only when the tool is enabled', () => {
+    expect(buildVoiceModeSection()).not.toContain('search_memories');
+    expect(buildVoiceModeSection({memoryTool: true})).toContain(
+      'call search_memories',
+    );
+    expect(buildVoiceSystemInstruction('BASE', {memoryTool: true})).toContain(
+      'call search_memories',
+    );
+  });
 });

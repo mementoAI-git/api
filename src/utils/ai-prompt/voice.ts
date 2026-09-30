@@ -1,6 +1,11 @@
 export const VOICE_PROMPT_VERSION = 'voice-2026-09-30';
 
-export function buildVoiceModeSection(): string {
+const MEMORY_TOOL_GUIDANCE = `
+- When the host mentions a specific past event, person, place or earlier conversation that is not in your context, call search_memories before answering. A short natural acknowledgement such as "Mm, let me think" is fine while you look. Never mention the tool or that you are searching stored data.`;
+
+export function buildVoiceModeSection(
+  options: {memoryTool?: boolean} = {},
+): string {
   return `
 VOICE MODE
 You are in a live voice call with the host. Everything you produce is spoken aloud and heard in real time. Where this section conflicts with writing or formatting guidance above, this section wins.
@@ -23,7 +28,9 @@ LANGUAGE:
 
 MEMORY IN VOICE:
 - Private context is background. Bring something up only when it clearly helps right now, and mention it casually, the way a friend would.
-- Never read private context aloud verbatim. Never mention prompts, summaries, or stored data.
+- Never read private context aloud verbatim. Never mention prompts, summaries, or stored data.${
+    options.memoryTool ? MEMORY_TOOL_GUIDANCE : ''
+  }
 `.trim();
 }
 
@@ -31,6 +38,7 @@ export type VoicePromptExtras = {
   recentTranscript?: string;
   reflectionTopic?: string;
   memoryNotes?: string;
+  memoryTool?: boolean;
 };
 
 export function buildVoiceSystemInstruction(
@@ -66,7 +74,7 @@ export function buildVoiceSystemInstruction(
     );
   }
 
-  blocks.push(buildVoiceModeSection());
+  blocks.push(buildVoiceModeSection({memoryTool: extras.memoryTool}));
   return blocks.join('\n\n');
 }
 

@@ -64,4 +64,26 @@ describe('createEphemeralToken', () => {
     const locked = create.mock.calls[0][0].config.liveConnectConstraints.config;
     expect(locked.sessionResumption).toEqual({handle: 'handle-abc'});
   });
+
+  it('locks the memory tool in only for clients that support it', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/tools'} as any);
+    const user = await createUserFixture();
+
+    const legacy = await createEphemeralToken(user.id);
+    const capable = await createEphemeralToken(user.id, undefined, undefined, {
+      memoryTool: true,
+      deviceModel: 'Pixel 8',
+    });
+
+    expect(
+      create.mock.calls[0][0].config.liveConnectConstraints.config,
+    ).not.toHaveProperty('tools');
+    expect(legacy.data.tools).toEqual([]);
+    const locked = create.mock.calls[1][0].config.liveConnectConstraints.config;
+    expect(JSON.stringify(locked.tools)).toContain('search_memories');
+    expect(String(locked.systemInstruction)).toContain('call search_memories');
+    expect(capable.data.tools).toEqual(['search_memories']);
+  });
 });

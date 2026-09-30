@@ -131,10 +131,19 @@ export async function getEphemeralToken(
       req.query.resume_handle.length <= 4096
         ? req.query.resume_handle.trim()
         : undefined;
+    const deviceModel =
+      typeof req.query.device_model === 'string'
+        ? req.query.device_model.trim().slice(0, 100)
+        : undefined;
+    const capabilities =
+      typeof req.query.capabilities === 'string'
+        ? req.query.capabilities.split(',').map(value => value.trim())
+        : [];
     const {message, data} = await service.createEphemeralToken(
       req.auth.id,
       memoryId,
       resumeHandle,
+      {deviceModel, memoryTool: capabilities.includes('memory_search')},
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

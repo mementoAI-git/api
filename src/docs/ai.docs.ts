@@ -596,6 +596,22 @@ const aiDocs = {
           description:
             'Latest sessionResumptionUpdate.newHandle from the previous connection. Resumes the same conversation after goAway or a network drop. Valid for 2 hours.',
         },
+        {
+          name: 'capabilities',
+          in: 'query',
+          required: false,
+          schema: {type: 'string', example: 'memory_search'},
+          description:
+            'Comma-separated client capabilities. memory_search locks the search_memories tool into the session. Only send it from builds that relay tool calls.',
+        },
+        {
+          name: 'device_model',
+          in: 'query',
+          required: false,
+          schema: {type: 'string'},
+          description:
+            'Device model name, used for the speaker full-duplex policy.',
+        },
       ],
       responses: {
         200: {
@@ -620,6 +636,8 @@ const aiDocs = {
                       },
                       memoryId: {type: 'string', nullable: true},
                       promptVersion: {type: 'string'},
+                      tools: {type: 'array', items: {type: 'string'}},
+                      speakerFullDuplex: {type: 'boolean'},
                     },
                   },
                 },

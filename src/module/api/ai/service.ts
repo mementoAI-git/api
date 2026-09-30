@@ -46,6 +46,7 @@ import {
 import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
+  SEARCH_MEMORIES_TOOL_NAME,
 } from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
 import {buildVoiceSessionContext} from './voice/session-context';
@@ -1032,6 +1033,7 @@ export async function createEphemeralToken(
   userId: string,
   memoryId?: string,
   resumeHandle?: string,
+  client: {deviceModel?: string; memoryTool?: boolean} = {},
 ) {
   // Resolve the user with profile and voice preferences
   const user = await User.findById(userId);
@@ -1044,7 +1046,10 @@ export async function createEphemeralToken(
     user.chat_voice_provider ?? undefined,
   );
 
-  const voiceContext = await buildVoiceSessionContext(user, memoryId);
+  const memoryTool = client.memoryTool === true;
+  const voiceContext = await buildVoiceSessionContext(user, memoryId, {
+    memoryTool,
+  });
 
   const expireTime = dayjs().add(30, 'minute').toDate();
   // 10 min gives mobile clients a realistic window to establish the WebSocket
@@ -1070,6 +1075,7 @@ export async function createEphemeralToken(
           live.voice.name,
           voiceContext.systemInstruction,
           resumeHandle,
+          {memoryTool},
         ),
       },
       httpOptions: {
@@ -1096,6 +1102,7 @@ export async function createEphemeralToken(
       greetingInstruction: voiceContext.greetingInstruction,
       memoryId: voiceContext.memoryId ?? null,
       promptVersion: VOICE_PROMPT_VERSION,
+      tools: memoryTool ? [SEARCH_MEMORIES_TOOL_NAME] : [],
     },
   };
 }

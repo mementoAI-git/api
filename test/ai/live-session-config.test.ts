@@ -8,6 +8,8 @@ import {
 import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
+  SEARCH_MEMORIES_TOOL_NAME,
+  VOICE_TOOLS,
 } from '../../src/module/api/ai/live-session-config';
 
 describe('Gemini Live session descriptor', () => {
@@ -107,5 +109,38 @@ describe('Gemini Live session descriptor', () => {
     expect(body.bidiGenerateContentSetup).toMatchObject({
       contextWindowCompression: {slidingWindow: {}},
     });
+  });
+
+  it('declares the memory search tool only when requested', async () => {
+    expect(buildLiveConnectConfig('Fenrir', 'hi')).not.toHaveProperty('tools');
+    const config = buildLiveConnectConfig('Fenrir', 'hi', undefined, {
+      memoryTool: true,
+    });
+    expect(config.tools).toEqual(VOICE_TOOLS);
+    expect(VOICE_TOOLS[0].functionDeclarations?.[0]).toMatchObject({
+      name: SEARCH_MEMORIES_TOOL_NAME,
+      parameters: {required: ['query']},
+    });
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({name: 'authTokens/test'}), {
+        status: 200,
+        headers: {'content-type': 'application/json'},
+      }),
+    );
+    const client = new GoogleGenAI({
+      apiKey: 'test-api-key',
+      httpOptions: {apiVersion: 'v1alpha', baseUrl: 'https://gemini.test'},
+    });
+    await client.authTokens.create({
+      config: {
+        uses: 1,
+        liveConnectConstraints: {model: 'gemini-test-live', config},
+      },
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(JSON.stringify(body.bidiGenerateContentSetup)).toContain(
+      SEARCH_MEMORIES_TOOL_NAME,
+    );
   });
 });

@@ -3,7 +3,34 @@ import {
   LiveConnectConfig,
   Modality,
   StartSensitivity,
+  Tool,
+  Type,
 } from '@google/genai';
+
+export const SEARCH_MEMORIES_TOOL_NAME = 'search_memories';
+
+export const VOICE_TOOLS: Tool[] = [
+  {
+    functionDeclarations: [
+      {
+        name: SEARCH_MEMORIES_TOOL_NAME,
+        description:
+          "Search the host's saved memories, stories and earlier conversations. Use it when the host mentions a specific past event, person, place or conversation that is not in your context.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            query: {
+              type: Type.STRING,
+              description:
+                'A short search phrase, for example "grandma\'s farm" or "trip to Lagos".',
+            },
+          },
+          required: ['query'],
+        },
+      },
+    ],
+  },
+];
 
 // Starting values. Tune from the mobile voice session metrics
 // (false interruptions per 10 min, end-of-speech to first audio p50/p95).
@@ -33,6 +60,7 @@ export function buildLiveConnectConfig(
   voiceName: string,
   systemInstruction?: string,
   resumeHandle?: string,
+  options: {memoryTool?: boolean} = {},
 ): LiveConnectConfig {
   const config: LiveConnectConfig = {
     // A handle resumes the same Gemini session after goAway or a network drop.
@@ -58,6 +86,10 @@ export function buildLiveConnectConfig(
       },
     },
   };
+
+  if (options.memoryTool) {
+    config.tools = VOICE_TOOLS;
+  }
 
   if (systemInstruction?.trim()) {
     config.systemInstruction = systemInstruction.trim();
