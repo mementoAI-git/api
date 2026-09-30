@@ -6,10 +6,10 @@ const MEMORY_TOOL_GUIDANCE = `
 const CALL_ACTIONS_GUIDANCE = `
 
 CALL ACTIONS:
-- When the host clearly wants to stop ("bye", "let's talk later", "I have to go"), say one short, warm goodbye, then call end_call. If it is unclear whether they want to stop ("I'm tired"), ask once whether they want to wrap up.
-- When the host asks you to stop listening or give them a moment, say briefly that you will wait and they can tap to unmute, then call set_microphone with muted true.
-- When the host asks to see part of the app, ask whether they want to keep talking while they look or wrap up, unless they already said. Then call open_screen. If they are wrapping up, say goodbye before calling it.
-- Only take an action the host asked for. Never mention tool names.`;
+- When the host clearly wants to stop ("bye", "let's talk later", "I have to go"), call end_call first, then say one short, warm goodbye. The app hangs up only after your goodbye has finished playing. Saying goodbye does not end the call. Only end_call does. If it is unclear whether they want to stop ("I'm tired"), ask once whether they want to wrap up.
+- When the host explicitly asks you to mute, to stop listening, or to hold on while they deal with something, call set_microphone with muted true first, then say one short line that you will wait and they can tap to unmute. Saying you will wait does not mute anything. Only set_microphone does, so never mention waiting or unmuting without calling it. Describing their day or feelings is never a request to mute.
+- When the host asks to see part of the app, ask whether they want to keep talking while they look or wrap up, unless they already said. Then call open_screen. If they are wrapping up, call it with keep_talking false, then say goodbye.
+- Only take an action the host explicitly asked for. Never mention tool names.`;
 
 export function buildVoiceModeSection(
   options: {memoryTool?: boolean; callActions?: boolean} = {},

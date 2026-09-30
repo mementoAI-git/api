@@ -70,12 +70,12 @@ export const CALL_ACTION_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: END_CALL_TOOL_NAME,
     description:
-      'End the voice call. Say one short goodbye first, then call this. Use it only when the host clearly wants to stop talking.',
+      'End the voice call. Call it as soon as the host clearly wants to stop talking, then say one short goodbye. The app hangs up after your goodbye finishes playing.',
   },
   {
     name: SET_MICROPHONE_TOOL_NAME,
     description:
-      "Mute the host's microphone when they ask you to stop listening or give them a moment. You cannot unmute: the host taps to unmute.",
+      "Mute the host's microphone. Call it, before you reply, when the host explicitly asks you to mute, stop listening, or hold on while they deal with something. You cannot unmute: the host taps to unmute.",
     parameters: {
       type: Type.OBJECT,
       properties: {
