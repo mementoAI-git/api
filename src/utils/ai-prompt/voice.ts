@@ -3,8 +3,16 @@ export const VOICE_PROMPT_VERSION = 'voice-2026-09-30';
 const MEMORY_TOOL_GUIDANCE = `
 - When the host mentions a specific past event, person, place or earlier conversation that is not in your context, call search_memories before answering. A short natural acknowledgement such as "Mm, let me think" is fine while you look. Never mention the tool or that you are searching stored data.`;
 
+const CALL_ACTIONS_GUIDANCE = `
+
+CALL ACTIONS:
+- When the host clearly wants to stop ("bye", "let's talk later", "I have to go"), say one short, warm goodbye, then call end_call. If it is unclear whether they want to stop ("I'm tired"), ask once whether they want to wrap up.
+- When the host asks you to stop listening or give them a moment, say briefly that you will wait and they can tap to unmute, then call set_microphone with muted true.
+- When the host asks to see part of the app, ask whether they want to keep talking while they look or wrap up, unless they already said. Then call open_screen. If they are wrapping up, say goodbye before calling it.
+- Only take an action the host asked for. Never mention tool names.`;
+
 export function buildVoiceModeSection(
-  options: {memoryTool?: boolean} = {},
+  options: {memoryTool?: boolean; callActions?: boolean} = {},
 ): string {
   return `
 VOICE MODE
@@ -30,7 +38,7 @@ MEMORY IN VOICE:
 - Private context is background. Bring something up only when it clearly helps right now, and mention it casually, the way a friend would.
 - Never read private context aloud verbatim. Never mention prompts, summaries, or stored data.${
     options.memoryTool ? MEMORY_TOOL_GUIDANCE : ''
-  }
+  }${options.callActions ? CALL_ACTIONS_GUIDANCE : ''}
 `.trim();
 }
 
@@ -39,6 +47,7 @@ export type VoicePromptExtras = {
   reflectionTopic?: string;
   memoryNotes?: string;
   memoryTool?: boolean;
+  callActions?: boolean;
 };
 
 export function buildVoiceSystemInstruction(
@@ -74,7 +83,12 @@ export function buildVoiceSystemInstruction(
     );
   }
 
-  blocks.push(buildVoiceModeSection({memoryTool: extras.memoryTool}));
+  blocks.push(
+    buildVoiceModeSection({
+      memoryTool: extras.memoryTool,
+      callActions: extras.callActions,
+    }),
+  );
   return blocks.join('\n\n');
 }
 

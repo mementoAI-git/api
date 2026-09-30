@@ -66,4 +66,14 @@ describe('voice prompt', () => {
       'call search_memories',
     );
   });
+
+  it('adds call action guidance only when call actions are enabled', () => {
+    expect(buildVoiceModeSection()).not.toContain('CALL ACTIONS');
+    const section = buildVoiceModeSection({callActions: true});
+    expect(section).toContain('CALL ACTIONS');
+    expect(section).toContain('call end_call');
+    expect(section).toContain('set_microphone');
+    expect(section).toMatch(/keep talking while they look or wrap up/);
+    expect(buildVoiceSystemInstruction('BASE', {callActions: true})).toContain('CALL ACTIONS');
+  });
 });
