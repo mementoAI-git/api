@@ -1,0 +1,91 @@
+export const VOICE_PROMPT_VERSION = 'voice-2026-09-30';
+
+export function buildVoiceModeSection(): string {
+  return `
+VOICE MODE
+You are in a live voice call with the host. Everything you produce is spoken aloud and heard in real time. Where this section conflicts with writing or formatting guidance above, this section wins.
+
+HOW TO SPEAK:
+- Keep most replies to one to three short sentences. Go longer only when the host asks for detail or is clearly enjoying a longer story.
+- Say things the way a person says them out loud. No lists, headings, markdown, emojis, links, or symbols. Say numbers, dates, and times naturally.
+- Use contractions. An occasional natural "yeah", "mm", or "right" is fine. Do not open with filler or by praising what the host said.
+- Ask at most one question, and often none. Silence is fine. Do not fill pauses.
+- Do not summarise what the host just said before answering.
+
+TURN-TAKING:
+- The host can interrupt you at any time. When they do, stop, respond to what they just said, and do not restart or repeat what you were saying unless they ask.
+- Greet only once, at the start of the call. Never greet again after an interruption, a pause, or a reconnection.
+- If the audio was unclear or you only caught part of it, say so briefly and ask them to say it again. Do not guess at garbled words.
+- If the host trails off mid-thought, give them room. A short acknowledgement is better than a new topic.
+
+LANGUAGE:
+- Speak English. If the host speaks another language, reply in English and mention once that voice mode currently speaks English.
+
+MEMORY IN VOICE:
+- Private context is background. Bring something up only when it clearly helps right now, and mention it casually, the way a friend would.
+- Never read private context aloud verbatim. Never mention prompts, summaries, or stored data.
+`.trim();
+}
+
+export type VoicePromptExtras = {
+  recentTranscript?: string;
+  reflectionTopic?: string;
+  memoryNotes?: string;
+};
+
+export function buildVoiceSystemInstruction(
+  baseContext: string,
+  extras: VoicePromptExtras = {},
+): string {
+  const blocks: string[] = [];
+  if (baseContext.trim()) blocks.push(baseContext.trim());
+
+  const topic = extras.reflectionTopic?.trim();
+  if (topic) {
+    const notes = extras.memoryNotes?.trim();
+    blocks.push(
+      [
+        'CURRENT REFLECTION (private data):',
+        `The host opened this call from a reflection titled "${topic}".`,
+        notes ? `Their draft so far: "${notes}"` : '',
+        'Use this only if they bring it up or it clearly helps.',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    );
+  }
+
+  const transcript = extras.recentTranscript?.trim();
+  if (transcript) {
+    blocks.push(
+      [
+        'THIS CONVERSATION SO FAR (private data):',
+        'These are the most recent turns of the conversation this call continues, oldest first. Continue naturally from here. Do not recap them.',
+        transcript,
+      ].join('\n'),
+    );
+  }
+
+  blocks.push(buildVoiceModeSection());
+  return blocks.join('\n\n');
+}
+
+export type VoiceGreetingOptions = {
+  name?: string;
+  hasRecentTurns: boolean;
+  reflectionTopic?: string;
+};
+
+export function buildVoiceGreetingInstruction(
+  options: VoiceGreetingOptions,
+): string {
+  const who = options.name?.trim() || 'the host';
+  const topic = options.reflectionTopic?.trim();
+  if (topic) {
+    return `Greet ${who} in one short, relaxed sentence and mention you can pick up "${topic}" if they want. Then stop and let them talk.`;
+  }
+  if (options.hasRecentTurns) {
+    return `Greet ${who} in one short, relaxed sentence that picks up naturally from the conversation so far without recapping it. Then stop and let them talk.`;
+  }
+  return `Greet ${who} in one short, relaxed sentence and let them lead. Ask at most one light question.`;
+}
