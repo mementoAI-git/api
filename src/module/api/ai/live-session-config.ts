@@ -1,4 +1,47 @@
-import {LiveConnectConfig, Modality} from '@google/genai';
+import {
+  EndSensitivity,
+  LiveConnectConfig,
+  Modality,
+  StartSensitivity,
+  Tool,
+  Type,
+} from '@google/genai';
+
+export const SEARCH_MEMORIES_TOOL_NAME = 'search_memories';
+
+export const VOICE_TOOLS: Tool[] = [
+  {
+    functionDeclarations: [
+      {
+        name: SEARCH_MEMORIES_TOOL_NAME,
+        description:
+          "Search the host's saved memories, stories and earlier conversations. Use it when the host mentions a specific past event, person, place or conversation that is not in your context.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            query: {
+              type: Type.STRING,
+              description:
+                'A short search phrase, for example "grandma\'s farm" or "trip to Lagos".',
+            },
+          },
+          required: ['query'],
+        },
+      },
+    ],
+  },
+];
+
+// Starting values. Tune from the mobile voice session metrics
+// (false interruptions per 10 min, end-of-speech to first audio p50/p95).
+export const VOICE_TURN_DETECTION = {
+  startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+  endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_UNSPECIFIED,
+  // Speech must last this long before Gemini treats it as the user talking.
+  // 20 ms made echo and room noise trigger interruptions.
+  prefixPaddingMs: 200,
+  silenceDurationMs: 800,
+} as const;
 
 export type GeminiVoiceDescriptor = {
   id: string;
@@ -16,9 +59,14 @@ export function buildLiveSessionDescriptor(
 export function buildLiveConnectConfig(
   voiceName: string,
   systemInstruction?: string,
+  resumeHandle?: string,
+  options: {memoryTool?: boolean} = {},
 ): LiveConnectConfig {
   const config: LiveConnectConfig = {
-    sessionResumption: {},
+    // A handle resumes the same Gemini session after goAway or a network drop.
+    sessionResumption: resumeHandle ? {handle: resumeHandle} : {},
+    // Without compression Gemini caps audio sessions at 15 minutes.
+    contextWindowCompression: {slidingWindow: {}},
     responseModalities: [Modality.AUDIO],
     speechConfig: {
       languageCode: 'en-US',
@@ -34,11 +82,14 @@ export function buildLiveConnectConfig(
     realtimeInputConfig: {
       automaticActivityDetection: {
         disabled: false,
-        prefixPaddingMs: 20,
-        silenceDurationMs: 800,
+        ...VOICE_TURN_DETECTION,
       },
     },
   };
+
+  if (options.memoryTool) {
+    config.tools = VOICE_TOOLS;
+  }
 
   if (systemInstruction?.trim()) {
     config.systemInstruction = systemInstruction.trim();

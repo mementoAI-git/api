@@ -46,8 +46,12 @@ import {
 import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
+  SEARCH_MEMORIES_TOOL_NAME,
 } from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
+import {buildVoiceSessionContext} from './voice/session-context';
+import {allowsSpeakerFullDuplex} from './voice/device-policy';
+import {VOICE_PROMPT_VERSION} from '../../../utils/ai-prompt/voice';
 import {
   shouldRunAsrShadow,
   transcribeWithConfiguredAsr,
@@ -1026,7 +1030,12 @@ function resolveGeminiVoiceName(
     : {voiceName: DEFAULT.voiceName, voiceId: DEFAULT.id};
 }
 
-export async function createEphemeralToken(userId: string, memoryId?: string) {
+export async function createEphemeralToken(
+  userId: string,
+  memoryId?: string,
+  resumeHandle?: string,
+  client: {deviceModel?: string; memoryTool?: boolean} = {},
+) {
   // Resolve the user with profile and voice preferences
   const user = await User.findById(userId);
   if (!user) {
@@ -1038,18 +1047,10 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
     user.chat_voice_provider ?? undefined,
   );
 
-  let systemInstruction = '';
-  try {
-    systemInstruction = await prompts.createSystemContext(
-      user,
-      memoryId,
-      null,
-      '',
-      0,
-    );
-  } catch (error) {
-    console.error('Failed to create system context for voice mode:', error);
-  }
+  const memoryTool = client.memoryTool === true;
+  const voiceContext = await buildVoiceSessionContext(user, memoryId, {
+    memoryTool,
+  });
 
   const expireTime = dayjs().add(30, 'minute').toDate();
   // 10 min gives mobile clients a realistic window to establish the WebSocket
@@ -1069,10 +1070,14 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
       newSessionExpireTime: newSessionExpireTime.toISOString(),
       liveConnectConstraints: {
         model: live.model,
-        // Supplying token constraints locks the complete Live config. Keep
-        // transcription and turn detection here because client overrides are
-        // ignored for constrained ephemeral tokens.
-        config: buildLiveConnectConfig(live.voice.name, systemInstruction),
+        // Constraints lock every LiveConnectConfig field. Client config is
+        // ignored, so all voice context must be built here.
+        config: buildLiveConnectConfig(
+          live.voice.name,
+          voiceContext.systemInstruction,
+          resumeHandle,
+          {memoryTool},
+        ),
       },
       httpOptions: {
         apiVersion: 'v1alpha',
@@ -1080,15 +1085,26 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
     },
   });
 
+  void recordAiMetric({
+    event: 'prompt_version_used',
+    task: 'voice_session',
+    endpoint: '/ai/ephemeral-token',
+    user: userId,
+    prompt_version: VOICE_PROMPT_VERSION,
+  });
+
   return {
     message: 'Ephemeral token created successfully',
     data: {
       token: token.name,
       expiresAt: expireTime.toISOString(),
-      // Return the resolved voice so the client can display which voice is active
       voice: live.voice,
       live,
-      systemInstruction,
+      greetingInstruction: voiceContext.greetingInstruction,
+      memoryId: voiceContext.memoryId ?? null,
+      promptVersion: VOICE_PROMPT_VERSION,
+      tools: memoryTool ? [SEARCH_MEMORIES_TOOL_NAME] : [],
+      speakerFullDuplex: allowsSpeakerFullDuplex(client.deviceModel),
     },
   };
 }

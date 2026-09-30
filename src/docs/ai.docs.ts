@@ -579,6 +579,40 @@ const aiDocs = {
       description:
         'Get an ephemeral token for real-time AI interactions (e.g., LiveKit/WebRTC).',
       security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'memory_id',
+          in: 'query',
+          required: false,
+          schema: {type: 'string'},
+          description:
+            'Conversation or story the call continues. Ignored if not owned by the caller.',
+        },
+        {
+          name: 'resume_handle',
+          in: 'query',
+          required: false,
+          schema: {type: 'string'},
+          description:
+            'Latest sessionResumptionUpdate.newHandle from the previous connection. Resumes the same conversation after goAway or a network drop. Valid for 2 hours.',
+        },
+        {
+          name: 'capabilities',
+          in: 'query',
+          required: false,
+          schema: {type: 'string', example: 'memory_search'},
+          description:
+            'Comma-separated client capabilities. memory_search locks the search_memories tool into the session. Only send it from builds that relay tool calls.',
+        },
+        {
+          name: 'device_model',
+          in: 'query',
+          required: false,
+          schema: {type: 'string'},
+          description:
+            'Device model name, used for the speaker full-duplex policy.',
+        },
+      ],
       responses: {
         200: {
           description: 'Token retrieved',
@@ -588,12 +622,131 @@ const aiDocs = {
                 type: 'object',
                 properties: {
                   status: {type: 'string', example: 'success'},
-                  data: {type: 'object', properties: {token: {type: 'string'}}},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      token: {type: 'string'},
+                      expiresAt: {type: 'string', format: 'date-time'},
+                      voice: {type: 'object'},
+                      live: {type: 'object'},
+                      greetingInstruction: {
+                        type: 'string',
+                        description:
+                          'Send as the first client text turn to start the call.',
+                      },
+                      memoryId: {type: 'string', nullable: true},
+                      promptVersion: {type: 'string'},
+                      tools: {type: 'array', items: {type: 'string'}},
+                      speakerFullDuplex: {type: 'boolean'},
+                    },
+                  },
                 },
               },
             },
           },
         },
+      },
+    },
+  },
+  '/ai/voice/turns': {
+    post: {
+      tags: ['AI'],
+      summary: 'Record Voice Turns',
+      description:
+        'Store spoken turns from a voice call as individual messages. Idempotent per (memory, session_id, index). Call after each completed turn and again on hang-up.',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['session_id', 'turns'],
+              properties: {
+                session_id: {type: 'string'},
+                memory_id: {type: 'string'},
+                turns: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    required: ['index', 'role', 'text'],
+                    properties: {
+                      index: {type: 'integer', minimum: 0},
+                      role: {type: 'string', enum: ['user', 'ai']},
+                      text: {type: 'string'},
+                      interrupted: {type: 'boolean'},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Turns recorded',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      memory_id: {type: 'string'},
+                      inserted: {type: 'integer'},
+                      duplicates: {type: 'integer'},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  '/ai/voice/memory-search': {
+    post: {
+      tags: ['AI'],
+      summary: 'Voice Memory Search',
+      description:
+        "Backs the Gemini Live search_memories tool. The app relays the model's tool call here and returns `result` as the tool response. Requires voice mode access.",
+      security: [{bearerAuth: []}],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['query'],
+              properties: {query: {type: 'string', maxLength: 200}},
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Search result as speakable text',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {
+                    type: 'object',
+                    properties: {result: {type: 'string'}},
+                  },
+                },
+              },
+            },
+          },
+        },
+        402: {description: 'Voice mode requires Pro or Legacy'},
+        422: {description: 'Invalid query'},
       },
     },
   },
