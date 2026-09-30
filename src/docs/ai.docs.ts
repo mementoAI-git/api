@@ -622,6 +622,66 @@ const aiDocs = {
       },
     },
   },
+  '/ai/voice/turns': {
+    post: {
+      tags: ['AI'],
+      summary: 'Record Voice Turns',
+      description:
+        'Store spoken turns from a voice call as individual messages. Idempotent per (memory, session_id, index). Call after each completed turn and again on hang-up.',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['session_id', 'turns'],
+              properties: {
+                session_id: {type: 'string'},
+                memory_id: {type: 'string'},
+                turns: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    required: ['index', 'role', 'text'],
+                    properties: {
+                      index: {type: 'integer', minimum: 0},
+                      role: {type: 'string', enum: ['user', 'ai']},
+                      text: {type: 'string'},
+                      interrupted: {type: 'boolean'},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Turns recorded',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      memory_id: {type: 'string'},
+                      inserted: {type: 'integer'},
+                      duplicates: {type: 'integer'},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   '/ai/voices': {
     get: {
       tags: ['AI'],

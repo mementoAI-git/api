@@ -4,6 +4,7 @@ import * as service from './service';
 import {IRequest} from '../../../utils/interface';
 import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
+import * as voiceTurns from './voice/turns';
 
 export async function autogenerateTags(
   req: IRequest,
@@ -126,6 +127,22 @@ export async function getEphemeralToken(
     const {message, data} = await service.createEphemeralToken(
       req.auth.id,
       memoryId,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function recordVoiceTurns(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await voiceTurns.recordVoiceTurns(
+      req.auth.id,
+      req.body,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

@@ -61,6 +61,12 @@ router.get(
   requireFeature('ai.live_ephemeral_token'),
   ctrl.getEphemeralToken,
 );
+router.post(
+  '/voice/turns',
+  gaurd,
+  validate(dto.voiceTurnsSchema),
+  ctrl.recordVoiceTurns,
+);
 router.get(
   '/voices',
   gaurd,
