@@ -50,6 +50,7 @@ import {
 } from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
 import {buildVoiceSessionContext} from './voice/session-context';
+import {allowsSpeakerFullDuplex} from './voice/device-policy';
 import {VOICE_PROMPT_VERSION} from '../../../utils/ai-prompt/voice';
 import {
   shouldRunAsrShadow,
@@ -1103,6 +1104,7 @@ export async function createEphemeralToken(
       memoryId: voiceContext.memoryId ?? null,
       promptVersion: VOICE_PROMPT_VERSION,
       tools: memoryTool ? [SEARCH_MEMORIES_TOOL_NAME] : [],
+      speakerFullDuplex: allowsSpeakerFullDuplex(client.deviceModel),
     },
   };
 }

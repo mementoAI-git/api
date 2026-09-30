@@ -86,4 +86,17 @@ describe('createEphemeralToken', () => {
     expect(String(locked.systemInstruction)).toContain('call search_memories');
     expect(capable.data.tools).toEqual(['search_memories']);
   });
+
+  it('reports speaker full duplex for devices not on the denylist', async () => {
+    vi.spyOn(geminiAuthClient.authTokens, 'create').mockResolvedValue({
+      name: 'authTokens/d',
+    } as any);
+    const user = await createUserFixture();
+
+    const {data} = await createEphemeralToken(user.id, undefined, undefined, {
+      deviceModel: 'Pixel 8',
+    });
+
+    expect(data.speakerFullDuplex).toBe(true);
+  });
 });
