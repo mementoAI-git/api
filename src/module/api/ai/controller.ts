@@ -143,7 +143,11 @@ export async function getEphemeralToken(
       req.auth.id,
       memoryId,
       resumeHandle,
-      {deviceModel, memoryTool: capabilities.includes('memory_search')},
+      {
+        deviceModel,
+        memoryTool: capabilities.includes('memory_search'),
+        callActions: capabilities.includes('call_actions'),
+      },
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

@@ -46,6 +46,7 @@ import {
 import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
+  CALL_ACTION_TOOL_NAMES,
   SEARCH_MEMORIES_TOOL_NAME,
 } from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
@@ -1034,7 +1035,11 @@ export async function createEphemeralToken(
   userId: string,
   memoryId?: string,
   resumeHandle?: string,
-  client: {deviceModel?: string; memoryTool?: boolean} = {},
+  client: {
+    deviceModel?: string;
+    memoryTool?: boolean;
+    callActions?: boolean;
+  } = {},
 ) {
   // Resolve the user with profile and voice preferences
   const user = await User.findById(userId);
@@ -1048,8 +1053,10 @@ export async function createEphemeralToken(
   );
 
   const memoryTool = client.memoryTool === true;
+  const callActions = client.callActions === true;
   const voiceContext = await buildVoiceSessionContext(user, memoryId, {
     memoryTool,
+    callActions,
   });
 
   const expireTime = dayjs().add(30, 'minute').toDate();
@@ -1076,7 +1083,7 @@ export async function createEphemeralToken(
           live.voice.name,
           voiceContext.systemInstruction,
           resumeHandle,
-          {memoryTool},
+          {memoryTool, callActions},
         ),
       },
       httpOptions: {
@@ -1103,7 +1110,10 @@ export async function createEphemeralToken(
       greetingInstruction: voiceContext.greetingInstruction,
       memoryId: voiceContext.memoryId ?? null,
       promptVersion: VOICE_PROMPT_VERSION,
-      tools: memoryTool ? [SEARCH_MEMORIES_TOOL_NAME] : [],
+      tools: [
+        ...(memoryTool ? [SEARCH_MEMORIES_TOOL_NAME] : []),
+        ...(callActions ? CALL_ACTION_TOOL_NAMES : []),
+      ],
       speakerFullDuplex: allowsSpeakerFullDuplex(client.deviceModel),
     },
   };
