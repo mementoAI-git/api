@@ -8,16 +8,16 @@
 //   MEMENTO_ENV=prod pm2 start ecosystem.config.js
 //   MEMENTO_ENV=dev  pm2 start ecosystem.config.js
 // ──────────────────────────────────────────────────────────────
-require('dotenv').config();
+require('dotenv').config({ override: true });
 
 const ENV = process.env.MEMENTO_ENV || 'prod';
 
 const config = {
-  prod: {suffix: 'prod', port: 4001, apiInstances: 3},
-  dev: {suffix: 'dev', port: 3001, apiInstances: 1},
+  prod: { suffix: 'prod', port: 4001, apiInstances: 3 },
+  dev: { suffix: 'dev', port: 3001, apiInstances: 1 },
 };
 
-const {suffix, port, apiInstances} = config[ENV] || config.prod;
+const { suffix, port, apiInstances } = config[ENV] || config.prod;
 
 module.exports = {
   apps: [
