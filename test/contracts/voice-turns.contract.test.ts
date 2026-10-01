@@ -53,7 +53,7 @@ describe('POST /ai/voice/turns', () => {
   afterAll(closeTestDatabase);
 
   it('stores each turn as its own voice message and updates activity', async () => {
-    const {user, token, memory} = await setup();
+    const {token, memory} = await setup();
 
     const res = await request(createTestApp())
       .post('/ai/voice/turns')
@@ -80,12 +80,8 @@ describe('POST /ai/voice/turns', () => {
     expect(new Date(updated!.last_active!).getTime()).toBeGreaterThan(
       new Date(updated!.last_summarized_at as any).getTime(),
     );
-    expect(addToInsightsBuffer).toHaveBeenCalledWith(
-      user.id,
-      memory.id,
-      turns[0].text,
-      turns[1].text,
-    );
+    // Insights wait for post-call transcript clean-up.
+    expect(addToInsightsBuffer).not.toHaveBeenCalled();
   });
 
   it('is idempotent when the client retries the same turns', async () => {
@@ -102,25 +98,6 @@ describe('POST /ai/voice/turns', () => {
     expect(retry.body.data).toMatchObject({inserted: 0, duplicates: 2});
     expect(await Message.countDocuments({memory: memory.id})).toBe(2);
     expect((await Memory.findById(memory.id).lean())?.message_count).toBe(6);
-  });
-
-  it('pairs a user turn from an earlier batch with the AI reply for insights', async () => {
-    const {user, token, memory} = await setup();
-    const post = (body: object) =>
-      request(createTestApp())
-        .post('/ai/voice/turns')
-        .set('Authorization', `Bearer ${token}`)
-        .send(body);
-
-    await post({session_id: 'call-2', memory_id: memory.id, turns: [turns[0]]});
-    await post({session_id: 'call-2', memory_id: memory.id, turns: [turns[1]]});
-
-    expect(addToInsightsBuffer).toHaveBeenCalledWith(
-      user.id,
-      memory.id,
-      turns[0].text,
-      turns[1].text,
-    );
   });
 
   it('creates a conversation by session when no memory is given', async () => {

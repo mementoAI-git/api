@@ -15,6 +15,10 @@ export interface IMessage {
   voice_turn_index?: number;
   /** True when the AI turn was cut off by the user speaking. */
   voice_interrupted?: boolean;
+  /** Original speech-to-text output, kept when post-call clean-up rewrote `text`. */
+  raw_text?: string;
+  /** True once post-call clean-up has rewritten this voice message. */
+  voice_cleaned?: boolean;
   /** Quoted message the user is replying to — persisted so clients don't need to parse wrapper text */
   replyTo?: {role: string; text: string};
   created_at: string;
@@ -43,6 +47,8 @@ const message = new Schema<IMessage>(
     voice_session_id: {type: String, default: undefined},
     voice_turn_index: {type: Number, default: undefined},
     voice_interrupted: {type: Boolean, default: undefined},
+    raw_text: {type: String, default: undefined},
+    voice_cleaned: {type: Boolean, default: undefined},
     attatchments: [
       {
         type: String,
@@ -71,6 +77,14 @@ message.index(
     unique: true,
     partialFilterExpression: {voice_session_id: {$type: 'string'}},
     name: 'voice_turn_unique',
+  },
+);
+
+message.index(
+  {user: 1, voice_session_id: 1},
+  {
+    partialFilterExpression: {voice_session_id: {$type: 'string'}},
+    name: 'voice_session_by_user',
   },
 );
 
