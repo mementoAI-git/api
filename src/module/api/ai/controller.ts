@@ -6,6 +6,7 @@ import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
 import * as voiceTurns from './voice/turns';
 import {searchMemoriesForVoice} from './voice/memory-search';
+import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
 
 export async function autogenerateTags(
   req: IRequest,
@@ -164,6 +165,39 @@ export async function recordVoiceTurns(
     const {message, data} = await voiceTurns.recordVoiceTurns(
       req.auth.id,
       req.body,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function endVoiceCall(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await endCall(
+      req.auth.id,
+      String(req.params.sessionId),
+      req.body,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function summarizeVoiceCall(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await getVoiceCallSummary(
+      req.auth.id,
+      String(req.params.sessionId),
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

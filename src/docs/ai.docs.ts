@@ -750,6 +750,120 @@ const aiDocs = {
       },
     },
   },
+  '/ai/voice/calls/{sessionId}/end': {
+    post: {
+      tags: ['AI'],
+      summary: 'End Voice Call',
+      description:
+        "Record that a voice call ended. Saves the real call duration on the call and its messages, then cleans the call's transcript in the background: misheard Host lines are fixed, and non-English or unintelligible ones become `[unclear]`. Originals are kept in `raw_text`. Insights are queued from the cleaned text. Call once on hang-up, after the final turns are recorded. Idempotent.",
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'sessionId',
+          in: 'path',
+          required: true,
+          schema: {type: 'string', maxLength: 128},
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['duration_seconds'],
+              properties: {
+                memory_id: {type: 'string'},
+                duration_seconds: {type: 'number', minimum: 0, maximum: 86400},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Call recorded',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      session_id: {type: 'string'},
+                      memory_id: {type: 'string', nullable: true},
+                      duration_seconds: {type: 'integer'},
+                      cleanup_status: {
+                        type: 'string',
+                        enum: [
+                          'pending',
+                          'running',
+                          'done',
+                          'failed',
+                          'skipped',
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        404: {description: 'Memory not found'},
+        422: {description: 'Invalid payload'},
+      },
+    },
+  },
+  '/ai/voice/calls/{sessionId}/summary': {
+    post: {
+      tags: ['AI'],
+      summary: 'Summarize Voice Call',
+      description:
+        'Return the saved summary of a voice call. The first request cleans the transcript if needed, generates the summary and saves it. Later requests return the saved one.',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'sessionId',
+          in: 'path',
+          required: true,
+          schema: {type: 'string', maxLength: 128},
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Call summary',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      summary: {
+                        type: 'object',
+                        properties: {
+                          text: {type: 'string'},
+                          key_points: {type: 'array', items: {type: 'string'}},
+                          generated_at: {type: 'string', format: 'date-time'},
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        404: {description: 'Voice call not found'},
+        503: {description: 'The summary could not be generated. Try again.'},
+      },
+    },
+  },
   '/ai/voices': {
     get: {
       tags: ['AI'],

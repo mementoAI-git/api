@@ -73,6 +73,18 @@ router.post(
   validate(dto.voiceMemorySearchSchema),
   ctrl.searchVoiceMemories,
 );
+router.post(
+  '/voice/calls/:sessionId/end',
+  gaurd,
+  validate(dto.voiceCallEndSchema),
+  ctrl.endVoiceCall,
+);
+router.post(
+  '/voice/calls/:sessionId/summary',
+  gaurd,
+  validate(dto.voiceCallSummarySchema),
+  ctrl.summarizeVoiceCall,
+);
 router.get(
   '/voices',
   gaurd,

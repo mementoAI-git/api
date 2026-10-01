@@ -145,6 +145,22 @@ export const voiceMemorySearchSchema = z.object({
   }),
 });
 
+const voiceCallParamsSchema = z.strictObject({
+  sessionId: z.string().trim().min(1, 'sessionId is required').max(128),
+});
+
+export const voiceCallEndSchema = z.object({
+  params: voiceCallParamsSchema,
+  body: z.strictObject({
+    memory_id: mongoIdSchema.optional(),
+    duration_seconds: z.number().min(0).max(86_400),
+  }),
+});
+
+export const voiceCallSummarySchema = z.object({
+  params: voiceCallParamsSchema,
+});
+
 // Type exports
 export type PromptBody = z.infer<typeof promptSchema>['body'];
 export type StartConversationBody = z.infer<
