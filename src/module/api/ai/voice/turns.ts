@@ -2,8 +2,7 @@ import Memory from '../../../database/model/memory';
 import Message from '../../../database/model/message';
 import {assertOwnedMemory} from '../../memory/access';
 import {updateStreak} from '../../user/service';
-import {addToInsightsBuffer} from '../../../../services/queues/insights';
-import {isSignificantMessage, updateMemoryTitle} from '../utils';
+import {updateMemoryTitle} from '../utils';
 
 export type VoiceTurnInput = {
   index: number;
@@ -35,27 +34,6 @@ async function resolveConversation(
     status: 'save',
     session_id: payload.session_id,
   });
-}
-
-async function findUserTextBefore(
-  memoryId: string,
-  sessionId: string,
-  index: number,
-  batch: VoiceTurnInput[],
-): Promise<string | undefined> {
-  const inBatch = batch.find(
-    turn => turn.index === index - 1 && turn.role === 'user',
-  );
-  if (inBatch) return inBatch.text;
-  const stored = await Message.findOne({
-    memory: memoryId,
-    voice_session_id: sessionId,
-    voice_turn_index: index - 1,
-    role: 'user',
-  })
-    .select('text')
-    .lean();
-  return stored?.text;
 }
 
 export async function recordVoiceTurns(
@@ -105,20 +83,8 @@ export async function recordVoiceTurns(
       console.error('Error updating voice streak:', error),
     );
 
-    for (const turn of insertedTurns) {
-      if (turn.role !== 'ai') continue;
-      const userText = await findUserTextBefore(
-        memoryId,
-        payload.session_id,
-        turn.index,
-        turns,
-      );
-      if (userText && isSignificantMessage(userText)) {
-        addToInsightsBuffer(userId, memoryId, userText, turn.text).catch(
-          error => console.error('Error queueing voice insights:', error),
-        );
-      }
-    }
+    // Insights are queued after post-call transcript clean-up, so misheard
+    // lines never reach the persona. See voice/transcript-cleanup.ts.
 
     if (!memory.title) {
       const firstUser = turns.find(turn => turn.role === 'user');
