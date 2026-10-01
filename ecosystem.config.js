@@ -8,7 +8,7 @@
 //   MEMENTO_ENV=prod pm2 start ecosystem.config.js
 //   MEMENTO_ENV=dev  pm2 start ecosystem.config.js
 // ──────────────────────────────────────────────────────────────
-require('dotenv').config();
+require('dotenv').config({override: true});
 
 const ENV = process.env.MEMENTO_ENV || 'prod';
 
