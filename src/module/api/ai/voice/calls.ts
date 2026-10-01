@@ -187,6 +187,7 @@ export async function getVoiceCallSummary(userId: string, sessionId: string) {
       'voice_call_summary',
       buildSummaryPrompt(formatTranscriptLines(turns)),
       userId,
+      {accept: answer => parseSummaryResponse(answer) !== null},
     );
   } catch {
     throw new ServiceUnavailableException(
