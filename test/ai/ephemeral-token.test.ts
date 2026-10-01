@@ -99,4 +99,28 @@ describe('createEphemeralToken', () => {
 
     expect(data.speakerFullDuplex).toBe(true);
   });
+
+  it('locks call actions in for clients that send the call_actions capability', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/actions'} as any);
+    const user = await createUserFixture();
+
+    const {data} = await createEphemeralToken(user.id, undefined, undefined, {
+      memoryTool: true,
+      callActions: true,
+    });
+
+    const locked = create.mock.calls[0][0].config.liveConnectConstraints.config;
+    const serialized = JSON.stringify(locked.tools);
+    expect(serialized).toContain('end_call');
+    expect(serialized).toContain('open_screen');
+    expect(String(locked.systemInstruction)).toContain('CALL ACTIONS');
+    expect(data.tools).toEqual([
+      'search_memories',
+      'end_call',
+      'set_microphone',
+      'open_screen',
+    ]);
+  });
 });

@@ -66,4 +66,27 @@ describe('voice prompt', () => {
       'call search_memories',
     );
   });
+
+  it('adds call action guidance only when call actions are enabled', () => {
+    expect(buildVoiceModeSection()).not.toContain('CALL ACTIONS');
+    const section = buildVoiceModeSection({callActions: true});
+    expect(section).toContain('CALL ACTIONS');
+    expect(section).toContain('call end_call');
+    expect(section).toContain('set_microphone');
+    expect(section).toMatch(/keep talking while they look or wrap up/);
+    expect(buildVoiceSystemInstruction('BASE', {callActions: true})).toContain(
+      'CALL ACTIONS',
+    );
+  });
+
+  it('tells the model that speaking alone does not end the call or mute', () => {
+    // Without these lines Gemini sometimes said "tap to unmute" or "bye"
+    // without calling the tool, leaving the microphone live or the call open.
+    const section = buildVoiceModeSection({callActions: true});
+    expect(section).toContain('call end_call first');
+    expect(section).toContain('Only end_call does.');
+    expect(section).toContain('call set_microphone with muted true first');
+    expect(section).toContain('Only set_microphone does');
+    expect(section).toContain('never a request to mute');
+  });
 });

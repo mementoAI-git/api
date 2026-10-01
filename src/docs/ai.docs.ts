@@ -602,7 +602,7 @@ const aiDocs = {
           required: false,
           schema: {type: 'string', example: 'memory_search'},
           description:
-            'Comma-separated client capabilities. memory_search locks the search_memories tool into the session. Only send it from builds that relay tool calls.',
+            'Comma-separated client capabilities. memory_search locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen. Only send a capability from builds that handle those tool calls.',
         },
         {
           name: 'device_model',

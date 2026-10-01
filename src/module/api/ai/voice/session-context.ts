@@ -33,7 +33,11 @@ function stripHtml(value: string): string {
 export async function buildVoiceSessionContext(
   user: HydratedDocument<IUser>,
   memoryId?: string,
-  options: {longTermTimeoutMs?: number; memoryTool?: boolean} = {},
+  options: {
+    longTermTimeoutMs?: number;
+    memoryTool?: boolean;
+    callActions?: boolean;
+  } = {},
 ): Promise<VoiceSessionContext> {
   const userId = String(user._id);
 
@@ -96,6 +100,7 @@ export async function buildVoiceSessionContext(
       reflectionTopic,
       memoryNotes,
       memoryTool: options.memoryTool,
+      callActions: options.callActions,
     }),
     greetingInstruction: buildVoiceGreetingInstruction({
       name: name || undefined,
