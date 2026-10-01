@@ -102,6 +102,25 @@ export function parseCleanupResponse(
   return [...byIndex].map(([index, text]) => ({index, text}));
 }
 
+function contentWords(text: string): Set<string> {
+  const words: string[] = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return new Set(words.filter(word => word.length >= 3));
+}
+
+/**
+ * A real mishearing fix keeps some of what was heard. A corrected line that
+ * shares no words with the original is a translation or a guess, so it is
+ * stored as [unclear] instead, whatever the model said.
+ */
+export function guardCleanupFix(original: string, fixed: string): string {
+  if (fixed === UNCLEAR_MARKER) return fixed;
+  const heard = contentWords(original);
+  for (const word of contentWords(fixed)) {
+    if (heard.has(word)) return fixed;
+  }
+  return UNCLEAR_MARKER;
+}
+
 async function claimCleanup(userId: string, sessionId: string) {
   return VoiceCall.findOneAndUpdate(
     {
@@ -196,18 +215,20 @@ export async function cleanVoiceCallTranscript(
 
     for (const fix of fixes) {
       const turn = turns.find(t => t.index === fix.index);
-      if (!turn || turn.text === fix.text) continue;
+      if (!turn) continue;
+      const text = guardCleanupFix(turn.text, fix.text);
+      if (turn.text === text) continue;
       await Message.updateOne(
         {_id: turn.id},
         {
           $set: {
-            text: fix.text,
+            text,
             raw_text: turn.raw_text ?? turn.text,
             voice_cleaned: true,
           },
         },
       );
-      turn.text = fix.text;
+      turn.text = text;
     }
 
     await setStatus(userId, sessionId, 'done', {
