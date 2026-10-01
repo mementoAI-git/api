@@ -14,6 +14,7 @@ import VoiceCall from '../../src/module/database/model/voice-call';
 import {
   buildCleanupPrompt,
   cleanVoiceCallTranscript,
+  guardCleanupFix,
   loadCallTurns,
   parseCleanupResponse,
 } from '../../src/module/api/ai/voice/transcript-cleanup';
@@ -88,6 +89,27 @@ describe('parseCleanupResponse', () => {
       expect(parseCleanupResponse(raw, userIndexes)).toBeNull();
     },
   );
+});
+
+describe('guardCleanupFix', () => {
+  it('keeps a correction that shares words with what was heard', () => {
+    expect(
+      guardCleanupFix(
+        'I was thinking about my grand mothers farm in kaduna',
+        "I was thinking about my grandmother's farm in Kaduna",
+      ),
+    ).toBe("I was thinking about my grandmother's farm in Kaduna");
+  });
+
+  it('turns a translation or a guess into [unclear]', () => {
+    expect(guardCleanupFix('Ja, das war verrückt', 'Yes, that was crazy')).toBe(
+      '[unclear]',
+    );
+    expect(guardCleanupFix('لا أعرف ما أقول', "I don't know what to say")).toBe(
+      '[unclear]',
+    );
+    expect(guardCleanupFix('nicht', '[unclear]')).toBe('[unclear]');
+  });
 });
 
 describe('buildCleanupPrompt', () => {
