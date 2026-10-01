@@ -183,6 +183,7 @@ export async function cleanVoiceCallTranscript(
       'voice_transcript_cleanup',
       buildCleanupPrompt(turns),
       userId,
+      {accept: answer => parseCleanupResponse(answer, userIndexes) !== null},
     );
     const fixes = parseCleanupResponse(raw, userIndexes);
     if (!fixes) {
