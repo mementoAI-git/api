@@ -441,6 +441,42 @@ const promptsDocs = {
       },
     },
   },
+  '/prompts/categories': {
+    get: {
+      tags: ['Prompts'],
+      summary: 'List Explore categories',
+      description:
+        'Returns the ordered canonical Explore taxonomy. Legacy aliases are accepted by category detail routes but are not returned here.',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Explore categories retrieved successfully',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  data: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        slug: {type: 'string', example: 'growing-up'},
+                        title: {type: 'string', example: 'Growing Up'},
+                        description: {type: 'string'},
+                        order: {type: 'number'},
+                        starterTotal: {type: 'number', example: 10},
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   '/prompts/categories/{id}': {
     get: {
       tags: ['Prompts'],
@@ -453,7 +489,7 @@ const promptsDocs = {
           in: 'path',
           required: true,
           description: 'Category ID',
-          schema: {type: 'string', example: '507f1f77bcf86cd799439011'},
+          schema: {type: 'string', example: 'growing-up'},
         },
         {
           name: 'page',
@@ -522,6 +558,44 @@ const promptsDocs = {
             },
           },
         },
+      },
+    },
+  },
+  '/prompts/{id}/feedback': {
+    post: {
+      tags: ['Prompts'],
+      summary: 'Save Explore question feedback',
+      description:
+        'Stores skipped as weak feedback or not-relevant as strong negative feedback for the authenticated user.',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: {type: 'string'},
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['status'],
+              properties: {
+                status: {
+                  type: 'string',
+                  enum: ['skipped', 'not-relevant'],
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {description: 'Explore question feedback saved'},
+        403: {description: 'Generated prompt belongs to another user'},
       },
     },
   },

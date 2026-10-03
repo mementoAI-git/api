@@ -34,13 +34,21 @@ router.get(
   '/categories',
   gaurd,
   requireFeature('prompts.category_explore'),
-  ctrl.getCategories,
+  ctrl.getExploreCategories,
 );
 router.get(
   '/categories/:id',
   gaurd,
   requireFeature('prompts.category_explore'),
   ctrl.getPromptsByCategory,
+);
+router.post(
+  '/:id/feedback',
+  gaurd,
+  requireFeature('prompts.category_explore'),
+  idValidator,
+  valid.exploreQuestionFeedback,
+  ctrl.setExploreQuestionFeedback,
 );
 router.get('/:id', gaurd, idValidator, ctrl.getPromptDetails);
 

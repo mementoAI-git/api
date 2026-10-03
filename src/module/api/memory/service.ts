@@ -30,6 +30,7 @@ import {
   EXCLUDED_STORAGE_PROVIDER,
 } from '../../../utils';
 import Prompt from '../../database/model/prompt';
+import {buildPromptOwnershipScope} from '../prompt/explore-contract';
 import {updateStreak} from '../user/service';
 import Message from '../../database/model/message';
 import {updateMemoryTitle} from '../ai/utils';
@@ -363,7 +364,10 @@ export async function quickCaptureMemory(
       if (!pid) {
         throw new BadRequestException('prompt_id is required');
       }
-      const p = await Prompt.findById(pid);
+      const p = await Prompt.findOne({
+        _id: pid,
+        ...buildPromptOwnershipScope(user_id),
+      });
       if (!p) {
         throw new BadRequestException('Prompt not found');
       }
@@ -695,7 +699,10 @@ export async function getMemoryByPrompt(
   });
 
   if (!memory) {
-    const prompt = await Prompt.findById(prompt_id);
+    const prompt = await Prompt.findOne({
+      _id: prompt_id,
+      ...buildPromptOwnershipScope(user_id),
+    });
     if (!prompt) {
       throw new NotFoundException('Memory not found');
     }

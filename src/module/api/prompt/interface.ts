@@ -5,3 +5,7 @@ export interface IReplyPrompt {
   level: number;
   attachments: string[];
 }
+
+export interface IExploreQuestionFeedback {
+  status: 'skipped' | 'not-relevant';
+}
