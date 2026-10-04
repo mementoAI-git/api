@@ -12,7 +12,8 @@ export type AiTask =
   | 'tags_generate'
   | 'title_generate'
   | 'quick_capture_enrich'
-  | 'daily_prompt_generate';
+  | 'daily_prompt_generate'
+  | 'explore_question_generate';
 
 export interface TaskRouting {
   primaryModel: string;
@@ -21,6 +22,11 @@ export interface TaskRouting {
 }
 
 const TASK_ROUTING: Record<AiTask, TaskRouting> = {
+  explore_question_generate: {
+    primaryModel: OR_MODEL_TAGS_PRIMARY,
+    fallbackModel: OR_MODEL_TAGS_FALLBACK,
+    timeoutMs: 15_000,
+  },
   chat_primary: {
     primaryModel: OR_MODEL_CHAT_PRIMARY,
     fallbackModel: OR_MODEL_CHAT_FALLBACK,

@@ -4,6 +4,9 @@ import * as service from './service';
 import {IRequest} from '../../../utils/interface';
 import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
+import * as voiceTurns from './voice/turns';
+import {searchMemoriesForVoice} from './voice/memory-search';
+import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
 
 export async function autogenerateTags(
   req: IRequest,
@@ -123,11 +126,96 @@ export async function getEphemeralToken(
       typeof req.query.memory_id === 'string' && req.query.memory_id.trim()
         ? req.query.memory_id.trim()
         : undefined;
+    const resumeHandle =
+      typeof req.query.resume_handle === 'string' &&
+      req.query.resume_handle.trim() &&
+      req.query.resume_handle.length <= 4096
+        ? req.query.resume_handle.trim()
+        : undefined;
+    const deviceModel =
+      typeof req.query.device_model === 'string'
+        ? req.query.device_model.trim().slice(0, 100)
+        : undefined;
+    const capabilities =
+      typeof req.query.capabilities === 'string'
+        ? req.query.capabilities.split(',').map(value => value.trim())
+        : [];
     const {message, data} = await service.createEphemeralToken(
       req.auth.id,
       memoryId,
+      resumeHandle,
+      {
+        deviceModel,
+        memoryTool: capabilities.includes('memory_search'),
+        callActions: capabilities.includes('call_actions'),
+      },
     );
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function recordVoiceTurns(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await voiceTurns.recordVoiceTurns(
+      req.auth.id,
+      req.body,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function endVoiceCall(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await endCall(
+      req.auth.id,
+      String(req.params.sessionId),
+      req.body,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function summarizeVoiceCall(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await getVoiceCallSummary(
+      req.auth.id,
+      String(req.params.sessionId),
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function searchVoiceMemories(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await assertAccess(req.auth.id, 'voice_mode');
+    const result = await searchMemoriesForVoice(req.auth.id, req.body.query);
+    return responsHandler(res, StatusCodes.OK, 'Memory search complete', {
+      result,
+    });
   } catch (error) {
     next(error);
   }

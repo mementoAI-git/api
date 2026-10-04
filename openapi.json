@@ -762,6 +762,45 @@
     "/ai/ephemeral-token": {
       "get": {
         "description": "Get an ephemeral token for real-time AI interactions (e.g., LiveKit/WebRTC).",
+        "parameters": [
+          {
+            "description": "Conversation or story the call continues. Ignored if not owned by the caller.",
+            "in": "query",
+            "name": "memory_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Latest sessionResumptionUpdate.newHandle from the previous connection. Resumes the same conversation after goAway or a network drop. Valid for 2 hours.",
+            "in": "query",
+            "name": "resume_handle",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Comma-separated client capabilities. memory_search locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen. Only send a capability from builds that handle those tool calls.",
+            "in": "query",
+            "name": "capabilities",
+            "required": false,
+            "schema": {
+              "example": "memory_search",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Device model name, used for the speaker full-duplex policy.",
+            "in": "query",
+            "name": "device_model",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -770,8 +809,38 @@
                   "properties": {
                     "data": {
                       "properties": {
+                        "expiresAt": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "greetingInstruction": {
+                          "description": "Send as the first client text turn to start the call.",
+                          "type": "string"
+                        },
+                        "live": {
+                          "type": "object"
+                        },
+                        "memoryId": {
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "promptVersion": {
+                          "type": "string"
+                        },
+                        "speakerFullDuplex": {
+                          "type": "boolean"
+                        },
                         "token": {
                           "type": "string"
+                        },
+                        "tools": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "voice": {
+                          "type": "object"
                         }
                       },
                       "type": "object"
@@ -1498,6 +1567,338 @@
           }
         ],
         "summary": "Get Voice Preview",
+        "tags": [
+          "AI"
+        ]
+      }
+    },
+    "/ai/voice/calls/{sessionId}/end": {
+      "post": {
+        "description": "Record that a voice call ended. Saves the real call duration on the call and its messages, then cleans the call's transcript in the background: misheard Host lines are fixed, and non-English or unintelligible ones become `[unclear]`. Originals are kept in `raw_text`. Insights are queued from the cleaned text. Call once on hang-up, after the final turns are recorded. Idempotent.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "duration_seconds": {
+                    "maximum": 86400,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "memory_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "duration_seconds"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "cleanup_status": {
+                          "enum": [
+                            "pending",
+                            "running",
+                            "done",
+                            "failed",
+                            "skipped"
+                          ],
+                          "type": "string"
+                        },
+                        "duration_seconds": {
+                          "type": "integer"
+                        },
+                        "memory_id": {
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "session_id": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Call recorded"
+          },
+          "404": {
+            "description": "Memory not found"
+          },
+          "422": {
+            "description": "Invalid payload"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "End Voice Call",
+        "tags": [
+          "AI"
+        ]
+      }
+    },
+    "/ai/voice/calls/{sessionId}/summary": {
+      "post": {
+        "description": "Return the saved summary of a voice call. The first request cleans the transcript if needed, generates the summary and saves it. Later requests return the saved one.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sessionId",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "summary": {
+                          "properties": {
+                            "generated_at": {
+                              "format": "date-time",
+                              "type": "string"
+                            },
+                            "key_points": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Call summary"
+          },
+          "404": {
+            "description": "Voice call not found"
+          },
+          "503": {
+            "description": "The summary could not be generated. Try again."
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Summarize Voice Call",
+        "tags": [
+          "AI"
+        ]
+      }
+    },
+    "/ai/voice/memory-search": {
+      "post": {
+        "description": "Backs the Gemini Live search_memories tool. The app relays the model's tool call here and returns `result` as the tool response. Requires voice mode access.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "query": {
+                    "maxLength": 200,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "query"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "result": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Search result as speakable text"
+          },
+          "402": {
+            "description": "Voice mode requires Pro or Legacy"
+          },
+          "422": {
+            "description": "Invalid query"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Voice Memory Search",
+        "tags": [
+          "AI"
+        ]
+      }
+    },
+    "/ai/voice/turns": {
+      "post": {
+        "description": "Store spoken turns from a voice call as individual messages. Idempotent per (memory, session_id, index). Call after each completed turn and again on hang-up.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "memory_id": {
+                    "type": "string"
+                  },
+                  "session_id": {
+                    "type": "string"
+                  },
+                  "turns": {
+                    "items": {
+                      "properties": {
+                        "index": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "interrupted": {
+                          "type": "boolean"
+                        },
+                        "role": {
+                          "enum": [
+                            "user",
+                            "ai"
+                          ],
+                          "type": "string"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "index",
+                        "role",
+                        "text"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "session_id",
+                  "turns"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "duplicates": {
+                          "type": "integer"
+                        },
+                        "inserted": {
+                          "type": "integer"
+                        },
+                        "memory_id": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Turns recorded"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Record Voice Turns",
         "tags": [
           "AI"
         ]
@@ -7663,6 +8064,114 @@
         ]
       }
     },
+    "/prompts/{id}/feedback": {
+      "post": {
+        "description": "Stores skipped as weak feedback or not-relevant as strong negative feedback for the authenticated user.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "skipped",
+                      "not-relevant"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Explore question feedback saved"
+          },
+          "403": {
+            "description": "Generated prompt belongs to another user"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Save Explore question feedback",
+        "tags": [
+          "Prompts"
+        ]
+      }
+    },
+    "/prompts/categories": {
+      "get": {
+        "description": "Returns the ordered canonical Explore taxonomy. Legacy aliases are accepted by category detail routes but are not returned here.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "description": {
+                            "type": "string"
+                          },
+                          "order": {
+                            "type": "number"
+                          },
+                          "slug": {
+                            "example": "growing-up",
+                            "type": "string"
+                          },
+                          "starterTotal": {
+                            "example": 10,
+                            "type": "number"
+                          },
+                          "title": {
+                            "example": "Growing Up",
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Explore categories retrieved successfully"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Explore categories",
+        "tags": [
+          "Prompts"
+        ]
+      }
+    },
     "/prompts/categories/{id}": {
       "get": {
         "description": "Get paginated list of prompts in a specific category",
@@ -7673,7 +8182,7 @@
             "name": "id",
             "required": true,
             "schema": {
-              "example": "507f1f77bcf86cd799439011",
+              "example": "growing-up",
               "type": "string"
             }
           },

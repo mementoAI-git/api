@@ -112,7 +112,7 @@ export const removeFileFromMemorySchema = z.object({
 
 // Add message to memory
 const messageItemSchema = z.strictObject({
-  text: z.string().min(1, 'Text is required'),
+  text: z.string().trim().min(1, 'Text is required'),
   role: z.enum(['user', 'ai']),
   is_voice: z.boolean().optional(),
   duration: z.coerce.number().int().min(0).optional(),

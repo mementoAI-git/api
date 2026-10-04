@@ -61,6 +61,30 @@ router.get(
   requireFeature('ai.live_ephemeral_token'),
   ctrl.getEphemeralToken,
 );
+router.post(
+  '/voice/turns',
+  gaurd,
+  validate(dto.voiceTurnsSchema),
+  ctrl.recordVoiceTurns,
+);
+router.post(
+  '/voice/memory-search',
+  gaurd,
+  validate(dto.voiceMemorySearchSchema),
+  ctrl.searchVoiceMemories,
+);
+router.post(
+  '/voice/calls/:sessionId/end',
+  gaurd,
+  validate(dto.voiceCallEndSchema),
+  ctrl.endVoiceCall,
+);
+router.post(
+  '/voice/calls/:sessionId/summary',
+  gaurd,
+  validate(dto.voiceCallSummarySchema),
+  ctrl.summarizeVoiceCall,
+);
 router.get(
   '/voices',
   gaurd,

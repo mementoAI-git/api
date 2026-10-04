@@ -26,9 +26,19 @@ describe('endpoint compatibility aliases', () => {
       key_preferences: ['Warm prompts'],
     });
     await Prompt.create([
-      {title: 'One', type: 'story', category: 'Family'},
-      {title: 'Two', type: 'story', category: 'Growth'},
-      {title: 'Three', type: 'story', category: 'Family'},
+      {
+        title: 'One',
+        type: 'story',
+        category: 'people-i-love',
+        source: 'starter',
+      },
+      {title: 'Two', type: 'story', category: 'who-i-am', source: 'starter'},
+      {
+        title: 'Three',
+        type: 'story',
+        category: 'people-i-love',
+        source: 'starter',
+      },
     ]);
 
     const context = await request(createTestApp())
@@ -47,7 +57,16 @@ describe('endpoint compatibility aliases', () => {
       key_preferences: ['Warm prompts'],
     });
     expect(categories.status).toBe(200);
-    expect(categories.body.data.sort()).toEqual(['Family', 'Growth']);
+    expect(categories.body.data).toHaveLength(11);
+    expect(categories.body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          slug: 'people-i-love',
+          title: 'People I Love',
+        }),
+        expect.objectContaining({slug: 'who-i-am', title: 'Who I Am'}),
+      ]),
+    );
     expect(familyPrompts.status).toBe(200);
     expect(familyPrompts.body.data.docs).toHaveLength(2);
     expect(

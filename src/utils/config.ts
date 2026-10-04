@@ -89,6 +89,15 @@ export const GEMINI_MODEL_VERSION =
 export const GEMINI_LIVE_MODEL_VERSION =
   process.env.GEMINI_LIVE_MODEL_VERSION || 'gemini-3.8-live';
 
+// Comma-separated device models (exact or prefix, case-insensitive) whose echo
+// cancellation is too weak for streaming the mic during loudspeaker playback.
+export const VOICE_SPEAKER_DUPLEX_DENYLIST = (
+  process.env.VOICE_SPEAKER_DUPLEX_DENYLIST || ''
+)
+  .split(',')
+  .map(entry => entry.trim().toLowerCase())
+  .filter(Boolean);
+
 export const VOICE_PROVIDER_DEFAULT = (
   process.env.VOICE_PROVIDER_DEFAULT || 'gemini'
 ).toLowerCase();

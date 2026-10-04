@@ -121,6 +121,46 @@ export const aiVoicePreviewSchema = z.object({
   }),
 });
 
+export const voiceTurnsSchema = z.object({
+  body: z.strictObject({
+    session_id: z.string().trim().min(1, 'session_id is required').max(128),
+    memory_id: mongoIdSchema.optional(),
+    turns: z
+      .array(
+        z.strictObject({
+          index: z.number().int().min(0).max(100_000),
+          role: z.enum(['user', 'ai']),
+          text: z.string().trim().min(1, 'Text is required').max(8_000),
+          interrupted: z.boolean().optional(),
+        }),
+      )
+      .min(1)
+      .max(50),
+  }),
+});
+
+export const voiceMemorySearchSchema = z.object({
+  body: z.strictObject({
+    query: z.string().trim().min(1, 'Query is required').max(200),
+  }),
+});
+
+const voiceCallParamsSchema = z.strictObject({
+  sessionId: z.string().trim().min(1, 'sessionId is required').max(128),
+});
+
+export const voiceCallEndSchema = z.object({
+  params: voiceCallParamsSchema,
+  body: z.strictObject({
+    memory_id: mongoIdSchema.optional(),
+    duration_seconds: z.number().min(0).max(86_400),
+  }),
+});
+
+export const voiceCallSummarySchema = z.object({
+  params: voiceCallParamsSchema,
+});
+
 // Type exports
 export type PromptBody = z.infer<typeof promptSchema>['body'];
 export type StartConversationBody = z.infer<

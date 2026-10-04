@@ -3,6 +3,7 @@ import type {RequestContext} from '../contracts/response';
 import type {SessionClaims} from '../contracts/session';
 
 export interface IPagination {
+  answered?: string;
   page: number;
   limit: number;
   paginate?: boolean;

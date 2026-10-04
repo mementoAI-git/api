@@ -1,6 +1,6 @@
 import {Response} from 'express';
 import {FilterQuery} from 'mongoose';
-import {createUserContent, Modality, PartListUnion} from '@google/genai';
+import {createUserContent, PartListUnion} from '@google/genai';
 import axios from 'axios';
 import {z} from 'zod';
 import Message, {IMessage} from '../../database/model/message';
@@ -29,6 +29,7 @@ import {
 } from './utils';
 import {serializeAttachmentList} from '../../../utils/attachment-response';
 import Prompt from '../../database/model/prompt';
+import {buildPromptOwnershipScope} from '../prompt/explore-contract';
 import AiMetric from '../../database/model/ai-metric';
 import {updateStreak} from '../user/service';
 import {addToInsightsBuffer} from '../../../services/queues/insights';
@@ -43,8 +44,16 @@ import {
   groqClient,
   generateTextWithGroqFallback,
 } from '../../../services/ai/groq';
-import {buildLiveSessionDescriptor} from './live-session-config';
+import {
+  buildLiveConnectConfig,
+  buildLiveSessionDescriptor,
+  CALL_ACTION_TOOL_NAMES,
+  SEARCH_MEMORIES_TOOL_NAME,
+} from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
+import {buildVoiceSessionContext} from './voice/session-context';
+import {allowsSpeakerFullDuplex} from './voice/device-policy';
+import {VOICE_PROMPT_VERSION} from '../../../utils/ai-prompt/voice';
 import {
   shouldRunAsrShadow,
   transcribeWithConfiguredAsr,
@@ -698,7 +707,10 @@ export async function startConversation(
   }
 
   if (!isEmpty(payload.prompt_id)) {
-    prompt = await Prompt.findById(payload.prompt_id);
+    prompt = await Prompt.findOne({
+      _id: payload.prompt_id,
+      ...buildPromptOwnershipScope(user_id),
+    });
   }
 
   // Single-conversation: reuse existing primary conversation if it exists
@@ -1023,7 +1035,16 @@ function resolveGeminiVoiceName(
     : {voiceName: DEFAULT.voiceName, voiceId: DEFAULT.id};
 }
 
-export async function createEphemeralToken(userId: string, memoryId?: string) {
+export async function createEphemeralToken(
+  userId: string,
+  memoryId?: string,
+  resumeHandle?: string,
+  client: {
+    deviceModel?: string;
+    memoryTool?: boolean;
+    callActions?: boolean;
+  } = {},
+) {
   // Resolve the user with profile and voice preferences
   const user = await User.findById(userId);
   if (!user) {
@@ -1035,18 +1056,12 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
     user.chat_voice_provider ?? undefined,
   );
 
-  let systemInstruction = '';
-  try {
-    systemInstruction = await prompts.createSystemContext(
-      user,
-      memoryId,
-      null,
-      '',
-      0,
-    );
-  } catch (error) {
-    console.error('Failed to create system context for voice mode:', error);
-  }
+  const memoryTool = client.memoryTool === true;
+  const callActions = client.callActions === true;
+  const voiceContext = await buildVoiceSessionContext(user, memoryId, {
+    memoryTool,
+    callActions,
+  });
 
   const expireTime = dayjs().add(30, 'minute').toDate();
   // 10 min gives mobile clients a realistic window to establish the WebSocket
@@ -1066,16 +1081,14 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
       newSessionExpireTime: newSessionExpireTime.toISOString(),
       liveConnectConstraints: {
         model: live.model,
-        config: {
-          sessionResumption: {},
-          responseModalities: [Modality.AUDIO],
-          // Apply the user's chosen Gemini voice to the live session
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {voiceName: live.voice.name},
-            },
-          },
-        },
+        // Constraints lock every LiveConnectConfig field. Client config is
+        // ignored, so all voice context must be built here.
+        config: buildLiveConnectConfig(
+          live.voice.name,
+          voiceContext.systemInstruction,
+          resumeHandle,
+          {memoryTool, callActions},
+        ),
       },
       httpOptions: {
         apiVersion: 'v1alpha',
@@ -1083,15 +1096,29 @@ export async function createEphemeralToken(userId: string, memoryId?: string) {
     },
   });
 
+  void recordAiMetric({
+    event: 'prompt_version_used',
+    task: 'voice_session',
+    endpoint: '/ai/ephemeral-token',
+    user: userId,
+    prompt_version: VOICE_PROMPT_VERSION,
+  });
+
   return {
     message: 'Ephemeral token created successfully',
     data: {
       token: token.name,
       expiresAt: expireTime.toISOString(),
-      // Return the resolved voice so the client can display which voice is active
       voice: live.voice,
       live,
-      systemInstruction,
+      greetingInstruction: voiceContext.greetingInstruction,
+      memoryId: voiceContext.memoryId ?? null,
+      promptVersion: VOICE_PROMPT_VERSION,
+      tools: [
+        ...(memoryTool ? [SEARCH_MEMORIES_TOOL_NAME] : []),
+        ...(callActions ? CALL_ACTION_TOOL_NAMES : []),
+      ],
+      speakerFullDuplex: allowsSpeakerFullDuplex(client.deviceModel),
     },
   };
 }
