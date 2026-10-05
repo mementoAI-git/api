@@ -1,4 +1,4 @@
-import {NextFunction, Request, Response} from 'express';
+import {NextFunction, Response} from 'express';
 import {StatusCodes} from 'http-status-codes';
 import {
   getFiles,
@@ -8,7 +8,6 @@ import {
 } from '../../../utils/helpers';
 import * as service from './service';
 import {IRequest} from '../../../utils/interface';
-import redis from '../../../services/redis';
 import {resolveUploadReservationId} from '../file/upload-idempotency';
 
 export async function getPrompts(
@@ -74,7 +73,10 @@ export async function getSuggestions(
 ) {
   try {
     const pagination = getPagination(req);
-    const {message, data} = await service.getSuggestions(pagination);
+    const {message, data} = await service.getSuggestions(
+      pagination,
+      req.auth.id,
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -89,6 +91,7 @@ export async function getPromptDetails(
   try {
     const {message, data} = await service.getPromptDetails(
       String(req.params.id),
+      req.auth.id,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
@@ -113,17 +116,31 @@ export async function getPromptsByCategory(
   }
 }
 
-export async function getCategories(
+export async function getExploreCategories(
+  _req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.getExploreCategories();
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function setExploreQuestionFeedback(
   req: IRequest,
   res: Response,
   next: NextFunction,
 ) {
   try {
-    // ?enriched=true opts into taxonomy objects with artwork; default stays
-    // string[] for already-released clients.
-    const enriched =
-      req.query.enriched === 'true' || req.query.enriched === '1';
-    const {message, data} = await service.getCategories(enriched);
+    validateRequest(req);
+    const {message, data} = await service.setExploreQuestionFeedback(
+      String(req.params.id),
+      req.body,
+      req.auth.id,
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
@@ -136,17 +153,7 @@ export async function getOverviewPrompts(
   next: NextFunction,
 ) {
   try {
-    const cacheKey = `overviewprompts:${req.auth.id}`;
-    const cachedData = await redis.get(cacheKey);
-    if (cachedData) {
-      const {message, data} = JSON.parse(String(cachedData));
-      return responsHandler(res, StatusCodes.OK, message, data);
-    }
-
     const {message, data} = await service.getOverviewPrompts(req.auth.id);
-    await redis.set(cacheKey, JSON.stringify({message, data}), {
-      EX: 60 * 60 * 24,
-    });
 
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

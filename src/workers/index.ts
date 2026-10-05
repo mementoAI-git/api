@@ -6,6 +6,7 @@ import startInsightsExtractionWorker from './insight';
 import startQuickCaptureWorker from './quick-capture';
 import startSummarizationWorker from './summarizarion';
 import startSystemWorker from './system';
+import startExploreQuestionWorker from './explore-questions';
 import {logger} from '../utils';
 import {startReadyWorkerHeartbeat} from '../services/worker-heartbeat';
 
@@ -28,6 +29,7 @@ async function startWorkers() {
     quickCaptureWorker,
     summarizationWorker,
     systemWorker,
+    startExploreQuestionWorker(connection),
   ];
   const heartbeat = await startReadyWorkerHeartbeat(
     workers,

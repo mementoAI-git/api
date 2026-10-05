@@ -24,6 +24,7 @@ import logger from '../../utils/logger';
 import {BULL_BOARD_ENABLED} from '../../utils/config';
 import gaurd from '../../middleware/gaurd';
 import {requireAdmin} from '../../middleware/admin';
+import {exploreQuestionQueue} from './explore-questions';
 
 export function setupBullBoard(app: Application): boolean {
   if (!BULL_BOARD_ENABLED) {
@@ -37,7 +38,12 @@ export function setupBullBoard(app: Application): boolean {
 
   serverAdapter.setBasePath(path);
 
-  const queues = [summarizationQueue, insightQueue, systemQueue]
+  const queues = [
+    summarizationQueue,
+    insightQueue,
+    systemQueue,
+    exploreQuestionQueue,
+  ]
     .filter((queue): queue is NonNullable<typeof queue> => Boolean(queue))
     .map(queue => new BullMQAdapter(queue));
 

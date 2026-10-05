@@ -1,27 +1,26 @@
-import fs from 'fs';
-import path from 'path';
+import 'dotenv/config';
+import mongoose from 'mongoose';
 import {connectMongodb} from '../connection';
-import Prompt from '../model/prompt';
+import {seedExploreStarterQuestions} from './explore-prompts.seed';
 import logger from '../../../utils/logger';
 
+/** Backward-compatible seed entry point; the curated Explore catalog is canonical. */
 async function seedPrompts() {
   await connectMongodb();
-
-  const filePath = path.join(__dirname, '../data/prompts.json');
-  const promptsRaw = fs.readFileSync(filePath, 'utf-8');
-  const prompts = JSON.parse(promptsRaw);
-
-  // Remove all existing prompts (optional, comment out if not desired)
-  // await Prompt.deleteMany({});
-
-  // Insert new prompts
-  await Prompt.insertMany(prompts);
-
-  logger.info('Prompts seeded successfully!');
-  process.exit(0); // eslint-disable-line n/no-process-exit
+  const result = await seedExploreStarterQuestions();
+  logger.info(
+    {
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+      inserted: result.upsertedCount,
+    },
+    'Explore prompts seeded successfully',
+  );
+  await mongoose.disconnect();
 }
 
-seedPrompts().catch(err => {
-  logger.error(err, 'Error seeding prompts');
-  process.exit(1); // eslint-disable-line n/no-process-exit
+seedPrompts().catch(async error => {
+  logger.error(error, 'Error seeding Explore prompts');
+  await mongoose.disconnect();
+  process.exitCode = 1;
 });

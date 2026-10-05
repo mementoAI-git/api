@@ -1,6 +1,8 @@
 import type {mongo} from 'mongoose';
 import type {DatabaseMigration} from './index';
 import {createHash, randomUUID} from 'crypto';
+import {runExploreTopicsMigration} from '../module/database/migrations/explore-topics-v2';
+import {seedExploreStarterQuestions} from '../module/database/seed/explore-prompts.seed';
 
 type Db = mongo.Db;
 type ObjectId = mongo.ObjectId;
@@ -203,6 +205,13 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
             {name: 'store_notification_status_received'},
           ),
       ]);
+    },
+  },
+  {
+    id: '202610030001_explore_topics_starters_and_compatibility',
+    up: async () => {
+      await runExploreTopicsMigration({apply: true, reverse: false});
+      await seedExploreStarterQuestions();
     },
   },
 ];

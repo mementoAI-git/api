@@ -8064,6 +8064,114 @@
         ]
       }
     },
+    "/prompts/{id}/feedback": {
+      "post": {
+        "description": "Stores skipped as weak feedback or not-relevant as strong negative feedback for the authenticated user.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "skipped",
+                      "not-relevant"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Explore question feedback saved"
+          },
+          "403": {
+            "description": "Generated prompt belongs to another user"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Save Explore question feedback",
+        "tags": [
+          "Prompts"
+        ]
+      }
+    },
+    "/prompts/categories": {
+      "get": {
+        "description": "Returns the ordered canonical Explore taxonomy. Legacy aliases are accepted by category detail routes but are not returned here.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "description": {
+                            "type": "string"
+                          },
+                          "order": {
+                            "type": "number"
+                          },
+                          "slug": {
+                            "example": "growing-up",
+                            "type": "string"
+                          },
+                          "starterTotal": {
+                            "example": 10,
+                            "type": "number"
+                          },
+                          "title": {
+                            "example": "Growing Up",
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Explore categories retrieved successfully"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Explore categories",
+        "tags": [
+          "Prompts"
+        ]
+      }
+    },
     "/prompts/categories/{id}": {
       "get": {
         "description": "Get paginated list of prompts in a specific category",
@@ -8074,7 +8182,7 @@
             "name": "id",
             "required": true,
             "schema": {
-              "example": "507f1f77bcf86cd799439011",
+              "example": "growing-up",
               "type": "string"
             }
           },

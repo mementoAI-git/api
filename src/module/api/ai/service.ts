@@ -29,6 +29,7 @@ import {
 } from './utils';
 import {serializeAttachmentList} from '../../../utils/attachment-response';
 import Prompt from '../../database/model/prompt';
+import {buildPromptOwnershipScope} from '../prompt/explore-contract';
 import AiMetric from '../../database/model/ai-metric';
 import {updateStreak} from '../user/service';
 import {addToInsightsBuffer} from '../../../services/queues/insights';
@@ -706,7 +707,10 @@ export async function startConversation(
   }
 
   if (!isEmpty(payload.prompt_id)) {
-    prompt = await Prompt.findById(payload.prompt_id);
+    prompt = await Prompt.findOne({
+      _id: payload.prompt_id,
+      ...buildPromptOwnershipScope(user_id),
+    });
   }
 
   // Single-conversation: reuse existing primary conversation if it exists

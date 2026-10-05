@@ -1,8 +1,12 @@
 import Memory from '../../database/model/memory';
 import Prompt, {IPrompt} from '../../database/model/prompt';
 import mongoose from 'mongoose';
-import {NotFoundException} from '../../../utils/service-error';
-import {IReplyPrompt} from './interface';
+import {
+  ActionNotAllowed,
+  BadRequestException,
+  NotFoundException,
+} from '../../../utils/service-error';
+import {IExploreQuestionFeedback, IReplyPrompt} from './interface';
 import {isEmpty} from '../../../utils/helpers';
 import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
 import User from '../../database/model/user';
@@ -19,11 +23,28 @@ import {
 } from './daily-ai-prompt';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
 import {persistUploadedFiles} from '../file/service';
-import {BACKEND_URL} from '../../../utils/config';
+import ExploreQuestionState from '../../database/model/explore-question-state';
 import {
-  getExploreCatalog,
+  EXPLORE_CATEGORIES,
+  exploreArtworkFor,
+  getCompatibleExploreCategoryValues,
   resolveExploreCategorySlug,
 } from './explore-taxonomy';
+import {
+  computeExploreProgress,
+  type ExploreQuestionCandidate,
+  isExploreQuestionSuppressed,
+  selectExploreQuestions,
+} from './explore-selection';
+import {
+  buildExplorePromptScope,
+  buildExploreSuggestionScope,
+  buildPromptOwnershipScope,
+  isExploreQuestionFeedbackStatus,
+  withExploreCategoryTitle,
+} from './explore-contract';
+import {queueExploreQuestionRefill} from '../../../services/queues/explore-questions';
+import {BACKEND_URL} from '../../../utils/config';
 
 dayjs.extend(utc);
 
@@ -105,6 +126,8 @@ const assignDailyPrompts = async (
     {
       $match: {
         _id: {$nin: nin},
+        source: 'starter',
+        active: {$ne: false},
       },
     },
     {$sample: {size: need}},
@@ -145,7 +168,13 @@ async function pickFallbackStaticPrompt(
   excludeIds: string[],
 ): Promise<IPrompt | null> {
   const [doc] = await Prompt.aggregate([
-    {$match: {_id: {$nin: excludeIds}}},
+    {
+      $match: {
+        _id: {$nin: excludeIds},
+        source: 'starter',
+        active: {$ne: false},
+      },
+    },
     {$sample: {size: 1}},
   ]);
   if (!doc?._id) {
@@ -256,7 +285,10 @@ export const getUserPromptResponse = async (id: string, user_id: string) => {
   });
 
   if (!memory) {
-    const prompt = await Prompt.findById(id);
+    const prompt = await Prompt.findOne({
+      _id: id,
+      ...buildPromptOwnershipScope(user_id),
+    });
     if (!prompt) {
       throw new NotFoundException('Prompt not found');
     }
@@ -284,7 +316,10 @@ export const replyPrompt = async (
     throw new NotFoundException('User not found');
   }
 
-  const prompt = await Prompt.findById(prompt_id);
+  const prompt = await Prompt.findOne({
+    _id: prompt_id,
+    ...buildPromptOwnershipScope(user_id),
+  });
   if (!prompt) {
     throw new NotFoundException('Prompt not found');
   }
@@ -332,6 +367,14 @@ export const replyPrompt = async (
     await ActivePrompt.findByIdAndUpdate(activePrompt.id, {memory: memory.id});
   }
 
+  await ExploreQuestionState.deleteOne({user: user_id, prompt: prompt_id});
+  if (prompt.source === 'ai-generated') {
+    await Prompt.updateOne(
+      {_id: prompt_id, owner_user: user_id},
+      {$set: {active: false}},
+    );
+  }
+
   const hasBody = Boolean(
     memory?.body && String(memory.body).trim().length > 0,
   );
@@ -359,34 +402,108 @@ export const getPromptsByCategory = async (
   user_id: string,
   pagination: IPagination,
 ) => {
-  const {page, limit, ...query} = pagination;
-
-  // Legacy slugs (e.g. `career`) resolve to canonical ones (`work-purpose`)
-  // so old deep links keep working. Unknown values pass through verbatim.
   const canonical = resolveExploreCategorySlug(category);
-  const queryFilter: any = {category: canonical ?? category};
+  if (!canonical) throw new NotFoundException('Explore category not found');
 
-  if ('answered' in query) {
-    const answeredMemories = await Memory.find({
-      user: user_id,
-      prompt: {$exists: true, $ne: null},
-      status: {$ne: 'draft'},
-    });
+  const page = Math.max(1, pagination.page);
+  const limit = Math.max(1, Math.min(50, pagination.limit));
+  const compatibleCategories = getCompatibleExploreCategoryValues(canonical);
+  const scope = {
+    ...buildExplorePromptScope(canonical, user_id),
+    category: {$in: compatibleCategories},
+  };
+  const answeredPromptIds = await getAnsweredPromptIds(user_id);
+  const answeredIds = new Set(answeredPromptIds.map(String));
+  const starterAnswered = await Prompt.countDocuments({
+    _id: {$in: answeredPromptIds},
+    category: {$in: compatibleCategories},
+    source: 'starter',
+  });
+  const progress = {
+    categorySlug: canonical,
+    ...computeExploreProgress(starterAnswered),
+  };
 
-    const answeredPromptIds = answeredMemories.map(m => m.prompt);
-
-    if (query?.answered === 'true') {
-      queryFilter._id = {$in: answeredPromptIds};
-    } else {
-      queryFilter._id = {$nin: answeredPromptIds};
-    }
+  if (pagination.answered === 'true') {
+    const prompts = await Prompt.paginate(
+      {...scope, _id: {$in: answeredPromptIds}},
+      {page, limit, sort: {created_at: -1}},
+    );
+    return {
+      data: {...prompts, progress},
+      message: 'Prompts retrieved successfully',
+    };
   }
 
-  const prompts = await Prompt.paginate(queryFilter, {
-    page,
-    limit,
-    sort: {created_at: -1},
+  const [states, promptDocs, usableContextCount] = await Promise.all([
+    ExploreQuestionState.find({user: user_id})
+      .select('prompt status updated_at')
+      .lean(),
+    Prompt.find({...scope, active: {$ne: false}})
+      .sort({stable_id: 1, created_at: 1})
+      .lean(),
+    Memory.countDocuments({
+      user: user_id,
+      status: {$nin: ['draft', 'deleted']},
+    }),
+  ]);
+  const stateByPrompt = new Map(
+    states.map(state => [String(state.prompt), state.status]),
+  );
+  const suppressedIds = new Set(
+    states
+      .filter(state =>
+        isExploreQuestionSuppressed(state.status, state.updated_at),
+      )
+      .map(state => String(state.prompt)),
+  );
+  const candidates = promptDocs.map(prompt => ({
+    ...prompt,
+    _id: String(prompt._id),
+    source: prompt.source ?? 'legacy',
+    status: answeredIds.has(String(prompt._id))
+      ? 'answered'
+      : (stateByPrompt.get(String(prompt._id)) ?? 'unanswered'),
+  })) as ExploreQuestionCandidate[];
+  const personalizedPoolSize = candidates.filter(
+    prompt => prompt.source === 'ai-generated',
+  ).length;
+  if (progress.personalizedQuestionsEnabled && personalizedPoolSize < 3) {
+    void queueExploreQuestionRefill({user_id, category: canonical});
+  }
+  const activeAnsweredIds =
+    pagination.answered === 'false' || pagination.answered === undefined
+      ? answeredIds
+      : new Set<string>();
+  const selected = selectExploreQuestions({
+    starterQuestions: candidates.filter(prompt => prompt.source === 'starter'),
+    personalizedQuestions: candidates.filter(
+      prompt => prompt.source === 'ai-generated',
+    ),
+    answeredIds: activeAnsweredIds,
+    suppressedIds,
+    starterAnswered,
+    usableContextCount,
+    limit: candidates.length,
   });
+  const offset = (page - 1) * limit;
+  const docs = selected.slice(offset, offset + limit);
+  const totalDocs = selected.length;
+  const totalPages = Math.max(1, Math.ceil(totalDocs / limit));
+  const hasNextPage = offset + limit < totalDocs;
+  const prompts = {
+    docs,
+    totalDocs,
+    limit,
+    page,
+    totalPages,
+    hasNextPage,
+    hasPrevPage: page > 1,
+    pagingCounter: totalDocs === 0 ? 0 : offset + 1,
+    nextPage: hasNextPage ? page + 1 : null,
+    prevPage: page > 1 ? page - 1 : null,
+    progress,
+  };
 
   return {
     data: prompts,
@@ -394,20 +511,74 @@ export const getPromptsByCategory = async (
   };
 };
 
-export const getSuggestions = async (pagination: IPagination) => {
+export const getExploreCategories = async () => ({
+  data: EXPLORE_CATEGORIES.map((category, index) => ({
+    ...category,
+    order: index,
+    starterTotal: 10,
+    artwork: exploreArtworkFor(category.slug, BACKEND_URL || ''),
+  })),
+  message: 'Explore categories retrieved successfully',
+});
+
+export const setExploreQuestionFeedback = async (
+  prompt_id: string,
+  payload: IExploreQuestionFeedback,
+  user_id: string,
+) => {
+  if (!isExploreQuestionFeedbackStatus(payload.status)) {
+    throw new BadRequestException('Invalid Explore question status');
+  }
+  const prompt = await Prompt.findById(prompt_id).lean();
+  if (!prompt) throw new NotFoundException('Prompt not found');
+  if (!resolveExploreCategorySlug(prompt.category)) {
+    throw new BadRequestException('Prompt is not an Explore question');
+  }
+  if (
+    prompt.source === 'ai-generated' &&
+    String(prompt.owner_user) !== String(user_id)
+  ) {
+    throw new ActionNotAllowed('Prompt does not belong to this user');
+  }
+  const state = await ExploreQuestionState.findOneAndUpdate(
+    {user: user_id, prompt: prompt_id},
+    {$set: {status: payload.status}},
+    {new: true, upsert: true},
+  );
+  return {data: state, message: 'Explore question feedback saved'};
+};
+
+async function getSuppressedExplorePromptIds(userId: string) {
+  const states = await ExploreQuestionState.find({user: userId})
+    .select('prompt status updated_at')
+    .lean();
+  return states
+    .filter(state =>
+      isExploreQuestionSuppressed(state.status, state.updated_at),
+    )
+    .map(state => String(state.prompt));
+}
+
+export const getSuggestions = async (
+  pagination: IPagination,
+  user_id: string,
+) => {
   const {page, limit} = pagination;
   const skip = (Math.max(1, page) - 1) * limit;
 
-  const total = await Prompt.countDocuments({});
+  const suppressedIds = await getSuppressedExplorePromptIds(user_id);
+  const suggestionScope = buildExploreSuggestionScope(user_id, suppressedIds);
+  const total = await Prompt.countDocuments(suggestionScope);
   const sampleSize = Math.min(total, skip + limit);
-  const docs = await Prompt.aggregate([
+  const docs = await Prompt.aggregate<IPrompt>([
+    {$match: suggestionScope},
     {$sample: {size: sampleSize}},
     {$skip: skip},
     {$limit: limit},
   ]).sort({title: 1});
 
   const data = {
-    docs,
+    docs: docs.map(withExploreCategoryTitle),
     totalDocs: total,
     limit,
     page: Math.max(1, page),
@@ -442,23 +613,34 @@ export const getOverviewPrompts = async (user_id: string) => {
   const activePromptIds = activePrompts.map(ap =>
     typeof ap.prompt === 'string'
       ? ap.prompt
-      : (ap.prompt as any)._id.toString(),
+      : String((ap.prompt as IPrompt)._id),
   );
+  const suppressedIds = await getSuppressedExplorePromptIds(user_id);
 
-  const availablePrompts = await Prompt.aggregate([
+  type OverviewPrompt = IPrompt & {category_title?: string};
+  const availablePrompts = await Prompt.aggregate<OverviewPrompt>([
     {
       $match: {
-        _id: {$nin: [...answeredPromptIds, ...activePromptIds]},
+        ...buildExploreSuggestionScope(user_id, [
+          ...answeredPromptIds,
+          ...activePromptIds,
+          ...suppressedIds,
+        ]),
       },
     },
     {$sample: {size: limit * 3}},
   ]).sort({title: 1});
 
-  const categoryMap = new Map<string, any>();
+  const categoryMap = new Map<string, OverviewPrompt[]>();
 
   for (const prompt of availablePrompts) {
-    const cat = prompt.category;
+    const cat = resolveExploreCategorySlug(prompt.category);
     if (cat) {
+      const categoryDefinition = EXPLORE_CATEGORIES.find(
+        category => category.slug === cat,
+      );
+      prompt.category = cat;
+      prompt.category_title = categoryDefinition?.title ?? cat;
       if (!categoryMap.has(cat)) {
         categoryMap.set(cat, []);
       }
@@ -480,12 +662,15 @@ export const getOverviewPrompts = async (user_id: string) => {
   };
 };
 
-export const getPromptDetails = async (id: string) => {
+export const getPromptDetails = async (id: string, user_id: string) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new NotFoundException('Prompt not found');
   }
 
-  const prompt = await Prompt.findById(id);
+  const prompt = await Prompt.findOne({
+    _id: id,
+    ...buildPromptOwnershipScope(user_id),
+  });
   if (!prompt) {
     throw new NotFoundException('Prompt not found');
   }
@@ -493,44 +678,5 @@ export const getPromptDetails = async (id: string) => {
   return {
     data: prompt,
     message: 'Prompt details retrieved successfully',
-  };
-};
-
-export const getCategories = async (enriched = false) => {
-  // Default (no flag) preserves the legacy string[] shape that production
-  // clients parse — enriched objects are opt-in so released apps keep
-  // working with zero rebuild until they migrate.
-  if (!enriched) {
-    const categories = await Prompt.distinct('category');
-    return {
-      data: (categories as unknown[]).filter(Boolean),
-      message: 'Categories retrieved successfully',
-    };
-  }
-  const baseUrl = BACKEND_URL || '';
-  const catalog = getExploreCatalog(baseUrl);
-  const known = new Set(catalog.map(c => c.slug));
-
-  // Surface any DB categories outside the canonical taxonomy (e.g. newly
-  // seeded content) instead of silently dropping them. They carry no
-  // artwork until promoted into the taxonomy module.
-  const distinct: string[] = await Prompt.distinct('category');
-  const extras = (distinct || [])
-    .filter(Boolean)
-    .map(c => String(c))
-    .filter(c => !known.has(c) && resolveExploreCategorySlug(c) === null)
-    .sort()
-    .map((c, i) => ({
-      slug: c,
-      title: c.replace(/-/g, ' '),
-      description: '',
-      order: catalog.length + i,
-      starterTotal: 0,
-      artwork: {src: '', srcSet: ''},
-    }));
-
-  return {
-    data: [...catalog, ...extras],
-    message: 'Categories retrieved successfully',
   };
 };
