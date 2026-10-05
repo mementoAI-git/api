@@ -38,6 +38,7 @@ import {getStorageUsageSummary} from './storage-quota';
 import mongoose from 'mongoose';
 import {randomUUID} from 'crypto';
 import {applyStoreSubscriptionSnapshot} from './store-entitlement-service';
+import {STAGING_AUTO_PRO} from '../../../utils/config';
 
 type CheckoutBody = {
   success_url: string;
@@ -77,11 +78,15 @@ export async function getSubscriptionSummary(userId: string) {
   return {
     message: 'Subscription summary fetched',
     data: {
-      tier: subscription.tier,
-      status: subscription.status,
-      current_period_end: subscription.current_period_end,
-      cancel_at_period_end: subscription.cancel_at_period_end || false,
-      trial_ends_at: subscription.trial_ends_at,
+      tier: STAGING_AUTO_PRO ? 'pro' : subscription.tier,
+      status: STAGING_AUTO_PRO ? 'active' : subscription.status,
+      current_period_end: STAGING_AUTO_PRO
+        ? null
+        : subscription.current_period_end,
+      cancel_at_period_end: STAGING_AUTO_PRO
+        ? false
+        : subscription.cancel_at_period_end || false,
+      trial_ends_at: STAGING_AUTO_PRO ? null : subscription.trial_ends_at,
       provider: subscription.payment_provider,
       store_account_token: subscription.store_account_token,
       currency: subscription.currency,

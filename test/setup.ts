@@ -1,4 +1,6 @@
 process.env.NODE_ENV = 'test';
+// Billing tests must not inherit the staging entitlement from a local .env.
+process.env.STAGING_AUTO_PRO = 'false';
 // Unit tests must not inherit a developer machine's Redis URL from .env.
 // Tests that intentionally exercise Redis can set this explicitly before import.
 process.env.REDIS_URL = '';
