@@ -26,6 +26,7 @@ import {persistUploadedFiles} from '../file/service';
 import ExploreQuestionState from '../../database/model/explore-question-state';
 import {
   EXPLORE_CATEGORIES,
+  exploreArtworkFor,
   getCompatibleExploreCategoryValues,
   resolveExploreCategorySlug,
 } from './explore-taxonomy';
@@ -43,6 +44,7 @@ import {
   withExploreCategoryTitle,
 } from './explore-contract';
 import {queueExploreQuestionRefill} from '../../../services/queues/explore-questions';
+import {BACKEND_URL} from '../../../utils/config';
 
 dayjs.extend(utc);
 
@@ -514,6 +516,7 @@ export const getExploreCategories = async () => ({
     ...category,
     order: index,
     starterTotal: 10,
+    artwork: exploreArtworkFor(category.slug, BACKEND_URL || ''),
   })),
   message: 'Explore categories retrieved successfully',
 });
