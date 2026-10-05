@@ -23,7 +23,9 @@ describe('explore taxonomy', () => {
     expect(resolveExploreCategorySlug('family')).toBe('people-i-love');
     expect(resolveExploreCategorySlug('identity')).toBe('who-i-am');
     expect(resolveExploreCategorySlug('nope')).toBeNull();
-    expect(Object.keys(LEGACY_EXPLORE_CATEGORY_ALIASES).length).toBeGreaterThan(0);
+    expect(Object.keys(LEGACY_EXPLORE_CATEGORY_ALIASES).length).toBeGreaterThan(
+      0,
+    );
   });
 
   it('builds versioned artwork urls with srcset widths', () => {
