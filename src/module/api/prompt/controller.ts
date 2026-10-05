@@ -119,7 +119,11 @@ export async function getCategories(
   next: NextFunction,
 ) {
   try {
-    const {message, data} = await service.getCategories();
+    // ?enriched=true opts into taxonomy objects with artwork; default stays
+    // string[] for already-released clients.
+    const enriched =
+      req.query.enriched === 'true' || req.query.enriched === '1';
+    const {message, data} = await service.getCategories(enriched);
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

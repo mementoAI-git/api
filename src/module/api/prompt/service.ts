@@ -19,6 +19,11 @@ import {
 } from './daily-ai-prompt';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
 import {persistUploadedFiles} from '../file/service';
+import {BACKEND_URL} from '../../../utils/config';
+import {
+  getExploreCatalog,
+  resolveExploreCategorySlug,
+} from './explore-taxonomy';
 
 dayjs.extend(utc);
 
@@ -356,7 +361,10 @@ export const getPromptsByCategory = async (
 ) => {
   const {page, limit, ...query} = pagination;
 
-  const queryFilter: any = {category};
+  // Legacy slugs (e.g. `career`) resolve to canonical ones (`work-purpose`)
+  // so old deep links keep working. Unknown values pass through verbatim.
+  const canonical = resolveExploreCategorySlug(category);
+  const queryFilter: any = {category: canonical ?? category};
 
   if ('answered' in query) {
     const answeredMemories = await Memory.find({
@@ -488,10 +496,41 @@ export const getPromptDetails = async (id: string) => {
   };
 };
 
-export const getCategories = async () => {
-  const categories = await Prompt.distinct('category');
+export const getCategories = async (enriched = false) => {
+  // Default (no flag) preserves the legacy string[] shape that production
+  // clients parse — enriched objects are opt-in so released apps keep
+  // working with zero rebuild until they migrate.
+  if (!enriched) {
+    const categories = await Prompt.distinct('category');
+    return {
+      data: (categories as unknown[]).filter(Boolean),
+      message: 'Categories retrieved successfully',
+    };
+  }
+  const baseUrl = BACKEND_URL || '';
+  const catalog = getExploreCatalog(baseUrl);
+  const known = new Set(catalog.map(c => c.slug));
+
+  // Surface any DB categories outside the canonical taxonomy (e.g. newly
+  // seeded content) instead of silently dropping them. They carry no
+  // artwork until promoted into the taxonomy module.
+  const distinct: string[] = await Prompt.distinct('category');
+  const extras = (distinct || [])
+    .filter(Boolean)
+    .map(c => String(c))
+    .filter(c => !known.has(c) && resolveExploreCategorySlug(c) === null)
+    .sort()
+    .map((c, i) => ({
+      slug: c,
+      title: c.replace(/-/g, ' '),
+      description: '',
+      order: catalog.length + i,
+      starterTotal: 0,
+      artwork: {src: '', srcSet: ''},
+    }));
+
   return {
-    data: categories.filter(Boolean),
+    data: [...catalog, ...extras],
     message: 'Categories retrieved successfully',
   };
 };
