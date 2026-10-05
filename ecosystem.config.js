@@ -18,6 +18,10 @@ const config = {
 };
 
 const {suffix, port, apiInstances} = config[ENV] || config.prod;
+// Staging grants everyone Pro; opt out to exercise Free-plan billing flows.
+// Force this off for production, even if its environment file enables it.
+const stagingAutoPro =
+  ENV === 'dev' ? process.env.STAGING_AUTO_PRO || 'true' : 'false';
 
 module.exports = {
   apps: [
@@ -31,6 +35,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         MEMENTO_ENV: ENV,
+        STAGING_AUTO_PRO: stagingAutoPro,
         PORT: port,
       },
       // Graceful shutdown
@@ -55,6 +60,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         MEMENTO_ENV: ENV,
+        STAGING_AUTO_PRO: stagingAutoPro,
         PORT: port,
       },
       // Workers may run long jobs — give them time to finish

@@ -164,6 +164,24 @@ Production configuration, rollback expectations, and compatibility evidence are 
 
 ## Billing and Storage
 
+### Staging Pro access
+
+The dev/staging PM2 deployment enables `STAGING_AUTO_PRO=true` for both the API
+and workers. It grants every existing and new staging account effective Pro
+access immediately, including the configured Pro storage allowance. No signup,
+payment, or database backfill is required for existing users.
+
+The application requires both `MEMENTO_ENV=dev` and `STAGING_AUTO_PRO=true`.
+Production PM2 processes force the flag off. `NODE_ENV` is not used to identify
+staging because both deployments run with `NODE_ENV=production`.
+
+This is an environment entitlement: subscription summaries report active Pro
+without an expiry, while stored subscription/payment records remain unchanged.
+Explicit per-user storage overrides and administrative feature flags still
+apply. To test Free plans or real subscription expiry on staging, set
+`STAGING_AUTO_PRO=false` and reload both processes with the updated environment;
+the original subscription behavior resumes without a data migration.
+
 Polar is the only active payment integration. Paystack values remain readable only where older persisted records may contain them; there is no Paystack checkout, portal, invoice, or webhook flow.
 
 The API is authoritative for subscription access and storage usage. Default storage quotas are configurable through `STORAGE_LIMIT_FREE_BYTES`, `STORAGE_LIMIT_PRO_BYTES`, and `STORAGE_LIMIT_LEGACY_BYTES`; the shipped defaults are 200 MiB for Free and 10 GiB for Pro and Legacy. A per-user administrative override takes precedence. See [the billing implementation checklist](BILLING_IMPLEMENTATION_CHECKLIST.md) for contract, reconciliation, deployment, and staging sign-off requirements.

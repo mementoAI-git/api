@@ -2,6 +2,7 @@ import dayjs from 'dayjs';
 import {StatusCodes} from 'http-status-codes';
 import {FREE_STORAGE_LIMIT_BYTES} from '../../../utils/constant';
 import {
+  STAGING_AUTO_PRO,
   STORAGE_LIMIT_LEGACY_BYTES,
   STORAGE_LIMIT_PRO_BYTES,
 } from '../../../utils/config';
@@ -70,6 +71,10 @@ function isPaidTier(tier: SubscriptionTier) {
 export function resolveEffectiveTier(
   subscription: ISubscription | null,
 ): SubscriptionTier {
+  // Applies to all staging accounts, even before a subscription is created or
+  // after a sandbox purchase expires. Provider records remain authoritative
+  // outside staging and are never rewritten by this entitlement.
+  if (STAGING_AUTO_PRO) return 'pro';
   if (!subscription) return 'free';
   if (isPaidTier(subscription.tier)) {
     const terminallyEnded =
