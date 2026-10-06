@@ -1,3 +1,4 @@
+import {getPromptReplyUserCount} from './reply-user-count';
 import Memory from '../../database/model/memory';
 import Prompt, {IPrompt} from '../../database/model/prompt';
 import mongoose from 'mongoose';
@@ -26,6 +27,7 @@ import {persistUploadedFiles} from '../file/service';
 import ExploreQuestionState from '../../database/model/explore-question-state';
 import {
   EXPLORE_CATEGORIES,
+  exploreArtworkFor,
   getCompatibleExploreCategoryValues,
   resolveExploreCategorySlug,
 } from './explore-taxonomy';
@@ -43,6 +45,7 @@ import {
   withExploreCategoryTitle,
 } from './explore-contract';
 import {queueExploreQuestionRefill} from '../../../services/queues/explore-questions';
+import {BACKEND_URL} from '../../../utils/config';
 
 dayjs.extend(utc);
 
@@ -270,7 +273,16 @@ export const getPrompts = async (user_id: string, date_key?: string) => {
   }
 
   return {
-    data: rows,
+    data: await Promise.all(
+      rows.map(async row => ({
+        ...row,
+        reply_user_count: await getPromptReplyUserCount(
+          row.slot_kind === 'static'
+            ? {prompt_id: String(row.prompt._id)}
+            : {prompt_text: row.ai_prompt_text},
+        ),
+      })),
+    ),
     message: 'Prompts retrieved successfully',
   };
 };
@@ -514,6 +526,7 @@ export const getExploreCategories = async () => ({
     ...category,
     order: index,
     starterTotal: 10,
+    artwork: exploreArtworkFor(category.slug, BACKEND_URL || ''),
   })),
   message: 'Explore categories retrieved successfully',
 });

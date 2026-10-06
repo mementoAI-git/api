@@ -201,6 +201,8 @@ export default {
       .optional()
       .isBoolean()
       .withMessage('Is voice must be a boolean'),
+    body('messages.*.attachments').optional().isArray({max: 10}),
+    body('messages.*.attachments.*').isMongoId(),
     body('messages.*.duration')
       .optional()
       .isInt({min: 0})

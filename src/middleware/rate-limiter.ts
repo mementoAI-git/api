@@ -4,7 +4,7 @@ import RedisStore from 'rate-limit-redis';
 import client, {getRedisConnection} from '../services/redis';
 import logger from '../utils/logger';
 
-export default function rateLimiter(window: number, max = 200) {
+export default function rateLimiter(window: number, max = 200, prefix = 'rl:') {
   const redisAvailable = Boolean(getRedisConnection()) && client.isReady;
 
   if (!redisAvailable) {
@@ -41,6 +41,7 @@ export default function rateLimiter(window: number, max = 200) {
       );
     },
     store: new RedisStore({
+      prefix,
       sendCommand: (...args: string[]) => client.sendCommand(args),
     }),
   });

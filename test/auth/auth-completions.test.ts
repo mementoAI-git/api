@@ -168,7 +168,7 @@ describe('authentication completion paths', () => {
       refresh_tokens: ['legacy-refresh'],
     });
     await createSession(user, context);
-    vi.spyOn(otp, 'verify').mockResolvedValue({
+    vi.spyOn(otp, 'consume').mockResolvedValue({
       valid: true,
       email: user.email,
       alreadyUsed: false,

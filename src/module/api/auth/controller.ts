@@ -274,3 +274,31 @@ export async function completePasskeyLogin(
     next(error);
   }
 }
+
+export async function sendRecoveryCode(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const {message, data} = await service.sendRecoveryCode(req.body);
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyRecoveryCode(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const {message, data} = await service.verifyRecoveryCode(req.body);
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}

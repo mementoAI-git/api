@@ -50,6 +50,29 @@ export default {
       .isIn(['link', 'code'])
       .withMessage('Invalid delivery format'),
   ],
+  sendRecoveryCode: [
+    body('email')
+      .isString()
+      .bail()
+      .trim()
+      .isEmail()
+      .withMessage('Invalid email address')
+      .toLowerCase(),
+  ],
+  verifyRecoveryCode: [
+    body('email')
+      .isString()
+      .bail()
+      .trim()
+      .isEmail()
+      .withMessage('Invalid email address')
+      .toLowerCase(),
+    body('code')
+      .isString()
+      .bail()
+      .matches(/^\d{6}$/)
+      .withMessage('Enter the 6-digit code'),
+  ],
   sendLink: [
     emailValidator,
     body('type')

@@ -10,6 +10,7 @@ import {
 
 import {
   ILogin,
+  IVerifyRecoveryCode,
   IOAuthAuthorization,
   IPasskeyLoginBegin,
   IPasskeyLoginComplete,
@@ -41,6 +42,7 @@ import mail from '../../mail';
 import User from '../../database/model/user';
 import otp from '../../../services/otp';
 import redis from '../../../services/redis';
+import {PasswordRecoveryCodes} from '../../../services/password-recovery';
 import {
   FRONTEND_URL,
   WEBAUTHN_RP_ID,
@@ -91,6 +93,14 @@ async function consume2FAPendingToken(token: string) {
 
 type AuthClientContext = Pick<RequestContext, 'client'> &
   Partial<Pick<RequestContext, 'version' | 'build'>>;
+
+function emailDelivery(
+  context: AuthClientContext,
+  requested?: 'link' | 'code',
+): 'link' | 'code' {
+  if (requested) return requested;
+  return ['web', 'ios', 'android'].includes(context.client) ? 'code' : 'link';
+}
 
 const LEGACY_CLIENT: AuthClientContext = {
   client: 'legacy-unknown',
@@ -330,7 +340,8 @@ export async function login(
     throw new BadRequestException('Incorrect password');
   }
   if (!user.verified) {
-    await mail.sendLink(email, user.first_name, 'verify');
+    const delivery = emailDelivery(context);
+    await mail.sendLink(email, user.first_name, 'verify', delivery);
     throw new BadRequestException('Please verify your email address', {
       requires_verification: true,
       email,
@@ -596,12 +607,7 @@ export async function register(
 
   const picture = generateDefaultAvatarUrl(email);
   await User.create({last_name, first_name, password, email, picture, ...keys});
-  const deliveryMode =
-    (payload as any).delivery === 'code' ||
-    context.client === 'ios' ||
-    context.client === 'android'
-      ? 'code'
-      : 'link';
+  const deliveryMode = emailDelivery(context, payload.delivery);
   await mail.sendLink(
     email,
     first_name || last_name || '',
@@ -614,6 +620,31 @@ export async function register(
   return {data, message: 'User registration successful'};
 }
 
+const recoveryCodes = new PasswordRecoveryCodes(redis);
+
+export async function sendRecoveryCode(payload: {email: string}) {
+  const email = payload.email.trim().toLowerCase();
+  // Use the same response for unknown accounts and throttled requests.
+  const code = await recoveryCodes.issue(email);
+  const user = await User.findOne({email});
+  if (user && code) await mail.sendRecoveryCode(email, user.first_name, code);
+  return {
+    message:
+      'If an account exists for this email, a recovery code has been sent.',
+    data: {email, resend_after: 60},
+  };
+}
+
+export async function verifyRecoveryCode(payload: IVerifyRecoveryCode) {
+  const email = payload.email.trim().toLowerCase();
+  const token = await recoveryCodes.verify(email, payload.code);
+  if (!token)
+    throw new BadRequestException(
+      'Invalid or expired code. Request a new code if needed.',
+    );
+  return {message: 'Code verified', data: {token}};
+}
+
 export async function sendLink(
   payload: ISendLink & {delivery?: 'link' | 'code'},
   context: AuthClientContext = LEGACY_CLIENT,
@@ -624,12 +655,7 @@ export async function sendLink(
     throw new NotFoundException('User not found');
   }
 
-  const deliveryMode =
-    payload.delivery === 'code' ||
-    context.client === 'ios' ||
-    context.client === 'android'
-      ? 'code'
-      : 'link';
+  const deliveryMode = emailDelivery(context, payload.delivery);
 
   await mail.sendLink(email, user.first_name, type, deliveryMode);
 
@@ -702,12 +728,10 @@ export async function setPassword(payload: ISetPassword) {
   const {token} = payload;
 
   // Verify the OTP using the centralized service
-  const result = await otp.verify(token, 'reset');
+  const result = await otp.consume(token, 'reset');
   if (!result.valid) {
     throw new BadRequestException('Invalid or expired link');
   }
-
-  await otp.delete(token, 'reset');
 
   const password = await hashPassword(payload.password);
 

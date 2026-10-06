@@ -23,6 +23,18 @@ router.post(
 );
 router.post('/login', rateLimiter(5, 5), valid.login, ctrl.login);
 router.post('/register', publicAuthLimiter, valid.register, ctrl.register);
+router.post(
+  '/recovery/send-code',
+  rateLimiter(10, 10, 'rl:recovery-send:'),
+  valid.sendRecoveryCode,
+  ctrl.sendRecoveryCode,
+);
+router.post(
+  '/recovery/verify-code',
+  rateLimiter(10, 30, 'rl:recovery-verify:'),
+  valid.verifyRecoveryCode,
+  ctrl.verifyRecoveryCode,
+);
 router.post('/send-link', sensitiveAuthLimiter, valid.sendLink, ctrl.sendLink);
 router.post(
   '/verify-email',

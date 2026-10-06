@@ -1077,6 +1077,9 @@ export async function createEphemeralToken(
   const token = await geminiAuthClient.authTokens.create({
     config: {
       uses: 1,
+      // Keep model/audio constraints locked, while allowing client voice,
+      // system context and transcription settings to take effect.
+      lockAdditionalFields: [],
       expireTime: expireTime.toISOString(),
       newSessionExpireTime: newSessionExpireTime.toISOString(),
       liveConnectConstraints: {

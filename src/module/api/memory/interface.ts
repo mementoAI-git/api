@@ -19,6 +19,7 @@ export interface IAddMessageToMemory {
     role: 'user' | 'ai';
     duration?: number;
     is_voice?: boolean;
+    attachments?: string[];
   }[];
   memory_id?: string;
   session_id?: string;

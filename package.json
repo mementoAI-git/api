@@ -38,9 +38,11 @@
     "files:audit-access": "ts-node src/scripts/file-access-audit.ts",
     "compat:report": "ts-node src/scripts/compatibility-report.ts",
     "files:backfill-thumbnails": "ts-node src/scripts/backfill-thumbnail-keys.ts",
+    "explore:upload-artwork": "ts-node src/scripts/upload-explore-artwork.ts",
     "capsules:backfill-recipients": "ts-node src/scripts/backfill-capsule-recipients.ts",
     "contracts:export": "ts-node src/scripts/export-openapi.ts",
-    "contracts:check": "ts-node src/scripts/export-openapi.ts --check"
+    "contracts:check": "ts-node src/scripts/export-openapi.ts --check",
+    "test:auth:redis": "node --test -r ts-node/register test/auth/reset-token.integration.ts"
   },
   "author": "Frank",
   "license": "MIT",

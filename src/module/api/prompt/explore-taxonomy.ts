@@ -116,3 +116,33 @@ export function getCompatibleExploreCategoryValues(
       .map(([legacy]) => legacy),
   ];
 }
+
+/** Version/query bump for artwork cache invalidation (bump when masters change). */
+export const EXPLORE_ARTWORK_VERSION = 'v1';
+
+const ARTWORK_WIDTHS = [480, 768, 1024, 1440];
+
+export interface ExploreCategoryArtwork {
+  src: string;
+  srcSet: string;
+}
+
+/**
+ * Artwork URLs for a canonical slug. Files live at
+ * `artwork/explore/{slug}-{width}.webp` in the public file store
+ * (same R2/CDN pipeline as user uploads — see services/storage).
+ * Upload via `npm run explore:upload-artwork`; until then clients
+ * use bundled covers.
+ */
+export function exploreArtworkFor(
+  slug: string,
+  baseUrl: string,
+): ExploreCategoryArtwork {
+  const base = baseUrl.replace(/\/$/, '');
+  const src = (w: number) =>
+    `${base}/artwork/explore/${slug}-${w}.webp?v=${EXPLORE_ARTWORK_VERSION}`;
+  return {
+    src: src(768),
+    srcSet: ARTWORK_WIDTHS.map(w => `${src(w)} ${w}w`).join(', '),
+  };
+}

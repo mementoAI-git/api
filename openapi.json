@@ -2414,6 +2414,93 @@
         ]
       }
     },
+    "/auth/recovery/send-code": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Generic send acknowledgement with email and resend_after (60 seconds)"
+          },
+          "400": {
+            "description": "Invalid or expired code"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "summary": "Send password recovery code",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/recovery/verify-code": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "code": {
+                    "pattern": "^[0-9]{6}$",
+                    "type": "string"
+                  },
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Verified; data.token is a single-use reset UUID expiring in ten minutes"
+          },
+          "400": {
+            "description": "Invalid or expired code"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "summary": "Exchange recovery code for a reset token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/auth/refresh-token": {
       "post": {
         "description": "Generate a new access token using a valid refresh token",
@@ -7875,7 +7962,7 @@
     },
     "/prompts": {
       "get": {
-        "description": "Get list of available prompts. Results are cached for performance.",
+        "description": "Get daily AI and catalog reflection slots. reply_user_count is the exact number of distinct users with submitted, non-deleted replies across all dates; display floors are applied only by the client.",
         "responses": {
           "200": {
             "content": {
@@ -7885,32 +7972,46 @@
                     "data": {
                       "items": {
                         "properties": {
-                          "_id": {
-                            "example": "507f1f77bcf86cd799439011",
+                          "ai_prompt_text": {
+                            "description": "Question text for AI slots",
                             "type": "string"
                           },
-                          "active": {
-                            "example": true,
+                          "answered": {
+                            "example": false,
                             "type": "boolean"
                           },
-                          "category": {
-                            "example": "reflection",
+                          "display_label": {
+                            "example": "Just for you",
                             "type": "string"
                           },
-                          "created_at": {
-                            "example": "2024-01-01T00:00:00.000Z",
-                            "format": "date-time",
+                          "prompt": {
+                            "description": "Catalog prompt document for static slots",
+                            "type": "object"
+                          },
+                          "reflection_day_key": {
+                            "example": "2026-10-06",
                             "type": "string"
                           },
-                          "description": {
-                            "example": "Reflect on your day",
-                            "type": "string"
+                          "reply_user_count": {
+                            "description": "Distinct replying users; repeated replies by the same user count once. Drafts and deleted replies are excluded. AI questions match complete text, ignoring case and whitespace. No minimum or synthetic variation is applied by the API.",
+                            "example": 42,
+                            "minimum": 0,
+                            "type": "integer"
                           },
-                          "title": {
-                            "example": "Daily Reflection",
+                          "slot_kind": {
+                            "enum": [
+                              "ai",
+                              "static"
+                            ],
                             "type": "string"
                           }
                         },
+                        "required": [
+                          "slot_kind",
+                          "answered",
+                          "reflection_day_key",
+                          "reply_user_count"
+                        ],
                         "type": "object"
                       },
                       "type": "array"
@@ -7946,7 +8047,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "Get All Prompts",
+        "summary": "Get Daily Reflection Prompts",
         "tags": [
           "Prompts"
         ]
