@@ -45,6 +45,7 @@ export const SUPPORTED_FILE_TYPES = [
 
 export const SENSITIVE_FIELDS = [
   'password',
+  'code',
   'old_password',
   'new_password',
   'authorization',

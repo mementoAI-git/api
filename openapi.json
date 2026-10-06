@@ -2414,6 +2414,93 @@
         ]
       }
     },
+    "/auth/recovery/send-code": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Generic send acknowledgement with email and resend_after (60 seconds)"
+          },
+          "400": {
+            "description": "Invalid or expired code"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "summary": "Send password recovery code",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
+    "/auth/recovery/verify-code": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "code": {
+                    "pattern": "^[0-9]{6}$",
+                    "type": "string"
+                  },
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Verified; data.token is a single-use reset UUID expiring in ten minutes"
+          },
+          "400": {
+            "description": "Invalid or expired code"
+          },
+          "422": {
+            "description": "Invalid input"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "summary": "Exchange recovery code for a reset token",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/auth/refresh-token": {
       "post": {
         "description": "Generate a new access token using a valid refresh token",

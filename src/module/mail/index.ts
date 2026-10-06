@@ -108,6 +108,18 @@ class MailService {
     }
   }
 
+  async sendRecoveryCode(email: string, name: string, code: string) {
+    const html = await this.renderTemplate('password-recovery-code', {
+      name,
+      code,
+    });
+    await this.send({
+      to: email,
+      subject: 'Your Memento password reset code',
+      html,
+    });
+  }
+
   async sendLink(
     email: string,
     name = '',

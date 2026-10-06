@@ -134,6 +134,14 @@ class OtpService {
     return {valid: true, email: data.email, alreadyUsed: false};
   }
 
+  /** Atomically consume a reset token, including previously emailed links. */
+  async consume(code: string, type: OtpType): Promise<OtpVerifyResult> {
+    const raw = await redis.getDel(this.buildKey(type, code));
+    if (!raw) return {valid: false};
+    const data: OtpData = JSON.parse(raw.toString());
+    return data.used ? {valid: false} : {valid: true, email: data.email};
+  }
+
   /**
    * Mark an OTP as used (but don't delete - let it expire naturally)
    * This prevents race conditions with duplicate requests

@@ -1,4 +1,62 @@
 const authDocs = {
+  '/auth/recovery/send-code': {
+    post: {
+      tags: ['Auth'],
+      summary: 'Send password recovery code',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['email'],
+              properties: {email: {type: 'string', format: 'email'}},
+            },
+          },
+        },
+      },
+      responses: {
+        '200': {
+          description:
+            'Generic send acknowledgement with email and resend_after (60 seconds)',
+        },
+        '400': {description: 'Invalid or expired code'},
+        '422': {description: 'Invalid input'},
+        '429': {description: 'Rate limited'},
+      },
+    },
+  },
+  '/auth/recovery/verify-code': {
+    post: {
+      tags: ['Auth'],
+      summary: 'Exchange recovery code for a reset token',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['email', 'code'],
+              properties: {
+                email: {type: 'string', format: 'email'},
+                code: {type: 'string', pattern: '^[0-9]{6}$'},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        '200': {
+          description:
+            'Verified; data.token is a single-use reset UUID expiring in ten minutes',
+        },
+        '400': {description: 'Invalid or expired code'},
+        '422': {description: 'Invalid input'},
+        '429': {description: 'Rate limited'},
+      },
+    },
+  },
+
   '/auth/oauth/{provider}': {
     get: {
       tags: ['Auth'],

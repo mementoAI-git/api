@@ -56,3 +56,8 @@ export interface IPasskeyRegisterComplete {
   response: Record<string, unknown>;
   device_name?: string;
 }
+
+export interface IVerifyRecoveryCode {
+  email: string;
+  code: string;
+}
