@@ -168,7 +168,7 @@ File references:
 | Area | Location |
 |---|---|
 | Overview enrichment % | `memento-web/src/pages/dashboard/overview/sections/welcome-section.tsx` |
-| Onboarding summary enrichment | `memento-web/src/pages/onboard/summary.tsx` |
+| Onboarding summary enrichment | `memento-web/src/pages/onboarding/summary.tsx` |
 | Chat enrichment stub + milestone | `src/features/host-chat/components/host-chat-enrichment-bar.tsx`, `milestone-card.tsx` |
 | Chat screen wiring | `memento-web/src/pages/dashboard/chat/conversation/index.tsx` |
 | Stats endpoint path | `memento-web/src/api/endpoint.ts → userStats: "/users/stats"` |

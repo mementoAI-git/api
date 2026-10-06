@@ -1,3 +1,4 @@
+import {consumeShuffle, getShuffleUsage} from './shuffle-usage';
 import {NextFunction, Response} from 'express';
 import {StatusCodes} from 'http-status-codes';
 import {
@@ -156,6 +157,43 @@ export async function getOverviewPrompts(
     const {message, data} = await service.getOverviewPrompts(req.auth.id);
 
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPromptShuffleUsage(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      'Shuffle allowance retrieved',
+      await getShuffleUsage(req.auth.id),
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function shufflePrompts(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await consumeShuffle(req.auth.id);
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      data.allowed
+        ? 'Reflection shuffle allowed'
+        : 'Daily shuffle limit reached',
+      data,
+    );
   } catch (error) {
     next(error);
   }

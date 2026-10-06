@@ -2,9 +2,9 @@ const promptsDocs = {
   '/prompts': {
     get: {
       tags: ['Prompts'],
-      summary: 'Get All Prompts',
+      summary: 'Get Daily Reflection Prompts',
       description:
-        'Get list of available prompts. Results are cached for performance.',
+        'Get daily AI and catalog reflection slots. reply_user_count is the exact number of distinct users with submitted, non-deleted replies across all dates; display floors are applied only by the client.',
       security: [{bearerAuth: []}],
       responses: {
         200: {
@@ -23,22 +23,38 @@ const promptsDocs = {
                     type: 'array',
                     items: {
                       type: 'object',
+                      required: [
+                        'slot_kind',
+                        'answered',
+                        'reflection_day_key',
+                        'reply_user_count',
+                      ],
                       properties: {
-                        _id: {
+                        slot_kind: {type: 'string', enum: ['ai', 'static']},
+                        display_label: {
                           type: 'string',
-                          example: '507f1f77bcf86cd799439011',
+                          example: 'Just for you',
                         },
-                        title: {type: 'string', example: 'Daily Reflection'},
-                        description: {
+                        answered: {type: 'boolean', example: false},
+                        reflection_day_key: {
                           type: 'string',
-                          example: 'Reflect on your day',
+                          example: '2026-10-06',
                         },
-                        category: {type: 'string', example: 'reflection'},
-                        active: {type: 'boolean', example: true},
-                        created_at: {
+                        ai_prompt_text: {
                           type: 'string',
-                          format: 'date-time',
-                          example: '2024-01-01T00:00:00.000Z',
+                          description: 'Question text for AI slots',
+                        },
+                        prompt: {
+                          type: 'object',
+                          description:
+                            'Catalog prompt document for static slots',
+                        },
+                        reply_user_count: {
+                          type: 'integer',
+                          minimum: 0,
+                          example: 42,
+                          description:
+                            'Distinct replying users; repeated replies by the same user count once. Drafts and deleted replies are excluded. AI questions match complete text, ignoring case and whitespace. No minimum or synthetic variation is applied by the API.',
                         },
                       },
                     },

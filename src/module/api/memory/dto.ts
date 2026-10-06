@@ -115,6 +115,7 @@ const messageItemSchema = z.strictObject({
   text: z.string().trim().min(1, 'Text is required'),
   role: z.enum(['user', 'ai']),
   is_voice: z.boolean().optional(),
+  attachments: z.array(mongoIdSchema).max(10).optional(),
   duration: z.coerce.number().int().min(0).optional(),
 });
 

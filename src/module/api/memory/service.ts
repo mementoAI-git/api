@@ -1,3 +1,4 @@
+import {checkVoiceMessageAccess} from './voice-message-access';
 import dayjs from 'dayjs';
 import {FilterQuery} from 'mongoose';
 import Memory, {IMemory} from '../../database/model/memory';
@@ -1026,9 +1027,9 @@ export async function addMessageToMemory(
   payload: IAddMessageToMemory,
   user_id: string,
 ) {
-  let memory = payload.memory_id
-    ? await assertOwnedMemory(payload.memory_id, user_id)
-    : null;
+  const access = await checkVoiceMessageAccess(payload, user_id);
+  let memory = access.memory;
+  const {attachmentIds} = access;
   if (!memory && !payload.memory_id) {
     memory = await Memory.findOne({
       session_id: payload.session_id,
@@ -1057,10 +1058,15 @@ export async function addMessageToMemory(
       role: message.role,
       text: message.text,
       is_voice: message.is_voice || false,
+      attatchments: message.attachments || [],
       duration: message.duration || 0,
       created_at: baseTime.add(i, 'second').toDate(),
     });
     messages.push(createdMessage);
+  }
+
+  if (attachmentIds.length) {
+    await memory.updateOne({$addToSet: {attachments: {$each: attachmentIds}}});
   }
 
   if (isEmpty(memory?.title)) {
