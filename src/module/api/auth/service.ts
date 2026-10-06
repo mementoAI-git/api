@@ -94,6 +94,14 @@ async function consume2FAPendingToken(token: string) {
 type AuthClientContext = Pick<RequestContext, 'client'> &
   Partial<Pick<RequestContext, 'version' | 'build'>>;
 
+function emailDelivery(
+  context: AuthClientContext,
+  requested?: 'link' | 'code',
+): 'link' | 'code' {
+  if (requested) return requested;
+  return ['web', 'ios', 'android'].includes(context.client) ? 'code' : 'link';
+}
+
 const LEGACY_CLIENT: AuthClientContext = {
   client: 'legacy-unknown',
 };
@@ -332,7 +340,8 @@ export async function login(
     throw new BadRequestException('Incorrect password');
   }
   if (!user.verified) {
-    await mail.sendLink(email, user.first_name, 'verify');
+    const delivery = emailDelivery(context);
+    await mail.sendLink(email, user.first_name, 'verify', delivery);
     throw new BadRequestException('Please verify your email address', {
       requires_verification: true,
       email,
@@ -598,12 +607,7 @@ export async function register(
 
   const picture = generateDefaultAvatarUrl(email);
   await User.create({last_name, first_name, password, email, picture, ...keys});
-  const deliveryMode =
-    (payload as any).delivery === 'code' ||
-    context.client === 'ios' ||
-    context.client === 'android'
-      ? 'code'
-      : 'link';
+  const deliveryMode = emailDelivery(context, payload.delivery);
   await mail.sendLink(
     email,
     first_name || last_name || '',
@@ -651,12 +655,7 @@ export async function sendLink(
     throw new NotFoundException('User not found');
   }
 
-  const deliveryMode =
-    payload.delivery === 'code' ||
-    context.client === 'ios' ||
-    context.client === 'android'
-      ? 'code'
-      : 'link';
+  const deliveryMode = emailDelivery(context, payload.delivery);
 
   await mail.sendLink(email, user.first_name, type, deliveryMode);
 

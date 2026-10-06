@@ -5,6 +5,7 @@ export interface ILogin {
 }
 
 export interface IRegister extends Omit<ILogin, 'remember_for_30_days'> {
+  delivery?: 'link' | 'code';
   first_name: string;
   last_name: string;
 }
