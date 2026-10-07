@@ -2262,6 +2262,11 @@
                     "description": "Authorization code from OAuth provider",
                     "example": "4/0AeanS...",
                     "type": "string"
+                  },
+                  "referral_code": {
+                    "description": "Optional personal invite code; new accounts only",
+                    "pattern": "^[a-f0-9]{32}$",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -2577,7 +2582,7 @@
     },
     "/auth/register": {
       "post": {
-        "description": "Register a new user account. Requires a valid 6-digit invite code.",
+        "description": "Register a new user account with optional personal invite attribution.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2610,14 +2615,18 @@
                     "example": "SecurePassword123!",
                     "format": "password",
                     "type": "string"
+                  },
+                  "referral_code": {
+                    "description": "Optional personal invite code",
+                    "pattern": "^[a-f0-9]{32}$",
+                    "type": "string"
                   }
                 },
                 "required": [
                   "email",
                   "password",
                   "first_name",
-                  "last_name",
-                  "invite_code"
+                  "last_name"
                 ],
                 "type": "object"
               }
@@ -10074,6 +10083,56 @@
           }
         ],
         "summary": "Update User Profile",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/referrals": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "invite_url": {
+                          "format": "uri",
+                          "type": "string"
+                        },
+                        "signup_count": {
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "invite_url",
+                        "signup_count"
+                      ],
+                      "type": "object"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invite details retrieved"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get personal invite link and signup count",
         "tags": [
           "Users"
         ]

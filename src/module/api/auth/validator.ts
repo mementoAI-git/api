@@ -17,6 +17,11 @@ export const emailValidator = body('email')
 export default {
   generateOauthUrl: providerValidator,
   authorization: [
+    body('referral_code')
+      .optional()
+      .isString()
+      .bail()
+      .matches(/^[a-f0-9]{32}$/),
     providerValidator,
     body('code').optional().isString(),
     body('id_token').optional().isString(),
@@ -37,6 +42,11 @@ export default {
     body('remember_for_30_days').optional().default(false).toBoolean(),
   ],
   register: [
+    body('referral_code')
+      .optional()
+      .isString()
+      .bail()
+      .matches(/^[a-f0-9]{32}$/),
     emailValidator,
     body('first_name').notEmpty().withMessage('First name is required'),
     body('last_name').notEmpty().withMessage('Last name is required'),

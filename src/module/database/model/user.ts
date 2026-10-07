@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import {model, Schema} from 'mongoose';
+import {model, Schema, Types} from 'mongoose';
 import {BACKEND_URL} from '../../../utils/config';
 import {
   concatStrings,
@@ -42,6 +42,8 @@ export interface IPasskey {
 }
 
 export interface IUser {
+  referral_code?: string;
+  referred_by?: Types.ObjectId;
   _id?: string;
   email: string;
   first_name: string;
@@ -93,6 +95,14 @@ export interface IUser {
 
 const user = new Schema<IUser>(
   {
+    referral_code: {type: String, unique: true, sparse: true, select: false},
+    referred_by: {
+      type: Schema.Types.ObjectId,
+      ref: 'user',
+      immutable: true,
+      index: true,
+      select: false,
+    },
     email: {
       type: String,
       unique: true,

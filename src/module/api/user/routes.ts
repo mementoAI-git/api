@@ -11,6 +11,7 @@ const router: IRouter = Router();
 router.use(gaurd);
 
 router.get('/profile', ctrl.getProfile);
+router.get('/referrals', ctrl.getReferrals);
 router.get('/context', ctrl.getContext);
 router.get('/onboarding-details', ctrl.getOnboardingDetails);
 router.post('/onboarding/skip', ctrl.skipOnboarding);

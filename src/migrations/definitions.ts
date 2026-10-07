@@ -214,4 +214,18 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
       await seedExploreStarterQuestions();
     },
   },
+  {
+    id: '202610070001_personal_referral_links',
+    up: async db => {
+      await db
+        .collection('users')
+        .createIndex(
+          {referral_code: 1},
+          {unique: true, sparse: true, name: 'referral_code_1'},
+        );
+      await db
+        .collection('users')
+        .createIndex({referred_by: 1}, {name: 'referred_by_1'});
+    },
+  },
 ];

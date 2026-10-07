@@ -1,3 +1,4 @@
+import {referrals} from '../user/referrals';
 import bcrypt from 'bcryptjs';
 import speakeasy from 'speakeasy';
 import {v4 as uuid} from 'uuid';
@@ -152,7 +153,7 @@ export function generateOauthUrl(provider: string) {
 }
 
 export async function oauthAuthorization(
-  {code, id_token, user: appleUser}: IOAuthAuthorization,
+  {code, id_token, user: appleUser, referral_code}: IOAuthAuthorization,
   provider: string,
   context: AuthClientContext = LEGACY_CLIENT,
 ) {
@@ -298,6 +299,7 @@ export async function oauthAuthorization(
     const picture =
       userinfo.picture || generateDefaultAvatarUrl(userinfo.email);
     user = await User.create({
+      referred_by: await referrals.inviter(referral_code),
       email: userinfo.email,
       first_name: userinfo.first_name,
       last_name: userinfo.last_name,
@@ -606,7 +608,15 @@ export async function register(
   const keys = generateKeys();
 
   const picture = generateDefaultAvatarUrl(email);
-  await User.create({last_name, first_name, password, email, picture, ...keys});
+  await User.create({
+    last_name,
+    first_name,
+    password,
+    email,
+    picture,
+    referred_by: await referrals.inviter(payload.referral_code),
+    ...keys,
+  });
   const deliveryMode = emailDelivery(context, payload.delivery);
   await mail.sendLink(
     email,

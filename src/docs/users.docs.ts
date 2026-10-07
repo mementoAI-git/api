@@ -1,4 +1,35 @@
 const usersDocs = {
+  '/users/referrals': {
+    get: {
+      tags: ['Users'],
+      summary: 'Get personal invite link and signup count',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Invite details retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: {type: 'boolean'},
+                  data: {
+                    type: 'object',
+                    required: ['invite_url', 'signup_count'],
+                    properties: {
+                      invite_url: {type: 'string', format: 'uri'},
+                      signup_count: {type: 'integer', minimum: 0},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {description: 'Authentication required'},
+      },
+    },
+  },
   '/users/profile': {
     get: {
       tags: ['Users'],

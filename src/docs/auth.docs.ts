@@ -140,6 +140,12 @@ const authDocs = {
               type: 'object',
               required: ['code'],
               properties: {
+                referral_code: {
+                  type: 'string',
+                  pattern: '^[a-f0-9]{32}$',
+                  description:
+                    'Optional personal invite code; new accounts only',
+                },
                 code: {
                   type: 'string',
                   description: 'Authorization code from OAuth provider',
@@ -313,21 +319,20 @@ const authDocs = {
       tags: ['Auth'],
       summary: 'User Registration',
       description:
-        'Register a new user account. Requires a valid 6-digit invite code.',
+        'Register a new user account with optional personal invite attribution.',
       requestBody: {
         required: true,
         content: {
           'application/json': {
             schema: {
               type: 'object',
-              required: [
-                'email',
-                'password',
-                'first_name',
-                'last_name',
-                'invite_code',
-              ],
+              required: ['email', 'password', 'first_name', 'last_name'],
               properties: {
+                referral_code: {
+                  type: 'string',
+                  pattern: '^[a-f0-9]{32}$',
+                  description: 'Optional personal invite code',
+                },
                 email: {
                   type: 'string',
                   format: 'email',
