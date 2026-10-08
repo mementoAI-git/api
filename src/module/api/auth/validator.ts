@@ -37,6 +37,11 @@ export default {
       .withMessage('Invalid Apple user data'),
   ],
   login: [
+    body('referral_code')
+      .optional()
+      .isString()
+      .bail()
+      .matches(/^[a-f0-9]{32}$/),
     emailValidator,
     body('password').notEmpty().withMessage('Password is required'),
     body('remember_for_30_days').optional().default(false).toBoolean(),

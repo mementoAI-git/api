@@ -75,6 +75,10 @@ export interface IUser {
     enabled: boolean;
   };
   picture: string;
+  banner?: string;
+  banner_preset?: number;
+  banner_position?: {x: number; y: number};
+  banner_url?: string | null;
   location?: string;
   age_range?: string;
   picture_url?: string;
@@ -177,6 +181,12 @@ const user = new Schema<IUser>(
       default: false,
     },
     picture: String,
+    banner: String,
+    banner_preset: {type: Number, enum: [0, 1, 2, 3], default: 0},
+    banner_position: {
+      x: {type: Number, min: 0, max: 100, default: 50},
+      y: {type: Number, min: 0, max: 100, default: 100},
+    },
     last_seen: {
       type: String,
       default: () => dayjs().format('YYYY-MM-DD'),
@@ -268,6 +278,9 @@ user.virtual('picture_url').get(function () {
   return generateDefaultAvatarUrl(
     this.email || (this._id ? this._id.toString() : 'memento'),
   );
+});
+user.virtual('banner_url').get(function () {
+  return this.banner ? `${BACKEND_URL}/files/${this.banner}` : null;
 });
 user.virtual('fullname').get(function () {
   return concatStrings(this.first_name, this.last_name, ' ').trim();

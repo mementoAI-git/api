@@ -134,6 +134,54 @@ export async function uploadPicture(
   }
 }
 
+export async function updateBanner(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.updateBannerPreset(
+      req.body.banner_preset,
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateBannerPosition(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.updateBannerPosition(
+      req.body,
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function uploadBanner(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.uploadBanner(
+      getFiles(req, true)?.[0],
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function verifyTOTP(
   req: IRequest,
   res: Response,

@@ -6,7 +6,9 @@ import {parseJson} from '../../../utils/helpers';
 // Types
 export interface InsightsJobData {
   user_id: string;
-  memory_id: string;
+  memory_id?: string;
+  profile_text?: string;
+  discover_social_accounts?: boolean;
   exchanges?: Array<{user: string; ai: string}>;
 }
 
@@ -137,4 +139,42 @@ export async function queueStoryInsights(
   } catch (error) {
     console.error('Error queueing story insights extraction:', error);
   }
+}
+
+/** Bio ownership extraction stays off the request path, like story/chat enrichment. */
+export async function queueProfileSocialAccounts(
+  userId: string,
+  text: string,
+): Promise<void> {
+  if (!/bluesky|bsky|twitter|\bx\b|youtube|linkedin|facebook/i.test(text))
+    return;
+  await queueInsightsExtraction({user_id: userId, profile_text: text});
+}
+
+export async function queueSocialAccountDiscovery(
+  userId: string,
+): Promise<void> {
+  if (!insightQueue) return;
+  const jobId = `social-discovery-${userId}`;
+  const existing = await insightQueue.getJob(jobId);
+  if (existing) {
+    const state = await existing.getState();
+    if (
+      state === 'completed' ||
+      (state === 'failed' && Date.now() - existing.timestamp > 3600000)
+    )
+      await existing.remove();
+    else return;
+  }
+  await insightQueue.add(
+    'discover-social-accounts',
+    {user_id: userId, discover_social_accounts: true},
+    {
+      jobId,
+      attempts: 3,
+      backoff: {type: 'exponential', delay: 5000},
+      removeOnComplete: 100,
+      removeOnFail: 50,
+    },
+  );
 }
