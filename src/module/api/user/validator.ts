@@ -1,4 +1,5 @@
 import {body} from 'express-validator';
+import {parseSocialAccountUpdate} from '../../../utils/social-accounts';
 
 export default {
   setPassword: [
@@ -41,6 +42,12 @@ export default {
   ],
   verifyTOTP: body('token').notEmpty().withMessage('Token is required'),
   updateContext: [
+    body('social_accounts')
+      .optional()
+      .custom(value => parseSocialAccountUpdate(value) !== null)
+      .withMessage(
+        'Social accounts must contain valid HTTPS profile links for supported platforms',
+      ),
     body('important_notes').optional().isArray(),
     body('key_preferences').optional().isArray(),
     body('conversation_history_summary').optional().isString(),

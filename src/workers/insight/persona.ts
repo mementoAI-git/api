@@ -2,6 +2,7 @@ import {logger, prompts} from '../../utils';
 import ai from '../../services/ai';
 import {extractJson} from '../../utils/helpers';
 import Persona, {IPersona} from '../../module/database/model/persona';
+import {confirmedSocialCandidates} from '../../utils/social-accounts';
 
 export async function extractBatchInsights(
   user_id: string,
@@ -24,6 +25,12 @@ export async function extractBatchInsights(
     ]);
 
     const insights = extractJson(response);
+    if (insights && typeof insights === 'object') {
+      insights.social_accounts = confirmedSocialCandidates(
+        insights.social_accounts,
+        exchanges.map(ex => ex.user).join('\n\n'),
+      ).map(account => ({...account, ownership_confirmed: true}));
+    }
 
     return insights;
   } catch (error) {

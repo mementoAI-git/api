@@ -1,3 +1,4 @@
+import {SOCIAL_ACCOUNT_EXTRACTION_RULES} from '../social-accounts';
 import dayjs from 'dayjs';
 import User, {IUser} from '../../module/database/model/user';
 import {isEmpty} from '../helpers';
@@ -489,6 +490,7 @@ Examples:
 - Do not turn "I was nervous before today's presentation" into an emotional trend.
 - "I get nervous before most presentations" can support a recurring pattern.
 
+${SOCIAL_ACCOUNT_EXTRACTION_RULES}
 Return empty arrays for categories with no meaningful new information. Return only the JSON object.`;
 }
 

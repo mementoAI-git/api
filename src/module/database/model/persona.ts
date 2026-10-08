@@ -1,4 +1,5 @@
 import {model, Schema} from 'mongoose';
+import {SocialAccounts, SOCIAL_PLATFORMS} from '../../../utils/social-accounts';
 
 export interface IPersona {
   _id?: string;
@@ -9,6 +10,8 @@ export interface IPersona {
   emotional_state_trends?: string[];
   goals_and_aspirations?: string[];
   self_description?: string;
+  social_accounts?: SocialAccounts;
+  social_accounts_discovered_at?: Date;
   current_priority?: string[];
   join_reasons?: string[];
   motivation?: string;
@@ -33,6 +36,26 @@ export interface IPersona {
   updated_at: string;
 }
 
+const socialAccount = new Schema(
+  {
+    url: {type: String, required: true},
+    source: {type: String, enum: ['user', 'ai'], required: true},
+    confirmed_at: {type: Date, required: true},
+    evidence: String,
+    source_id: String,
+  },
+  {_id: false},
+);
+const socialAccounts = new Schema(
+  Object.fromEntries(
+    SOCIAL_PLATFORMS.map(platform => [
+      platform,
+      {type: socialAccount, default: undefined},
+    ]),
+  ),
+  {_id: false},
+);
+
 const persona = new Schema<IPersona>(
   {
     user: {
@@ -47,6 +70,8 @@ const persona = new Schema<IPersona>(
     emotional_state_trends: [String],
     goals_and_aspirations: [String],
     self_description: String,
+    social_accounts: {type: socialAccounts, default: undefined},
+    social_accounts_discovered_at: Date,
     current_priority: [String],
     join_reasons: [String],
     motivation: String,

@@ -32,6 +32,12 @@ export interface IUpdateContext {
   emotional_state_trends?: string[];
   goals_and_aspirations?: string[];
   self_description?: string;
+  social_accounts?: Partial<
+    Record<
+      import('../../../utils/social-accounts').SocialPlatform,
+      string | null
+    >
+  >;
   current_priority?: string[];
   join_reasons?: string[];
 }

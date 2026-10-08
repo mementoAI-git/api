@@ -1,6 +1,7 @@
 import {RequestHandler, Router, type IRouter} from 'express';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
+import {publish, revoke} from '../public-profile/controller';
 import * as dto from './dto';
 import valid from './validator';
 import validate from '../../../middleware/validator';
@@ -11,6 +12,8 @@ const router: IRouter = Router();
 router.use(gaurd);
 
 router.get('/profile', ctrl.getProfile);
+router.post('/profile/share', publish);
+router.delete('/profile/share', revoke);
 router.get('/referrals', ctrl.getReferrals);
 router.get('/context', ctrl.getContext);
 router.get('/onboarding-details', ctrl.getOnboardingDetails);
@@ -25,6 +28,13 @@ router.post(
 router.post('/change-password', valid.setPassword, ctrl.setPassword);
 router.put('/profile', valid.profile, ctrl.updateProfile);
 router.post('/profile', valid.profile, ctrl.updateProfile);
+router.put('/banner', ctrl.updateBanner);
+router.put('/banner-position', ctrl.updateBannerPosition);
+router.post(
+  '/upload-banner',
+  fileUploadMiddleWare.array('file', 1) as RequestHandler,
+  ctrl.uploadBanner,
+);
 router.get('/persona/memory-insights-summary', ctrl.getMemoryInsightsSummary);
 router.get('/persona', ctrl.getPersona);
 router.put('/persona', valid.updateContext, ctrl.updateContext);

@@ -1,3 +1,15 @@
+import {
+  queueProfileSocialAccounts,
+  queueSocialAccountDiscovery,
+} from '../../../services/queues/insights';
+import {parseSocialAccountUpdate} from '../../../utils/social-accounts';
+import {BACKEND_URL} from '../../../utils/config';
+import {
+  convertBannerImage,
+  parseBannerPreset,
+  parseBannerPosition,
+  DEFAULT_BANNER_POSITION,
+} from '../../../utils/profile-banner';
 import bcrypt from 'bcryptjs';
 import dayjs from 'dayjs';
 import User, {IUser} from '../../database/model/user';
@@ -119,6 +131,11 @@ export async function getProfile(user_id: string) {
 
 export async function getPersona(user_id: string) {
   const persona = await Persona.findOne({user: user_id}).lean();
+  if (!persona?.social_accounts_discovered_at) {
+    void queueSocialAccountDiscovery(user_id).catch(error =>
+      logger.error(error, 'Could not queue social profile discovery'),
+    );
+  }
 
   return {
     message: 'Persona retrieved successfully',
@@ -316,6 +333,76 @@ export async function uploadPicture(
   }
 
   return {message: 'Profile pics uploaded successfully', data: file};
+}
+
+export async function updateBannerPreset(value: unknown, user_id: string) {
+  const preset = parseBannerPreset(value);
+  const user = await User.findByIdAndUpdate(
+    user_id,
+    {
+      $set: {banner_preset: preset, banner_position: DEFAULT_BANNER_POSITION},
+      $unset: {banner: 1},
+    },
+    {new: true},
+  ).select('-password -providers -public_key -private_key');
+  if (!user) throw new NotFoundException('User not found');
+  return {
+    message: 'Banner updated',
+    data: {
+      banner_preset: preset,
+      banner_url: null,
+      banner_position: DEFAULT_BANNER_POSITION,
+    },
+  };
+}
+
+export async function uploadBanner(
+  file: Express.Multer.File | undefined,
+  user_id: string,
+) {
+  if (!file || !file.mimetype.startsWith('image/')) {
+    throw new BadRequestException('Upload a banner image.');
+  }
+  const user = await User.findById(user_id);
+  if (!user) throw new NotFoundException('User not found');
+  const buffer = await convertBannerImage(file.buffer);
+  const [savedFile] = await persistUploadedFiles(
+    [
+      {
+        ...file,
+        buffer,
+        size: buffer.length,
+        mimetype: 'image/webp',
+        originalname: 'profile-banner.webp',
+      },
+    ],
+    user_id,
+  );
+  await user.updateOne({
+    banner: savedFile.name,
+    banner_position: DEFAULT_BANNER_POSITION,
+  });
+  user.banner = savedFile.name;
+  return {
+    message: 'Banner uploaded',
+    data: {
+      banner_url: user.banner_url,
+      banner_preset: user.banner_preset ?? 0,
+      banner_position: DEFAULT_BANNER_POSITION,
+    },
+  };
+}
+
+export async function updateBannerPosition(value: unknown, user_id: string) {
+  const position = parseBannerPosition(value);
+  const user = await User.findByIdAndUpdate(user_id, {
+    $set: {banner_position: position},
+  });
+  if (!user) throw new NotFoundException('User not found');
+  return {
+    message: 'Banner position updated',
+    data: {banner_position: position},
+  };
 }
 
 export async function setup2FA(user_id: string) {
@@ -516,12 +603,25 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
 
   for (const key of allowed) {
     const value = (payload as any)[key];
-    if (!isEmpty(value)) {
+    if (
+      !isEmpty(value) ||
+      (key === 'self_description' && typeof value === 'string')
+    ) {
       updateDoc[key] = value;
       // Check if we're modifying important_notes or key_preferences
       if (key === 'important_notes' || key === 'key_preferences') {
         isModifyingArrays = true;
       }
+    }
+  }
+
+  if (payload.social_accounts !== undefined) {
+    const accounts = parseSocialAccountUpdate(payload.social_accounts);
+    if (accounts === null)
+      throw new BadRequestException('Invalid social profile links');
+    for (const [platform, url] of Object.entries(accounts)) {
+      updateDoc[`social_accounts.${platform}`] =
+        url === null ? null : {url, source: 'user', confirmed_at: new Date()};
     }
   }
 
@@ -536,6 +636,19 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
   });
   if (!persona) {
     throw new NotFoundException('Persona not found');
+  }
+
+  if (
+    typeof payload.self_description === 'string' &&
+    payload.self_description.trim()
+  ) {
+    void queueProfileSocialAccounts(user_id, payload.self_description).catch(
+      error =>
+        logger.error(
+          error,
+          'Could not queue profile social account extraction',
+        ),
+    );
   }
 
   return {message: 'User context updated successfully', data: null};

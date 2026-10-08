@@ -12,6 +12,8 @@ import PendingInsight, {
 } from '../../module/database/model/pending-insight';
 import Persona from '../../module/database/model/persona';
 import Memory from '../../module/database/model/memory';
+import {saveConfirmedSocialAccounts} from './social-accounts';
+import {discoverExistingSocialAccounts} from './social-discovery';
 import {invalidateEnrichmentCache} from '../../services/enrichment';
 import {isActiveAccount} from '../../services/account-purge/account-state';
 
@@ -57,8 +59,28 @@ export default function startInsightsExtractionWorker(
   return new Worker(
     'insights-extraction',
     async job => {
-      const {user_id, memory_id, exchanges} = job.data;
+      const {user_id, memory_id, exchanges, profile_text} = job.data;
       if (!(await isActiveAccount(user_id))) return;
+      if (job.data.discover_social_accounts === true) {
+        await discoverExistingSocialAccounts(user_id);
+        return;
+      }
+      if (typeof profile_text === 'string') {
+        const insights = await extractBatchInsights(user_id, [
+          {user: profile_text, ai: ''},
+        ]);
+        if (!insights)
+          throw new Error(
+            'Profile social account extraction provider unavailable',
+          );
+        await saveConfirmedSocialAccounts(
+          user_id,
+          'profile-bio',
+          insights?.social_accounts,
+          profile_text,
+        );
+        return;
+      }
 
       const isStory = !exchanges || exchanges.length === 0;
       const source: PendingInsightSource = isStory ? 'story' : 'conversation';
@@ -67,8 +89,18 @@ export default function startInsightsExtractionWorker(
         ? await extractStoryInsights(memory_id, user_id)
         : await extractBatchInsights(user_id, exchanges);
 
+      if (!insights)
+        throw new Error('Insights extraction provider unavailable');
+
       if (insights && typeof insights === 'object') {
         if (await isActiveAccount(user_id)) {
+          if (!isStory)
+            await saveConfirmedSocialAccounts(
+              user_id,
+              memory_id,
+              insights.social_accounts,
+              exchanges.map((ex: {user: string}) => ex.user).join('\n\n'),
+            );
           await savePendingInsights(insights, user_id, memory_id, source);
         }
       }
