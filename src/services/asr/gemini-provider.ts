@@ -27,11 +27,22 @@ export class GeminiAsrProvider implements AsrProvider {
     const response = await gemini.models.generateContent({
       model: this.modelName,
       contents,
+      ...(input.textOnly
+        ? {
+            config: {
+              responseMimeType: 'application/json',
+              ...(this.modelName.startsWith('gemini-2.5-flash')
+                ? {thinkingConfig: {thinkingBudget: 0}}
+                : {}),
+            },
+          }
+        : {}),
     });
     const parsed: ITranscriptionData = extractJson(response.text);
 
     const normalizedData =
-      parsed?.full_text && Array.isArray(parsed?.segments)
+      typeof parsed?.full_text === 'string' &&
+      (input.textOnly || Array.isArray(parsed?.segments))
         ? parsed
         : {full_text: response.text};
 
