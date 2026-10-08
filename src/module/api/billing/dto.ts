@@ -49,7 +49,27 @@ export const cancelSubscriptionSchema = z.object({
   body: z
     .object({
       reason: z.string().trim().max(500).optional(),
+      comment: z.string().trim().max(1000).optional(),
       details: z.string().trim().max(2000).optional(),
     })
     .optional(),
+});
+
+export const CANCELLATION_REASONS = [
+  'too_expensive',
+  'unused',
+  'missing_features',
+  'switched_service',
+  'customer_service',
+  'low_quality',
+  'too_complex',
+  'other',
+] as const;
+
+export const cancelSchema = z.object({
+  body: z.strictObject({
+    reason: z.enum(CANCELLATION_REASONS).optional(),
+    comment: z.string().trim().max(1000).optional(),
+    details: z.string().trim().max(2000).optional(),
+  }),
 });

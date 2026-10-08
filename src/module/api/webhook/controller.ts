@@ -1,4 +1,5 @@
 import {NextFunction, Request, Response} from 'express';
+import {BadRequestException} from '../../../utils/service-error';
 import {StatusCodes} from 'http-status-codes';
 import {responsHandler} from '../../../utils/helpers';
 import * as service from './service';
@@ -57,28 +58,24 @@ export async function handlePayments(
       );
     }
 
-    const rawBody = Buffer.isBuffer((req as Request | any).rawBody)
-      ? (req as Request | any).rawBody
-      : Buffer.isBuffer(req.body)
-        ? req.body
-        : Buffer.from(JSON.stringify(req.body || {}));
-    const signature = req.headers['polar-signature'] as string | undefined;
-    service.verifyPolarSignature(
-      rawBody,
-      req.headers['webhook-signature'] ? req.headers : signature,
-    );
+    const capturedBody = (req as Request & {rawBody?: Buffer}).rawBody;
+    const rawBody = Buffer.isBuffer(capturedBody) ? capturedBody : req.body;
+    if (!Buffer.isBuffer(rawBody))
+      throw new BadRequestException('Raw webhook body is required');
+    const headers = {
+      id: req.get('webhook-id'),
+      timestamp: req.get('webhook-timestamp'),
+      signature: req.get('webhook-signature'),
+    };
+    service.verifyPolarSignature(rawBody, headers);
 
     const payload = JSON.parse(rawBody.toString('utf8')) as Record<
       string,
       unknown
     >;
-    const deliveryId =
-      typeof req.headers['webhook-id'] === 'string'
-        ? req.headers['webhook-id']
-        : undefined;
     const result = await billingService.processPolarWebhook(
       payload,
-      deliveryId,
+      headers.id,
     );
     return responsHandler(res, StatusCodes.OK, result.message, result.data);
   } catch (error) {
