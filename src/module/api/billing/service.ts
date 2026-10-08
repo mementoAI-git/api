@@ -27,12 +27,14 @@ import {
   type FeatureAccessResult,
 } from './access';
 import {
-  cancelPolarSubscription,
   createPolarCheckoutSession,
   createPolarPortalSession,
+  getPolarCustomer,
+  listPolarPaymentMethods,
   listPolarInvoices,
+  updatePolarCancellation,
+  getPolarSubscriptionInterval,
   resolvePolarProductPlan,
-  resumePolarSubscription,
 } from './providers/polar';
 import {getStorageUsageSummary} from './storage-quota';
 import mongoose from 'mongoose';
@@ -75,18 +77,55 @@ export async function getSubscriptionSummary(userId: string) {
     await subscription.save();
   }
 
+  // Older webhooks did not persist the interval. Resolve it from the existing
+  // provider subscription so the UI never guesses which plan is current.
+  if (
+    !subscription.billing_interval &&
+    subscription.payment_provider === 'polar' &&
+    subscription.provider_subscription_id &&
+    ['active', 'trialing', 'past_due'].includes(subscription.status)
+  ) {
+    subscription.billing_interval = await getPolarSubscriptionInterval(
+      subscription.provider_subscription_id,
+    );
+    await Subscription.updateOne(
+      {
+        user_id: userId,
+        provider_subscription_id: subscription.provider_subscription_id,
+        billing_interval: null,
+      },
+      {$set: {billing_interval: subscription.billing_interval}},
+    );
+  }
+
+  const cancellationEnded = Boolean(
+    subscription.cancel_at_period_end &&
+      subscription.current_period_end &&
+      dayjs(subscription.current_period_end).isBefore(dayjs()),
+  );
   return {
     message: 'Subscription summary fetched',
     data: {
-      tier: STAGING_AUTO_PRO ? 'pro' : subscription.tier,
+      tier: STAGING_AUTO_PRO
+        ? 'pro'
+        : cancellationEnded
+          ? 'free'
+          : subscription.tier,
+      billing_interval: subscription.billing_interval,
+      can_manage_subscription:
+        subscription.payment_provider === 'polar' &&
+        Boolean(subscription.provider_subscription_id) &&
+        subscription.billing_interval !== 'lifetime' &&
+        !cancellationEnded &&
+        ['active', 'trialing', 'past_due'].includes(subscription.status),
       status: STAGING_AUTO_PRO ? 'active' : subscription.status,
       current_period_end: STAGING_AUTO_PRO
         ? null
         : subscription.current_period_end,
+      trial_ends_at: STAGING_AUTO_PRO ? null : subscription.trial_ends_at,
       cancel_at_period_end: STAGING_AUTO_PRO
         ? false
-        : subscription.cancel_at_period_end || false,
-      trial_ends_at: STAGING_AUTO_PRO ? null : subscription.trial_ends_at,
+        : subscription.cancel_at_period_end,
       provider: subscription.payment_provider,
       store_account_token: subscription.store_account_token,
       currency: subscription.currency,
@@ -140,6 +179,15 @@ export async function createCheckoutSession(
   if (!user?.email) {
     throw new NotFoundException('User email is required for checkout');
   }
+  const existing = await Subscription.findOne({user_id: userId}).lean();
+  if (
+    existing?.provider_subscription_id &&
+    ['active', 'trialing', 'past_due'].includes(existing.status)
+  ) {
+    throw new BadRequestException(
+      'Use Manage plan to change your existing subscription',
+    );
+  }
   const tier = body.tier || 'pro';
   const interval = body.interval || 'monthly';
 
@@ -173,14 +221,6 @@ export async function createCheckoutSession(
 }
 
 export async function createPortalSession(userId: string, returnUrl: string) {
-  const subscription = await Subscription.findOne({user_id: userId}).lean();
-  if (
-    !subscription ||
-    (subscription.tier !== 'pro' && subscription.tier !== 'legacy')
-  ) {
-    throw new BadRequestException('No active paid subscription to manage');
-  }
-
   const polar = await createPolarPortalSession({
     externalCustomerId: userId,
     returnUrl,
@@ -234,78 +274,110 @@ export async function redeemPromoCode(userId: string, code: string) {
   };
 }
 
+export async function getBillingAccount(userId: string) {
+  const user = await User.findById(userId, {
+    email: 1,
+    first_name: 1,
+    last_name: 1,
+  }).lean();
+  if (!user) throw new NotFoundException('User not found');
+  const subscription = await Subscription.findOne({user_id: userId}).lean();
+  // Free and promo-only accounts have no provider customer until checkout.
+  const customer =
+    subscription?.payment_provider === 'polar'
+      ? await getPolarCustomer(userId)
+      : null;
+  const methods = customer ? await listPolarPaymentMethods(userId) : [];
+  return {
+    message: 'Billing account fetched',
+    data: {
+      has_customer: Boolean(customer),
+      email: customer?.email || user.email,
+      name:
+        customer?.billing_name ||
+        customer?.name ||
+        [user.first_name, user.last_name].filter(Boolean).join(' '),
+      address: customer?.billing_address || null,
+      payment_methods: methods,
+    },
+  };
+}
 export async function listInvoices(userId: string) {
-  const invoices = await listPolarInvoices(userId);
+  const subscription = await Subscription.findOne({user_id: userId}).lean();
+  const customer =
+    subscription?.payment_provider === 'polar'
+      ? await getPolarCustomer(userId)
+      : null;
   return {
     message: 'Invoices fetched',
-    data: invoices,
+    data: customer ? await listPolarInvoices(userId) : [],
   };
 }
 
-export async function cancelSubscription(
+export type CancellationFeedback = {
+  reason?: string;
+  comment?: string;
+  details?: string;
+};
+
+async function setCancellation(
   userId: string,
-  feedback?: {reason?: string; details?: string},
+  cancel: boolean,
+  feedback: CancellationFeedback = {},
 ) {
   const subscription = await Subscription.findOne({user_id: userId});
   if (!subscription) throw new NotFoundException('Subscription not found');
-  if (subscription.tier === 'free') {
-    throw new BadRequestException('Free plan has no cancellation flow');
-  }
   if (
+    subscription.tier === 'free' ||
     subscription.payment_provider !== 'polar' ||
-    !subscription.provider_subscription_id
+    !subscription.provider_subscription_id ||
+    subscription.billing_interval === 'lifetime'
   ) {
-    throw new BadRequestException('Polar subscription is not available');
+    throw new BadRequestException(
+      'This account has no recurring web subscription to manage',
+    );
   }
-  const provider = await cancelPolarSubscription(
+  if (!['active', 'trialing', 'past_due'].includes(subscription.status)) {
+    throw new BadRequestException('This subscription is no longer active');
+  }
+  const result = await updatePolarCancellation(
     subscription.provider_subscription_id,
+    cancel,
+    feedback.details
+      ? {...feedback, comment: feedback.comment ?? feedback.details}
+      : feedback,
   );
-  subscription.status = mapPolarStatus(
-    'subscription.canceled',
-    provider.status,
-  );
-  subscription.cancel_at_period_end = provider.cancel_at_period_end !== false;
-  subscription.cancelled_at = provider.canceled_at
-    ? new Date(String(provider.canceled_at))
-    : new Date();
-  if (feedback?.reason) {
-    subscription.cancellation_reason = String(feedback.reason);
-  }
-  if (feedback?.details) {
-    subscription.cancellation_details = String(feedback.details);
-  }
+  // Persist only after the provider confirms the change. Keep access until period end.
+  if (result.status) subscription.status = mapPolarStatus('', result.status);
+  subscription.cancel_at_period_end = result.cancel_at_period_end;
+  subscription.cancelled_at = cancel ? new Date() : null;
+  if (feedback.reason) subscription.cancellation_reason = feedback.reason;
+  if (feedback.comment || feedback.details)
+    subscription.cancellation_details = feedback.comment || feedback.details;
+  if (result.current_period_end)
+    subscription.current_period_end = new Date(result.current_period_end);
   await subscription.save();
   return {
-    message: 'Subscription cancellation scheduled',
+    message: cancel
+      ? 'Subscription cancellation scheduled'
+      : 'Subscription resumed',
     data: {
       status: subscription.status,
-      cancel_at_period_end: subscription.cancel_at_period_end,
+      cancel_at_period_end: result.cancel_at_period_end,
       current_period_end: subscription.current_period_end,
     },
   };
 }
 
+export async function cancelSubscription(
+  userId: string,
+  feedback: CancellationFeedback = {},
+) {
+  return setCancellation(userId, true, feedback);
+}
+
 export async function resumeSubscription(userId: string) {
-  const subscription = await Subscription.findOne({user_id: userId});
-  if (!subscription) throw new NotFoundException('Subscription not found');
-  if (subscription.tier === 'free') {
-    throw new BadRequestException('Free plan has no resumable subscription');
-  }
-  if (
-    subscription.payment_provider !== 'polar' ||
-    !subscription.provider_subscription_id
-  ) {
-    throw new BadRequestException('Polar subscription is not available');
-  }
-  await resumePolarSubscription(subscription.provider_subscription_id);
-  subscription.status = 'active';
-  subscription.cancel_at_period_end = false;
-  subscription.cancelled_at = null;
-  await subscription.save();
-  return {
-    message: 'Subscription resumed',
-    data: {status: subscription.status, cancel_at_period_end: false},
-  };
+  return setCancellation(userId, false);
 }
 
 export async function ensureBillingUser(userId: string) {
@@ -374,6 +446,7 @@ export async function processPolarWebhook(
   deliveryId?: string,
 ) {
   const eventId =
+    deliveryId ||
     (typeof payload.id === 'string' && payload.id) ||
     (typeof payload.event_id === 'string' && payload.event_id) ||
     deliveryId;
@@ -395,11 +468,13 @@ export async function processPolarWebhook(
       ? (data.metadata as Record<string, unknown>)
       : {};
 
+  // Customer identity is nested in real subscription/order webhook payloads.
   const customer =
     data.customer && typeof data.customer === 'object'
       ? (data.customer as Record<string, unknown>)
       : {};
   const userId =
+    (typeof customer.external_id === 'string' && customer.external_id) ||
     (typeof data.external_customer_id === 'string' &&
       data.external_customer_id) ||
     (typeof data.user_id === 'string' && data.user_id) ||
@@ -480,6 +555,9 @@ export async function processPolarWebhook(
           $setOnInsert: {user_id: userId, has_used_trial: false},
           $set: {
             payment_provider: 'polar',
+            ...(typeof data.currency === 'string'
+              ? {currency: data.currency.toUpperCase()}
+              : {}),
             ...(tier ? {tier} : {}),
             ...(interval ? {billing_interval: interval} : {}),
             status,

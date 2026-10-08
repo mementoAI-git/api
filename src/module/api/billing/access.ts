@@ -88,7 +88,8 @@ export function resolveEffectiveTier(
     if (
       terminallyEnded ||
       ((subscription.status === 'past_due' ||
-        subscription.status === 'cancelled') &&
+        subscription.status === 'cancelled' ||
+        subscription.cancel_at_period_end === true) &&
         periodEnded)
     ) {
       return 'free';

@@ -3354,9 +3354,125 @@
         ]
       }
     },
+    "/billing/account": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "address": {
+                          "nullable": true,
+                          "properties": {
+                            "city": {
+                              "type": "string"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "line1": {
+                              "type": "string"
+                            },
+                            "line2": {
+                              "type": "string"
+                            },
+                            "postal_code": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "has_customer": {
+                          "type": "boolean"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "payment_methods": {
+                          "items": {
+                            "properties": {
+                              "brand": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "is_default": {
+                                "type": "boolean"
+                              },
+                              "last4": {
+                                "nullable": true,
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Billing account retrieved"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get billing details and masked payment methods",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
     "/billing/cancel": {
       "post": {
         "description": "Cancel the active subscription at the end of the current period",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "comment": {
+                    "maxLength": 1000,
+                    "type": "string"
+                  },
+                  "reason": {
+                    "enum": [
+                      "too_expensive",
+                      "unused",
+                      "missing_features",
+                      "switched_service",
+                      "customer_service",
+                      "low_quality",
+                      "too_complex",
+                      "other"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "200": {
             "content": {
@@ -3808,6 +3924,19 @@
                   "properties": {
                     "data": {
                       "properties": {
+                        "billing_interval": {
+                          "enum": [
+                            "monthly",
+                            "annual",
+                            "lifetime",
+                            null
+                          ],
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "can_manage_subscription": {
+                          "type": "boolean"
+                        },
                         "cancel_at_period_end": {
                           "type": "boolean"
                         },

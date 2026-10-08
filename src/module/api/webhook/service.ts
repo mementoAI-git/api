@@ -4,7 +4,10 @@ import {UnauthorizedException} from '../../../utils/service-error';
 import type {ITallyWebhookPayload, ITallySubmissionData} from './interface';
 import * as authService from '../auth/service';
 import {compareStrings} from '../../../utils';
-import {verifyPolarWebhookSignature} from '../billing/providers/polar';
+import {
+  verifyPolarWebhookSignature,
+  type PolarWebhookHeaders,
+} from '../billing/providers/polar';
 
 export function verifyTallySignature(
   rawBody: Buffer,
@@ -94,7 +97,7 @@ export async function processTallySubmission(
 
 export function verifyPolarSignature(
   rawBody: Buffer,
-  signature: string | undefined | Record<string, string | string[] | undefined>,
+  headers: PolarWebhookHeaders,
 ): void {
-  verifyPolarWebhookSignature(rawBody, signature);
+  verifyPolarWebhookSignature(rawBody, headers);
 }

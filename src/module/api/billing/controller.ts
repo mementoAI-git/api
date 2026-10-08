@@ -132,3 +132,17 @@ export async function verifyIap(
     next(error);
   }
 }
+
+export async function account(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await service.ensureBillingUser(req.auth.id);
+    const {message, data} = await service.getBillingAccount(req.auth.id);
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
