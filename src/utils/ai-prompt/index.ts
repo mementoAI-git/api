@@ -1,10 +1,14 @@
+import {SOCIAL_ACCOUNT_EXTRACTION_RULES} from '../social-accounts';
 import dayjs from 'dayjs';
 import User, {IUser} from '../../module/database/model/user';
 import {isEmpty} from '../helpers';
 import Persona, {IPersona} from '../../module/database/model/persona';
 import {IPrompt} from '../../module/database/model/prompt';
 import Memory from '../../module/database/model/memory';
-import {getMemorySummaries} from '../../module/api/ai/utils';
+import {
+  buildMemoriesContext,
+  getMemorySummaries,
+} from '../../module/api/ai/memory-context';
 import {buildTagsJsonInstructions} from '../story-tags';
 import {buildPendingInsightsPromptSection} from './pending-insights-prompt';
 import {computeEnrichmentScore} from '../../services/enrichment';
@@ -49,28 +53,6 @@ RECENT REFLECTION CONTEXT (private data):
 These are recent entries from the host. They may help interpret the current conversation, but they are not topics Memento needs to revisit. Do not mention the reflection system itself. Do not bring an entry up merely because it is available.
 
 ${lines.join('\n')}
-`.trim();
-}
-
-function buildMemoriesContext(
-  summaries: Array<{title: string; summary: string; topics: string[]}>,
-): string {
-  if (!summaries || summaries.length === 0) return '';
-
-  const summariesText = summaries
-    .map(
-      (s, i) =>
-        `${i + 1}. "${s.title}": ${s.summary}${
-          s.topics?.length ? ` (Topics: ${s.topics.join(', ')})` : ''
-        }`,
-    )
-    .join('\n');
-
-  return `
-STORED MEMORY CONTEXT (private data):
-These are summaries of memories, stories, and earlier conversations. They can be incomplete, compressed, or outdated. The host's current message always has priority over stored context.
-
-${summariesText}
 `.trim();
 }
 
@@ -362,8 +344,18 @@ FINAL BEHAVIOUR CHECK:
     .trim();
 }
 
-function createTranscriptionPrompt(): string {
-  return `Transcribe the provided audio accurately and return only valid JSON.
+function createTranscriptionPrompt(textOnly = false): string {
+  if (textOnly) {
+    return `Transcribe all speech in this audio accurately in its original language. Preserve the speaker's words, filler words and hesitations. Add punctuation and capitalization. Keep continuous thoughts in the same paragraph; use a blank line only for a clear change of topic or an explicitly spoken paragraph break. Do not summarize, translate or invent speech. Return only a JSON object with one field: {"full_text":"complete transcript"}. Do not include timestamps, segments or commentary. If there is no speech, return {"full_text":""}.`;
+  }
+  return `You are an expert audio transcription assistant. Your task is to transcribe the provided audio file and return the results in a specific JSON format.
+
+IMPORTANT INSTRUCTIONS:
+1. Listen carefully to the audio and transcribe all speech accurately
+2. Include punctuation, capitalization, and proper grammar
+3. For each segment, estimate the start and end times in seconds
+4. Break the audio into logical segments (typically 3-10 seconds each)
+5. Return ONLY a valid JSON object with this exact structure:
 
 Use this exact structure:
 {
@@ -498,6 +490,7 @@ Examples:
 - Do not turn "I was nervous before today's presentation" into an emotional trend.
 - "I get nervous before most presentations" can support a recurring pattern.
 
+${SOCIAL_ACCOUNT_EXTRACTION_RULES}
 Return empty arrays for categories with no meaningful new information. Return only the JSON object.`;
 }
 

@@ -1,4 +1,57 @@
 const billingDocs = {
+  '/billing/account': {
+    get: {
+      tags: ['Billing'],
+      summary: 'Get billing details and masked payment methods',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Billing account retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  data: {
+                    type: 'object',
+                    properties: {
+                      has_customer: {type: 'boolean'},
+                      email: {type: 'string'},
+                      name: {type: 'string'},
+                      address: {
+                        type: 'object',
+                        nullable: true,
+                        properties: {
+                          line1: {type: 'string'},
+                          line2: {type: 'string'},
+                          city: {type: 'string'},
+                          state: {type: 'string'},
+                          postal_code: {type: 'string'},
+                          country: {type: 'string'},
+                        },
+                      },
+                      payment_methods: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            id: {type: 'string'},
+                            brand: {type: 'string'},
+                            last4: {type: 'string', nullable: true},
+                            is_default: {type: 'boolean'},
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
   '/billing/subscription': {
     get: {
       tags: ['Billing'],
@@ -19,6 +72,12 @@ const billingDocs = {
                     type: 'object',
                     properties: {
                       tier: {type: 'string', example: 'pro'},
+                      billing_interval: {
+                        type: 'string',
+                        nullable: true,
+                        enum: ['monthly', 'annual', 'lifetime', null],
+                      },
+                      can_manage_subscription: {type: 'boolean'},
                       status: {type: 'string', example: 'active'},
                       cancel_at_period_end: {type: 'boolean'},
                       current_period_end: {type: 'string', format: 'date-time'},
@@ -348,6 +407,33 @@ const billingDocs = {
       description:
         'Cancel the active subscription at the end of the current period',
       security: [{bearerAuth: []}],
+      requestBody: {
+        required: false,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                reason: {
+                  type: 'string',
+                  enum: [
+                    'too_expensive',
+                    'unused',
+                    'missing_features',
+                    'switched_service',
+                    'customer_service',
+                    'low_quality',
+                    'too_complex',
+                    'other',
+                  ],
+                },
+                comment: {type: 'string', maxLength: 1000},
+              },
+            },
+          },
+        },
+      },
       responses: {
         200: {
           description: 'Subscription cancellation scheduled',

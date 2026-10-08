@@ -6,6 +6,7 @@ export interface ILogin {
 
 export interface IRegister extends Omit<ILogin, 'remember_for_30_days'> {
   delivery?: 'link' | 'code';
+  referral_code?: string;
   first_name: string;
   last_name: string;
 }
@@ -26,6 +27,7 @@ export interface ISendLink {
 }
 
 export interface IOAuthAuthorization {
+  referral_code?: string;
   code?: string;
   id_token?: string;
   user?:

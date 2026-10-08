@@ -12,6 +12,11 @@ vi.mock(
 );
 
 const polar = vi.hoisted(() => ({
+  getPolarCustomer: vi.fn(async () => ({id: 'customer-id'})),
+  updatePolarCancellation: vi.fn(async (_id: string, cancel: boolean) => ({
+    status: 'canceled',
+    cancel_at_period_end: cancel,
+  })),
   cancelPolarSubscription: vi.fn(async () => ({
     id: 'polar-sub',
     status: 'canceled',

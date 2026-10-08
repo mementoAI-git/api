@@ -12,6 +12,7 @@ import {
 
 const router: IRouter = Router();
 
+router.get('/account', gaurd, ctrl.account);
 router.get('/subscription', gaurd, ctrl.getSubscription);
 router.get('/usage', gaurd, ctrl.getUsage);
 router.post('/checkout', gaurd, validate(checkoutSchema), ctrl.checkout);

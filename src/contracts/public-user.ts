@@ -1,3 +1,4 @@
+import {BACKEND_URL} from '../utils/config';
 export type PublicPasskey = {
   credential_id: string;
   device_name: string;
@@ -25,6 +26,10 @@ export type PublicUser = {
   verified: boolean;
   two_factor: {enabled: boolean};
   passkeys: PublicPasskey[];
+  banner?: string | null;
+  banner_preset?: number;
+  banner_position?: {x: number; y: number};
+  banner_url?: string | null;
   picture?: string;
   picture_url?: string;
   location?: string;
@@ -61,6 +66,9 @@ export const PUBLIC_USER_SELECT = [
   'passkeys.credential_id',
   'passkeys.device_name',
   'passkeys.created_at',
+  'banner',
+  'banner_preset',
+  'banner_position',
   'picture',
   'location',
   'age_range',
@@ -153,6 +161,15 @@ export function toPublicUser(input: unknown): PublicUser {
     verified: source.verified === true,
     two_factor: {enabled: twoFactor.enabled === true},
     passkeys,
+    banner: nullableStringValue(source.banner),
+    banner_preset: numberValue(source.banner_preset),
+    banner_position: source.banner_position as
+      | {x: number; y: number}
+      | undefined,
+    banner_url:
+      source.banner && BACKEND_URL
+        ? `${BACKEND_URL}/files/${source.banner}`
+        : null,
     picture: stringValue(source.picture),
     picture_url: stringValue(source.picture_url),
     location: stringValue(source.location),

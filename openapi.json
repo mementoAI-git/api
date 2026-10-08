@@ -1416,7 +1416,7 @@
     },
     "/ai/transcribe-audio": {
       "post": {
-        "description": "Transcribe audio file to text. Requires a file_id of an uploaded audio file.",
+        "description": "Transcribe audio to text. Send a multipart file (maximum 15 MB) for transient dictation, or a JSON file_id for an existing stored recording. Multipart audio is processed in memory and is not saved to file storage. Dictation returns full_text only for low latency; stored recordings also return timed segments.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1428,6 +1428,20 @@
                     "type": "string"
                   }
                 },
+                "type": "object"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
                 "type": "object"
               }
             }
@@ -1442,14 +1456,27 @@
                   "properties": {
                     "data": {
                       "properties": {
-                        "file_id": {
-                          "example": "507f1f77bcf86cd799439011",
+                        "full_text": {
+                          "description": "Complete transcribed text",
                           "type": "string"
                         },
-                        "transcription": {
-                          "description": "Transcribed text",
-                          "example": "Hello, this is the transcribed text from the audio file.",
-                          "type": "string"
+                        "segments": {
+                          "description": "Timed segments for stored recordings; omitted for transient dictation.",
+                          "items": {
+                            "properties": {
+                              "end": {
+                                "type": "number"
+                              },
+                              "start": {
+                                "type": "number"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
                         }
                       },
                       "type": "object"
@@ -2262,6 +2289,11 @@
                     "description": "Authorization code from OAuth provider",
                     "example": "4/0AeanS...",
                     "type": "string"
+                  },
+                  "referral_code": {
+                    "description": "Optional personal invite code; new accounts only",
+                    "pattern": "^[a-f0-9]{32}$",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -2577,7 +2609,7 @@
     },
     "/auth/register": {
       "post": {
-        "description": "Register a new user account. Requires a valid 6-digit invite code.",
+        "description": "Register a new user account with optional personal invite attribution.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -2610,14 +2642,18 @@
                     "example": "SecurePassword123!",
                     "format": "password",
                     "type": "string"
+                  },
+                  "referral_code": {
+                    "description": "Optional personal invite code",
+                    "pattern": "^[a-f0-9]{32}$",
+                    "type": "string"
                   }
                 },
                 "required": [
                   "email",
                   "password",
                   "first_name",
-                  "last_name",
-                  "invite_code"
+                  "last_name"
                 ],
                 "type": "object"
               }
@@ -3345,9 +3381,125 @@
         ]
       }
     },
+    "/billing/account": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "address": {
+                          "nullable": true,
+                          "properties": {
+                            "city": {
+                              "type": "string"
+                            },
+                            "country": {
+                              "type": "string"
+                            },
+                            "line1": {
+                              "type": "string"
+                            },
+                            "line2": {
+                              "type": "string"
+                            },
+                            "postal_code": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "email": {
+                          "type": "string"
+                        },
+                        "has_customer": {
+                          "type": "boolean"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "payment_methods": {
+                          "items": {
+                            "properties": {
+                              "brand": {
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "is_default": {
+                                "type": "boolean"
+                              },
+                              "last4": {
+                                "nullable": true,
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Billing account retrieved"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get billing details and masked payment methods",
+        "tags": [
+          "Billing"
+        ]
+      }
+    },
     "/billing/cancel": {
       "post": {
         "description": "Cancel the active subscription at the end of the current period",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "comment": {
+                    "maxLength": 1000,
+                    "type": "string"
+                  },
+                  "reason": {
+                    "enum": [
+                      "too_expensive",
+                      "unused",
+                      "missing_features",
+                      "switched_service",
+                      "customer_service",
+                      "low_quality",
+                      "too_complex",
+                      "other"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "200": {
             "content": {
@@ -3799,6 +3951,19 @@
                   "properties": {
                     "data": {
                       "properties": {
+                        "billing_interval": {
+                          "enum": [
+                            "monthly",
+                            "annual",
+                            "lifetime",
+                            null
+                          ],
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "can_manage_subscription": {
+                          "type": "boolean"
+                        },
                         "cancel_at_period_end": {
                           "type": "boolean"
                         },
@@ -10074,6 +10239,56 @@
           }
         ],
         "summary": "Update User Profile",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/referrals": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "invite_url": {
+                          "format": "uri",
+                          "type": "string"
+                        },
+                        "signup_count": {
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "invite_url",
+                        "signup_count"
+                      ],
+                      "type": "object"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Invite details retrieved"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get personal invite link and signup count",
         "tags": [
           "Users"
         ]

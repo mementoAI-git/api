@@ -1,5 +1,5 @@
 import dayjs from 'dayjs';
-import {model, Schema} from 'mongoose';
+import {model, Schema, Types} from 'mongoose';
 import {BACKEND_URL} from '../../../utils/config';
 import {
   concatStrings,
@@ -42,6 +42,8 @@ export interface IPasskey {
 }
 
 export interface IUser {
+  referral_code?: string;
+  referred_by?: Types.ObjectId;
   _id?: string;
   email: string;
   first_name: string;
@@ -73,6 +75,10 @@ export interface IUser {
     enabled: boolean;
   };
   picture: string;
+  banner?: string;
+  banner_preset?: number;
+  banner_position?: {x: number; y: number};
+  banner_url?: string | null;
   location?: string;
   age_range?: string;
   picture_url?: string;
@@ -93,6 +99,14 @@ export interface IUser {
 
 const user = new Schema<IUser>(
   {
+    referral_code: {type: String, unique: true, sparse: true, select: false},
+    referred_by: {
+      type: Schema.Types.ObjectId,
+      ref: 'user',
+      immutable: true,
+      index: true,
+      select: false,
+    },
     email: {
       type: String,
       unique: true,
@@ -167,6 +181,12 @@ const user = new Schema<IUser>(
       default: false,
     },
     picture: String,
+    banner: String,
+    banner_preset: {type: Number, enum: [0, 1, 2, 3], default: 0},
+    banner_position: {
+      x: {type: Number, min: 0, max: 100, default: 50},
+      y: {type: Number, min: 0, max: 100, default: 100},
+    },
     last_seen: {
       type: String,
       default: () => dayjs().format('YYYY-MM-DD'),
@@ -258,6 +278,9 @@ user.virtual('picture_url').get(function () {
   return generateDefaultAvatarUrl(
     this.email || (this._id ? this._id.toString() : 'memento'),
   );
+});
+user.virtual('banner_url').get(function () {
+  return this.banner ? `${BACKEND_URL}/files/${this.banner}` : null;
 });
 user.virtual('fullname').get(function () {
   return concatStrings(this.first_name, this.last_name, ' ').trim();

@@ -1,3 +1,5 @@
+import {referrals} from './referrals';
+import {FRONTEND_URL} from '../../../utils/config';
 import {NextFunction, Response} from 'express';
 import * as service from './service';
 import {
@@ -125,6 +127,54 @@ export async function uploadPicture(
         req.context?.requestId,
         'user:picture',
       ),
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateBanner(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.updateBannerPreset(
+      req.body.banner_preset,
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateBannerPosition(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.updateBannerPosition(
+      req.body,
+      req.auth.id,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function uploadBanner(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await service.uploadBanner(
+      getFiles(req, true)?.[0],
+      req.auth.id,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
@@ -370,6 +420,24 @@ export async function deletePasskey(
       credential_id,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getReferrals(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await referrals.summary(req.auth!.id, FRONTEND_URL!);
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      'Invite details retrieved',
+      data,
+    );
   } catch (error) {
     next(error);
   }

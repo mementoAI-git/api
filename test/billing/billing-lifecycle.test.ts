@@ -1,6 +1,13 @@
+import request from 'supertest';
+import {createTestApp} from '../helpers/app';
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
 const polar = vi.hoisted(() => ({
+  getPolarCustomer: vi.fn(async () => ({id: 'customer-id'})),
+  updatePolarCancellation: vi.fn(async (_id: string, cancel: boolean) => ({
+    status: 'active',
+    cancel_at_period_end: cancel,
+  })),
   cancelPolarSubscription: vi.fn(async () => ({
     id: 'polar-subscription',
     status: 'active',
@@ -42,7 +49,7 @@ import {
   closeTestDatabase,
   connectTestReplicaSet,
 } from '../helpers/database';
-import {createUserFixture} from '../helpers/factories';
+import {createUserFixture, issueLegacyAccessToken} from '../helpers/factories';
 
 describe('Polar billing lifecycle', () => {
   beforeAll(connectTestReplicaSet);
@@ -64,8 +71,10 @@ describe('Polar billing lifecycle', () => {
     });
 
     await cancelSubscription(user.id);
-    expect(polar.cancelPolarSubscription).toHaveBeenCalledWith(
+    expect(polar.updatePolarCancellation).toHaveBeenCalledWith(
       'polar-subscription',
+      true,
+      {},
     );
     expect(await Subscription.findOne({user_id: user.id}).lean()).toMatchObject(
       {
@@ -75,8 +84,10 @@ describe('Polar billing lifecycle', () => {
     );
 
     await resumeSubscription(user.id);
-    expect(polar.resumePolarSubscription).toHaveBeenCalledWith(
+    expect(polar.updatePolarCancellation).toHaveBeenCalledWith(
       'polar-subscription',
+      false,
+      {},
     );
     expect(await Subscription.findOne({user_id: user.id}).lean()).toMatchObject(
       {
@@ -87,9 +98,60 @@ describe('Polar billing lifecycle', () => {
     );
   });
 
+  it.each(['ios', 'android', 'legacy'])(
+    'accepts existing %s cancellation feedback',
+    async client => {
+      const user = await createUserFixture();
+      await Subscription.create({
+        user_id: user.id,
+        tier: 'pro',
+        status: 'active',
+        payment_provider: 'polar',
+        provider_subscription_id: 'polar-subscription',
+      });
+      let call = request(createTestApp())
+        .post('/billing/cancel')
+        .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`);
+      if (client !== 'legacy') call = call.set('X-Memento-Client', client);
+      const response = await call.send({
+        reason: 'Taking a break from the app',
+        details: 'I will return later',
+      });
+      expect(response.status).toBe(200);
+      expect(
+        (await Subscription.findOne({user_id: user.id}))?.cancellation_reason,
+      ).toBe('Taking a break from the app');
+    },
+  );
+
+  it('retains the web cancellation comment', async () => {
+    const user = await createUserFixture();
+    await Subscription.create({
+      user_id: user.id,
+      tier: 'pro',
+      status: 'active',
+      payment_provider: 'polar',
+      provider_subscription_id: 'polar-subscription',
+    });
+    const response = await request(createTestApp())
+      .post('/billing/cancel')
+      .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`)
+      .set('X-Memento-Client', 'web')
+      .send({reason: 'unused', comment: 'Taking a break'});
+    expect(response.status).toBe(200);
+    expect(
+      (await Subscription.findOne({user_id: user.id}))?.cancellation_details,
+    ).toBe('Taking a break');
+  });
+
   it('returns Polar order receipts for the authenticated customer only', async () => {
     const user = await createUserFixture();
 
+    await Subscription.create({
+      user_id: user.id,
+      tier: 'pro',
+      payment_provider: 'polar',
+    });
     const result = await listInvoices(user.id);
 
     expect(polar.listPolarInvoices).toHaveBeenCalledWith(user.id);

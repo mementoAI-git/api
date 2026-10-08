@@ -1,3 +1,4 @@
+import {getTranscriptionInput} from './transcription-input';
 import {NextFunction, Response} from 'express';
 import {getPagination, responsHandler} from '../../../utils/helpers';
 import * as service from './service';
@@ -108,7 +109,9 @@ export async function transcribeAudio(
   next: NextFunction,
 ) {
   try {
-    const {message, data} = await service.transcribeAudio(req.body);
+    const {message, data} = await service.transcribeAudio(
+      getTranscriptionInput(req.body, req.file),
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

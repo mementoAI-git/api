@@ -194,48 +194,7 @@ export async function triggerSummarization(memoryId: string): Promise<boolean> {
   }
 }
 
-export async function getMemorySummaries(
-  userId: string,
-  excludeMemoryId?: string,
-): Promise<Array<{title: string; summary: string; topics: string[]}>> {
-  try {
-    const query: any = {
-      user: userId,
-      status: {$nin: ['draft', 'deleted']},
-      summary: {$exists: true, $ne: null},
-    };
-
-    if (excludeMemoryId) {
-      query._id = {$ne: excludeMemoryId};
-    }
-
-    const stories = await Memory.find({...query, type: 'story'})
-      .sort({updated_at: -1})
-      .limit(12)
-      .select('title summary topics');
-
-    const memories = await Memory.find({...query, type: 'conversation'})
-      .sort({updated_at: -1})
-      .limit(12)
-      .select('title summary topics');
-
-    const allMemories = [...memories, ...stories];
-    allMemories.sort((a, b) => {
-      const dateA = new Date(a.updated_at || 0).getTime();
-      const dateB = new Date(b.updated_at || 0).getTime();
-      return dateB - dateA;
-    });
-
-    return allMemories.map(m => ({
-      title: m.title || 'Untitled conversation',
-      summary: m.summary || '',
-      topics: m.topics || [],
-    }));
-  } catch (error) {
-    console.error('Error fetching conversation summaries:', error);
-    return [];
-  }
-}
+export {getMemorySummaries} from '../memory-context';
 
 export async function buildMemoryContent(memory: IMemory) {
   const attachments = (memory.attachments || []).filter(a => {
