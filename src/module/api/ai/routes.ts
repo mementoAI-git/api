@@ -1,4 +1,5 @@
 import {Router, type IRouter} from 'express';
+import fileUploadMiddleware from '../../../middleware/file-upload';
 import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
 import valid from './validator';
@@ -53,6 +54,7 @@ router.post(
   '/transcribe-audio',
   gaurd,
   requireFeature('ai.transcribe_audio'),
+  fileUploadMiddleware.single('file'),
   ctrl.transcribeAudio,
 );
 router.get(

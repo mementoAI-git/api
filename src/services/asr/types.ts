@@ -2,6 +2,8 @@ import {ITranscriptionData} from '../../module/database/model/file';
 
 export interface AsrTranscriptionInput {
   transcriptionPrompt: string;
+  /** Dictation needs only text; stored files still need timed segments. */
+  textOnly?: boolean;
   processedFilePart: unknown;
 }
 

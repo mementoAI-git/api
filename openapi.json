@@ -1416,7 +1416,7 @@
     },
     "/ai/transcribe-audio": {
       "post": {
-        "description": "Transcribe audio file to text. Requires a file_id of an uploaded audio file.",
+        "description": "Transcribe audio to text. Send a multipart file (maximum 15 MB) for transient dictation, or a JSON file_id for an existing stored recording. Multipart audio is processed in memory and is not saved to file storage. Dictation returns full_text only for low latency; stored recordings also return timed segments.",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1428,6 +1428,20 @@
                     "type": "string"
                   }
                 },
+                "type": "object"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
                 "type": "object"
               }
             }
@@ -1442,14 +1456,27 @@
                   "properties": {
                     "data": {
                       "properties": {
-                        "file_id": {
-                          "example": "507f1f77bcf86cd799439011",
+                        "full_text": {
+                          "description": "Complete transcribed text",
                           "type": "string"
                         },
-                        "transcription": {
-                          "description": "Transcribed text",
-                          "example": "Hello, this is the transcribed text from the audio file.",
-                          "type": "string"
+                        "segments": {
+                          "description": "Timed segments for stored recordings; omitted for transient dictation.",
+                          "items": {
+                            "properties": {
+                              "end": {
+                                "type": "number"
+                              },
+                              "start": {
+                                "type": "number"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
                         }
                       },
                       "type": "object"

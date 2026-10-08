@@ -7,6 +7,7 @@ import {
   ASR_SHADOW_PROVIDER,
 } from '../../utils/config';
 import {GeminiAsrProvider} from './gemini-provider';
+import {ServiceUnavailableException} from '../../utils/service-error';
 import {
   AsrProvider,
   AsrRouterResult,
@@ -30,6 +31,18 @@ function resolveProvider() {
   return provider;
 }
 
+function transcriptionUnavailable(error: unknown) {
+  const status =
+    typeof error === 'object' && error !== null && 'status' in error
+      ? error.status
+      : undefined;
+  return new ServiceUnavailableException(
+    status === 429
+      ? 'Transcription is temporarily busy. Please try again later.'
+      : 'Transcription is temporarily unavailable. Please try again later.',
+  );
+}
+
 export async function transcribeWithConfiguredAsr(
   input: AsrTranscriptionInput,
 ) {
@@ -44,13 +57,17 @@ export async function transcribeWithConfiguredAsr(
     } as AsrRouterResult;
   } catch (primaryError) {
     if (!fallback || fallback.providerId === primary.providerId) {
-      throw primaryError;
+      throw transcriptionUnavailable(primaryError);
     }
-    const fallbackResult = await fallback.transcribe(input);
-    return {
-      ...fallbackResult,
-      usedFallback: true,
-    } as AsrRouterResult;
+    try {
+      const fallbackResult = await fallback.transcribe(input);
+      return {
+        ...fallbackResult,
+        usedFallback: true,
+      } as AsrRouterResult;
+    } catch (fallbackError) {
+      throw transcriptionUnavailable(fallbackError);
+    }
   }
 }
 

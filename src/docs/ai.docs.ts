@@ -455,11 +455,18 @@ const aiDocs = {
       tags: ['AI'],
       summary: 'Transcribe Audio',
       description:
-        'Transcribe audio file to text. Requires a file_id of an uploaded audio file.',
+        'Transcribe audio to text. Send a multipart file (maximum 15 MB) for transient dictation, or a JSON file_id for an existing stored recording. Multipart audio is processed in memory and is not saved to file storage. Dictation returns full_text only for low latency; stored recordings also return timed segments.',
       security: [{bearerAuth: []}],
       requestBody: {
         required: true,
         content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['file'],
+              properties: {file: {type: 'string', format: 'binary'}},
+            },
+          },
           'application/json': {
             schema: {
               type: 'object',
@@ -490,15 +497,22 @@ const aiDocs = {
                   data: {
                     type: 'object',
                     properties: {
-                      transcription: {
+                      full_text: {
                         type: 'string',
-                        description: 'Transcribed text',
-                        example:
-                          'Hello, this is the transcribed text from the audio file.',
+                        description: 'Complete transcribed text',
                       },
-                      file_id: {
-                        type: 'string',
-                        example: '507f1f77bcf86cd799439011',
+                      segments: {
+                        description:
+                          'Timed segments for stored recordings; omitted for transient dictation.',
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            start: {type: 'number'},
+                            end: {type: 'number'},
+                            text: {type: 'string'},
+                          },
+                        },
                       },
                     },
                   },

@@ -1,3 +1,4 @@
+import type {TranscriptionInput} from './transcription-input';
 import {Response} from 'express';
 import {FilterQuery} from 'mongoose';
 import {createUserContent, PartListUnion} from '@google/genai';
@@ -8,7 +9,7 @@ import gemini, {GEMINI_MODEL} from '../../../services/gemini';
 import {geminiAuthClient, GEMINI_LIVE_MODEL} from '../../../services/gemini';
 import {extractJson, isEmpty, uploadMimeBaseType} from '../../../utils/helpers';
 import {IPagination} from '../../../utils/interface';
-import {IPrompt, IStartMemory, ITranscribeAudio} from './interface';
+import {IPrompt, IStartMemory} from './interface';
 import File, {ITranscriptionData} from '../../database/model/file';
 import {
   BadRequestException,
@@ -596,20 +597,22 @@ function isTranscribableMime(type: string): boolean {
   return false;
 }
 
-export async function transcribeAudio(payload: ITranscribeAudio) {
-  const file = await File.findById(payload.file_id);
-  if (!file) {
+export async function transcribeAudio(input: TranscriptionInput) {
+  const file =
+    input.kind === 'stored' ? await File.findById(input.fileId) : null;
+  if (input.kind === 'stored' && !file) {
     throw new NotFoundException('File not found');
   }
-  if (!isTranscribableMime(file.type)) {
+  if (file && !isTranscribableMime(file.type)) {
     throw new NotFoundException('Invalid file type ');
   }
 
-  if (!isEmpty(file.transcription)) {
+  if (file && !isEmpty(file.transcription)) {
     return {message: 'Transcription successful', data: file.transcription};
   }
 
-  const prompt = prompts.createTranscriptionPrompt();
+  const textOnly = input.kind === 'recording';
+  const prompt = prompts.createTranscriptionPrompt(textOnly);
   const transcriptionPromptVersion = getPromptVersion('transcription');
   void recordAiMetric({
     event: 'prompt_version_used',
@@ -617,7 +620,15 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
     endpoint: '/ai/transcribe-audio',
     prompt_version: transcriptionPromptVersion,
   });
-  const processedFile = await processFile(file);
+  const processedFile =
+    input.kind === 'recording'
+      ? {
+          inlineData: {
+            mimeType: input.mimeType,
+            data: input.file.buffer.toString('base64'),
+          },
+        }
+      : await processFile(file);
   if (!processedFile) {
     throw new BadRequestException(
       'Could not load this recording from storage for transcription.',
@@ -626,6 +637,7 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
 
   const result = await transcribeWithConfiguredAsr({
     transcriptionPrompt: prompt,
+    textOnly,
     processedFilePart: processedFile,
   });
   void recordAiMetric({
@@ -645,6 +657,7 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
       try {
         const shadow = await transcribeWithShadowProvider({
           transcriptionPrompt: prompt,
+          textOnly,
           processedFilePart: processedFile,
         });
         if (!shadow) return;
@@ -681,7 +694,7 @@ export async function transcribeAudio(payload: ITranscribeAudio) {
     })();
   }
 
-  await file.updateOne({transcription: result.data});
+  if (file) await file.updateOne({transcription: result.data});
   return {message: 'Transcription successful', data: result.data};
 }
 
