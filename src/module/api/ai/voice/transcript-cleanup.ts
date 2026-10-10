@@ -61,13 +61,15 @@ The Host lines come from automatic speech recognition. It sometimes mishears wor
 
 For each Host line, decide:
 - If it is sensible English, leave it out of your answer.
-- If it has obvious mishearings and the conversation around it, especially Memento's next reply, makes the intended English words clear, return the corrected line.
-- If it is not in English, or is gibberish, and you cannot tell with confidence which English words were said, return "${UNCLEAR_MARKER}".
+- If it has obvious mishearings and the conversation around it makes the intended words clear, return the corrected line.
+- If it is gibberish, or English audio written in another language or script, and you cannot tell with confidence which words were said, return "${UNCLEAR_MARKER}".
+- If the Host deliberately used words from another language (a name, greeting or phrase, for example in Yoruba, Igbo or Hausa), leave it out of your answer: keep it exactly as said.
 
 Rules:
 - Only return Host lines. Never return or change Memento's lines.
 - Keep the Host's own words. Do not summarize, add details, restyle, or fix grammar.
-- Do not translate. A non-English line becomes "${UNCLEAR_MARKER}" unless Memento's reply shows exactly what was said in English.
+- Never change names, places, dates, numbers, or words like "not" and "never". Memento's reply is not proof of what the Host said: Memento may have misheard too.
+- Do not translate.
 
 Return JSON only, in this shape: {"fixes":[{"index":<line number>,"text":"<corrected line>"}]}
 Return {"fixes":[]} if every Host line is fine.
@@ -102,23 +104,171 @@ export function parseCleanupResponse(
   return [...byIndex].map(([index, text]) => ({index, text}));
 }
 
-function contentWords(text: string): Set<string> {
-  const words: string[] = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-  return new Set(words.filter(word => word.length >= 3));
+const NEGATIONS = new Set([
+  'not',
+  'no',
+  'never',
+  'nothing',
+  'nobody',
+  'none',
+  'neither',
+  'nor',
+  'cannot',
+  'nowhere',
+]);
+
+const NUMBER_WORDS = new Set([
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
+  'twenty',
+  'thirty',
+  'forty',
+  'fifty',
+  'sixty',
+  'seventy',
+  'eighty',
+  'ninety',
+  'hundred',
+  'thousand',
+  'million',
+  'first',
+  'second',
+  'third',
+  'fourth',
+  'fifth',
+  'sixth',
+  'seventh',
+  'eighth',
+  'ninth',
+  'tenth',
+  'half',
+  'dozen',
+]);
+
+/** Words as heard, lower-cased, apostrophes removed ("grandmother's" -> "grandmothers"). */
+function words(text: string): string[] {
+  const raw: string[] =
+    text.toLowerCase().match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)*/gu) ?? [];
+  return raw.map(word => word.replace(/['’]/g, ''));
+}
+
+function negationCount(text: string): number {
+  const raw: string[] =
+    text.toLowerCase().match(/[\p{L}]+(?:['’][\p{L}]+)*/gu) ?? [];
+  return raw.filter(word => NEGATIONS.has(word) || /n['’]t$/.test(word)).length;
+}
+
+function numbers(text: string): string {
+  return words(text)
+    .filter(word => /^\d+$/.test(word) || NUMBER_WORDS.has(word))
+    .sort()
+    .join(' ');
+}
+
+/** Capitalised words that are not sentence starts: names and places. */
+function properNouns(text: string): string[] {
+  const found: string[] = [];
+  const pattern = /([.!?]\s+|^\s*)?(\p{Lu}[\p{L}'’]+)/gu;
+  for (const match of text.matchAll(pattern)) {
+    if (match[1] !== undefined) continue;
+    found.push(match[2].toLowerCase().replace(/['’]/g, ''));
+  }
+  return found;
+}
+
+function editDistance(a: string, b: string): number {
+  const row = Array.from({length: b.length + 1}, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    let previous = row[0];
+    row[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const current = row[j];
+      row[j] = Math.min(
+        row[j] + 1,
+        row[j - 1] + 1,
+        previous + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      previous = current;
+    }
+  }
+  return row[b.length];
+}
+
+/** Share of letters in the Latin script; wrong-script ASR output scores low. */
+function latinShare(text: string): number {
+  const letters = text.match(/\p{L}/gu) ?? [];
+  if (letters.length === 0) return 1;
+  const latin = text.match(/\p{Script=Latin}/gu) ?? [];
+  return latin.length / letters.length;
 }
 
 /**
- * A real mishearing fix keeps some of what was heard. A corrected line that
- * shares no words with the original is a translation or a guess, so it is
- * stored as [unclear] instead, whatever the model said.
+ * Whether a proposed fix only corrects how words were heard. It must not add
+ * facts: no new names or places, the same numbers and negations, about the
+ * same length, and every changed word a near-spelling of something heard
+ * (two heard words joined count, for "grand mothers" -> "grandmother's").
+ */
+function isMishearingFix(original: string, fixed: string): boolean {
+  const heard = words(original);
+  const proposed = words(fixed);
+  if (heard.length === 0 || proposed.length === 0) return false;
+
+  const slack = Math.max(2, Math.ceil(heard.length * 0.2));
+  if (Math.abs(proposed.length - heard.length) > slack) return false;
+  if (negationCount(original) !== negationCount(fixed)) return false;
+  if (numbers(original) !== numbers(fixed)) return false;
+
+  const heardSet = new Set(heard);
+  const candidates = new Set(heard);
+  for (let i = 0; i < heard.length - 1; i += 1) {
+    candidates.add(heard[i] + heard[i + 1]);
+  }
+  for (const noun of properNouns(fixed)) {
+    if (!candidates.has(noun)) return false;
+  }
+
+  let changed = 0;
+  for (const word of proposed) {
+    if (candidates.has(word)) continue;
+    const allowed = Math.max(1, Math.floor(word.length / 3));
+    const near = [...candidates].some(
+      candidate => editDistance(word, candidate) <= allowed,
+    );
+    if (!near) return false;
+    changed += 1;
+  }
+  return changed <= Math.max(2, Math.ceil(heard.length * 0.34));
+}
+
+/**
+ * Decides what to store for a Host line the model proposed to fix. The
+ * assistant's next reply is not proof of what the Host said, so a fix may
+ * only correct how words were heard. Anything else keeps the words as heard,
+ * except wrong-script output (English audio written in another alphabet),
+ * which becomes [unclear]. An explicit [unclear] from the model is kept.
  */
 export function guardCleanupFix(original: string, fixed: string): string {
   if (fixed === UNCLEAR_MARKER) return fixed;
-  const heard = contentWords(original);
-  for (const word of contentWords(fixed)) {
-    if (heard.has(word)) return fixed;
-  }
-  return UNCLEAR_MARKER;
+  if (isMishearingFix(original, fixed)) return fixed;
+  return latinShare(original) < 0.5 ? UNCLEAR_MARKER : original;
 }
 
 async function claimCleanup(userId: string, sessionId: string) {
