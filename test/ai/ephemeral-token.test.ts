@@ -53,6 +53,33 @@ describe('createEphemeralToken', () => {
     expect(data).not.toHaveProperty('systemInstruction');
   });
 
+  it('sends Gemini no field mask, which would be invalid with tools locked in', async () => {
+    // Runs the real SDK request shaping; only the network call is stubbed.
+    // `lockAdditionalFields: []` made the SDK send a field mask containing
+    // `tools.0`, which Gemini rejects ("field_mask is invalid for
+    // BidiGenerateContentSetup"), so every voice call failed with a 500.
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({name: 'authTokens/real-sdk'}), {
+        status: 200,
+        headers: {'content-type': 'application/json'},
+      }),
+    );
+    const user = await createUserFixture();
+
+    const {data} = await createEphemeralToken(user.id, undefined, undefined, {
+      memoryTool: true,
+      callActions: true,
+    });
+
+    const call = fetchSpy.mock.calls.find(([, init]) =>
+      String(init?.body ?? '').includes('bidiGenerateContentSetup'),
+    );
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(body.bidiGenerateContentSetup.tools).toBeDefined();
+    expect(body).not.toHaveProperty('fieldMask');
+    expect(data.token).toBe('authTokens/real-sdk');
+  });
+
   it('locks the resume handle into the token when reconnecting', async () => {
     const create = vi
       .spyOn(geminiAuthClient.authTokens, 'create')

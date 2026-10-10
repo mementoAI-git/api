@@ -1090,9 +1090,10 @@ export async function createEphemeralToken(
   const token = await geminiAuthClient.authTokens.create({
     config: {
       uses: 1,
-      // Keep model/audio constraints locked, while allowing client voice,
-      // system context and transcription settings to take effect.
-      lockAdditionalFields: [],
+      // No lockAdditionalFields: every field below is locked as-is. Passing []
+      // makes the SDK send a field mask built from the config, which includes
+      // `tools.0`; Gemini rejects that ("field_mask is invalid for
+      // BidiGenerateContentSetup") and every voice call fails.
       expireTime: expireTime.toISOString(),
       newSessionExpireTime: newSessionExpireTime.toISOString(),
       liveConnectConstraints: {
