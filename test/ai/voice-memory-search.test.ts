@@ -7,6 +7,7 @@ vi.mock('../../src/services/supermemory', () => ({
 import * as supermemory from '../../src/services/supermemory';
 import Memory from '../../src/module/database/model/memory';
 import {
+  MEMORY_SEARCH_UNAVAILABLE_RESULT,
   NO_MEMORY_MATCH_RESULT,
   searchMemoriesForVoice,
 } from '../../src/module/api/ai/voice/memory-search';
@@ -106,5 +107,98 @@ describe('searchMemoriesForVoice', () => {
 
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(result).toBe(NO_MEMORY_MATCH_RESULT);
+  });
+
+  it("searches the host's own words and quotes them", async () => {
+    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    const user = await createUserFixture();
+    await Memory.create({
+      user: user.id,
+      type: 'story',
+      status: 'save',
+      title: 'Behind the house',
+      body: '<p>Every rainy season we planted <b>yams</b> behind the house with Papa.</p>',
+    });
+
+    const result = await searchMemoriesForVoice(user.id, 'yams');
+
+    expect(result).toContain('Behind the house');
+    expect(result).toContain('planted yams behind the house');
+    expect(result).not.toContain('<b>');
+  });
+
+  it('ranks the most relevant memory first, not just the newest', async () => {
+    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    const user = await createUserFixture();
+    await Memory.create({
+      user: user.id,
+      type: 'story',
+      status: 'save',
+      title: 'Lagos trip with Ada',
+      updated_at: new Date('2025-01-01'),
+    });
+    await Memory.create({
+      user: user.id,
+      type: 'story',
+      status: 'save',
+      title: 'Work notes',
+      summary: 'A short trip to the office.',
+      updated_at: new Date('2026-09-01'),
+    });
+
+    const result = await searchMemoriesForVoice(
+      user.id,
+      'my trip to Lagos with Ada',
+    );
+
+    expect(result.indexOf('Lagos trip with Ada')).toBeGreaterThan(-1);
+    expect(result.indexOf('Lagos trip with Ada')).toBeLessThan(
+      result.indexOf('Work notes'),
+    );
+  });
+
+  it('ignores filler words, so a vague question does not match everything', async () => {
+    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    const user = await createUserFixture();
+    await Memory.create({
+      user: user.id,
+      type: 'story',
+      status: 'save',
+      title: 'What the day was about',
+    });
+
+    await expect(
+      searchMemoriesForVoice(user.id, 'what about the'),
+    ).resolves.toBe(NO_MEMORY_MATCH_RESULT);
+  });
+
+  it('labels dates as when a memory was saved, not when it happened', async () => {
+    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    const user = await createUserFixture();
+    await Memory.create({
+      user: user.id,
+      type: 'story',
+      status: 'save',
+      title: 'Wedding day',
+      created_at: new Date('2026-03-15'),
+    });
+
+    await expect(searchMemoriesForVoice(user.id, 'wedding')).resolves.toContain(
+      'Wedding day (saved March 2026)',
+    );
+  });
+
+  // "No match" makes Memento tell the host nothing is saved. A broken search
+  // must not sound like that.
+  it('says the search is unavailable, not that nothing is saved, when the lookup fails', async () => {
+    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    const user = await createUserFixture();
+    vi.spyOn(Memory, 'find').mockImplementation(() => {
+      throw new Error('database down');
+    });
+
+    await expect(searchMemoriesForVoice(user.id, 'farm')).resolves.toBe(
+      MEMORY_SEARCH_UNAVAILABLE_RESULT,
+    );
   });
 });
