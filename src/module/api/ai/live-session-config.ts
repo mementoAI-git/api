@@ -167,6 +167,11 @@ export function buildLiveConnectConfig(
     // language detection instead of SDK fields supported only by other APIs.
     inputAudioTranscription: {},
     outputAudioTranscription: {},
+    // Reply without a thinking pass first. Measured on gemini-3.8-live with
+    // the app's Live config: median end-of-speech to first audio 1.25s vs
+    // 1.33s, and steadier (middle half 1.24-1.33s vs 1.28-1.57s), with no
+    // change in reply quality or cut-offs.
+    thinkingConfig: {thinkingBudget: 0},
     realtimeInputConfig: {
       automaticActivityDetection: {
         disabled: false,
