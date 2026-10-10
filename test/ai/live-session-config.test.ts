@@ -9,6 +9,7 @@ import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
   CALL_ACTION_TOOL_NAMES,
+  parseVoiceClientCapabilities,
   SEARCH_MEMORIES_TOOL_NAME,
   VOICE_SCREEN_DESTINATIONS,
   VOICE_TOOLS,
@@ -205,5 +206,42 @@ describe('Gemini Live session descriptor', () => {
     for (const name of CALL_ACTION_TOOL_NAMES)
       expect(serialized).toContain(name);
     expect(serialized).toContain('time_capsules');
+  });
+});
+
+describe('voice client capabilities', () => {
+  // The exact query string current app builds send (mobile
+  // CLIENT_CAPABILITIES = [SEARCH_MEMORIES_TOOL, CALL_ACTIONS_CAPABILITY]).
+  // The API used to check only `memory_search`, so the memory tool was never
+  // locked into any app call.
+  it('enables memory search for the name the app actually sends', () => {
+    expect(
+      parseVoiceClientCapabilities('search_memories,call_actions'),
+    ).toEqual({
+      memoryTool: true,
+      callActions: true,
+    });
+  });
+
+  it('still accepts the documented memory_search name', () => {
+    expect(parseVoiceClientCapabilities('memory_search')).toEqual({
+      memoryTool: true,
+      callActions: false,
+    });
+  });
+
+  it('ignores whitespace, unknown names and missing values', () => {
+    expect(parseVoiceClientCapabilities(' call_actions , unknown ')).toEqual({
+      memoryTool: false,
+      callActions: true,
+    });
+    expect(parseVoiceClientCapabilities(undefined)).toEqual({
+      memoryTool: false,
+      callActions: false,
+    });
+    expect(parseVoiceClientCapabilities(['search_memories'])).toEqual({
+      memoryTool: false,
+      callActions: false,
+    });
   });
 });

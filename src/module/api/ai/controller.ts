@@ -7,6 +7,7 @@ import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
 import * as voiceTurns from './voice/turns';
 import {searchMemoriesForVoice} from './voice/memory-search';
+import {parseVoiceClientCapabilities} from './live-session-config';
 import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
 
 export async function autogenerateTags(
@@ -139,18 +140,17 @@ export async function getEphemeralToken(
       typeof req.query.device_model === 'string'
         ? req.query.device_model.trim().slice(0, 100)
         : undefined;
-    const capabilities =
-      typeof req.query.capabilities === 'string'
-        ? req.query.capabilities.split(',').map(value => value.trim())
-        : [];
+    const {memoryTool, callActions} = parseVoiceClientCapabilities(
+      req.query.capabilities,
+    );
     const {message, data} = await service.createEphemeralToken(
       req.auth.id,
       memoryId,
       resumeHandle,
       {
         deviceModel,
-        memoryTool: capabilities.includes('memory_search'),
-        callActions: capabilities.includes('call_actions'),
+        memoryTool,
+        callActions,
       },
     );
     return responsHandler(res, StatusCodes.OK, message, data);
