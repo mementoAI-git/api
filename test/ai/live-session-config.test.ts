@@ -48,6 +48,7 @@ describe('Gemini Live session descriptor', () => {
       },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
+      thinkingConfig: {thinkingBudget: 0},
       realtimeInputConfig: {
         automaticActivityDetection: {
           disabled: false,
