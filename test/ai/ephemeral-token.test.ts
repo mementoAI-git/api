@@ -4,6 +4,7 @@ vi.mock('../../src/services/supermemory', () => ({
   getContextForUser: vi.fn().mockResolvedValue({formatedText: ''}),
 }));
 
+import {GoogleGenAI} from '@google/genai';
 import {geminiAuthClient} from '../../src/services/gemini';
 import Memory from '../../src/module/database/model/memory';
 import Message from '../../src/module/database/model/message';
@@ -58,6 +59,15 @@ describe('createEphemeralToken', () => {
     // `lockAdditionalFields: []` made the SDK send a field mask containing
     // `tools.0`, which Gemini rejects ("field_mask is invalid for
     // BidiGenerateContentSetup"), so every voice call failed with a 500.
+    // A client with a dummy key keeps this independent of GEMINI_API_KEY and
+    // of Google default credentials, which CI has neither of.
+    const sdk = new GoogleGenAI({
+      apiKey: 'test-key',
+      httpOptions: {apiVersion: 'v1alpha'},
+    });
+    vi.spyOn(geminiAuthClient.authTokens, 'create').mockImplementation(params =>
+      sdk.authTokens.create(params),
+    );
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({name: 'authTokens/real-sdk'}), {
         status: 200,
