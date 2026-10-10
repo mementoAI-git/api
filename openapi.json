@@ -782,12 +782,12 @@
             }
           },
           {
-            "description": "Comma-separated client capabilities. memory_search locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen. Only send a capability from builds that handle those tool calls.",
+            "description": "Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen. Only send a capability from builds that handle those tool calls.",
             "in": "query",
             "name": "capabilities",
             "required": false,
             "schema": {
-              "example": "memory_search",
+              "example": "search_memories,call_actions",
               "type": "string"
             }
           },

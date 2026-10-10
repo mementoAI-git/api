@@ -10,6 +10,26 @@ import {
 
 export const SEARCH_MEMORIES_TOOL_NAME = 'search_memories';
 
+// Capability names a client can send on GET /ai/ephemeral-token. App builds
+// send the tool name `search_memories`; the documented name was
+// `memory_search`. Both enable the memory tool so every shipped build gets it.
+const MEMORY_SEARCH_CAPABILITIES = ['memory_search', SEARCH_MEMORIES_TOOL_NAME];
+const CALL_ACTIONS_CAPABILITY = 'call_actions';
+
+export function parseVoiceClientCapabilities(raw: unknown): {
+  memoryTool: boolean;
+  callActions: boolean;
+} {
+  const capabilities =
+    typeof raw === 'string' ? raw.split(',').map(value => value.trim()) : [];
+  return {
+    memoryTool: MEMORY_SEARCH_CAPABILITIES.some(name =>
+      capabilities.includes(name),
+    ),
+    callActions: capabilities.includes(CALL_ACTIONS_CAPABILITY),
+  };
+}
+
 export const VOICE_TOOLS: Tool[] = [
   {
     functionDeclarations: [
