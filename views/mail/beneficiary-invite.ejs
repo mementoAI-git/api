@@ -1,9 +1,13 @@
 <%- include('components/header') %>
-  <h1 class="subject">Beneficiary Invite</h1>
+  <h1 class="subject"><%= isConnection ? 'Connection Invite' : 'Beneficiary Invite' %></h1>
   <%- include('components/greetings', { name }) %>
     <p>
-      You have been invited to join Memento as a beneficiary. Click the button below to accept the invitation and
-      create your account.
+      <% if (isConnection) { %>
+        You have been invited to connect on Memento and keep memories together in a private shared space.
+        You choose what to share. Your Memento stays private unless you activate it.
+      <% } else { %>
+        You have been invited to join Memento as a beneficiary. Click the button below to accept the invitation and create your account.
+      <% } %>
     </p>
 
     <%- include('components/btn-link', { title: 'Accept Invitation' , url }) %>

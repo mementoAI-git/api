@@ -23,6 +23,7 @@ import {CreateBeneficiaryBody} from './dto';
 import otp from '../../../services/otp';
 import {acquireUsageSlot, applyUsageDelta} from '../billing/usage-accounting';
 import mongoose from 'mongoose';
+import {ensureSharedSpace} from '../../database/model/shared-space';
 
 export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   const {
@@ -344,6 +345,10 @@ export async function acceptInvite(payload: IAcceptInivite) {
   beneficiary.status = 'accepted';
   beneficiary.accepted_at = dayjs().toISOString();
   await beneficiary.save();
+
+  if (beneficiary.access_scope === 'shared_only') {
+    await ensureSharedSpace(beneficiary.benefactor, user.id);
+  }
 
   return {message: 'Invite retrieved successfully', data: {token}};
 }

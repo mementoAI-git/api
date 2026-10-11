@@ -29,7 +29,7 @@ export async function findReadableMemory(
       user: principal.userId,
       status: 'accepted',
       $or: [
-        {access_scope: {$in: ['full_vault', 'memories_only']}},
+        {access_scope: {$in: ['full_vault', 'memories_only', 'shared_only']}},
         {access_scope: {$exists: false}},
         {access_scope: null},
       ],

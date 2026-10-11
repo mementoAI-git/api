@@ -15,6 +15,7 @@ import fileRoutes from './file/routes';
 import groupRoutes from './group/routes';
 import memoryRoutes from './memory/routes';
 import personaRoutes from './persona/routes';
+import peopleRoutes from './people/routes';
 import promptRoutes from './prompt/routes';
 import pushDeviceRoutes from './push-device/routes';
 import sentryTunnelRoutes from './sentry_tunnel/routes';
@@ -41,6 +42,7 @@ const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
   {path: 'groups', router: groupRoutes},
   {path: 'memories', router: memoryRoutes},
   {path: 'persona', router: personaRoutes},
+  {path: 'people', router: peopleRoutes},
   {path: 'prompts', router: promptRoutes},
   {path: 'push-devices', router: pushDeviceRoutes},
   ...(SENTRY_TUNNEL_ENABLED

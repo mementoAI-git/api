@@ -1,4 +1,5 @@
 export const BENEFICIARY_ACCESS_SCOPES = [
+  'shared_only',
   'full_vault',
   'memories_only',
   'capsules_only',
