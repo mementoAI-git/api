@@ -102,6 +102,12 @@ export const VOICE_SPEAKER_DUPLEX_DENYLIST = (
   .map(entry => entry.trim().toLowerCase())
   .filter(Boolean);
 
+// Percentage of users (0-100) whose voice calls use the faster end-of-turn
+// silence window. Validated at startup by runtime-config.
+export const VOICE_TURN_AB_PERCENT = Number(
+  process.env.VOICE_TURN_AB_PERCENT || 0,
+);
+
 export const VOICE_PROVIDER_DEFAULT = (
   process.env.VOICE_PROVIDER_DEFAULT || 'gemini'
 ).toLowerCase();

@@ -652,6 +652,16 @@ const aiDocs = {
                       promptVersion: {type: 'string'},
                       tools: {type: 'array', items: {type: 'string'}},
                       speakerFullDuplex: {type: 'boolean'},
+                      turnDetection: {
+                        type: 'object',
+                        description:
+                          'Turn detection locked into this session, for client metrics.',
+                        properties: {
+                          variant: {type: 'string', example: 'silence-800'},
+                          silenceDurationMs: {type: 'integer', example: 800},
+                          prefixPaddingMs: {type: 'integer', example: 200},
+                        },
+                      },
                     },
                   },
                 },

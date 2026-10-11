@@ -49,6 +49,8 @@ import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
   CALL_ACTION_TOOL_NAMES,
+  chooseVoiceTurnDetection,
+  describeVoiceTurnDetection,
   SEARCH_MEMORIES_TOOL_NAME,
 } from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
@@ -78,6 +80,7 @@ import {
   ELEVENLABS_BASE_URL,
   ELEVENLABS_TTS_MODEL_ID,
   OPENROUTER_CRITICAL_ENABLED,
+  VOICE_TURN_AB_PERCENT,
 } from '../../../utils/config';
 import {
   ensureStoryAutogenTagCount,
@@ -1081,6 +1084,9 @@ export async function createEphemeralToken(
   // even on slow networks or after a brief app backgrounding.
   const newSessionExpireTime = dayjs().add(10, 'minutes').toDate();
 
+  // Same user, same arm: reconnects within a call keep their turn detection.
+  const turnDetection = chooseVoiceTurnDetection(userId, VOICE_TURN_AB_PERCENT);
+
   const live = buildLiveSessionDescriptor(GEMINI_LIVE_MODEL, {
     id: voiceId,
     name: voiceName,
@@ -1105,6 +1111,7 @@ export async function createEphemeralToken(
           voiceContext.systemInstruction,
           resumeHandle,
           {memoryTool, callActions},
+          turnDetection,
         ),
       },
       httpOptions: {
@@ -1136,6 +1143,7 @@ export async function createEphemeralToken(
         ...(callActions ? CALL_ACTION_TOOL_NAMES : []),
       ],
       speakerFullDuplex: allowsSpeakerFullDuplex(client.deviceModel),
+      turnDetection: describeVoiceTurnDetection(turnDetection),
     },
   };
 }

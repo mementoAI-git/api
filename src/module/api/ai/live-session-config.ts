@@ -1,3 +1,4 @@
+import {createHash} from 'crypto';
 import {
   EndSensitivity,
   FunctionDeclaration,
@@ -151,6 +152,60 @@ export const VOICE_TURN_DETECTION = {
   silenceDurationMs: 800,
 } as const;
 
+export type VoiceTurnDetectionArm = {
+  /** Reported to the app so its metrics can be split by arm. */
+  variant: string;
+  settings: {
+    startOfSpeechSensitivity: StartSensitivity;
+    endOfSpeechSensitivity: EndSensitivity;
+    prefixPaddingMs: number;
+    silenceDurationMs: number;
+  };
+};
+
+// A/B on the silence window that ends the user's turn. The fast arm answers
+// sooner but may cut people off mid-thought; compare `voice_reply_p50` against
+// `voice_reply_cutoffs` in the app's Sentry voice.call transactions.
+// Rename a variant whenever its settings change.
+export const VOICE_TURN_CONTROL: VoiceTurnDetectionArm = {
+  variant: 'silence-800',
+  settings: VOICE_TURN_DETECTION,
+};
+
+export const VOICE_TURN_FAST: VoiceTurnDetectionArm = {
+  variant: 'silence-450',
+  settings: {...VOICE_TURN_DETECTION, silenceDurationMs: 450},
+};
+
+/** Stable 0-99 bucket per user, so a user hears the same arm on every call. */
+function voiceTurnBucket(userId: string): number {
+  const digest = createHash('sha256')
+    .update(`voice-turn-ab:${userId}`)
+    .digest();
+  return digest.readUInt32BE(0) % 100;
+}
+
+/**
+ * Puts `fastPercent` of users in the fast arm. Raising the percentage only
+ * adds users to the fast arm; nobody already in it moves back.
+ */
+export function chooseVoiceTurnDetection(
+  userId: string,
+  fastPercent: number,
+): VoiceTurnDetectionArm {
+  return voiceTurnBucket(userId) < fastPercent
+    ? VOICE_TURN_FAST
+    : VOICE_TURN_CONTROL;
+}
+
+export function describeVoiceTurnDetection(arm: VoiceTurnDetectionArm) {
+  return {
+    variant: arm.variant,
+    silenceDurationMs: arm.settings.silenceDurationMs,
+    prefixPaddingMs: arm.settings.prefixPaddingMs,
+  };
+}
+
 export type GeminiVoiceDescriptor = {
   id: string;
   name: string;
@@ -169,6 +224,7 @@ export function buildLiveConnectConfig(
   systemInstruction?: string,
   resumeHandle?: string,
   options: VoiceToolOptions = {},
+  turnDetection: VoiceTurnDetectionArm = VOICE_TURN_CONTROL,
 ): LiveConnectConfig {
   const config: LiveConnectConfig = {
     // A handle resumes the same Gemini session after goAway or a network drop.
@@ -195,7 +251,7 @@ export function buildLiveConnectConfig(
     realtimeInputConfig: {
       automaticActivityDetection: {
         disabled: false,
-        ...VOICE_TURN_DETECTION,
+        ...turnDetection.settings,
       },
     },
   };

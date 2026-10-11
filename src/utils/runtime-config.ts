@@ -42,6 +42,15 @@ function commaSeparated(env: Environment, name: string): string[] {
     .filter(Boolean);
 }
 
+function validatePercentage(env: Environment, name: string): void {
+  const value = env[name];
+  if (value === undefined || value === '') return;
+  const percent = Number(value);
+  if (!/^\d+$/.test(value) || percent > 100) {
+    throw new Error(`${name} must be a whole number from 0 to 100`);
+  }
+}
+
 function validateFileSigningKeys(value: string | undefined): void {
   if (!value) throw new Error('FILE_URL_SIGNING_KEYS is required');
   const ids = new Set<string>();
@@ -71,6 +80,7 @@ export function validateRuntimeConfig(env: Environment): RuntimeConfig {
   // Attachment responses are signed in every environment. Validate the key at
   // bootstrap instead of allowing the first attachment-bearing request to fail.
   validateFileSigningKeys(env.FILE_URL_SIGNING_KEYS);
+  validatePercentage(env, 'VOICE_TURN_AB_PERCENT');
 
   if (isProduction) {
     requireSecret(env, 'JWT_SECRET');
