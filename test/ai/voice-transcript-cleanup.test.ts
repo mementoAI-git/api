@@ -92,19 +92,85 @@ describe('parseCleanupResponse', () => {
 });
 
 describe('guardCleanupFix', () => {
-  it('keeps a correction that shares words with what was heard', () => {
+  it('keeps a correction of how words were heard', () => {
     expect(
       guardCleanupFix(
         'I was thinking about my grand mothers farm in kaduna',
         "I was thinking about my grandmother's farm in Kaduna",
       ),
     ).toBe("I was thinking about my grandmother's farm in Kaduna");
+    expect(
+      guardCleanupFix(
+        'wen I was young we lived there',
+        'when I was young we lived there',
+      ),
+    ).toBe('when I was young we lived there');
   });
 
-  it('turns a translation or a guess into [unclear]', () => {
-    expect(guardCleanupFix('Ja, das war verrückt', 'Yes, that was crazy')).toBe(
-      '[unclear]',
+  // Memento's reply is not evidence of what the Host said. A fix that swaps
+  // in a different person, place, number or negation would put words in the
+  // Host's mouth and then into their lasting personal context.
+  it('keeps what was heard when a fix swaps in a different place or person', () => {
+    expect(
+      guardCleanupFix(
+        'I visited Lagos with my aunt',
+        'I visited Abuja with my aunt',
+      ),
+    ).toBe('I visited Lagos with my aunt');
+    expect(
+      guardCleanupFix(
+        'I went to the market with him',
+        'I went to the market with Tunde',
+      ),
+    ).toBe('I went to the market with him');
+  });
+
+  it('keeps what was heard when a fix changes a number or a date', () => {
+    expect(
+      guardCleanupFix(
+        'she had about twenty goats',
+        'she had about forty goats',
+      ),
+    ).toBe('she had about twenty goats');
+    expect(
+      guardCleanupFix('we moved there in 1998', 'we moved there in 1989'),
+    ).toBe('we moved there in 1998');
+  });
+
+  it('keeps what was heard when a fix adds or drops a negation', () => {
+    expect(
+      guardCleanupFix(
+        'I never went back to the farm',
+        'I went back to the farm',
+      ),
+    ).toBe('I never went back to the farm');
+    expect(guardCleanupFix('I liked school', "I didn't like school")).toBe(
+      'I liked school',
     );
+  });
+
+  it('keeps what was heard when a fix adds new content', () => {
+    expect(
+      guardCleanupFix(
+        'we moved to Kano',
+        'we moved to Kano because my father got a job there',
+      ),
+    ).toBe('we moved to Kano');
+  });
+
+  it('keeps Latin-script words in another language instead of translating or erasing them', () => {
+    expect(guardCleanupFix('Ja, das war verrückt', 'Yes, that was crazy')).toBe(
+      'Ja, das war verrückt',
+    );
+    expect(
+      guardCleanupFix(
+        'my mother would say e kaabo',
+        'my mother would say welcome',
+      ),
+    ).toBe('my mother would say e kaabo');
+  });
+
+  it('stores a rewrite of wrong-script text, or an explicit [unclear], as [unclear]', () => {
     expect(guardCleanupFix('لا أعرف ما أقول', "I don't know what to say")).toBe(
       '[unclear]',
     );
@@ -122,6 +188,10 @@ describe('buildCleanupPrompt', () => {
     expect(prompt).toContain('[1] Memento: hi there');
     expect(prompt).toContain('[unclear]');
     expect(prompt).toContain('Do not translate');
+    expect(prompt).toContain(
+      "Memento's reply is not proof of what the Host said",
+    );
+    expect(prompt).toContain('Never change names, places, dates, numbers');
   });
 });
 
