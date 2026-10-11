@@ -1,4 +1,5 @@
 import {FilterQuery, HydratedDocument} from 'mongoose';
+import SharedSpace from '../../database/model/shared-space';
 import Beneficiary from '../../database/model/beneficiary';
 import Group from '../../database/model/group';
 import Memory, {IMemory} from '../../database/model/memory';
@@ -35,10 +36,24 @@ export async function findReadableMemory(
       ],
     }).select('_id benefactor');
 
-    const beneficiaryIds = beneficiaries.map(b => b.id);
+    const unavailable = await SharedSpace.find({
+      $or: [{user_a: principal.userId}, {user_b: principal.userId}],
+      $and: [{$or: [{status: 'removed'}, {'blocked_by.0': {$exists: true}}]}],
+    })
+      .select('user_a user_b')
+      .lean();
+    const unavailableOwners = new Set(
+      unavailable.map(space =>
+        space.user_a === principal.userId ? space.user_b : space.user_a,
+      ),
+    );
+    const allowedBeneficiaries = beneficiaries.filter(
+      row => !unavailableOwners.has(String(row.benefactor)),
+    );
+    const beneficiaryIds = allowedBeneficiaries.map(b => b.id);
     const benefactorIds = Array.from(
       new Set(
-        beneficiaries
+        allowedBeneficiaries
           .map(b => (b.benefactor ? String(b.benefactor) : null))
           .filter((id): id is string => Boolean(id)),
       ),

@@ -2,7 +2,13 @@ import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import mail from '../../src/module/mail';
 import Beneficiary from '../../src/module/database/model/beneficiary';
 import SharedSpace from '../../src/module/database/model/shared-space';
-import {acceptInvite} from '../../src/module/api/beneficiary/service';
+import * as settings from '../../src/module/api/people/settings';
+import {assertConnection} from '../../src/module/api/people/connection';
+import {
+  acceptInvite,
+  create,
+  resendInvite,
+} from '../../src/module/api/beneficiary/service';
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -71,5 +77,57 @@ describe('connection mode in the existing invitation flow', () => {
       await SharedSpace.findById(`${user_a}:${user_b}`).lean(),
     ).toMatchObject({user_a, user_b});
     expect(await SharedSpace.countDocuments()).toBe(1);
+  });
+  it('blocks new invitations, acceptance and resend until the blocker unblocks', async () => {
+    const a = await createUserFixture();
+    const b = await createUserFixture();
+    const invite = await Beneficiary.create({
+      benefactor: a.id,
+      user: b.id,
+      email: b.email,
+      status: 'accepted',
+      access_scope: 'shared_only',
+    });
+    const sender = vi
+      .spyOn(mail, 'sendBeneficiaryInvite')
+      .mockResolvedValue(undefined);
+    await settings.disconnect(b.id, a.id, true);
+    await expect(
+      create(
+        createBeneficiarySchema.parse({
+          body: {email: b.email, access_scope: 'shared_only'},
+        }).body,
+        a.id,
+      ),
+    ).rejects.toMatchObject({statusCode: 400});
+    await expect(resendInvite({email: b.email}, a.id)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    await invite.updateOne({$set: {status: 'pending'}});
+    const accept = {
+      invite_id: invite.id,
+      first_name: 'B',
+      last_name: 'User',
+      dob: '1990-01-01',
+    };
+    await expect(acceptInvite(accept)).rejects.toMatchObject({statusCode: 400});
+    expect(sender).not.toHaveBeenCalled();
+    await invite.updateOne({$set: {status: 'removed'}});
+    await settings.unblock(b.id, a.id);
+    await create(
+      createBeneficiarySchema.parse({
+        body: {email: b.email, access_scope: 'shared_only'},
+      }).body,
+      a.id,
+    );
+    expect(sender).toHaveBeenCalledOnce();
+    await expect(assertConnection(b.id, a.id)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    await acceptInvite(accept);
+    expect(await assertConnection(b.id, a.id)).toHaveProperty('sharedSpaceId');
+    expect((await Beneficiary.findById(invite.id))?.access_scope).toBe(
+      'shared_only',
+    );
   });
 });

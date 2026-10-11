@@ -23,7 +23,7 @@ import {CreateBeneficiaryBody} from './dto';
 import otp from '../../../services/otp';
 import {acquireUsageSlot, applyUsageDelta} from '../billing/usage-accounting';
 import mongoose from 'mongoose';
-import {ensureSharedSpace} from '../../database/model/shared-space';
+import {activatePair, isPairBlocked} from '../people/connection';
 
 export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   const {
@@ -49,11 +49,23 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   }
 
   const beneficiary = await Beneficiary.findOne({benefactor: user_id, email});
-  if (beneficiary) {
-    throw new BadRequestException('Beneficiary has already been invited');
-  }
-
   const user = await User.findOne({email});
+  if (user && (await isPairBlocked(user_id, user.id)))
+    throw new BadRequestException('This connection is unavailable');
+  if (beneficiary) {
+    if (beneficiary.status !== 'removed' || access_scope !== 'shared_only')
+      throw new BadRequestException('Beneficiary has already been invited');
+    Object.assign(beneficiary, {
+      name,
+      relationship,
+      access_scope,
+      status: 'pending',
+      due_at: dayjs().add(3, 'days').toDate(),
+    });
+    await beneficiary.save();
+    await mail.sendBeneficiaryInvite(beneficiary);
+    return {message: 'Connection invitation sent', data: beneficiary};
+  }
 
   let data;
   const session = await mongoose.startSession();
@@ -293,6 +305,8 @@ export async function resendInvite(
   if (beneficiary.status === 'accepted') {
     throw new BadRequestException('Beneficiary already accepted');
   }
+  if (beneficiary.user && (await isPairBlocked(user_id, beneficiary.user)))
+    throw new BadRequestException('This connection is unavailable');
 
   await beneficiary.updateOne({due_at: dayjs().add(3, 'days').toDate()});
 
@@ -341,13 +355,15 @@ export async function acceptInvite(payload: IAcceptInivite) {
     token = await otp.create(email, 'reset');
   }
 
+  if (await isPairBlocked(beneficiary.benefactor, user.id))
+    throw new BadRequestException('This connection is unavailable');
   beneficiary.user = user.id;
   beneficiary.status = 'accepted';
   beneficiary.accepted_at = dayjs().toISOString();
   await beneficiary.save();
 
   if (beneficiary.access_scope === 'shared_only') {
-    await ensureSharedSpace(beneficiary.benefactor, user.id);
+    await activatePair(beneficiary.benefactor, user.id);
   }
 
   return {message: 'Invite retrieved successfully', data: {token}};
