@@ -146,8 +146,10 @@ export function buildVoiceTools(options: VoiceToolOptions): Tool[] | undefined {
 export const VOICE_TURN_DETECTION = {
   startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
   endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_UNSPECIFIED,
-  // Speech must last this long before Gemini treats it as the user talking.
-  // 20 ms made echo and room noise trigger interruptions.
+  // Google's guide and API schema describe this differently (required speech
+  // before a start is committed, or audio kept before it). 20 ms coincided
+  // with more false interruptions; do not rely on it as an echo filter. The
+  // app filters echo on the loudspeaker itself.
   prefixPaddingMs: 200,
   silenceDurationMs: 800,
 } as const;
@@ -164,8 +166,12 @@ export type VoiceTurnDetectionArm = {
 };
 
 // A/B on the silence window that ends the user's turn. The fast arm answers
-// sooner but may cut people off mid-thought; compare `voice_reply_p50` against
-// `voice_reply_cutoffs` in the app's Sentry voice.call transactions.
+// sooner but may cut people off mid-thought. In the app's Sentry voice.call
+// transactions, split by `voice.turn_variant` and compare
+// `voice_reply_audible_p50` (what the user hears) against
+// `voice_reply_early_interruptions` per reply. The latter is a proxy: it also
+// counts quick corrections, so compare arms on the same audio route
+// (`voice.route`, `voice.speaker_full_duplex`), never across them.
 // Rename a variant whenever its settings change.
 export const VOICE_TURN_CONTROL: VoiceTurnDetectionArm = {
   variant: 'silence-800',
