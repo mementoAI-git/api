@@ -42,14 +42,12 @@ describe('Gemini Live session descriptor', () => {
       responseModalities: [Modality.AUDIO],
       systemInstruction: 'Always answer in English.',
       speechConfig: {
-        languageCode: 'en-US',
         voiceConfig: {
           prebuiltVoiceConfig: {voiceName: 'Fenrir'},
         },
       },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
-      thinkingConfig: {thinkingBudget: 0},
       realtimeInputConfig: {
         automaticActivityDetection: {
           disabled: false,
@@ -60,6 +58,15 @@ describe('Gemini Live session descriptor', () => {
         },
       },
     });
+  });
+
+  // gemini-3.8-live is a native-audio model: Google documents that it picks
+  // the language itself and does not support setting it, and that
+  // thinking_config must be omitted. Unsupported fields risk setup failures.
+  it('does not lock fields the native-audio Live model does not support', () => {
+    const config = buildLiveConnectConfig('Fenrir', 'hi');
+    expect(config.speechConfig).not.toHaveProperty('languageCode');
+    expect(config).not.toHaveProperty('thinkingConfig');
   });
 
   it('omits an empty system instruction from the locked config', () => {

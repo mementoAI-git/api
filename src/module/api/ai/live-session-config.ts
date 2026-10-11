@@ -176,8 +176,10 @@ export function buildLiveConnectConfig(
     // Without compression Gemini caps audio sessions at 15 minutes.
     contextWindowCompression: {slidingWindow: {}},
     responseModalities: [Modality.AUDIO],
+    // No languageCode: native-audio Live models choose the language
+    // themselves and do not support setting it. The voice prompt asks for
+    // English.
     speechConfig: {
-      languageCode: 'en-US',
       voiceConfig: {
         prebuiltVoiceConfig: {voiceName},
       },
@@ -187,11 +189,9 @@ export function buildLiveConnectConfig(
     // language detection instead of SDK fields supported only by other APIs.
     inputAudioTranscription: {},
     outputAudioTranscription: {},
-    // Reply without a thinking pass first. Measured on gemini-3.8-live with
-    // the app's Live config: median end-of-speech to first audio 1.25s vs
-    // 1.33s, and steadier (middle half 1.24-1.33s vs 1.28-1.57s), with no
-    // change in reply quality or cut-offs.
-    thinkingConfig: {thinkingBudget: 0},
+    // No thinkingConfig: Google's gemini-3.8-live guide says to omit
+    // thinking_config (the model reasons internally). An earlier
+    // thinkingBudget: 0 was accepted but is outside the documented contract.
     realtimeInputConfig: {
       automaticActivityDetection: {
         disabled: false,
