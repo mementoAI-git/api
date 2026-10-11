@@ -55,6 +55,7 @@
   8. Miscellaneous
    - TALLY_WEBHOOK_SECRET: Secret for verifying Tally.so webhooks.
    - FEATURE_FLAG_ENVIRONMENT: Environment name for feature flags.
+   - VOICE_TURN_AB_PERCENT: Percentage of users (0-100) on the faster 450 ms voice end-of-turn window (default 0).
    - FEATURE_FLAGS_ADMIN_EMAILS: Admin emails for feature flag overrides.
    - AI_SLO_*: Latency and error rate thresholds (AI_SLO_ERROR_RATE_MAX, AI_SLO_FALLBACK_RATE_MAX, AI_SLO_P95_LATENCY_MS_MAX).
    - PROMPT_VERSION_*: Overrides for AI prompt versions (e.g., PROMPT_VERSION_CHAT_PRIMARY).

@@ -137,6 +137,24 @@ describe('createEphemeralToken', () => {
     expect(data.speakerFullDuplex).toBe(true);
   });
 
+  it('reports the turn detection it locked into the token', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/turns'} as any);
+    const user = await createUserFixture();
+
+    const {data} = await createEphemeralToken(user.id);
+
+    const detection =
+      create.mock.calls[0][0].config.liveConnectConstraints.config
+        .realtimeInputConfig.automaticActivityDetection;
+    expect(data.turnDetection).toEqual({
+      variant: expect.any(String),
+      silenceDurationMs: detection.silenceDurationMs,
+      prefixPaddingMs: detection.prefixPaddingMs,
+    });
+  });
+
   it('locks call actions in for clients that send the call_actions capability', async () => {
     const create = vi
       .spyOn(geminiAuthClient.authTokens, 'create')

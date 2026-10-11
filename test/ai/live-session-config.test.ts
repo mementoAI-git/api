@@ -10,7 +10,11 @@ import {
   buildLiveSessionDescriptor,
   CALL_ACTION_TOOL_NAMES,
   parseVoiceClientCapabilities,
+  chooseVoiceTurnDetection,
+  describeVoiceTurnDetection,
   SEARCH_MEMORIES_TOOL_NAME,
+  VOICE_TURN_CONTROL,
+  VOICE_TURN_FAST,
   VOICE_SCREEN_DESTINATIONS,
   VOICE_TOOLS,
 } from '../../src/module/api/ai/live-session-config';
@@ -250,6 +254,71 @@ describe('voice client capabilities', () => {
     expect(parseVoiceClientCapabilities(['search_memories'])).toEqual({
       memoryTool: false,
       callActions: false,
+    });
+  });
+});
+
+describe('voice turn detection A/B', () => {
+  const userIds = Array.from({length: 1_000}, (_, index) => `user-${index}`);
+
+  it('keeps everyone on control at 0% and moves everyone at 100%', () => {
+    expect(
+      userIds.every(
+        id => chooseVoiceTurnDetection(id, 0) === VOICE_TURN_CONTROL,
+      ),
+    ).toBe(true);
+    expect(
+      userIds.every(
+        id => chooseVoiceTurnDetection(id, 100) === VOICE_TURN_FAST,
+      ),
+    ).toBe(true);
+  });
+
+  it('gives each user the same arm on every call and splits users evenly', () => {
+    const arms = userIds.map(id => chooseVoiceTurnDetection(id, 50));
+    expect(userIds.map(id => chooseVoiceTurnDetection(id, 50))).toEqual(arms);
+    const fast = arms.filter(arm => arm === VOICE_TURN_FAST).length;
+    expect(fast).toBeGreaterThan(420);
+    expect(fast).toBeLessThan(580);
+  });
+
+  it('keeps users already in the fast arm there when the rollout grows', () => {
+    const at20 = userIds.filter(
+      id => chooseVoiceTurnDetection(id, 20) === VOICE_TURN_FAST,
+    );
+    expect(
+      at20.every(id => chooseVoiceTurnDetection(id, 50) === VOICE_TURN_FAST),
+    ).toBe(true);
+  });
+
+  it('differs from control only in the silence window', () => {
+    const {silenceDurationMs: fastSilence, ...fastRest} =
+      VOICE_TURN_FAST.settings;
+    const {silenceDurationMs: controlSilence, ...controlRest} =
+      VOICE_TURN_CONTROL.settings;
+    expect(fastRest).toEqual(controlRest);
+    expect(fastSilence).toBeLessThan(controlSilence);
+  });
+
+  it('locks the chosen arm into the live config and reports it', () => {
+    const config = buildLiveConnectConfig(
+      'Fenrir',
+      'hi',
+      undefined,
+      {},
+      VOICE_TURN_FAST,
+    );
+    expect(
+      config.realtimeInputConfig?.automaticActivityDetection,
+    ).toMatchObject({disabled: false, ...VOICE_TURN_FAST.settings});
+    expect(
+      buildLiveConnectConfig('Fenrir', 'hi').realtimeInputConfig
+        ?.automaticActivityDetection,
+    ).toMatchObject(VOICE_TURN_CONTROL.settings);
+    expect(describeVoiceTurnDetection(VOICE_TURN_FAST)).toEqual({
+      variant: VOICE_TURN_FAST.variant,
+      silenceDurationMs: VOICE_TURN_FAST.settings.silenceDurationMs,
+      prefixPaddingMs: VOICE_TURN_FAST.settings.prefixPaddingMs,
     });
   });
 });

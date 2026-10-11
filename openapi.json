@@ -839,6 +839,24 @@
                           },
                           "type": "array"
                         },
+                        "turnDetection": {
+                          "description": "Turn detection locked into this session, for client metrics.",
+                          "properties": {
+                            "prefixPaddingMs": {
+                              "example": 200,
+                              "type": "integer"
+                            },
+                            "silenceDurationMs": {
+                              "example": 800,
+                              "type": "integer"
+                            },
+                            "variant": {
+                              "example": "silence-800",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
                         "voice": {
                           "type": "object"
                         }

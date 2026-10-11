@@ -124,4 +124,17 @@ describe('runtime security configuration', () => {
       }),
     ).toThrow('FILE_URL_SIGNING_KEYS');
   });
+
+  it('accepts a voice turn A/B percentage from 0 to 100 only', () => {
+    for (const value of ['0', '50', '100']) {
+      expect(() =>
+        validateRuntimeConfig({...productionEnv, VOICE_TURN_AB_PERCENT: value}),
+      ).not.toThrow();
+    }
+    for (const value of ['-1', '101', '50%', 'half', '12.5']) {
+      expect(() =>
+        validateRuntimeConfig({...productionEnv, VOICE_TURN_AB_PERCENT: value}),
+      ).toThrow('VOICE_TURN_AB_PERCENT');
+    }
+  });
 });
