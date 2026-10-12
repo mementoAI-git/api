@@ -1,7 +1,8 @@
 import dayjs from 'dayjs';
-import Memory from '../../../database/model/memory';
 import * as users from '../../user/service';
-import {escapeRegex, searchWords} from './memory-search';
+import {CONTENT_ACTION_HANDLERS} from './content-actions';
+import {findStory} from './find-story';
+import type {VoiceToolOutcome} from './server-tool-types';
 import {
   OPEN_STORY_TOOL_NAME,
   UPDATE_PROFILE_TOOL_NAME,
@@ -21,12 +22,7 @@ export {SERVER_TOOL_NAMES} from './server-tool-declarations';
  * release as long as they use existing effect types.
  */
 
-export type VoiceToolEffect =
-  | {type: 'refresh'; what: 'profile'}
-  | {type: 'open'; destination: 'profile'}
-  | {type: 'open_story'; id: string};
-
-export type VoiceToolOutcome = {result: string; effects: VoiceToolEffect[]};
+export type {VoiceToolEffect, VoiceToolOutcome} from './server-tool-types';
 
 export class UnknownVoiceToolError extends Error {
   constructor(name: string) {
@@ -103,42 +99,18 @@ async function openStory(
   userId: string,
   args: Record<string, unknown>,
 ): Promise<VoiceToolOutcome> {
-  const words = searchWords(String(args.query ?? ''));
-  const notFound = {
-    result:
-      'No story matched. Tell the host you could not find it and ask what it was called.',
-    effects: [],
-  };
-  if (!words.length) return notFound;
-  const pattern = new RegExp(words.map(escapeRegex).join('|'), 'i');
-  const rows = await Memory.find({
-    user: userId,
-    type: 'story',
-    status: {$nin: ['draft', 'deleted']},
-    $or: [{title: pattern}, {summary: pattern}, {topics: pattern}],
-  })
-    .sort({updated_at: -1})
-    .limit(20)
-    .select('title summary topics')
-    .lean();
-  const best = rows
-    .map(row => {
-      const title = String(row.title || '').toLowerCase();
-      const rest =
-        `${row.summary || ''} ${(row.topics || []).join(' ')}`.toLowerCase();
-      const score = words.reduce(
-        (sum, word) =>
-          sum + (title.includes(word) ? 3 : 0) + (rest.includes(word) ? 1 : 0),
-        0,
-      );
-      return {row, score};
-    })
-    .sort((a, b) => b.score - a.score)[0];
-  if (!best) return notFound;
-  const title = String(best.row.title || 'Untitled');
+  const story = await findStory(userId, args.query);
+  if (!story) {
+    return {
+      result:
+        'No story matched. Tell the host you could not find it and ask what it was called.',
+      effects: [],
+    };
+  }
+  const title = String(story.title || 'Untitled');
   return {
     result: `Opened their story "${title}" on screen. Say so in a few words.`,
-    effects: [{type: 'open_story', id: String(best.row._id)}],
+    effects: [{type: 'open_story', id: String(story._id)}],
   };
 }
 
@@ -148,6 +120,7 @@ const HANDLERS: Record<
 > = {
   [UPDATE_PROFILE_TOOL_NAME]: updateProfile,
   [OPEN_STORY_TOOL_NAME]: openStory,
+  ...CONTENT_ACTION_HANDLERS,
 };
 
 export async function runVoiceServerTool(

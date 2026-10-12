@@ -41,6 +41,11 @@ export const SCREEN_CONTROL_DECLARATIONS: FunctionDeclaration[] = [
           type: Type.STRING,
           description: 'The words on the button, as the host said them.',
         },
+        turn_on: {
+          type: Type.BOOLEAN,
+          description:
+            'Only for switches and options: true when the host wants it on or selected, false when they want it off. Leave out for ordinary buttons.',
+        },
       },
       required: ['label'],
     },

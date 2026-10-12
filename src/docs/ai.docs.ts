@@ -788,7 +788,15 @@ const aiDocs = {
                               type: 'string',
                               enum: ['refresh', 'open', 'open_story'],
                             },
-                            what: {type: 'string', example: 'profile'},
+                            what: {
+                              type: 'string',
+                              enum: [
+                                'profile',
+                                'memories',
+                                'capsules',
+                                'beneficiaries',
+                              ],
+                            },
                             destination: {type: 'string', example: 'profile'},
                             id: {type: 'string'},
                           },
