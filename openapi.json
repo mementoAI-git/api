@@ -1915,7 +1915,12 @@
                                 "type": "string"
                               },
                               "what": {
-                                "example": "profile",
+                                "enum": [
+                                  "profile",
+                                  "memories",
+                                  "capsules",
+                                  "beneficiaries"
+                                ],
                                 "type": "string"
                               }
                             },

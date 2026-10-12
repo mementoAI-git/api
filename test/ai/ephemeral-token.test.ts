@@ -15,6 +15,7 @@ import {
   connectTestDatabase,
 } from '../helpers/database';
 import {createUserFixture} from '../helpers/factories';
+import {SERVER_TOOL_NAMES} from '../../src/module/api/ai/voice/server-tool-declarations';
 
 describe('createEphemeralToken', () => {
   beforeAll(connectTestDatabase);
@@ -203,12 +204,16 @@ describe('createEphemeralToken', () => {
     const locked = create.mock.calls[1][0].config.liveConnectConstraints.config;
     expect(JSON.stringify(locked.tools)).toContain('update_profile');
     expect(String(locked.systemInstruction)).toContain('APP ACTIONS');
-    expect(data.serverTools).toEqual(['update_profile', 'open_story']);
-    expect(data.tools).toEqual([
-      'search_memories',
-      'update_profile',
-      'open_story',
-    ]);
+    expect(data.serverTools).toEqual(SERVER_TOOL_NAMES);
+    expect(data.serverTools).toEqual(
+      expect.arrayContaining([
+        'update_profile',
+        'open_story',
+        'save_story',
+        'add_beneficiary',
+      ]),
+    );
+    expect(data.tools).toEqual(['search_memories', ...SERVER_TOOL_NAMES]);
   });
 
   it('locks screen control in, as tools the app runs itself, only for clients that can', async () => {

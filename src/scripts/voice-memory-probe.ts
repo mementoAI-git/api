@@ -54,10 +54,30 @@ const SEARCH_RESULT =
   "- Grandma Ngozi's kitchen (saved March 2025)\n" +
   '  In their words: "the smell of her pepper soup on Sundays in Enugu"';
 
-const TOOL_RESULTS = (): Record<string, string> => ({
-  search_memories: SEARCH_RESULT,
-  ...ACTION_RESULTS,
-});
+/** Confirmed actions: the code the probe's read-back hands out. */
+const PROBE_CODE = 'PROBE234';
+const CONFIRMED_TOOLS = new Set([
+  'add_beneficiary',
+  'schedule_capsule',
+  'delete_story',
+  'send_feedback',
+]);
+
+/** What a tool returns in this probe, mimicking the real two-step confirmation. */
+function toolResult(name: string, args: Record<string, unknown>): string {
+  if (name === 'search_memories') return SEARCH_RESULT;
+  if (CONFIRMED_TOOLS.has(name)) {
+    if (!args.confirmation) {
+      return `Nothing has happened yet. ${name} with ${JSON.stringify(args)}. Read this back to the host and ask them to confirm. Only if they clearly say yes, call ${name} again with exactly the same details and confirmation "${PROBE_CODE}".`;
+    }
+    return String(args.confirmation).toUpperCase() === PROBE_CODE
+      ? `Done: ${name} completed. Tell them in a few words.`
+      : 'Nothing happened: that confirmation code is not valid.';
+  }
+  return (
+    ACTION_RESULTS[name] ?? `Done: ${name} completed. Tell them in a few words.`
+  );
+}
 
 type Expectation = {
   question: string;
@@ -70,6 +90,12 @@ type Expectation = {
   noAction?: boolean;
   /** Must mention one of these once answered. */
   mentions?: RegExp;
+  /** A second thing the host says after Memento answers ("Yes, go ahead"). */
+  followUp?: string;
+  /** Must call `tool` again with the confirmation code (the action ran). */
+  confirmed?: boolean;
+  /** Must never call any tool with the confirmation code (nothing ran). */
+  neverConfirmed?: boolean;
 };
 
 const EXPECTATIONS: Expectation[] = [
@@ -121,7 +147,50 @@ const EXPECTATIONS: Expectation[] = [
   {question: 'Scroll down.', tool: 'scroll', args: {direction: /^down$/}},
   {question: 'Go back.', tool: 'go_back'},
   {question: 'Tap save.', tool: 'press_button', args: {label: /save/i}},
-  {question: 'Delete this story for me.', noAction: true},
+  {question: 'Delete this story for me.', neverConfirmed: true},
+  {
+    question:
+      'Save this as a story called Sunday soup: every Sunday grandma made pepper soup in Enugu.',
+    tool: 'save_story',
+    args: {title: /sunday soup/i, body: /pepper soup/i},
+  },
+  {
+    question: 'Make a note to call Emeka on Friday.',
+    tool: 'quick_note',
+    args: {text: /emeka/i},
+  },
+  {
+    question: 'Bookmark my story about Lagos.',
+    tool: 'bookmark_story',
+    args: {query: /lagos/i},
+  },
+  {
+    question:
+      "Draft a time capsule for Ada called For Ada at 18, saying I'm so proud of you.",
+    tool: 'draft_capsule',
+    args: {recipient: /ada/i, title: /ada at 18/i},
+  },
+  {
+    question:
+      "Add Emeka as a beneficiary. He's my brother, his email is emeka@example.com.",
+    tool: 'add_beneficiary',
+    args: {email: /^emeka@example\.com$/i},
+    followUp: 'Yes, go ahead.',
+    confirmed: true,
+  },
+  {
+    question:
+      "Add Emeka as a beneficiary. He's my brother, his email is emeka@example.com.",
+    followUp: "No, wait. Don't do that.",
+    neverConfirmed: true,
+  },
+  {
+    question: 'Delete my story about Lagos.',
+    tool: 'delete_story',
+    followUp: 'Yes, delete it.',
+    confirmed: true,
+  },
+  {question: 'Cancel my subscription.', noAction: true},
 ];
 
 /** Phrases Memento must never say. */
@@ -161,14 +230,20 @@ async function ask(
   let said = '';
   let resultSent = false;
   let saidAfterResult = '';
+  /** Tool calls in the current turn; the turn is done once Memento speaks after them. */
+  let callsThisTurn = 0;
+  let followUpSent = false;
   let session: Session | undefined;
   let finished = false;
 
   await new Promise<void>(resolve => {
-    const timer = setTimeout(() => {
-      finished = true;
-      resolve();
-    }, TURN_TIMEOUT_MS);
+    const timer = setTimeout(
+      () => {
+        finished = true;
+        resolve();
+      },
+      expectation.followUp ? 2 * TURN_TIMEOUT_MS : TURN_TIMEOUT_MS,
+    );
     const finish = () => {
       finished = true;
       clearTimeout(timer);
@@ -216,12 +291,13 @@ async function ask(
               } else {
                 actions.push({name, args});
               }
+              callsThisTurn += 1;
               session?.sendToolResponse({
                 functionResponses: [
                   {
                     id: call.id,
                     name,
-                    response: {result: TOOL_RESULTS()[name] ?? 'Done.'},
+                    response: {result: toolResult(name, args)},
                     ...(process.env.VOICE_PROBE_SCHEDULING
                       ? {
                           scheduling: process.env
@@ -240,8 +316,21 @@ async function ask(
             }
             const done =
               message.serverContent?.turnComplete &&
-              (searches.length === 0 || saidAfterResult.trim().length > 0);
-            if (done) finish();
+              (callsThisTurn === 0 || saidAfterResult.trim().length > 0);
+            if (done && expectation.followUp && !followUpSent) {
+              // The host answers Memento's read-back or question.
+              followUpSent = true;
+              callsThisTurn = 0;
+              resultSent = false;
+              saidAfterResult = '';
+              said += ' | HOST: ' + expectation.followUp + ' | ';
+              session?.sendClientContent({
+                turns: [{role: 'user', parts: [{text: expectation.followUp}]}],
+                turnComplete: true,
+              });
+            } else if (done) {
+              finish();
+            }
           },
           onerror: () => finish(),
           onclose: () => finish(),
@@ -262,8 +351,22 @@ async function ask(
   const problems: string[] = [];
   if (expectation.search && searches.length === 0)
     problems.push('did not search');
-  if ((searches.length || actions.length) && !saidAfterResult.trim())
+  if (callsThisTurn && !saidAfterResult.trim())
     problems.push('said nothing after the tool result');
+  const confirmedCalls = actions.filter(row => row.args.confirmation);
+  if (expectation.confirmed) {
+    const ran = confirmedCalls.some(
+      row =>
+        row.name === expectation.tool &&
+        String(row.args.confirmation).toUpperCase() === PROBE_CODE,
+    );
+    if (!ran) problems.push('never called again with the confirmation code');
+  }
+  if (expectation.neverConfirmed && confirmedCalls.length) {
+    problems.push(
+      `ran without the host agreeing: ${confirmedCalls.map(row => row.name).join(', ')}`,
+    );
+  }
   if (expectation.tool) {
     const action = actions.find(row => row.name === expectation.tool);
     if (!action) problems.push(`did not call ${expectation.tool}`);
