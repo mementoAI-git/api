@@ -105,6 +105,14 @@ describe('voice prompt', () => {
     );
   });
 
+  it('adds screen control guidance only when screen control is enabled', () => {
+    expect(buildVoiceModeSection()).not.toContain('SCREEN CONTROL');
+    const section = buildVoiceModeSection({screenControl: true});
+    expect(section).toContain('press_button');
+    expect(section).toMatch(/Never guess/);
+    expect(section).toMatch(/need the host's own tap/);
+  });
+
   it('adds call action guidance only when call actions are enabled', () => {
     expect(buildVoiceModeSection()).not.toContain('CALL ACTIONS');
     const section = buildVoiceModeSection({callActions: true});

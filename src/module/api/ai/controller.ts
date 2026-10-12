@@ -142,9 +142,8 @@ export async function getEphemeralToken(
       typeof req.query.device_model === 'string'
         ? req.query.device_model.trim().slice(0, 100)
         : undefined;
-    const {memoryTool, callActions, serverTools} = parseVoiceClientCapabilities(
-      req.query.capabilities,
-    );
+    const {memoryTool, callActions, serverTools, screenControl} =
+      parseVoiceClientCapabilities(req.query.capabilities);
     const {message, data} = await service.createEphemeralToken(
       req.auth.id,
       memoryId,
@@ -154,6 +153,7 @@ export async function getEphemeralToken(
         memoryTool,
         callActions,
         serverTools,
+        screenControl,
       },
     );
     return responsHandler(res, StatusCodes.OK, message, data);
