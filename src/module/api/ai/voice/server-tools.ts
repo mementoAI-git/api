@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import User from '../../../database/model/user';
 import * as users from '../../user/service';
 import {CONTENT_ACTION_HANDLERS} from './content-actions';
 import {findStory} from './find-story';
@@ -52,11 +53,20 @@ async function updateProfile(
 ): Promise<VoiceToolOutcome> {
   const update: Record<string, unknown> = {};
   const changed: string[] = [];
+  // What each field was, so Memento can answer "what was it before?" and
+  // change it back.
+  const before = ((await User.findById(userId)
+    .select('first_name last_name nickname country location dob')
+    .lean()) ?? {}) as Record<string, unknown>;
+  const was = (value: unknown) =>
+    value === undefined || value === null || value === ''
+      ? 'empty'
+      : `"${String(value)}"`;
   for (const [arg, {field, label}] of Object.entries(PROFILE_FIELDS)) {
     const value = text(args[arg]);
     if (value === undefined) continue;
     update[field] = value;
-    changed.push(`${label} to ${value}`);
+    changed.push(`${label} from ${was(before[field])} to "${value}"`);
   }
   if (args.birthday !== undefined) {
     const given = String(args.birthday);
@@ -75,7 +85,12 @@ async function updateProfile(
       };
     }
     update.dob = `${given}T00:00:00.000Z`;
-    changed.push(`birthday to ${birthday.format('D MMMM YYYY')}`);
+    const previous = before.dob
+      ? dayjs(before.dob as Date).format('D MMMM YYYY')
+      : undefined;
+    changed.push(
+      `birthday from ${previous ? `"${previous}"` : 'empty'} to "${birthday.format('D MMMM YYYY')}"`,
+    );
   }
   if (!changed.length) {
     return {

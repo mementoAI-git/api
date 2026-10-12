@@ -14,6 +14,7 @@ import {
 } from './transcript-context';
 import {withTimeout} from './with-timeout';
 import {buildHostOverview} from './host-overview';
+import {describeHostNow} from './local-time';
 
 const DEFAULT_LONG_TERM_TIMEOUT_MS = 1_500;
 const HOST_OVERVIEW_TIMEOUT_MS = 1_500;
@@ -42,6 +43,7 @@ export async function buildVoiceSessionContext(
     callActions?: boolean;
     serverTools?: boolean;
     screenControl?: boolean;
+    timeZone?: string;
   } = {},
 ): Promise<VoiceSessionContext> {
   const userId = String(user._id);
@@ -117,6 +119,7 @@ export async function buildVoiceSessionContext(
 
   return {
     systemInstruction: buildVoiceSystemInstruction(baseContext, {
+      hostNow: describeHostNow(options.timeZone),
       hostOverview,
       recentTranscript: formatTranscriptLines(lines),
       reflectionTopic,

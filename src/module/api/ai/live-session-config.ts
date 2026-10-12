@@ -130,7 +130,7 @@ export const CALL_ACTION_DECLARATIONS: FunctionDeclaration[] = [
   {
     name: OPEN_SCREEN_TOOL_NAME,
     description:
-      'Open a screen in the Memento app when the host asks to see it. First ask whether they want to keep talking while they look or wrap up, unless they already said.',
+      'Open a screen in the Memento app when the host asks to see it. The call keeps going while they look, so you can keep helping on that screen (scroll, tap, read it). Never ask whether they want to keep talking.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -142,7 +142,7 @@ export const CALL_ACTION_DECLARATIONS: FunctionDeclaration[] = [
         keep_talking: {
           type: Type.BOOLEAN,
           description:
-            'True keeps the call going in a floating bar. False means you say goodbye and the call ends before the screen opens.',
+            'True (the normal case): the call keeps going in a floating bar. False only when the host has said they want to stop talking: you say goodbye and the call ends before the screen opens.',
         },
       },
       required: ['destination', 'keep_talking'],

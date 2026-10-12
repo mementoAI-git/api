@@ -626,6 +626,14 @@ const aiDocs = {
           description:
             'Device model name, used for the speaker full-duplex policy.',
         },
+        {
+          name: 'timezone',
+          in: 'query',
+          required: false,
+          schema: {type: 'string', example: 'Africa/Lagos'},
+          description:
+            "The device's IANA time zone, so Memento knows the host's local date and time. Invalid values are ignored.",
+        },
       ],
       responses: {
         200: {

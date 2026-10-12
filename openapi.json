@@ -799,6 +799,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "The device's IANA time zone, so Memento knows the host's local date and time. Invalid values are ignored.",
+            "in": "query",
+            "name": "timezone",
+            "required": false,
+            "schema": {
+              "example": "Africa/Lagos",
+              "type": "string"
+            }
           }
         ],
         "responses": {
