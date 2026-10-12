@@ -46,6 +46,8 @@ MEMORY IN VOICE:
 }
 
 export type VoicePromptExtras = {
+  /** What the host keeps in Memento: people, stories, capsules, reflections. */
+  hostOverview?: string;
   recentTranscript?: string;
   reflectionTopic?: string;
   memoryNotes?: string;
@@ -59,6 +61,8 @@ export function buildVoiceSystemInstruction(
 ): string {
   const blocks: string[] = [];
   if (baseContext.trim()) blocks.push(baseContext.trim());
+  const overview = extras.hostOverview?.trim();
+  if (overview) blocks.push(overview);
 
   const topic = extras.reflectionTopic?.trim();
   if (topic) {

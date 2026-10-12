@@ -7,6 +7,7 @@ vi.mock('../../src/services/supermemory', () => ({
 import * as supermemory from '../../src/services/supermemory';
 import Memory from '../../src/module/database/model/memory';
 import Message from '../../src/module/database/model/message';
+import Beneficiary from '../../src/module/database/model/beneficiary';
 import {buildVoiceSessionContext} from '../../src/module/api/ai/voice/session-context';
 import {
   clearTestDatabase,
@@ -108,5 +109,24 @@ describe('buildVoiceSessionContext', () => {
 
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(ctx.systemInstruction).toContain('VOICE MODE');
+  });
+
+  it("tells Memento who the host's people are, before the voice rules", async () => {
+    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    const user = await createUserFixture();
+    await Beneficiary.create({
+      benefactor: user.id,
+      name: 'Emeka',
+      relationship: 'brother',
+      email: 'e@example.com',
+    });
+
+    const {systemInstruction} = await buildVoiceSessionContext(user);
+
+    expect(systemInstruction).toContain('ABOUT THE HOST');
+    expect(systemInstruction).toContain('Emeka (brother)');
+    expect(systemInstruction.indexOf('ABOUT THE HOST')).toBeLessThan(
+      systemInstruction.indexOf('VOICE MODE'),
+    );
   });
 });

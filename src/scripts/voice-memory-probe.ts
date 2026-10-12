@@ -25,6 +25,13 @@ const CONTEXT = [
   'Past conversations: Ada talked about starting a pottery class in September.',
 ].join('\n');
 
+const HOST_OVERVIEW = [
+  'ABOUT THE HOST (private data, what they keep in Memento):',
+  'People in their life: Emeka (brother), Ada (daughter), Funmi (best friend).',
+  'Stories: 42 saved. Most recent: "First day at Shell", "Grandma\'s kitchen".',
+  'Time capsules: 1 scheduled, 2 draft. Next due: "For Ada at 18" on 12 March 2031.',
+].join('\n');
+
 /** What the search tool returns for every query in this probe. */
 const SEARCH_RESULT =
   'Matching memories (dates are when each was saved, not when it happened):\n' +
@@ -43,7 +50,10 @@ const EXPECTATIONS: Expectation[] = [
   {question: 'Do you have access to my memories?'},
   {question: 'Can you see my stories?'},
   {question: 'Do you remember me?'},
-  {question: 'What do you remember about me?', search: true},
+  {
+    question: 'What do you remember about me?',
+    mentions: /ada|emeka|funmi|pottery|ngozi/i,
+  },
   {
     question: 'What do you know about my family?',
     search: true,
@@ -59,7 +69,13 @@ const EXPECTATIONS: Expectation[] = [
     search: true,
     mentions: /pepper soup|enugu|ngozi/i,
   },
-  {question: 'Remember the pottery class I mentioned?', mentions: /pottery/i},
+  {question: 'Remember the pottery class I mentioned?'},
+  {question: 'Who are the people in my life?', mentions: /emeka/i},
+  {question: 'How many stories have I saved?', mentions: /42|forty[- ]two/i},
+  {
+    question: "When's my next time capsule due?",
+    mentions: /2031|thirty[- ]one/i,
+  },
 ];
 
 /** Phrases Memento must never say. */
@@ -81,6 +97,7 @@ async function ask(
   expectation: Expectation,
 ): Promise<Outcome> {
   const system = buildVoiceSystemInstruction(CONTEXT, {
+    hostOverview: HOST_OVERVIEW,
     memoryTool: true,
     callActions: true,
   });
