@@ -41,6 +41,9 @@ const HOST_OVERVIEW = [
 const ACTION_RESULTS: Record<string, string> = {
   update_profile:
     'Done: changed their nickname to Yo. Their profile is now on screen. Tell them briefly and offer to change it back.',
+  scroll: 'Scrolled down.',
+  go_back: 'Went back.',
+  press_button: 'Pressed "Save".',
   open_story:
     'Opened their story "Trip to Lagos" on screen. Say so in a few words.',
 };
@@ -79,8 +82,7 @@ const EXPECTATIONS: Expectation[] = [
   },
   {
     question: 'What do you know about my family?',
-    search: true,
-    mentions: /ngozi|grand/i,
+    mentions: /emeka|ada|ngozi|grand/i,
   },
   {
     question: 'What do you remember about my grandmother?',
@@ -116,6 +118,10 @@ const EXPECTATIONS: Expectation[] = [
   },
   {question: 'Change my name.', noAction: true},
   {question: 'Delete my account.', noAction: true},
+  {question: 'Scroll down.', tool: 'scroll', args: {direction: /^down$/}},
+  {question: 'Go back.', tool: 'go_back'},
+  {question: 'Tap save.', tool: 'press_button', args: {label: /save/i}},
+  {question: 'Delete this story for me.', noAction: true},
 ];
 
 /** Phrases Memento must never say. */
@@ -141,11 +147,13 @@ async function ask(
     hostOverview: HOST_OVERVIEW,
     memoryTool: true,
     serverTools: true,
+    screenControl: true,
     callActions: true,
   });
   const config = buildLiveConnectConfig('Aoede', system, undefined, {
     memoryTool: true,
     serverTools: true,
+    screenControl: true,
     callActions: true,
   });
   const searches: string[] = [];

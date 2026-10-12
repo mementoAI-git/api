@@ -233,13 +233,29 @@ describe('voice client capabilities', () => {
       memoryTool: true,
       callActions: true,
       serverTools: false,
+      screenControl: false,
     });
   });
 
   it('enables server tools only for builds that can forward them', () => {
     expect(
       parseVoiceClientCapabilities('search_memories,call_actions,server_tools'),
-    ).toEqual({memoryTool: true, callActions: true, serverTools: true});
+    ).toEqual({
+      memoryTool: true,
+      callActions: true,
+      serverTools: true,
+      screenControl: false,
+    });
+  });
+
+  it('enables screen control only for builds that run it', () => {
+    expect(
+      parseVoiceClientCapabilities('search_memories,screen_control')
+        .screenControl,
+    ).toBe(true);
+    expect(parseVoiceClientCapabilities('search_memories').screenControl).toBe(
+      false,
+    );
   });
 
   it('still accepts the documented memory_search name', () => {
@@ -247,6 +263,7 @@ describe('voice client capabilities', () => {
       memoryTool: true,
       callActions: false,
       serverTools: false,
+      screenControl: false,
     });
   });
 
@@ -255,16 +272,19 @@ describe('voice client capabilities', () => {
       memoryTool: false,
       callActions: true,
       serverTools: false,
+      screenControl: false,
     });
     expect(parseVoiceClientCapabilities(undefined)).toEqual({
       memoryTool: false,
       callActions: false,
       serverTools: false,
+      screenControl: false,
     });
     expect(parseVoiceClientCapabilities(['search_memories'])).toEqual({
       memoryTool: false,
       callActions: false,
       serverTools: false,
+      screenControl: false,
     });
   });
 });

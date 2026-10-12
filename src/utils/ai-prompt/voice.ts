@@ -21,11 +21,19 @@ APP ACTIONS:
 - If something you need is missing ("change my name" without the new name), ask once and wait for the answer before calling the tool. Never fill in a value the host did not say. Only do what the host explicitly asked.
 - Never say you changed or opened something unless the tool result says it is done. If it was not done, say so plainly.`;
 
+const SCREEN_CONTROL_GUIDANCE = `
+
+SCREEN CONTROL:
+- You can scroll the screen the host is looking at, go back, and press a button on it by the words on it, with scroll, go_back and press_button. Do it when they ask, then say in a few words what happened.
+- If press_button lists the buttons on screen, ask the host which one they meant. Never guess.
+- Buttons that delete, remove, cancel a plan, pay, subscribe or sign out need the host's own tap. Tell them to tap it themselves rather than pressing it.`;
+
 export function buildVoiceModeSection(
   options: {
     memoryTool?: boolean;
     callActions?: boolean;
     serverTools?: boolean;
+    screenControl?: boolean;
   } = {},
 ): string {
   return `
@@ -55,7 +63,7 @@ MEMORY IN VOICE:
     options.memoryTool ? MEMORY_TOOL_GUIDANCE : ''
   }${options.callActions ? CALL_ACTIONS_GUIDANCE : ''}${
     options.serverTools ? APP_ACTIONS_GUIDANCE : ''
-  }
+  }${options.screenControl ? SCREEN_CONTROL_GUIDANCE : ''}
 `.trim();
 }
 
@@ -68,6 +76,7 @@ export type VoicePromptExtras = {
   memoryTool?: boolean;
   callActions?: boolean;
   serverTools?: boolean;
+  screenControl?: boolean;
 };
 
 export function buildVoiceSystemInstruction(
@@ -110,6 +119,7 @@ export function buildVoiceSystemInstruction(
       memoryTool: extras.memoryTool,
       callActions: extras.callActions,
       serverTools: extras.serverTools,
+      screenControl: extras.screenControl,
     }),
   );
   return blocks.join('\n\n');

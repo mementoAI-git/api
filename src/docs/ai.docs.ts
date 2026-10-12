@@ -616,7 +616,7 @@ const aiDocs = {
           required: false,
           schema: {type: 'string', example: 'search_memories,call_actions'},
           description:
-            'Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen; server_tools locks the server-run tools listed in `serverTools`, which the app forwards to POST /ai/voice/tools/{name}. Only send a capability from builds that handle those tool calls.',
+            'Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen; server_tools locks the server-run tools listed in `serverTools`, which the app forwards to POST /ai/voice/tools/{name}. screen_control locks scroll, go_back and press_button, which the app runs itself. Only send a capability from builds that handle those tool calls.',
         },
         {
           name: 'device_model',

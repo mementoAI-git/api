@@ -210,4 +210,24 @@ describe('createEphemeralToken', () => {
       'open_story',
     ]);
   });
+
+  it('locks screen control in, as tools the app runs itself, only for clients that can', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/screen'} as any);
+    const user = await createUserFixture();
+
+    const {data} = await createEphemeralToken(user.id, undefined, undefined, {
+      screenControl: true,
+    });
+
+    const locked = create.mock.calls[0][0].config.liveConnectConstraints.config;
+    const serialized = JSON.stringify(locked.tools);
+    expect(serialized).toContain('press_button');
+    expect(serialized).toContain('"behavior":"BLOCKING"');
+    expect(String(locked.systemInstruction)).toContain('SCREEN CONTROL');
+    expect(data.tools).toEqual(['scroll', 'go_back', 'press_button']);
+    // Run by the app, not forwarded to the server.
+    expect(data.serverTools).toEqual([]);
+  });
 });

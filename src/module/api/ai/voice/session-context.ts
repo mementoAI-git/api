@@ -40,6 +40,7 @@ export async function buildVoiceSessionContext(
     memoryTool?: boolean;
     callActions?: boolean;
     serverTools?: boolean;
+    screenControl?: boolean;
   } = {},
 ): Promise<VoiceSessionContext> {
   const userId = String(user._id);
@@ -111,6 +112,7 @@ export async function buildVoiceSessionContext(
       memoryTool: options.memoryTool,
       callActions: options.callActions,
       serverTools: options.serverTools,
+      screenControl: options.screenControl,
     }),
     greetingInstruction: buildVoiceGreetingInstruction({
       name: name || undefined,
