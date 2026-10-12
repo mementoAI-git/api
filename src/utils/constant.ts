@@ -104,6 +104,8 @@ export const queueNames = {
       dispatchAccountPurges: 'dispatch-account-purges',
       accountPurge: 'account-purge',
       expireStorageReservations: 'expire-storage-reservations',
+      sweepMemoryEmbeddings: 'sweep-memory-embeddings',
+      pruneMemoryEmbeddings: 'prune-memory-embeddings',
       reconcileBillingUsage: 'reconcile-billing-usage',
       dispatchStoreNotifications: 'dispatch-store-notifications',
       processStoreNotification: 'process-store-notification',

@@ -1,7 +1,8 @@
 import {HydratedDocument} from 'mongoose';
 import {IUser} from '../../../database/model/user';
 import {prompts} from '../../../../utils';
-import * as supermemory from '../../../../services/supermemory';
+import {getLongTermContext} from '../../../../services/embeddings/long-term';
+import {MEMORY_RETRIEVAL} from '../../../../utils/config';
 import {findOwnedMemory} from '../../memory/access';
 import {
   buildVoiceGreetingInstruction,
@@ -66,17 +67,28 @@ export async function buildVoiceSessionContext(
         undefined
       : undefined;
 
+  const linesReady = ownedMemoryId
+    ? getRecentConversationLines(userId, ownedMemoryId, MAX_TRANSCRIPT_LINES)
+    : Promise.resolve([]);
+  // What to recall at the start: the reflection, else what the host last
+  // said in this conversation. Without either there is nothing specific to
+  // look up, and the host overview and profile already cover the basics.
+  const longTermReady = linesReady.then(recent => {
+    const lastHostLine = [...recent]
+      .reverse()
+      .find(line => line.speaker === 'Host')?.text;
+    const topic =
+      reflectionTopic ||
+      lastHostLine ||
+      (MEMORY_RETRIEVAL === 'supermemory'
+        ? 'ongoing life, recent conversations and people'
+        : '');
+    return getLongTermContext(userId, topic).catch(() => '');
+  });
   const [lines, longTermContext, hostOverview] = await Promise.all([
-    ownedMemoryId
-      ? getRecentConversationLines(userId, ownedMemoryId, MAX_TRANSCRIPT_LINES)
-      : Promise.resolve([]),
+    linesReady,
     withTimeout(
-      supermemory
-        .getContextForUser(
-          userId,
-          reflectionTopic || 'ongoing life, recent conversations and people',
-        )
-        .then(result => result?.formatedText || ''),
+      longTermReady,
       options.longTermTimeoutMs ?? DEFAULT_LONG_TERM_TIMEOUT_MS,
       '',
     ),

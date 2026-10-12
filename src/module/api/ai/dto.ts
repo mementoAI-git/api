@@ -151,6 +151,7 @@ export const voiceToolSchema = z.object({
 export const voiceMemorySearchSchema = z.object({
   body: z.strictObject({
     query: z.string().trim().min(1, 'Query is required').max(200),
+    also: z.array(z.string().trim().max(100)).max(5).optional(),
   }),
 });
 

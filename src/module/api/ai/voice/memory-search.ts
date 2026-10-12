@@ -1,7 +1,9 @@
 import dayjs from 'dayjs';
 import Memory from '../../../database/model/memory';
 import Message from '../../../database/model/message';
-import * as supermemory from '../../../../services/supermemory';
+import Beneficiary from '../../../database/model/beneficiary';
+import {getLongTermContext} from '../../../../services/embeddings/long-term';
+import {MEMORY_RETRIEVAL} from '../../../../utils/config';
 import {withTimeout} from './with-timeout';
 
 const MAX_QUERY_CHARS = 200;
@@ -117,7 +119,7 @@ export function searchWords(query: string): string[] {
     .slice(0, 6);
 }
 
-function stripHtml(value: string): string {
+export function stripHtml(value: string): string {
   return value
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
@@ -126,6 +128,86 @@ function stripHtml(value: string): string {
 }
 
 /** A short quote of the host's own words around the first matching word. */
+/**
+ * A word's stem, so other forms match: "travelling" and "travelled" both
+ * become "travell", "stories" becomes "stor". Short words are left alone.
+ */
+export function stem(word: string): string {
+  const stripped = word.replace(/(ing|ed|es|s|ly)$/, '');
+  return stripped.length >= 4 ? stripped : word;
+}
+
+/** Relationship words, each with the forms people say them in. */
+const RELATIONSHIPS: Record<string, string[]> = {
+  brother: ['brother', 'brothers', 'bro'],
+  sister: ['sister', 'sisters', 'sis'],
+  mother: ['mother', 'mum', 'mom', 'mummy', 'mama'],
+  father: ['father', 'dad', 'daddy', 'papa'],
+  son: ['son', 'sons'],
+  daughter: ['daughter', 'daughters'],
+  wife: ['wife'],
+  husband: ['husband'],
+  partner: ['partner', 'boyfriend', 'girlfriend', 'fiance', 'fiancee'],
+  grandmother: ['grandmother', 'grandma', 'granny', 'nana'],
+  grandfather: ['grandfather', 'grandpa', 'granddad'],
+  aunt: ['aunt', 'auntie', 'aunty'],
+  uncle: ['uncle'],
+  cousin: ['cousin', 'cousins'],
+  niece: ['niece'],
+  nephew: ['nephew'],
+  friend: ['friend', 'friends', 'bestie'],
+};
+
+/**
+ * Names of the host's people a question refers to by relationship: "my
+ * brother" also searches for the beneficiaries and connections they call
+ * their brother, so a story about "Emeka" is found.
+ */
+async function namesForRelationships(
+  userId: string,
+  query: string,
+): Promise<string[]> {
+  const said = new Set(query.toLowerCase().match(/[\p{L}]+/gu) ?? []);
+  const asked = Object.entries(RELATIONSHIPS)
+    .filter(([, forms]) => forms.some(form => said.has(form)))
+    .map(([relationship, forms]) => ({relationship, forms}));
+  if (!asked.length) return [];
+  const pattern = new RegExp(
+    asked.flatMap(({forms}) => forms.map(escapeRegex)).join('|'),
+    'i',
+  );
+  const rows = await Beneficiary.find({
+    benefactor: userId,
+    relationship: pattern,
+  })
+    .select('name')
+    .limit(10)
+    .lean();
+  return rows
+    .map(row =>
+      String(row.name || '')
+        .trim()
+        .split(/\s+/)[0]
+        ?.toLowerCase(),
+    )
+    .filter((name): name is string => Boolean(name));
+}
+
+/** Everything to search for: the question's words, Memento's extra phrasings, and named people. */
+async function queryWords(
+  userId: string,
+  query: string,
+  also: string[] = [],
+): Promise<string[]> {
+  const names = await namesForRelationships(userId, query).catch(() => []);
+  const words = [
+    ...searchWords(query),
+    ...also.flatMap(phrase => searchWords(String(phrase))),
+    ...names,
+  ];
+  return [...new Set(words)].slice(0, 10);
+}
+
 function excerptAround(text: string, words: string[]): string {
   const lower = text.toLowerCase();
   const at = Math.min(
@@ -164,9 +246,9 @@ function relevance(row: Candidate, words: string[]): number {
 
 async function searchStoredMemories(
   userId: string,
-  query: string,
+  queryWordsList: string[],
 ): Promise<string[]> {
-  const words = searchWords(query);
+  const words = queryWordsList.map(stem);
   if (!words.length) return [];
   const pattern = new RegExp(words.map(escapeRegex).join('|'), 'i');
   const rows: Candidate[] = await Memory.find({
@@ -217,9 +299,9 @@ async function searchStoredMemories(
  */
 async function searchConversations(
   userId: string,
-  query: string,
+  queryWordsList: string[],
 ): Promise<string[]> {
-  const words = searchWords(query);
+  const words = queryWordsList.map(stem);
   if (!words.length) return [];
   const conversations = await Memory.find({
     user: userId,
@@ -264,16 +346,15 @@ async function searchConversations(
 export async function searchMemoriesForVoice(
   userId: string,
   query: string,
-  options: {longTermTimeoutMs?: number} = {},
+  options: {longTermTimeoutMs?: number; also?: string[]} = {},
 ): Promise<string> {
   const trimmed = query.trim().slice(0, MAX_QUERY_CHARS);
+  const words = await queryWords(userId, trimmed, options.also ?? []);
   const [stored, said, longTerm] = await Promise.all([
-    searchStoredMemories(userId, trimmed).catch(() => null),
-    searchConversations(userId, trimmed).catch(() => []),
+    searchStoredMemories(userId, words).catch(() => null),
+    searchConversations(userId, words).catch(() => []),
     withTimeout(
-      supermemory
-        .getContextForUser(userId, trimmed)
-        .then(result => result?.formatedText || ''),
+      getLongTermContext(userId, trimmed).catch(() => ''),
       options.longTermTimeoutMs ?? DEFAULT_LONG_TERM_TIMEOUT_MS,
       '',
     ),
@@ -290,7 +371,14 @@ export async function searchMemoriesForVoice(
       `From past conversations (their own words):\n${said.join('\n')}`,
     );
   }
-  if (longTerm.trim()) sections.push(`Related facts:\n${longTerm.trim()}`);
+  if (longTerm.trim()) {
+    // In-house results carry their own heading; Supermemory's are plain facts.
+    sections.push(
+      MEMORY_RETRIEVAL === 'supermemory'
+        ? `Related facts:\n${longTerm.trim()}`
+        : longTerm.trim(),
+    );
+  }
   const result = sections.join('\n\n').slice(0, MAX_RESULT_CHARS);
   if (result) return result;
   // The saved-memory search itself failed: that is not the same as nothing

@@ -221,7 +221,9 @@ export async function searchVoiceMemories(
 ) {
   try {
     await assertAccess(req.auth.id, 'voice_mode');
-    const result = await searchMemoriesForVoice(req.auth.id, req.body.query);
+    const result = await searchMemoriesForVoice(req.auth.id, req.body.query, {
+      also: req.body.also,
+    });
     return responsHandler(res, StatusCodes.OK, 'Memory search complete', {
       result,
     });

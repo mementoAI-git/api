@@ -837,7 +837,16 @@ const aiDocs = {
             schema: {
               type: 'object',
               required: ['query'],
-              properties: {query: {type: 'string', maxLength: 200}},
+              properties: {
+                query: {type: 'string', maxLength: 200},
+                also: {
+                  type: 'array',
+                  maxItems: 5,
+                  items: {type: 'string', maxLength: 100},
+                  description:
+                    'Other ways to say it the model suggested (names, synonyms).',
+                },
+              },
             },
           },
         },

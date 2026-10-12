@@ -34,7 +34,6 @@ import {buildPromptOwnershipScope} from '../prompt/explore-contract';
 import AiMetric from '../../database/model/ai-metric';
 import {updateStreak} from '../user/service';
 import {addToInsightsBuffer} from '../../../services/queues/insights';
-import * as supermemory from '../../../services/supermemory';
 import {OpenRouterMessage} from '../../../services/ai/openrouter';
 import {
   generateTextWithProviderFallback,
@@ -101,6 +100,10 @@ import {
   isProviderRateLimited,
   setUserBackoffWindow,
 } from '../../../services/ai/chat-user-backoff';
+import {getLongTermContext} from '../../../services/embeddings/long-term';
+import {withTimeout} from './voice/with-timeout';
+
+const CHAT_LONG_TERM_TIMEOUT_MS = 2_500;
 
 const tagsOutputSchema = z.object({
   tags: z.array(z.string()).default([]),
@@ -344,8 +347,12 @@ export async function prompt(
 
   let longTermContext = '';
   if (isSignificantMessage(userText)) {
-    const context = await supermemory.getContextForUser(user_id, payload.text);
-    longTermContext = context.formatedText;
+    // Capped: a slow lookup must not hold up the reply.
+    longTermContext = await withTimeout(
+      getLongTermContext(user_id, payload.text).catch(() => ''),
+      CHAT_LONG_TERM_TIMEOUT_MS,
+      '',
+    );
   }
 
   const systemInstruction = await prompts.createSystemContext(

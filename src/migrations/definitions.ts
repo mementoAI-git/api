@@ -228,4 +228,20 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
         .createIndex({referred_by: 1}, {name: 'referred_by_1'});
     },
   },
+  {
+    // In-house memory search: one user's vectors are loaded by user; each
+    // story piece or message has one embedding.
+    id: '202610120001_memory_embedding_indexes',
+    up: async db => {
+      await db
+        .collection('memory_embeddings')
+        .createIndex({user: 1}, {name: 'embedding_user'});
+      await db
+        .collection('memory_embeddings')
+        .createIndex(
+          {source: 1, source_id: 1, chunk: 1},
+          {unique: true, name: 'embedding_source_unique'},
+        );
+    },
+  },
 ];
