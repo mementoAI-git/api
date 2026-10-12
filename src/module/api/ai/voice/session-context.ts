@@ -39,6 +39,7 @@ export async function buildVoiceSessionContext(
     longTermTimeoutMs?: number;
     memoryTool?: boolean;
     callActions?: boolean;
+    serverTools?: boolean;
   } = {},
 ): Promise<VoiceSessionContext> {
   const userId = String(user._id);
@@ -109,6 +110,7 @@ export async function buildVoiceSessionContext(
       memoryNotes,
       memoryTool: options.memoryTool,
       callActions: options.callActions,
+      serverTools: options.serverTools,
     }),
     greetingInstruction: buildVoiceGreetingInstruction({
       name: name || undefined,

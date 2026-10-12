@@ -139,6 +139,15 @@ export const voiceTurnsSchema = z.object({
   }),
 });
 
+export const voiceToolSchema = z.object({
+  params: z.strictObject({
+    name: z.string().regex(/^[a-z_]{1,64}$/, 'Unknown tool'),
+  }),
+  body: z.strictObject({
+    args: z.record(z.string(), z.unknown()).default({}),
+  }),
+});
+
 export const voiceMemorySearchSchema = z.object({
   body: z.strictObject({
     query: z.string().trim().min(1, 'Query is required').max(200),

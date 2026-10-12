@@ -232,13 +232,21 @@ describe('voice client capabilities', () => {
     ).toEqual({
       memoryTool: true,
       callActions: true,
+      serverTools: false,
     });
+  });
+
+  it('enables server tools only for builds that can forward them', () => {
+    expect(
+      parseVoiceClientCapabilities('search_memories,call_actions,server_tools'),
+    ).toEqual({memoryTool: true, callActions: true, serverTools: true});
   });
 
   it('still accepts the documented memory_search name', () => {
     expect(parseVoiceClientCapabilities('memory_search')).toEqual({
       memoryTool: true,
       callActions: false,
+      serverTools: false,
     });
   });
 
@@ -246,14 +254,17 @@ describe('voice client capabilities', () => {
     expect(parseVoiceClientCapabilities(' call_actions , unknown ')).toEqual({
       memoryTool: false,
       callActions: true,
+      serverTools: false,
     });
     expect(parseVoiceClientCapabilities(undefined)).toEqual({
       memoryTool: false,
       callActions: false,
+      serverTools: false,
     });
     expect(parseVoiceClientCapabilities(['search_memories'])).toEqual({
       memoryTool: false,
       callActions: false,
+      serverTools: false,
     });
   });
 });

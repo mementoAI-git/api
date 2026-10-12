@@ -8,6 +8,7 @@ import {
   Tool,
   Type,
 } from '@google/genai';
+import {SERVER_TOOL_DECLARATIONS} from './voice/server-tool-declarations';
 
 export const SEARCH_MEMORIES_TOOL_NAME = 'search_memories';
 
@@ -17,9 +18,17 @@ export const SEARCH_MEMORIES_TOOL_NAME = 'search_memories';
 const MEMORY_SEARCH_CAPABILITIES = ['memory_search', SEARCH_MEMORIES_TOOL_NAME];
 const CALL_ACTIONS_CAPABILITY = 'call_actions';
 
+/**
+ * Builds that forward server-run tools to POST /ai/voice/tools/:name and
+ * apply their effects. Any server tool works through it, so new ones need no
+ * app release.
+ */
+export const SERVER_TOOLS_CAPABILITY = 'server_tools';
+
 export function parseVoiceClientCapabilities(raw: unknown): {
   memoryTool: boolean;
   callActions: boolean;
+  serverTools: boolean;
 } {
   const capabilities =
     typeof raw === 'string' ? raw.split(',').map(value => value.trim()) : [];
@@ -28,6 +37,7 @@ export function parseVoiceClientCapabilities(raw: unknown): {
       capabilities.includes(name),
     ),
     callActions: capabilities.includes(CALL_ACTIONS_CAPABILITY),
+    serverTools: capabilities.includes(SERVER_TOOLS_CAPABILITY),
   };
 }
 
@@ -128,13 +138,18 @@ export const CALL_ACTION_DECLARATIONS: FunctionDeclaration[] = [
   },
 ];
 
-export type VoiceToolOptions = {memoryTool?: boolean; callActions?: boolean};
+export type VoiceToolOptions = {
+  memoryTool?: boolean;
+  callActions?: boolean;
+  serverTools?: boolean;
+};
 
 /** All enabled declarations go in one Tool, as the Live API expects. */
 export function buildVoiceTools(options: VoiceToolOptions): Tool[] | undefined {
   const declarations: FunctionDeclaration[] = [
     ...(options.memoryTool ? (VOICE_TOOLS[0].functionDeclarations ?? []) : []),
     ...(options.callActions ? CALL_ACTION_DECLARATIONS : []),
+    ...(options.serverTools ? SERVER_TOOL_DECLARATIONS : []),
   ];
   return declarations.length
     ? [{functionDeclarations: declarations}]

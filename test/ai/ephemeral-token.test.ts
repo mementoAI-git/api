@@ -178,4 +178,36 @@ describe('createEphemeralToken', () => {
       'open_screen',
     ]);
   });
+
+  it('locks server tools in, and lists them for the app to forward, only for clients that can', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/server-tools'} as any);
+    const user = await createUserFixture();
+
+    const without = await createEphemeralToken(user.id, undefined, undefined, {
+      memoryTool: true,
+    });
+    expect(without.data.serverTools).toEqual([]);
+    expect(
+      JSON.stringify(
+        create.mock.calls[0][0].config.liveConnectConstraints.config.tools,
+      ),
+    ).not.toContain('update_profile');
+
+    const {data} = await createEphemeralToken(user.id, undefined, undefined, {
+      memoryTool: true,
+      serverTools: true,
+    });
+
+    const locked = create.mock.calls[1][0].config.liveConnectConstraints.config;
+    expect(JSON.stringify(locked.tools)).toContain('update_profile');
+    expect(String(locked.systemInstruction)).toContain('APP ACTIONS');
+    expect(data.serverTools).toEqual(['update_profile', 'open_story']);
+    expect(data.tools).toEqual([
+      'search_memories',
+      'update_profile',
+      'open_story',
+    ]);
+  });
 });
