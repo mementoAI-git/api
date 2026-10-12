@@ -20,6 +20,7 @@ import {
 } from '@google/genai';
 import {buildLiveConnectConfig} from '../module/api/ai/live-session-config';
 import {buildVoiceSystemInstruction} from '../utils/ai-prompt/voice';
+import {describeHostNow} from '../module/api/ai/voice/local-time';
 
 const MODEL = process.env.GEMINI_LIVE_MODEL_VERSION || 'gemini-3.8-live';
 const TURN_TIMEOUT_MS = 25_000;
@@ -40,7 +41,7 @@ const HOST_OVERVIEW = [
 /** What each tool returns in this probe (search_memories below). */
 const ACTION_RESULTS: Record<string, string> = {
   update_profile:
-    'Done: changed their nickname to Yo. Their profile is now on screen. Tell them briefly and offer to change it back.',
+    'Done: changed their nickname from "Saviour" to "Yo". Their profile is now on screen. Tell them briefly and offer to change it back.',
   scroll: 'Scrolled down.',
   go_back: 'Went back.',
   press_button: 'Pressed "Save".',
@@ -85,6 +86,8 @@ type Expectation = {
   search?: boolean;
   /** Must call this tool, with arguments matching `args` when given. */
   tool?: string;
+  /** Must call all of these tools (multi-step requests). */
+  tools?: string[];
   args?: Record<string, RegExp>;
   /** Must not call any tool other than search_memories. */
   noAction?: boolean;
@@ -97,6 +100,22 @@ type Expectation = {
   /** Must never call any tool with the confirmation code (nothing ran). */
   neverConfirmed?: boolean;
 };
+
+/** This coming Friday and the one after, in Lagos: both are fair readings of "next Friday". */
+function fridaysInLagos(): string[] {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const today = new Date(`${parts}T12:00:00Z`);
+  const ahead = (5 - today.getUTCDay() + 7) % 7 || 7;
+  today.setUTCDate(today.getUTCDate() + ahead);
+  const first = today.toISOString().slice(0, 10);
+  today.setUTCDate(today.getUTCDate() + 7);
+  return [first, today.toISOString().slice(0, 10)];
+}
 
 const EXPECTATIONS: Expectation[] = [
   {question: 'Do you have access to my memories?'},
@@ -191,10 +210,34 @@ const EXPECTATIONS: Expectation[] = [
     confirmed: true,
   },
   {question: 'Cancel my subscription.', noAction: true},
+  {
+    question: 'Change my nickname to Yo.',
+    tool: 'update_profile',
+    followUp: 'What was my nickname before you changed it?',
+    mentions: /saviour/i,
+  },
+  {
+    question: 'Open my stories and scroll down.',
+    tools: ['open_screen', 'scroll'],
+  },
+  {
+    question: 'Open settings.',
+    tool: 'open_screen',
+    args: {keep_talking: /true/},
+  },
+  {
+    question: 'Schedule my capsule For Ada for next Friday.',
+    tool: 'schedule_capsule',
+    args: {date: new RegExp(`^(${fridaysInLagos().join('|')})$`)},
+    // Either Friday is a fair reading; saying the exact date lets the host correct it.
+    mentions:
+      /\b(1[0-9]|2[0-9]|3[01])(st|nd|rd|th)?\b|(teenth|twentieth|twenty|thirtieth|thirty)/i,
+  },
 ];
 
 /** Phrases Memento must never say. */
 const FORBIDDEN = [
+  /(keep (talking|chatting)|wrap (it )?up)\b.*\?/i,
   /(don't|do not|can't|cannot|can not) (have )?(direct )?(access|see|browse|remember)/i,
   /\b(search(ing)?|look(ing)? (it |that )?up|pull(ing)? up|check(ing)? (my|our|the) (records|notes|chats|data))\b/i,
   /\b(database|stored data|records)\b/i,
@@ -213,6 +256,7 @@ async function ask(
   expectation: Expectation,
 ): Promise<Outcome> {
   const system = buildVoiceSystemInstruction(CONTEXT, {
+    hostNow: describeHostNow('Africa/Lagos'),
     hostOverview: HOST_OVERVIEW,
     memoryTool: true,
     serverTools: true,
@@ -377,6 +421,10 @@ async function ask(
         );
       }
     }
+  }
+  for (const name of expectation.tools ?? []) {
+    if (!actions.some(row => row.name === name))
+      problems.push(`did not call ${name}`);
   }
   if (expectation.noAction && actions.length) {
     problems.push(

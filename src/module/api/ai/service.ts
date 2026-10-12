@@ -1063,6 +1063,8 @@ export async function createEphemeralToken(
     callActions?: boolean;
     serverTools?: boolean;
     screenControl?: boolean;
+    /** The device's IANA time zone, validated. */
+    timeZone?: string;
   } = {},
 ) {
   // Resolve the user with profile and voice preferences
@@ -1085,6 +1087,7 @@ export async function createEphemeralToken(
     callActions,
     serverTools,
     screenControl,
+    timeZone: client.timeZone,
   });
 
   const expireTime = dayjs().add(30, 'minute').toDate();

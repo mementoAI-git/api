@@ -32,6 +32,10 @@ describe('voice server tools', () => {
       expect(saved?.nickname).toBe('Yo');
       expect(saved?.country).toBe('Nigeria');
       expect(outcome.result).toMatch(/nickname.*Yo/i);
+      // So "what was it before?" and "change it back" work.
+      expect(outcome.result).toContain(
+        `nickname from "${user.nickname}" to "Yo"`,
+      );
       expect(outcome.effects).toEqual([
         {type: 'refresh', what: 'profile'},
         {type: 'open', destination: 'profile'},
