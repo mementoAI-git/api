@@ -7,6 +7,7 @@ import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
 import * as voiceTurns from './voice/turns';
 import {searchMemoriesForVoice} from './voice/memory-search';
+import {validTimeZone} from './voice/local-time';
 import {UnknownVoiceToolError, runVoiceServerTool} from './voice/server-tools';
 import {parseVoiceClientCapabilities} from './live-session-config';
 import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
@@ -142,6 +143,7 @@ export async function getEphemeralToken(
       typeof req.query.device_model === 'string'
         ? req.query.device_model.trim().slice(0, 100)
         : undefined;
+    const timeZone = validTimeZone(req.query.timezone);
     const {memoryTool, callActions, serverTools, screenControl} =
       parseVoiceClientCapabilities(req.query.capabilities);
     const {message, data} = await service.createEphemeralToken(
@@ -154,6 +156,7 @@ export async function getEphemeralToken(
         callActions,
         serverTools,
         screenControl,
+        timeZone,
       },
     );
     return responsHandler(res, StatusCodes.OK, message, data);

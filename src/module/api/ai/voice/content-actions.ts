@@ -166,7 +166,7 @@ const tagStory: Handler = async (userId, args) => {
     return failed(error);
   }
   return {
-    result: `"${story.title || 'Untitled'}" now has the tags: ${tags.join(', ') || 'none'}.`,
+    result: `"${story.title || 'Untitled'}" tags were ${current.join(', ') || 'none'}; now ${tags.join(', ') || 'none'}.`,
     effects: [{type: 'refresh', what: 'memories'}],
   };
 };

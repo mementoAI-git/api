@@ -119,7 +119,12 @@ describe('voice prompt', () => {
     expect(section).toContain('CALL ACTIONS');
     expect(section).toContain('call end_call');
     expect(section).toContain('set_microphone');
-    expect(section).toMatch(/keep talking while they look or wrap up/);
+    // Asking "keep talking?" on every screen change was a hiccup: the call
+    // stays with the host on the new screen unless they said to stop.
+    expect(section).toMatch(/Do not ask whether they want to keep talking/);
+    expect(section).not.toMatch(
+      /ask whether they want to keep talking while they look or wrap up/,
+    );
     expect(buildVoiceSystemInstruction('BASE', {callActions: true})).toContain(
       'CALL ACTIONS',
     );

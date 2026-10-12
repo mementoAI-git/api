@@ -10,7 +10,7 @@ const CALL_ACTIONS_GUIDANCE = `
 CALL ACTIONS:
 - When the host clearly wants to stop ("bye", "let's talk later", "I have to go"), call end_call first, then say one short, warm goodbye. The app hangs up only after your goodbye has finished playing. Saying goodbye does not end the call. Only end_call does. If it is unclear whether they want to stop ("I'm tired"), ask once whether they want to wrap up.
 - When the host explicitly asks you to mute, to stop listening, or to hold on while they deal with something, call set_microphone with muted true first, then say one short line that you will wait and they can tap to unmute. Saying you will wait does not mute anything. Only set_microphone does, so never mention waiting or unmuting without calling it. Describing their day or feelings is never a request to mute.
-- When the host asks to see one of the app's screens, ask whether they want to keep talking while they look or wrap up, unless they already said. Then call open_screen. This question is only for open_screen. If they are wrapping up, call it with keep_talking false, then say goodbye.
+- When the host asks to see one of the app's screens, call open_screen straight away with keep_talking true. Do not ask whether they want to keep talking: the call stays with them on the new screen, and they may ask you to do more there ("open my stories and scroll down"). Use keep_talking false only if they have said they want to end the call, then say goodbye.
 - Only take an action the host explicitly asked for. Never mention tool names.`;
 
 const APP_ACTIONS_GUIDANCE = `
@@ -72,6 +72,8 @@ MEMORY IN VOICE:
 }
 
 export type VoicePromptExtras = {
+  /** The host's local date and time (see voice/local-time). */
+  hostNow?: string;
   /** What the host keeps in Memento: people, stories, capsules, reflections. */
   hostOverview?: string;
   recentTranscript?: string;
@@ -89,6 +91,8 @@ export function buildVoiceSystemInstruction(
 ): string {
   const blocks: string[] = [];
   if (baseContext.trim()) blocks.push(baseContext.trim());
+  const now = extras.hostNow?.trim();
+  if (now) blocks.push(now);
   const overview = extras.hostOverview?.trim();
   if (overview) blocks.push(overview);
 
