@@ -7,8 +7,10 @@ import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
 import * as voiceTurns from './voice/turns';
 import {searchMemoriesForVoice} from './voice/memory-search';
+import {UnknownVoiceToolError, runVoiceServerTool} from './voice/server-tools';
 import {parseVoiceClientCapabilities} from './live-session-config';
 import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
+import {NotFoundException} from '../../../utils/service-error';
 
 export async function autogenerateTags(
   req: IRequest,
@@ -140,7 +142,7 @@ export async function getEphemeralToken(
       typeof req.query.device_model === 'string'
         ? req.query.device_model.trim().slice(0, 100)
         : undefined;
-    const {memoryTool, callActions} = parseVoiceClientCapabilities(
+    const {memoryTool, callActions, serverTools} = parseVoiceClientCapabilities(
       req.query.capabilities,
     );
     const {message, data} = await service.createEphemeralToken(
@@ -151,6 +153,7 @@ export async function getEphemeralToken(
         deviceModel,
         memoryTool,
         callActions,
+        serverTools,
       },
     );
     return responsHandler(res, StatusCodes.OK, message, data);
@@ -220,6 +223,28 @@ export async function searchVoiceMemories(
       result,
     });
   } catch (error) {
+    next(error);
+  }
+}
+
+/** Runs a server-side voice tool the app forwarded from Gemini Live. */
+export async function runVoiceTool(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await assertAccess(req.auth.id, 'voice_mode');
+    const outcome = await runVoiceServerTool(
+      req.auth.id,
+      String(req.params.name),
+      (req.body.args ?? {}) as Record<string, unknown>,
+    );
+    return responsHandler(res, StatusCodes.OK, 'Voice tool complete', outcome);
+  } catch (error) {
+    if (error instanceof UnknownVoiceToolError) {
+      return next(new NotFoundException('Unknown voice tool', null));
+    }
     next(error);
   }
 }

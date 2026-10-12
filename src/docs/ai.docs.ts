@@ -616,7 +616,7 @@ const aiDocs = {
           required: false,
           schema: {type: 'string', example: 'search_memories,call_actions'},
           description:
-            'Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen. Only send a capability from builds that handle those tool calls.',
+            'Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen; server_tools locks the server-run tools listed in `serverTools`, which the app forwards to POST /ai/voice/tools/{name}. Only send a capability from builds that handle those tool calls.',
         },
         {
           name: 'device_model',
@@ -651,6 +651,12 @@ const aiDocs = {
                       memoryId: {type: 'string', nullable: true},
                       promptVersion: {type: 'string'},
                       tools: {type: 'array', items: {type: 'string'}},
+                      serverTools: {
+                        type: 'array',
+                        items: {type: 'string'},
+                        description:
+                          'Tools the app forwards to POST /ai/voice/tools/{name}. Empty unless the server_tools capability was sent.',
+                      },
                       speakerFullDuplex: {type: 'boolean'},
                       turnDetection: {
                         type: 'object',
@@ -729,6 +735,75 @@ const aiDocs = {
             },
           },
         },
+      },
+    },
+  },
+  '/ai/voice/tools/{name}': {
+    post: {
+      tags: ['AI'],
+      summary: 'Run Voice Tool',
+      description:
+        "Runs a server-side Gemini Live tool (listed in the ephemeral token's `serverTools`) as the signed-in host. The app forwards the model's tool call here, returns `result` as the tool response, and applies `effects` it recognises. Requires voice mode access.",
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'name',
+          in: 'path',
+          required: true,
+          schema: {type: 'string', example: 'update_profile'},
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                args: {type: 'object', additionalProperties: true},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Tool result for the model, and effects for the app',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      result: {type: 'string'},
+                      effects: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            type: {
+                              type: 'string',
+                              enum: ['refresh', 'open', 'open_story'],
+                            },
+                            what: {type: 'string', example: 'profile'},
+                            destination: {type: 'string', example: 'profile'},
+                            id: {type: 'string'},
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        402: {description: 'Voice mode requires Pro or Legacy'},
+        404: {description: 'Unknown voice tool'},
+        422: {description: 'Invalid request'},
       },
     },
   },

@@ -104,11 +104,11 @@ const FILLER_WORDS = new Set([
   'one',
 ]);
 
-function escapeRegex(value: string): string {
+export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function searchWords(query: string): string[] {
+export function searchWords(query: string): string[] {
   return query
     .toLowerCase()
     .split(/\s+/)
