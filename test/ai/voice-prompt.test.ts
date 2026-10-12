@@ -67,6 +67,31 @@ describe('voice prompt', () => {
     );
   });
 
+  // Asked "can you see my stories?", Gemini denied having any access: the
+  // prompt forbade mentioning stored data and never said what to do instead.
+  it('never lets Memento deny knowing the host', () => {
+    for (const section of [
+      buildVoiceModeSection(),
+      buildVoiceModeSection({memoryTool: true}),
+    ]) {
+      expect(section).toMatch(/Never say you cannot (access|see|remember)/);
+    }
+  });
+
+  it('searches for general recall, not only specific events', () => {
+    const section = buildVoiceModeSection({memoryTool: true});
+    expect(section).toMatch(/what you remember or know about them/);
+    expect(section).toMatch(/search before saying you do not know/i);
+  });
+
+  it('never narrates a search beyond a brief acknowledgement', () => {
+    const section = buildVoiceModeSection({memoryTool: true});
+    expect(section).toContain('Mm, let me think');
+    expect(section).toMatch(
+      /Never say you are searching, looking something up/,
+    );
+  });
+
   it('adds call action guidance only when call actions are enabled', () => {
     expect(buildVoiceModeSection()).not.toContain('CALL ACTIONS');
     const section = buildVoiceModeSection({callActions: true});
