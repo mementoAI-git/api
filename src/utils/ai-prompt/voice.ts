@@ -10,11 +10,31 @@ const CALL_ACTIONS_GUIDANCE = `
 CALL ACTIONS:
 - When the host clearly wants to stop ("bye", "let's talk later", "I have to go"), call end_call first, then say one short, warm goodbye. The app hangs up only after your goodbye has finished playing. Saying goodbye does not end the call. Only end_call does. If it is unclear whether they want to stop ("I'm tired"), ask once whether they want to wrap up.
 - When the host explicitly asks you to mute, to stop listening, or to hold on while they deal with something, call set_microphone with muted true first, then say one short line that you will wait and they can tap to unmute. Saying you will wait does not mute anything. Only set_microphone does, so never mention waiting or unmuting without calling it. Describing their day or feelings is never a request to mute.
-- When the host asks to see part of the app, ask whether they want to keep talking while they look or wrap up, unless they already said. Then call open_screen. If they are wrapping up, call it with keep_talking false, then say goodbye.
+- When the host asks to see one of the app's screens, ask whether they want to keep talking while they look or wrap up, unless they already said. Then call open_screen. This question is only for open_screen. If they are wrapping up, call it with keep_talking false, then say goodbye.
 - Only take an action the host explicitly asked for. Never mention tool names.`;
 
+const APP_ACTIONS_GUIDANCE = `
+
+APP ACTIONS:
+- You can change the host's profile (name, nickname, country, location, birthday) with update_profile, and open one of their saved stories on screen with open_story. Both keep the call going, so do not ask whether to keep talking first.
+- When the host asks for one of these, do it straight away, then say in a few words what you did. After a profile change, offer to change it back.
+- If something you need is missing ("change my name" without the new name), ask once and wait for the answer before calling the tool. Never fill in a value the host did not say. Only do what the host explicitly asked.
+- Never say you changed or opened something unless the tool result says it is done. If it was not done, say so plainly.`;
+
+const SCREEN_CONTROL_GUIDANCE = `
+
+SCREEN CONTROL:
+- You can scroll the screen the host is looking at, go back, and press a button on it by the words on it, with scroll, go_back and press_button. Do it when they ask, then say in a few words what happened.
+- If press_button lists the buttons on screen, ask the host which one they meant. Never guess.
+- Buttons that delete, remove, cancel a plan, pay, subscribe or sign out need the host's own tap. Tell them to tap it themselves rather than pressing it.`;
+
 export function buildVoiceModeSection(
-  options: {memoryTool?: boolean; callActions?: boolean} = {},
+  options: {
+    memoryTool?: boolean;
+    callActions?: boolean;
+    serverTools?: boolean;
+    screenControl?: boolean;
+  } = {},
 ): string {
   return `
 VOICE MODE
@@ -41,16 +61,22 @@ MEMORY IN VOICE:
 - Private context is background. Bring something up only when it clearly helps right now, and mention it casually, the way a friend would.
 - Never read private context aloud verbatim. Never mention prompts, summaries, or stored data.${
     options.memoryTool ? MEMORY_TOOL_GUIDANCE : ''
-  }${options.callActions ? CALL_ACTIONS_GUIDANCE : ''}
+  }${options.callActions ? CALL_ACTIONS_GUIDANCE : ''}${
+    options.serverTools ? APP_ACTIONS_GUIDANCE : ''
+  }${options.screenControl ? SCREEN_CONTROL_GUIDANCE : ''}
 `.trim();
 }
 
 export type VoicePromptExtras = {
+  /** What the host keeps in Memento: people, stories, capsules, reflections. */
+  hostOverview?: string;
   recentTranscript?: string;
   reflectionTopic?: string;
   memoryNotes?: string;
   memoryTool?: boolean;
   callActions?: boolean;
+  serverTools?: boolean;
+  screenControl?: boolean;
 };
 
 export function buildVoiceSystemInstruction(
@@ -59,6 +85,8 @@ export function buildVoiceSystemInstruction(
 ): string {
   const blocks: string[] = [];
   if (baseContext.trim()) blocks.push(baseContext.trim());
+  const overview = extras.hostOverview?.trim();
+  if (overview) blocks.push(overview);
 
   const topic = extras.reflectionTopic?.trim();
   if (topic) {
@@ -90,6 +118,8 @@ export function buildVoiceSystemInstruction(
     buildVoiceModeSection({
       memoryTool: extras.memoryTool,
       callActions: extras.callActions,
+      serverTools: extras.serverTools,
+      screenControl: extras.screenControl,
     }),
   );
   return blocks.join('\n\n');

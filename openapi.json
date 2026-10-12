@@ -782,7 +782,7 @@
             }
           },
           {
-            "description": "Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen. Only send a capability from builds that handle those tool calls.",
+            "description": "Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen; server_tools locks the server-run tools listed in `serverTools`, which the app forwards to POST /ai/voice/tools/{name}. screen_control locks scroll, go_back and press_button, which the app runs itself. Only send a capability from builds that handle those tool calls.",
             "in": "query",
             "name": "capabilities",
             "required": false,
@@ -826,6 +826,13 @@
                         },
                         "promptVersion": {
                           "type": "string"
+                        },
+                        "serverTools": {
+                          "description": "Tools the app forwards to POST /ai/voice/tools/{name}. Empty unless the server_tools capability was sent.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
                         },
                         "speakerFullDuplex": {
                           "type": "boolean"
@@ -1846,6 +1853,109 @@
           }
         ],
         "summary": "Voice Memory Search",
+        "tags": [
+          "AI"
+        ]
+      }
+    },
+    "/ai/voice/tools/{name}": {
+      "post": {
+        "description": "Runs a server-side Gemini Live tool (listed in the ephemeral token's `serverTools`) as the signed-in host. The app forwards the model's tool call here, returns `result` as the tool response, and applies `effects` it recognises. Requires voice mode access.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "example": "update_profile",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "args": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "effects": {
+                          "items": {
+                            "properties": {
+                              "destination": {
+                                "example": "profile",
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "enum": [
+                                  "refresh",
+                                  "open",
+                                  "open_story"
+                                ],
+                                "type": "string"
+                              },
+                              "what": {
+                                "example": "profile",
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "result": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Tool result for the model, and effects for the app"
+          },
+          "402": {
+            "description": "Voice mode requires Pro or Legacy"
+          },
+          "404": {
+            "description": "Unknown voice tool"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Run Voice Tool",
         "tags": [
           "AI"
         ]

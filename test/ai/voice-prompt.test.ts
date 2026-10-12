@@ -33,6 +33,19 @@ describe('voice prompt', () => {
     expect(result).toContain('It was at a bakery.');
   });
 
+  it('puts the host overview after the base context and before the conversation', () => {
+    const prompt = buildVoiceSystemInstruction('BASE', {
+      hostOverview: 'ABOUT THE HOST (private data):\nPeople: Emeka (brother).',
+      recentTranscript: 'Host: hi',
+    });
+    expect(prompt.indexOf('BASE')).toBeLessThan(
+      prompt.indexOf('ABOUT THE HOST'),
+    );
+    expect(prompt.indexOf('ABOUT THE HOST')).toBeLessThan(
+      prompt.indexOf('THIS CONVERSATION SO FAR'),
+    );
+  });
+
   it('omits empty optional blocks', () => {
     const result = buildVoiceSystemInstruction('BASE', {
       recentTranscript: '  ',
@@ -90,6 +103,14 @@ describe('voice prompt', () => {
     expect(section).toMatch(
       /Never say you are searching, looking something up/,
     );
+  });
+
+  it('adds screen control guidance only when screen control is enabled', () => {
+    expect(buildVoiceModeSection()).not.toContain('SCREEN CONTROL');
+    const section = buildVoiceModeSection({screenControl: true});
+    expect(section).toContain('press_button');
+    expect(section).toMatch(/Never guess/);
+    expect(section).toMatch(/need the host's own tap/);
   });
 
   it('adds call action guidance only when call actions are enabled', () => {

@@ -56,6 +56,8 @@ import {
 import {recordAiMetric} from '../../../services/ai/metrics';
 import {buildVoiceSessionContext} from './voice/session-context';
 import {allowsSpeakerFullDuplex} from './voice/device-policy';
+import {SERVER_TOOL_NAMES} from './voice/server-tool-declarations';
+import {SCREEN_CONTROL_TOOL_NAMES} from './voice/screen-control-declarations';
 import {VOICE_PROMPT_VERSION} from '../../../utils/ai-prompt/voice';
 import {
   shouldRunAsrShadow,
@@ -1059,6 +1061,8 @@ export async function createEphemeralToken(
     deviceModel?: string;
     memoryTool?: boolean;
     callActions?: boolean;
+    serverTools?: boolean;
+    screenControl?: boolean;
   } = {},
 ) {
   // Resolve the user with profile and voice preferences
@@ -1074,9 +1078,13 @@ export async function createEphemeralToken(
 
   const memoryTool = client.memoryTool === true;
   const callActions = client.callActions === true;
+  const serverTools = client.serverTools === true;
+  const screenControl = client.screenControl === true;
   const voiceContext = await buildVoiceSessionContext(user, memoryId, {
     memoryTool,
     callActions,
+    serverTools,
+    screenControl,
   });
 
   const expireTime = dayjs().add(30, 'minute').toDate();
@@ -1110,7 +1118,7 @@ export async function createEphemeralToken(
           live.voice.name,
           voiceContext.systemInstruction,
           resumeHandle,
-          {memoryTool, callActions},
+          {memoryTool, callActions, serverTools, screenControl},
           turnDetection,
         ),
       },
@@ -1141,7 +1149,11 @@ export async function createEphemeralToken(
       tools: [
         ...(memoryTool ? [SEARCH_MEMORIES_TOOL_NAME] : []),
         ...(callActions ? CALL_ACTION_TOOL_NAMES : []),
+        ...(serverTools ? SERVER_TOOL_NAMES : []),
+        ...(screenControl ? SCREEN_CONTROL_TOOL_NAMES : []),
       ],
+      // The app forwards these to POST /ai/voice/tools/:name.
+      serverTools: serverTools ? SERVER_TOOL_NAMES : [],
       speakerFullDuplex: allowsSpeakerFullDuplex(client.deviceModel),
       turnDetection: describeVoiceTurnDetection(turnDetection),
     },

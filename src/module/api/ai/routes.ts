@@ -76,6 +76,12 @@ router.post(
   ctrl.searchVoiceMemories,
 );
 router.post(
+  '/voice/tools/:name',
+  gaurd,
+  validate(dto.voiceToolSchema),
+  ctrl.runVoiceTool,
+);
+router.post(
   '/voice/calls/:sessionId/end',
   gaurd,
   validate(dto.voiceCallEndSchema),

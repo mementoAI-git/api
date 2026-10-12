@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import Memory from '../../../database/model/memory';
+import Message from '../../../database/model/message';
 import * as supermemory from '../../../../services/supermemory';
 import {withTimeout} from './with-timeout';
 
@@ -10,6 +11,12 @@ const MAX_CANDIDATES = 40;
 const MAX_SUMMARY_CHARS = 200;
 const EXCERPT_CHARS = 160;
 const DEFAULT_LONG_TERM_TIMEOUT_MS = 2_500;
+const MAX_CONVERSATION_MATCHES = 3;
+const MAX_MESSAGE_CANDIDATES = 60;
+/** Conversations to search, newest first. */
+const MAX_CONVERSATIONS = 2_000;
+/** A conversation search slower than this is skipped, not waited on. */
+const CONVERSATION_SEARCH_MAX_MS = 1_500;
 
 export const NO_MEMORY_MATCH_RESULT =
   'No matching memories found. Say you do not have that saved, and ask the host to tell you about it.';
@@ -97,11 +104,11 @@ const FILLER_WORDS = new Set([
   'one',
 ]);
 
-function escapeRegex(value: string): string {
+export function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function searchWords(query: string): string[] {
+export function searchWords(query: string): string[] {
   return query
     .toLowerCase()
     .split(/\s+/)
@@ -202,14 +209,67 @@ async function searchStoredMemories(
  * Backs the Gemini Live `search_memories` tool. Returns plain text the model
  * can speak from. Never throws for search failures.
  */
+/**
+ * What the host said in earlier chats and voice calls, in their own words.
+ * Reached through the host's own conversations, which keeps the search on
+ * the memory index and scoped to them. Memento's lines are left out: the
+ * host's words are the record.
+ */
+async function searchConversations(
+  userId: string,
+  query: string,
+): Promise<string[]> {
+  const words = searchWords(query);
+  if (!words.length) return [];
+  const conversations = await Memory.find({
+    user: userId,
+    status: {$ne: 'deleted'},
+  })
+    .sort({updated_at: -1})
+    .limit(MAX_CONVERSATIONS)
+    .select('_id')
+    .maxTimeMS(CONVERSATION_SEARCH_MAX_MS)
+    .lean();
+  if (!conversations.length) return [];
+
+  const pattern = new RegExp(words.map(escapeRegex).join('|'), 'i');
+  const rows = await Message.find({
+    memory: {$in: conversations.map(row => String(row._id))},
+    role: 'user',
+    text: pattern,
+  })
+    .sort({created_at: -1})
+    .limit(MAX_MESSAGE_CANDIDATES)
+    .select('text is_voice created_at')
+    .maxTimeMS(CONVERSATION_SEARCH_MAX_MS)
+    .lean();
+
+  return rows
+    .map(row => {
+      const text = String(row.text || '').toLowerCase();
+      return {row, score: words.filter(word => text.includes(word)).length};
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_CONVERSATION_MATCHES)
+    .map(({row}) => {
+      const where = row.is_voice ? 'In a voice call' : 'In a chat';
+      const when = row.created_at
+        ? ` (${dayjs(row.created_at).format('MMMM YYYY')})`
+        : '';
+      const quote = excerptAround(String(row.text || ''), words);
+      return `- ${where}${when}: "${quote}"`;
+    });
+}
+
 export async function searchMemoriesForVoice(
   userId: string,
   query: string,
   options: {longTermTimeoutMs?: number} = {},
 ): Promise<string> {
   const trimmed = query.trim().slice(0, MAX_QUERY_CHARS);
-  const [stored, longTerm] = await Promise.all([
+  const [stored, said, longTerm] = await Promise.all([
     searchStoredMemories(userId, trimmed).catch(() => null),
+    searchConversations(userId, trimmed).catch(() => []),
     withTimeout(
       supermemory
         .getContextForUser(userId, trimmed)
@@ -223,6 +283,11 @@ export async function searchMemoriesForVoice(
   if (stored?.length) {
     sections.push(
       `Matching memories (dates are when each was saved, not when it happened):\n${stored.join('\n')}`,
+    );
+  }
+  if (said.length) {
+    sections.push(
+      `From past conversations (their own words):\n${said.join('\n')}`,
     );
   }
   if (longTerm.trim()) sections.push(`Related facts:\n${longTerm.trim()}`);
