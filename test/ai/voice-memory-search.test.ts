@@ -1,12 +1,13 @@
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
-vi.mock('../../src/services/supermemory', () => ({
-  getContextForUser: vi.fn(),
+vi.mock('../../src/services/embeddings/long-term', () => ({
+  getLongTermContext: vi.fn(),
 }));
 
-import * as supermemory from '../../src/services/supermemory';
+import * as longTerm from '../../src/services/embeddings/long-term';
 import Memory from '../../src/module/database/model/memory';
 import Message from '../../src/module/database/model/message';
+import Beneficiary from '../../src/module/database/model/beneficiary';
 import {
   MEMORY_SEARCH_UNAVAILABLE_RESULT,
   NO_MEMORY_MATCH_RESULT,
@@ -19,18 +20,18 @@ import {
 } from '../helpers/database';
 import {createUserFixture} from '../helpers/factories';
 
-const getContextForUser = vi.mocked(supermemory.getContextForUser);
+const getLongTermContext = vi.mocked(longTerm.getLongTermContext);
 
 describe('searchMemoriesForVoice', () => {
   beforeAll(connectTestDatabase);
   afterEach(async () => {
-    getContextForUser.mockReset();
+    getLongTermContext.mockReset();
     await clearTestDatabase();
   });
   afterAll(closeTestDatabase);
 
   it("finds the caller's saved memories by title, summary or topic", async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     const other = await createUserFixture();
     await Memory.create({
@@ -70,20 +71,18 @@ describe('searchMemoriesForVoice', () => {
     expect(result).not.toContain('Other farm');
   });
 
-  it('adds long-term facts and caps the result length', async () => {
-    getContextForUser.mockResolvedValue({
-      formatedText: 'Sister is named Ada. '.repeat(200),
-    } as any);
+  it('adds long-term memory and caps the result length', async () => {
+    getLongTermContext.mockResolvedValue('Sister is named Ada. '.repeat(200));
     const user = await createUserFixture();
 
     const result = await searchMemoriesForVoice(user.id, 'sister');
 
-    expect(result).toContain('Related facts:');
+    expect(result).toContain('Sister is named Ada.');
     expect(result.length).toBeLessThanOrEqual(1_500);
   });
 
   it('treats regex characters in the query as plain text', async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     await Memory.create({
       user: user.id,
@@ -98,7 +97,7 @@ describe('searchMemoriesForVoice', () => {
   });
 
   it('returns a speakable no-match message and never waits on a slow lookup', async () => {
-    getContextForUser.mockReturnValue(new Promise(() => undefined) as any);
+    getLongTermContext.mockReturnValue(new Promise(() => undefined));
     const user = await createUserFixture();
 
     const started = Date.now();
@@ -111,7 +110,7 @@ describe('searchMemoriesForVoice', () => {
   });
 
   it("searches the host's own words and quotes them", async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     await Memory.create({
       user: user.id,
@@ -129,7 +128,7 @@ describe('searchMemoriesForVoice', () => {
   });
 
   it('ranks the most relevant memory first, not just the newest', async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     await Memory.create({
       user: user.id,
@@ -159,7 +158,7 @@ describe('searchMemoriesForVoice', () => {
   });
 
   it('ignores filler words, so a vague question does not match everything', async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     await Memory.create({
       user: user.id,
@@ -174,7 +173,7 @@ describe('searchMemoriesForVoice', () => {
   });
 
   it('labels dates as when a memory was saved, not when it happened', async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     await Memory.create({
       user: user.id,
@@ -192,7 +191,7 @@ describe('searchMemoriesForVoice', () => {
   // "No match" makes Memento tell the host nothing is saved. A broken search
   // must not sound like that.
   it('says the search is unavailable, not that nothing is saved, when the lookup fails', async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     vi.spyOn(Memory, 'find').mockImplementation(() => {
       throw new Error('database down');
@@ -214,7 +213,7 @@ describe('searchMemoriesForVoice', () => {
     }
 
     it('finds what the host said in earlier chats and voice calls, in their own words', async () => {
-      getContextForUser.mockResolvedValue({formatedText: ''} as any);
+      getLongTermContext.mockResolvedValue('');
       const user = await createUserFixture();
       const chat = await conversation(user.id);
       await Message.create({
@@ -245,7 +244,7 @@ describe('searchMemoriesForVoice', () => {
     });
 
     it("never returns Memento's own lines or another person's conversations", async () => {
-      getContextForUser.mockResolvedValue({formatedText: ''} as any);
+      getLongTermContext.mockResolvedValue('');
       const user = await createUserFixture();
       const other = await createUserFixture();
       const mine = await conversation(user.id);
@@ -269,7 +268,7 @@ describe('searchMemoriesForVoice', () => {
     });
 
     it('skips conversations the host deleted', async () => {
-      getContextForUser.mockResolvedValue({formatedText: ''} as any);
+      getLongTermContext.mockResolvedValue('');
       const user = await createUserFixture();
       const gone = await Memory.create({
         user: user.id,
@@ -287,6 +286,67 @@ describe('searchMemoriesForVoice', () => {
       expect(await searchMemoriesForVoice(user.id, 'Emeka')).toBe(
         NO_MEMORY_MATCH_RESULT,
       );
+    });
+  });
+
+  describe('understanding the question', () => {
+    it('finds a story about a person when asked by relationship ("my brother")', async () => {
+      getLongTermContext.mockResolvedValue('');
+      const user = await createUserFixture();
+      await Beneficiary.create({
+        benefactor: user.id,
+        name: 'Emeka',
+        relationship: 'brother',
+        email: 'e@example.com',
+      });
+      await Memory.create({
+        user: user.id,
+        type: 'story',
+        status: 'save',
+        title: 'Big news',
+        body: 'Emeka got his visa.',
+      });
+
+      const result = await searchMemoriesForVoice(
+        user.id,
+        'what did I say about my brother',
+      );
+
+      expect(result).toContain('Big news');
+    });
+
+    it('matches other forms of a word ("travelling" finds "travelled")', async () => {
+      getLongTermContext.mockResolvedValue('');
+      const user = await createUserFixture();
+      await Memory.create({
+        user: user.id,
+        type: 'story',
+        status: 'save',
+        title: 'When we travelled north',
+        body: 'Long drive.',
+      });
+
+      expect(await searchMemoriesForVoice(user.id, 'travelling')).toContain(
+        'When we travelled north',
+      );
+    });
+
+    it('also searches the extra phrasings Memento suggests', async () => {
+      getLongTermContext.mockResolvedValue('');
+      const user = await createUserFixture();
+      await Memory.create({
+        user: user.id,
+        type: 'story',
+        status: 'save',
+        title: 'Lagos beach day',
+        body: 'Waves.',
+      });
+
+      expect(
+        await searchMemoriesForVoice(user.id, 'our holiday', {
+          also: ['beach', 'Lagos'],
+        }),
+      ).toContain('Lagos beach day');
     });
   });
 });

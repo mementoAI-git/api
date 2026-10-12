@@ -296,3 +296,11 @@ export const WEBAUTHN_ORIGINS = (
   .split(',')
   .map(v => v.trim())
   .filter(Boolean);
+
+/**
+ * Where long-term memory comes from: 'inhouse' (default) searches the host's
+ * stories, chats and calls by meaning, with embeddings stored in MongoDB;
+ * 'supermemory' restores the previous Supermemory profile lookups.
+ */
+export const MEMORY_RETRIEVAL: 'inhouse' | 'supermemory' =
+  process.env.MEMORY_RETRIEVAL === 'supermemory' ? 'supermemory' : 'inhouse';

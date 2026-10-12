@@ -1,10 +1,10 @@
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
-vi.mock('../../src/services/supermemory', () => ({
-  getContextForUser: vi.fn(),
+vi.mock('../../src/services/embeddings/long-term', () => ({
+  getLongTermContext: vi.fn(),
 }));
 
-import * as supermemory from '../../src/services/supermemory';
+import * as longTerm from '../../src/services/embeddings/long-term';
 import Memory from '../../src/module/database/model/memory';
 import Message from '../../src/module/database/model/message';
 import Beneficiary from '../../src/module/database/model/beneficiary';
@@ -16,20 +16,18 @@ import {
 } from '../helpers/database';
 import {createUserFixture} from '../helpers/factories';
 
-const getContextForUser = vi.mocked(supermemory.getContextForUser);
+const getLongTermContext = vi.mocked(longTerm.getLongTermContext);
 
 describe('buildVoiceSessionContext', () => {
   beforeAll(connectTestDatabase);
   afterEach(async () => {
-    getContextForUser.mockReset();
+    getLongTermContext.mockReset();
     await clearTestDatabase();
   });
   afterAll(closeTestDatabase);
 
   it('includes the conversation turns, long-term memory, and voice rules', async () => {
-    getContextForUser.mockResolvedValue({
-      formatedText: 'Has a sister named Ada.',
-    } as any);
+    getLongTermContext.mockResolvedValue('Has a sister named Ada.');
     const user = await createUserFixture({nickname: 'Sam'} as any);
     const memory = await Memory.create({
       user: user.id,
@@ -58,7 +56,7 @@ describe('buildVoiceSessionContext', () => {
   });
 
   it('uses the reflection prompt as the topic for story memories', async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     const memory = await Memory.create({
       user: user.id,
@@ -77,7 +75,7 @@ describe('buildVoiceSessionContext', () => {
   });
 
   it("ignores another user's memory instead of leaking or failing", async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const owner = await createUserFixture();
     const caller = await createUserFixture();
     const memory = await Memory.create({
@@ -99,7 +97,7 @@ describe('buildVoiceSessionContext', () => {
   });
 
   it('does not wait on a slow long-term memory lookup', async () => {
-    getContextForUser.mockReturnValue(new Promise(() => undefined) as any);
+    getLongTermContext.mockReturnValue(new Promise(() => undefined));
     const user = await createUserFixture();
 
     const started = Date.now();
@@ -112,7 +110,7 @@ describe('buildVoiceSessionContext', () => {
   });
 
   it("tells Memento who the host's people are, before the voice rules", async () => {
-    getContextForUser.mockResolvedValue({formatedText: ''} as any);
+    getLongTermContext.mockResolvedValue('');
     const user = await createUserFixture();
     await Beneficiary.create({
       benefactor: user.id,

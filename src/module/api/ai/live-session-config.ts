@@ -62,6 +62,12 @@ export const VOICE_TOOLS: Tool[] = [
               description:
                 'A short search phrase, for example "grandma\'s farm" or "trip to Lagos".',
             },
+            also: {
+              type: Type.ARRAY,
+              items: {type: Type.STRING},
+              description:
+                'Up to 3 other ways to say it: names, places or words they might have used ("Emeka" for "my brother").',
+            },
           },
           required: ['query'],
         },

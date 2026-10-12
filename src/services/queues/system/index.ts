@@ -1,7 +1,7 @@
 import {Queue} from 'bullmq';
 import {logger, queueNames} from '../../../utils';
 import {getRedisConnection} from '../../redis';
-import {IS_PRODUCTION} from '../../../utils/config';
+import {IS_PRODUCTION, MEMORY_RETRIEVAL} from '../../../utils/config';
 import dayjs from 'dayjs';
 import PurgeCommand from '../../../module/database/model/purge-command';
 import {PURGE_SCHEMA_VERSION} from '../../account-purge';
@@ -128,6 +128,27 @@ export async function initializeAccountPurgeDispatcher(): Promise<void> {
   await systemQueue.upsertJobScheduler(
     queueNames.system.jobs.dispatchAccountPurges,
     {every: 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}
+
+/** Keeps memory embeddings in step with new and edited stories and messages. */
+export async function initializeMemoryEmbeddings(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue not available, memory embeddings will not update',
+    );
+    return;
+  }
+  if (MEMORY_RETRIEVAL !== 'inhouse') return;
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.sweepMemoryEmbeddings,
+    {every: 5 * 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.pruneMemoryEmbeddings,
+    {pattern: '30 3 * * *'}, // daily, 03:30 UTC
     {opts: {removeOnComplete: true, removeOnFail: 10}},
   );
 }
