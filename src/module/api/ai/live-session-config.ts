@@ -37,7 +37,7 @@ export const VOICE_TOOLS: Tool[] = [
       {
         name: SEARCH_MEMORIES_TOOL_NAME,
         description:
-          "Search the host's saved memories, stories and earlier conversations. Use it when the host mentions a specific past event, person, place or conversation that is not in your context.",
+          'Search everything the host has shared in Memento: their stories, memories and past conversations, including earlier voice calls. Use it whenever the host asks what you remember or know about them, or about someone or something in their life, and whenever they mention a past event, person, place or conversation that is not in your context.',
         parameters: {
           type: Type.OBJECT,
           properties: {

@@ -321,4 +321,13 @@ describe('voice turn detection A/B', () => {
       prefixPaddingMs: VOICE_TURN_FAST.settings.prefixPaddingMs,
     });
   });
+
+  it('describes the memory tool for general recall, not only specific events', () => {
+    const declaration = VOICE_TOOLS[0].functionDeclarations?.[0];
+    expect(declaration?.name).toBe('search_memories');
+    expect(declaration?.description).toMatch(
+      /what you remember or know about them/,
+    );
+    expect(declaration?.description).toMatch(/past conversations/);
+  });
 });
