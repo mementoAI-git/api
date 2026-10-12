@@ -6,6 +6,7 @@ vi.mock('../../src/services/supermemory', () => ({
 
 import * as supermemory from '../../src/services/supermemory';
 import Memory from '../../src/module/database/model/memory';
+import Message from '../../src/module/database/model/message';
 import {
   MEMORY_SEARCH_UNAVAILABLE_RESULT,
   NO_MEMORY_MATCH_RESULT,
@@ -200,5 +201,92 @@ describe('searchMemoriesForVoice', () => {
     await expect(searchMemoriesForVoice(user.id, 'farm')).resolves.toBe(
       MEMORY_SEARCH_UNAVAILABLE_RESULT,
     );
+  });
+
+  describe('past conversations', () => {
+    async function conversation(userId: string, title = 'Chat') {
+      return Memory.create({
+        user: userId,
+        type: 'conversation',
+        status: 'save',
+        title,
+      });
+    }
+
+    it('finds what the host said in earlier chats and voice calls, in their own words', async () => {
+      getContextForUser.mockResolvedValue({formatedText: ''} as any);
+      const user = await createUserFixture();
+      const chat = await conversation(user.id);
+      await Message.create({
+        user: user.id,
+        memory: chat.id,
+        role: 'user',
+        text: 'My brother Emeka is moving to Toronto next spring.',
+        created_at: new Date('2026-03-04'),
+      });
+      await Message.create({
+        user: user.id,
+        memory: chat.id,
+        role: 'user',
+        text: 'Emeka called me today, he got the visa!',
+        is_voice: true,
+        voice_session_id: 'call-1',
+        voice_turn_index: 0,
+        created_at: new Date('2026-05-10'),
+      });
+
+      const result = await searchMemoriesForVoice(user.id, 'Emeka');
+
+      expect(result).toContain('From past conversations');
+      expect(result).toContain('moving to Toronto');
+      expect(result).toContain('he got the visa');
+      expect(result).toMatch(/voice call \(May 2026\)/);
+      expect(result).toMatch(/chat \(March 2026\)/);
+    });
+
+    it("never returns Memento's own lines or another person's conversations", async () => {
+      getContextForUser.mockResolvedValue({formatedText: ''} as any);
+      const user = await createUserFixture();
+      const other = await createUserFixture();
+      const mine = await conversation(user.id);
+      const theirs = await conversation(other.id);
+      await Message.create({
+        user: user.id,
+        memory: mine.id,
+        role: 'ai',
+        text: 'Tell me about Emeka.',
+      });
+      await Message.create({
+        user: other.id,
+        memory: theirs.id,
+        role: 'user',
+        text: 'Emeka is my cousin.',
+      });
+
+      const result = await searchMemoriesForVoice(user.id, 'Emeka');
+
+      expect(result).toBe(NO_MEMORY_MATCH_RESULT);
+    });
+
+    it('skips conversations the host deleted', async () => {
+      getContextForUser.mockResolvedValue({formatedText: ''} as any);
+      const user = await createUserFixture();
+      const gone = await Memory.create({
+        user: user.id,
+        type: 'conversation',
+        status: 'deleted',
+        title: 'Chat',
+      });
+      await Message.create({
+        user: user.id,
+        memory: gone.id,
+        role: 'user',
+        text: 'Emeka secrets',
+      });
+
+      expect(await searchMemoriesForVoice(user.id, 'Emeka')).toBe(
+        NO_MEMORY_MATCH_RESULT,
+      );
+    });
   });
 });

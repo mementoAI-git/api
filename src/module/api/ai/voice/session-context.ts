@@ -12,8 +12,10 @@ import {
   getRecentConversationLines,
 } from './transcript-context';
 import {withTimeout} from './with-timeout';
+import {buildHostOverview} from './host-overview';
 
 const DEFAULT_LONG_TERM_TIMEOUT_MS = 1_500;
+const HOST_OVERVIEW_TIMEOUT_MS = 1_500;
 const MAX_TRANSCRIPT_LINES = 20;
 const MAX_NOTES_CHARS = 400;
 
@@ -60,7 +62,7 @@ export async function buildVoiceSessionContext(
         undefined
       : undefined;
 
-  const [lines, longTermContext] = await Promise.all([
+  const [lines, longTermContext, hostOverview] = await Promise.all([
     ownedMemoryId
       ? getRecentConversationLines(userId, ownedMemoryId, MAX_TRANSCRIPT_LINES)
       : Promise.resolve([]),
@@ -72,6 +74,11 @@ export async function buildVoiceSessionContext(
         )
         .then(result => result?.formatedText || ''),
       options.longTermTimeoutMs ?? DEFAULT_LONG_TERM_TIMEOUT_MS,
+      '',
+    ),
+    withTimeout(
+      buildHostOverview(userId).catch(() => ''),
+      HOST_OVERVIEW_TIMEOUT_MS,
       '',
     ),
   ]);
@@ -96,6 +103,7 @@ export async function buildVoiceSessionContext(
 
   return {
     systemInstruction: buildVoiceSystemInstruction(baseContext, {
+      hostOverview,
       recentTranscript: formatTranscriptLines(lines),
       reflectionTopic,
       memoryNotes,
