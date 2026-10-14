@@ -7,6 +7,7 @@ import startQuickCaptureWorker from './quick-capture';
 import startSummarizationWorker from './summarizarion';
 import startSystemWorker from './system';
 import startExploreQuestionWorker from './explore-questions';
+import startMemorySearchWorker from './memory-search';
 import {logger} from '../utils';
 import {startReadyWorkerHeartbeat} from '../services/worker-heartbeat';
 
@@ -31,6 +32,8 @@ async function startWorkers() {
     systemWorker,
     startExploreQuestionWorker(connection),
   ];
+  const memorySearchWorker = startMemorySearchWorker(connection);
+  if (memorySearchWorker) workers.push(memorySearchWorker);
   const heartbeat = await startReadyWorkerHeartbeat(
     workers,
     undefined,

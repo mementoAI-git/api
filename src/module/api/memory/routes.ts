@@ -4,10 +4,25 @@ import gaurd from '../../../middleware/gaurd';
 import * as ctrl from './controller';
 import fileUploadMiddleWare from '../../../middleware/file-upload';
 import {requireFeature} from '../../../middleware/feature-gate';
+import rateLimit from 'express-rate-limit';
+import type {IRequest} from '../../../utils/interface';
 
 const router: IRouter = Router();
 
 router.get('/stats', gaurd, ctrl.memoryStats);
+router.get(
+  '/search',
+  gaurd,
+  rateLimit({
+    windowMs: 60_000,
+    limit: 60,
+    keyGenerator: req => (req as IRequest).auth.id,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+  valid.search,
+  ctrl.searchMemory,
+);
 router.post(
   '/',
   gaurd,

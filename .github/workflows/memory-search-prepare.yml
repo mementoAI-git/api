@@ -1,0 +1,83 @@
+name: 'Description Search: Prepare Test Server'
+
+on:
+  push:
+    branches: [deploy/memory-description-search]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: memory-search-test-preparation
+  cancel-in-progress: true
+
+jobs:
+  server-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check existing test-server access and platform
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          key=$(mktemp)
+          hosts=$(mktemp)
+          trap 'rm -f "$key" "$hosts"' EXIT
+          chmod 600 "$key" "$hosts"
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$hosts"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$hosts" -o ConnectTimeout=15 \
+            -i "$key" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            'set -eu; uname -sm; getconf GNU_LIBC_VERSION; free -m | head -2; test -L /opt/memento/backend-dev/current; echo "Test release found"'
+
+  linux-runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - name: Build the pinned Linux embedding helper
+        run: docker build --platform linux/amd64 --target runtime-artifact --output type=local,dest=runtime -f ops/memory-search/Dockerfile ops/memory-search
+      - name: Download and verify the pinned text model
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          curl --fail --location --retry 3 --max-time 600 \
+            'https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf' \
+            -o models/embeddinggemma-2-Q8_0.gguf
+          echo '2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135  models/embeddinggemma-2-Q8_0.gguf' | sha256sum -c -
+          curl --fail --location --retry 3 --max-time 600 \
+            'https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf' \
+            -o models/mmproj-embeddinggemma-2-Q8_0.gguf
+          echo 'c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f  models/mmproj-embeddinggemma-2-Q8_0.gguf' | sha256sum -c -
+      - name: Install app test dependencies
+        run: yarn install --frozen-lockfile
+      - name: Verify the native helper through authenticated app search
+        env:
+          RUN_DIGUP_SMOKE: 'true'
+          MEMORY_SEARCH_DIGUP_PATH: ${{ github.workspace }}/runtime/digup
+          MEMORY_SEARCH_MODELS_DIR: ${{ github.workspace }}/models
+        run: yarn vitest run test/memory-search/digup-smoke.test.ts
+      - name: Package the verified runtime
+        run: tar -czf memory-search-linux-amd64.tgz -C runtime .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: memory-search-linux-amd64
+          path: |
+            memory-search-linux-amd64.tgz
+            tmp/memory-search-integration/results.json
+            tmp/memory-search-integration/results.md
+          retention-days: 3

@@ -2,6 +2,13 @@ import {model, PaginateModel, Schema} from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 import {IFile} from './file';
 
+export interface IMemorySearchIndex {
+  fingerprint: string;
+  version: string;
+  retry_after?: Date;
+  chunks: {kind: 'story' | 'photo'; vector: number[]; file_id?: string}[];
+}
+
 export interface IMemory {
   _id?: string;
   title: string;
@@ -40,6 +47,8 @@ export interface IMemory {
   category?: string;
   /** Who can discover the story; default private. `everyone` must be sent explicitly. */
   visibility?: 'private' | 'everyone';
+  /** Private derived search data; never part of API serialization. */
+  search_index?: IMemorySearchIndex;
 }
 
 const memory = new Schema<IMemory>(
@@ -124,8 +133,40 @@ const memory = new Schema<IMemory>(
       enum: ['private', 'everyone'],
       default: 'private',
     },
+    search_index: {
+      type: new Schema<IMemorySearchIndex>(
+        {
+          fingerprint: {type: String, required: true},
+          version: {type: String, required: true},
+          retry_after: Date,
+          chunks: [
+            {
+              _id: false,
+              kind: {type: String, enum: ['story', 'photo']},
+              vector: [Number],
+              file_id: String,
+            },
+          ],
+        },
+        {_id: false},
+      ),
+      select: false,
+      default: undefined,
+    },
   },
   {
+    toJSON: {
+      transform: (_doc, ret) => {
+        delete ret.search_index;
+        return ret;
+      },
+    },
+    toObject: {
+      transform: (_doc, ret) => {
+        delete ret.search_index;
+        return ret;
+      },
+    },
     timestamps: {
       createdAt: 'created_at',
       updatedAt: 'updated_at',

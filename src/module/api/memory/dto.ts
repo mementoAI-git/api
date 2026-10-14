@@ -1,5 +1,9 @@
 import {z} from 'zod';
 
+export const searchMemorySchema = z.object({
+  query: z.object({q: z.string().trim().min(1).max(200)}),
+});
+
 const mongoIdSchema = z
   .string()
   .min(1, 'ID is required')

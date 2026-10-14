@@ -3,6 +3,7 @@ import Message from '../../../database/model/message';
 import {assertOwnedMemory} from '../../memory/access';
 import {updateStreak} from '../../user/service';
 import {updateMemoryTitle} from '../utils';
+import {queueMemorySearch} from '../../../../services/queues/memory-search';
 
 export type VoiceTurnInput = {
   index: number;
@@ -79,6 +80,7 @@ export async function recordVoiceTurns(
         $set: {last_active: now},
       },
     );
+    void queueMemorySearch(userId, memoryId);
     void updateStreak(userId).catch(error =>
       console.error('Error updating voice streak:', error),
     );

@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "memories": [
+    {
+      "id": "s01",
+      "title": "Starting out",
+      "kind": "story",
+      "file": "s01.txt"
+    },
+    {
+      "id": "s02",
+      "title": "Sundays with Nana",
+      "kind": "story",
+      "file": "s02.txt"
+    },
+    {
+      "id": "s03",
+      "title": "Learning to ride",
+      "kind": "story",
+      "file": "s03.txt"
+    },
+    {
+      "id": "s04",
+      "title": "The blue notebook",
+      "kind": "story",
+      "file": "s04.txt"
+    },
+    {
+      "id": "s05",
+      "title": "A fresh start",
+      "kind": "story",
+      "file": "s05.txt"
+    },
+    {
+      "id": "s06",
+      "title": "By the water",
+      "kind": "story",
+      "file": "s06.txt"
+    },
+    {
+      "id": "s07",
+      "title": "The big day",
+      "kind": "story",
+      "file": "s07.txt"
+    },
+    {
+      "id": "s08",
+      "title": "Waiting together",
+      "kind": "story",
+      "file": "s08.txt"
+    },
+    {
+      "id": "s09",
+      "title": "The orange tree",
+      "kind": "story",
+      "file": "s09.txt"
+    },
+    {
+      "id": "s10",
+      "title": "An unexpected visitor",
+      "kind": "story",
+      "file": "s10.txt"
+    },
+    {
+      "id": "p01",
+      "title": "Sample photo A",
+      "kind": "photo",
+      "file": "p01.png"
+    },
+    {
+      "id": "p02",
+      "title": "Sample photo B",
+      "kind": "photo",
+      "file": "p02.png"
+    }
+  ],
+  "queries": [
+    {
+      "text": "our first home",
+      "expected": [
+        "s01"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "Grandma preparing a meal",
+      "expected": [
+        "s02"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "my father teaching me to cycle",
+      "expected": [
+        "s03"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "a secret book of verses with my school friend",
+      "expected": [
+        "s04"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "how Dad got his first job",
+      "expected": [
+        "s05"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "a family trip to the beach",
+      "expected": [
+        "s06"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "finishing a degree",
+      "expected": [
+        "s07"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "family spending an evening without lights",
+      "expected": [
+        "s08"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "a tree planted to celebrate my birth",
+      "expected": [
+        "s09"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "the animal we adopted",
+      "expected": [
+        "s10"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "Ada and the blue notebook",
+      "expected": [
+        "s04"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "jollof rice",
+      "expected": [
+        "s02"
+      ],
+      "kind": "story"
+    },
+    {
+      "text": "a skiing holiday in Switzerland",
+      "expected": [],
+      "kind": "story"
+    },
+    {
+      "text": "the day I learned to scuba dive",
+      "expected": [],
+      "kind": "story"
+    },
+    {
+      "text": "a person wearing a space suit",
+      "expected": [
+        "p01"
+      ],
+      "kind": "photo"
+    },
+    {
+      "text": "a close-up of a cat",
+      "expected": [
+        "p02"
+      ],
+      "kind": "photo"
+    },
+    {
+      "text": "an orange tabby with whiskers",
+      "expected": [
+        "p02"
+      ],
+      "kind": "photo"
+    },
+    {
+      "text": "a snowy mountain landscape",
+      "expected": [],
+      "kind": "photo"
+    },
+    {
+      "text": "an astronaut portrait",
+      "expected": [
+        "p01"
+      ]
+    }
+  ]
+}

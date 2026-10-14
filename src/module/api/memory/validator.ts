@@ -1,4 +1,4 @@
-import {body, param} from 'express-validator';
+import {body, param, query} from 'express-validator';
 
 export const deleteMemoryValidator = [
   param('id')
@@ -14,6 +14,14 @@ export const deleteMemoryValidator = [
 ];
 
 export default {
+  search: [
+    query('q')
+      .isString()
+      .bail()
+      .trim()
+      .isLength({min: 1, max: 200})
+      .withMessage('Search must contain 1–200 characters'),
+  ],
   quickCapture: [
     body('body').optional().isString().withMessage('Body must be a string'),
     body('attachments')

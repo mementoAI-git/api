@@ -38,6 +38,7 @@ import {updateMemoryTitle} from '../ai/utils';
 import ActivePrompt from '../../database/model/active-prompt';
 import {queueStoryInsights} from '../../../services/queues/insights';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
+import {queueMemorySearch} from '../../../services/queues/memory-search';
 import {queueSummarization} from '../../../services/queues/summarization';
 import {
   getConversationEnrichment,
@@ -322,6 +323,7 @@ export async function createMemory(
     void invalidateEnrichmentCache(user_id);
   }
 
+  void queueMemorySearch(user_id, memory.id);
   return {
     message: 'Memory created successfully',
     data: memory,
@@ -495,6 +497,7 @@ export async function quickCaptureMemory(
   });
   void updateStreak(user_id);
 
+  void queueMemorySearch(user_id, memory.id);
   return {
     message: 'Thought saved',
     data: memory,
@@ -853,6 +856,7 @@ export async function updateMemory(
     );
   }
 
+  void queueMemorySearch(user_id, memory.id);
   return {
     data: updatedMemory ?? memory,
     message: 'Memory updated successfully',
@@ -933,6 +937,7 @@ export async function restoreMemory(_id: string, user_id: string) {
     user_id,
   );
 
+  void queueMemorySearch(user_id, memory.id);
   return {data: memory, message: 'Memory restored successfully'};
 }
 
@@ -1017,6 +1022,7 @@ export async function removeFileFromSpecificMemory(
   );
   if (!memory) throw new NotFoundException('Memory not found');
 
+  void queueMemorySearch(user_id, memory.id);
   return {
     data: memory,
     message: 'File detached from memory successfully',
@@ -1079,6 +1085,7 @@ export async function addMessageToMemory(
     }
   }
 
+  void queueMemorySearch(user_id, memory.id);
   return {
     data: messages,
     message: 'Message added to memory successfully',
