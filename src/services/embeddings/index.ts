@@ -1,5 +1,6 @@
 import {createHash} from 'crypto';
 import gemini from '../gemini';
+import {withRateLimitRetry} from './retry';
 
 /**
  * Meaning fingerprints (embeddings) for memory search, made with Gemini's
@@ -26,11 +27,13 @@ const geminiEmbedder: Embedder = async (texts, task) => {
   const vectors: number[][] = [];
   for (let start = 0; start < texts.length; start += MAX_BATCH) {
     const batch = texts.slice(start, start + MAX_BATCH);
-    const response = await gemini.models.embedContent({
-      model: EMBEDDING_MODEL,
-      contents: batch,
-      config: {taskType: task, outputDimensionality: EMBEDDING_DIMENSIONS},
-    });
+    const response = await withRateLimitRetry(() =>
+      gemini.models.embedContent({
+        model: EMBEDDING_MODEL,
+        contents: batch,
+        config: {taskType: task, outputDimensionality: EMBEDDING_DIMENSIONS},
+      }),
+    );
     for (const embedding of response.embeddings ?? []) {
       vectors.push(embedding.values ?? []);
     }

@@ -151,10 +151,26 @@ describe('in-house memory embeddings', () => {
       text: 'ok',
     });
 
-    expect(await indexMessages()).toBe(1);
+    expect((await indexMessages()).embedded).toBe(1);
     const [match] = await semanticSearch(user.id, 'my brother');
     expect(match.text).toBe('My brother Emeka is moving to Toronto soon.');
     expect(match.source).toBe('message');
+  });
+
+  // The backfill pages with skip; without it, a host with more stories than
+  // one page only ever had their first page embedded.
+  it("pages through all of a host's stories, not just the first page", async () => {
+    const user = await createUserFixture();
+    for (const word of ['beach', 'soup', 'visa']) {
+      await story(user.id, word, `About ${word}`);
+    }
+
+    const first = await indexStories({user: user.id, limit: 2, skip: 0});
+    const second = await indexStories({user: user.id, limit: 2, skip: 2});
+
+    expect([first.seen, second.seen]).toEqual([2, 1]);
+    expect(first.embedded + second.embedded).toBe(3);
+    expect(await MemoryEmbedding.countDocuments({user: user.id})).toBe(3);
   });
 
   it('removes embeddings whose story or message is gone', async () => {
