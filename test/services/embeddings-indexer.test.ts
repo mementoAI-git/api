@@ -173,6 +173,32 @@ describe('in-house memory embeddings', () => {
     expect(await MemoryEmbedding.countDocuments({user: user.id})).toBe(3);
   });
 
+  it('ignores and replaces vectors from another embedding model', async () => {
+    const user = await createUserFixture();
+    const lagos = await story(user.id, 'Lagos', 'At the beach.');
+    await MemoryEmbedding.create({
+      user: user.id,
+      source: 'story',
+      source_id: String(lagos._id),
+      chunk: 0,
+      memory: String(lagos._id),
+      text: 'Lagos\nAt the beach.',
+      text_hash: 'from-before',
+      vector: Buffer.alloc(4, 1),
+      embedding_model: 'some-older-model',
+    });
+    forgetCachedVectors(user.id);
+    expect(await semanticSearch(user.id, 'beach')).toEqual([]);
+
+    await indexStories();
+    forgetCachedVectors(user.id);
+
+    expect(embedCalls).toBe(1);
+    expect((await semanticSearch(user.id, 'beach'))[0]?.text).toContain(
+      'Lagos',
+    );
+  });
+
   it('removes embeddings whose story or message is gone', async () => {
     const user = await createUserFixture();
     const lagos = await story(user.id, 'Lagos', 'At the beach.');

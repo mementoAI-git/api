@@ -59,12 +59,13 @@ async function upsert(items: Item[]): Promise<number> {
       chunk: item.chunk,
     })),
   })
-    .select('source source_id chunk text_hash')
+    .select('source source_id chunk text_hash embedding_model')
     .lean();
   const known = new Map(
     existing.map(row => [
       `${row.source}:${row.source_id}:${row.chunk}`,
-      row.text_hash,
+      // A vector from another model is stale: compare scales would differ.
+      row.embedding_model === EMBEDDING_MODEL ? row.text_hash : '',
     ]),
   );
   const changed = items.filter(
