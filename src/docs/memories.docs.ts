@@ -1,4 +1,58 @@
 const memoriesDocs = {
+  '/memories/search': {
+    get: {
+      tags: ['Memories'],
+      summary: 'Search the signed-in owner’s memories by words and description',
+      description:
+        'Search only content saved inside Memento: owned stories, supported attached photos, and saved chat messages. No device folders or arbitrary local files are indexed. Description search requires explicit server configuration and an allowlisted account. Falls back to keyword search when unavailable or outside preparation limits. Excludes drafts, deleted memories and all other owners. Results use the existing attachment access contract; private vectors and internal chat transcripts are never returned.',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          in: 'query',
+          name: 'q',
+          required: true,
+          schema: {type: 'string', minLength: 1, maxLength: 200},
+          description: 'A word or a description of a memory',
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Up to 20 current memory results with search readiness',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  data: {
+                    type: 'object',
+                    properties: {
+                      docs: {type: 'array', items: {type: 'object'}},
+                      search: {
+                        type: 'object',
+                        required: ['mode', 'preparing'],
+                        properties: {
+                          mode: {type: 'string', enum: ['hybrid', 'keyword']},
+                          preparing: {type: 'boolean'},
+                          limited: {
+                            type: 'boolean',
+                            description:
+                              'Some sources are temporarily available only to word search after a preparation failure',
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {description: 'Authentication required'},
+        422: {description: 'Invalid search query'},
+        429: {description: 'Search rate limit exceeded'},
+      },
+    },
+  },
   '/memories/public/{id}': {
     get: {
       tags: ['Memories'],

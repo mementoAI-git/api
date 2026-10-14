@@ -34,6 +34,7 @@ import {buildPromptOwnershipScope} from '../prompt/explore-contract';
 import AiMetric from '../../database/model/ai-metric';
 import {updateStreak} from '../user/service';
 import {addToInsightsBuffer} from '../../../services/queues/insights';
+import {queueMemorySearch} from '../../../services/queues/memory-search';
 import {OpenRouterMessage} from '../../../services/ai/openrouter';
 import {
   generateTextWithProviderFallback,
@@ -495,6 +496,7 @@ export async function handleStreaming(
         $inc: {message_count: 2},
         $set: {last_active: dayjs().toDate()},
       });
+      void queueMemorySearch(user, memory);
 
       if (userMessage && isSignificantMessage(userMessage)) {
         addToInsightsBuffer(user, memory, userMessage, finalText).catch(
@@ -827,6 +829,7 @@ export async function startConversation(
       $inc: {message_count: 2},
       $set: {last_active: now.toDate()},
     });
+    void queueMemorySearch(user_id, memory.id);
     if (isEmpty(memory.title)) {
       void updateMemoryTitle(memory.id, payload.text, responseText);
     }
@@ -1013,6 +1016,7 @@ export async function startConversation(
     $inc: {message_count: 2},
     $set: {last_active: now.toDate()},
   });
+  void queueMemorySearch(user_id, memory.id);
 
   if (isEmpty(memory.title)) {
     void updateMemoryTitle(memory.id, payload.text, responseText);

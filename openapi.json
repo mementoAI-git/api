@@ -7887,6 +7887,90 @@
         ]
       }
     },
+    "/memories/search": {
+      "get": {
+        "description": "Search only content saved inside Memento: owned stories, supported attached photos, and saved chat messages. No device folders or arbitrary local files are indexed. Description search requires explicit server configuration and an allowlisted account. Falls back to keyword search when unavailable or outside preparation limits. Excludes drafts, deleted memories and all other owners. Results use the existing attachment access contract; private vectors and internal chat transcripts are never returned.",
+        "parameters": [
+          {
+            "description": "A word or a description of a memory",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "docs": {
+                          "items": {
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "search": {
+                          "properties": {
+                            "limited": {
+                              "description": "Some sources are temporarily available only to word search after a preparation failure",
+                              "type": "boolean"
+                            },
+                            "mode": {
+                              "enum": [
+                                "hybrid",
+                                "keyword"
+                              ],
+                              "type": "string"
+                            },
+                            "preparing": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "preparing"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Up to 20 current memory results with search readiness"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "422": {
+            "description": "Invalid search query"
+          },
+          "429": {
+            "description": "Search rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Search the signed-in owner’s memories by words and description",
+        "tags": [
+          "Memories"
+        ]
+      }
+    },
     "/memories/stats": {
       "get": {
         "description": "Get statistics about user memories",

@@ -9,6 +9,21 @@ import {
 import * as service from './service';
 import {IRequest} from '../../../utils/interface';
 import {resolveUploadReservationId} from '../file/upload-idempotency';
+import {searchMemories} from './search';
+
+export async function searchMemory(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const data = await searchMemories(req.auth.id, String(req.query.q).trim());
+    return responsHandler(res, StatusCodes.OK, 'Memory search completed', data);
+  } catch (error) {
+    next(error);
+  }
+}
 
 export async function memoryStats(
   req: IRequest,
