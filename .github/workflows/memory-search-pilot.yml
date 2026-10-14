@@ -1,4 +1,4 @@
-name: 'Description Search: Install Verified Test Runtime'
+name: 'Description Search: Enable Verified Text Pilot'
 
 on:
   push:
@@ -6,6 +6,8 @@ on:
     paths:
       - .github/workflows/memory-search-pilot.yml
       - ops/memory-search/probe-runtime.py
+      - ops/memory-search/activate-pilot.sh
+      - ops/memory-search/test-pilot-activation.py
 
 permissions:
   contents: read
@@ -19,13 +21,20 @@ jobs:
   install-runtime:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+    environment: development
+    concurrency:
+      group: backend-deploy-dev
+      cancel-in-progress: false
     env:
       SOURCE_RUN: '38618334612'
       SOURCE_SHA: 854530ee42ef5bba272375d5df5dc99a5ef8ee58
+      EXPECTED_BACKEND_SHA: 8068c15a4020d3dd2f97b5474ed83a0b660ece48
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Check activation recovery without services
+        run: python3 ops/memory-search/test-pilot-activation.py
       - name: Require the pinned runtime build and model checks to pass
         env:
           GH_TOKEN: ${{ github.token }}
@@ -59,7 +68,7 @@ jobs:
           cd verified
           echo '2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135  embeddinggemma-2-Q8_0.gguf' | sha256sum -c -
           echo 'c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f  mmproj-embeddinggemma-2-Q8_0.gguf' | sha256sum -c -
-      - name: Install inactive runtime and check native query speed
+      - name: Verify runtime and activate the test-owner text pilot
         shell: bash
         env:
           SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
@@ -80,13 +89,14 @@ jobs:
           ssh "${options[@]}" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
             "test -L /opt/memento/backend-dev/current && test ! -e '$staging' && mkdir -m 700 '$staging'"
           scp "${options[@]}" -P "$SSH_PORT" \
-            verified/memory-search-linux-amd64.tgz verified/*.gguf ops/memory-search/probe-runtime.py \
+            verified/memory-search-linux-amd64.tgz verified/*.gguf ops/memory-search/probe-runtime.py ops/memory-search/activate-pilot.sh \
             "$SSH_USER@$SSH_HOST:$staging/"
           ssh "${options[@]}" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
-            "bash -s -- '$staging' '$SOURCE_SHA'" <<'REMOTE'
+            "bash -s -- '$staging' '$SOURCE_SHA' '$EXPECTED_BACKEND_SHA'" <<'REMOTE'
           set -euo pipefail
           staging="$1"
           revision="$2"
+          expected_backend="$3"
           case "$staging" in /opt/memento/backend-dev/.search-upload-[0-9]*-[0-9]*) ;; *) exit 1;; esac
           trap 'rm -rf -- "$staging"' EXIT
           root=/opt/memento/backend-dev
@@ -105,5 +115,5 @@ jobs:
           test "$(cat "$runtime/SOURCE_REVISION")" = ca6e877be139997ef259e1a5f84881394c46332c
           python3 probe-runtime.py "$runtime/digup" "$models"
           printf '%s\n' "$revision" > "$runtime/MEMENTO_VERIFIED"
-          echo 'Inactive test runtime installed. App configuration and processes have not changed.'
+          bash activate-pilot.sh "$expected_backend"
           REMOTE
