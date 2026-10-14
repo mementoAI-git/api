@@ -1,0 +1,109 @@
+name: 'Description Search: Install Verified Test Runtime'
+
+on:
+  push:
+    branches: [ops/description-search-pilot]
+    paths:
+      - .github/workflows/memory-search-pilot.yml
+      - ops/memory-search/probe-runtime.py
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: memory-search-test-installation
+  cancel-in-progress: false
+
+jobs:
+  install-runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      SOURCE_RUN: '38618334612'
+      SOURCE_SHA: 854530ee42ef5bba272375d5df5dc99a5ef8ee58
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require the pinned runtime build and model checks to pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN")
+            test "$(jq -r .head_sha <<< "$run")" = "$SOURCE_SHA"
+            if [ "$(jq -r .status <<< "$run")" = completed ]; then
+              test "$(jq -r .conclusion <<< "$run")" = success
+              exit 0
+            fi
+            sleep 15
+          done
+          echo 'Verified runtime build did not complete in time' >&2
+          exit 1
+      - uses: actions/download-artifact@v4
+        with:
+          name: memory-search-linux-amd64
+          run-id: ${{ env.SOURCE_RUN }}
+          github-token: ${{ github.token }}
+          path: verified
+      - name: Download and verify pinned models
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8
+          curl --fail --location --retry 3 --max-time 600 "$base/embeddinggemma-2-Q8_0.gguf" -o verified/embeddinggemma-2-Q8_0.gguf
+          curl --fail --location --retry 3 --max-time 600 "$base/mmproj-embeddinggemma-2-Q8_0.gguf" -o verified/mmproj-embeddinggemma-2-Q8_0.gguf
+          cd verified
+          echo '2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135  embeddinggemma-2-Q8_0.gguf' | sha256sum -c -
+          echo 'c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f  mmproj-embeddinggemma-2-Q8_0.gguf' | sha256sum -c -
+      - name: Install inactive runtime and check native query speed
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key=$(mktemp)
+          hosts=$(mktemp)
+          trap 'rm -f "$key" "$hosts"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$hosts"
+          options=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$hosts" -o ConnectTimeout=15 -i "$key")
+          staging="/opt/memento/backend-dev/.search-upload-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          ssh "${options[@]}" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "test -L /opt/memento/backend-dev/current && test ! -e '$staging' && mkdir -m 700 '$staging'"
+          scp "${options[@]}" -P "$SSH_PORT" \
+            verified/memory-search-linux-amd64.tgz verified/*.gguf ops/memory-search/probe-runtime.py \
+            "$SSH_USER@$SSH_HOST:$staging/"
+          ssh "${options[@]}" -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "bash -s -- '$staging' '$SOURCE_SHA'" <<'REMOTE'
+          set -euo pipefail
+          staging="$1"
+          revision="$2"
+          case "$staging" in /opt/memento/backend-dev/.search-upload-[0-9]*-[0-9]*) ;; *) exit 1;; esac
+          trap 'rm -rf -- "$staging"' EXIT
+          root=/opt/memento/backend-dev
+          test "$(uname -m)" = x86_64
+          test "$(df -Pm "$root" | awk 'NR==2 {print $4}')" -gt 2500
+          models="$root/search-models/bfcd298762cc34d0357ece5ebdd31791a3a374d8"
+          runtime="$root/search-runtime/$revision"
+          mkdir -p "$models" "$runtime"
+          chmod 700 "$root/search-models" "$root/search-runtime" "$models" "$runtime"
+          rm -f -- "$runtime/MEMENTO_VERIFIED"
+          cd "$staging"
+          echo '2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135  embeddinggemma-2-Q8_0.gguf' | sha256sum -c -
+          echo 'c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f  mmproj-embeddinggemma-2-Q8_0.gguf' | sha256sum -c -
+          mv -- *.gguf "$models/"
+          tar -xzf memory-search-linux-amd64.tgz -C "$runtime"
+          test "$(cat "$runtime/SOURCE_REVISION")" = ca6e877be139997ef259e1a5f84881394c46332c
+          python3 probe-runtime.py "$runtime/digup" "$models"
+          printf '%s\n' "$revision" > "$runtime/MEMENTO_VERIFIED"
+          echo 'Inactive test runtime installed. App configuration and processes have not changed.'
+          REMOTE
