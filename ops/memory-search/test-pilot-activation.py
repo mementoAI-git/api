@@ -16,11 +16,17 @@ class ActivationRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / '.env').write_text(settings)
+            (root / 'ecosystem.config.js').write_text("module.exports={apps:['memento-backend-dev','memento-backend-dev-worker'].map(name=>({name,env:{NODE_ENV:'production',MEMENTO_ENV:'dev',PORT:3001}}))};")
             binary = root / 'pm2'
             binary.write_text(r"""#!/usr/bin/env node
 const fs = require('node:fs');
 const app = process.argv[process.argv.indexOf('--only') + 1];
 fs.appendFileSync(process.env.CALLS, JSON.stringify({app, enabled:process.env.MEMORY_SEARCH_ENABLED, owner:process.env.MEMORY_SEARCH_USER_IDS, photos:process.env.MEMORY_SEARCH_PHOTOS_ENABLED, environment:process.env.MEMENTO_ENV}) + '\n');
+const config = require(process.argv[3]);
+const entry = config.apps.find(item => item.name === app);
+for (const key of ['MEMORY_SEARCH_ENABLED','MEMORY_SEARCH_USER_IDS','MEMORY_SEARCH_DIGUP_PATH','MEMORY_SEARCH_MODELS_DIR','MEMORY_SEARCH_PHOTOS_ENABLED']) {
+  if (entry.env[key] !== process.env[key]) process.exit(93);
+}
 if (process.env.FAIL_API === 'yes' && app === 'memento-backend-dev') process.exit(42);
 """)
             binary.chmod(0o700)
@@ -29,6 +35,7 @@ if (process.env.FAIL_API === 'yes' && app === 'memento-backend-dev') process.exi
             command = 'set -euo pipefail\nroot="$1"\n' + reload_function + '\nreload_apps'
             result = subprocess.run(['bash', '-c', command, 'test', str(root)], env=env, capture_output=True, text=True)
             records = [json.loads(line) for line in calls.read_text().splitlines()] if calls.exists() else []
+            self.assertEqual(list(root.glob('.search-pm2-*')), [])
             return result, records
 
     def test_missing_prior_settings_explicitly_reset_pm2_values(self):
