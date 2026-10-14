@@ -11,7 +11,7 @@ afterEach(async () => {
   );
 });
 
-async function helper(response: string, ready = true) {
+async function helper(response: string, ready = true, acceptQuit = true) {
   const folder = await mkdtemp(path.join(tmpdir(), 'memento-engine-test-'));
   folders.push(folder);
   const executable = path.join(folder, 'digup');
@@ -22,7 +22,7 @@ const readline = require('node:readline');
 console.log(JSON.stringify({ready:${ready},info:{model:'google/embeddinggemma-2',revision:'bfcd298762cc34d0357ece5ebdd31791a3a374d8',runtime:'llama.cpp-vectors1',dtype:'text-q8_0+mmproj-q8_0',dim:768}}));
 readline.createInterface({input:process.stdin}).on('line', line => {
  const request = JSON.parse(line);
- if(request.op === 'quit') {process.exit(0);}
+ if(request.op === 'quit') {${acceptQuit ? 'process.exit(0);' : 'return;'}}
  ${response}
 });
 `,
@@ -68,7 +68,9 @@ describe('DigUp embedding protocol', () => {
   });
 
   it('terminates a stalled worker', async () => {
-    const config = await helper('');
+    // Ignore quit and remain alive after stdin closes, so process startup speed
+    // cannot turn this timeout check into an ordinary protocol-error check.
+    const config = await helper('setInterval(() => {}, 1000);', true, false);
     await expect(
       embedInputs([{op: 'text', inputs: ['one']}], config, 100),
     ).rejects.toThrow(/timed out/i);
