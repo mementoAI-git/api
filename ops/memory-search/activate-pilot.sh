@@ -28,15 +28,27 @@ if [ "$(id -u)" != 0 ]; then test "$(stat -c %u "$root/.env")" = "$(id -u)"; fi
 reload_apps() {
   local app
   for app in memento-backend-dev memento-backend-dev-worker; do
-    # PM2 merges old environments. Reset absent keys before dotenv overrides
-    # them from the current (or restored) file, including rollback from no flag.
-    MEMORY_SEARCH_ENABLED=false \
-      MEMORY_SEARCH_USER_IDS= \
-      MEMORY_SEARCH_DIGUP_PATH= \
-      MEMORY_SEARCH_MODELS_DIR= \
-      MEMORY_SEARCH_PHOTOS_ENABLED=true \
-      MEMENTO_ENV=dev \
-      pm2 startOrReload "$root/ecosystem.config.js" --only "$app" --update-env || return 1
+    # Give PM2 the intended environment at launch instead of depending on
+    # ecosystem dotenv changes propagating into PM2's environment merge.
+    # Defaults clear sticky keys when rolling back to a file without them.
+    node - "$root" "$app" <<'NODE' || return 1
+const fs = require('node:fs');
+const {spawnSync} = require('node:child_process');
+const [root, app] = process.argv.slice(2);
+const {parseEnv} = require('node:util');
+const env = {
+  ...process.env,
+  MEMORY_SEARCH_ENABLED: 'false',
+  MEMORY_SEARCH_USER_IDS: '',
+  MEMORY_SEARCH_DIGUP_PATH: '',
+  MEMORY_SEARCH_MODELS_DIR: '',
+  MEMORY_SEARCH_PHOTOS_ENABLED: 'true',
+  ...parseEnv(fs.readFileSync(root + '/.env', 'utf8')),
+  MEMENTO_ENV: 'dev',
+};
+const result = spawnSync('pm2', ['startOrReload', root + '/ecosystem.config.js', '--only', app, '--update-env'], {env, stdio: 'inherit'});
+process.exit(result.status ?? 1);
+NODE
   done
 }
 wait_ready() {
