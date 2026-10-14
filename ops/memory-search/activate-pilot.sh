@@ -46,8 +46,22 @@ const env = {
   ...parseEnv(fs.readFileSync(root + '/.env', 'utf8')),
   MEMENTO_ENV: 'dev',
 };
-const result = spawnSync('pm2', ['startOrReload', root + '/ecosystem.config.js', '--only', app, '--update-env'], {env, stdio: 'inherit'});
-process.exit(result.status ?? 1);
+const pilot = Object.fromEntries(['MEMORY_SEARCH_ENABLED', 'MEMORY_SEARCH_USER_IDS', 'MEMORY_SEARCH_DIGUP_PATH', 'MEMORY_SEARCH_MODELS_DIR', 'MEMORY_SEARCH_PHOTOS_ENABLED'].map(key => [key, env[key]]));
+// Ecosystem reload replaces PM2's nested app.env. Include pilot keys there
+// explicitly as well as in the CLI environment, using a private adapter.
+const directory = fs.mkdtempSync(root + '/.search-pm2-');
+let status = 1;
+try {
+  const wrapper = directory + '/ecosystem.config.js';
+  const source = 'const config = require(' + JSON.stringify(root + '/ecosystem.config.js') + ');\n' +
+    'config.apps = config.apps.filter(item => item.name === ' + JSON.stringify(app) + ').map(item => ({...item, cwd: item.cwd ?? ' + JSON.stringify(root) + ', env: {...item.env, ...' + JSON.stringify(pilot) + '}}));\nmodule.exports = config;\n';
+  fs.writeFileSync(wrapper, source, {mode: 0o600});
+  const result = spawnSync('pm2', ['startOrReload', wrapper, '--only', app, '--update-env'], {cwd: root, env, stdio: 'inherit'});
+  status = result.status ?? 1;
+} finally {
+  fs.rmSync(directory, {recursive: true, force: true});
+}
+process.exit(status);
 NODE
   done
 }
@@ -138,6 +152,7 @@ process.stdin.on("end", () => {
     const app = apps.find(item => item.name === name);
     const env = {...app?.pm2_env?.env, ...app?.pm2_env};
     if (env.status !== "online" || !Object.entries(expected).every(([key,value]) => env[key] === value)) {
+      console.error(JSON.stringify({app: name, online: env.status === "online", checks: Object.entries(expected).map(([key,value]) => ({key, matches: env[key] === value, type: typeof env[key], nestedMatches: app?.pm2_env?.env?.[key] === value}))}));
       console.error("Effective test-process pilot settings did not match; activation rejected");
       process.exitCode = 1;
     }
