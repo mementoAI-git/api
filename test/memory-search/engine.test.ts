@@ -18,11 +18,12 @@ async function helper(response: string, ready = true, acceptQuit = true) {
   await writeFile(
     executable,
     `#!/usr/bin/env node
+// Exit only after output is flushed: pipes are asynchronous on macOS.
 const readline = require('node:readline');
 console.log(JSON.stringify({ready:${ready},info:{model:'google/embeddinggemma-2',revision:'bfcd298762cc34d0357ece5ebdd31791a3a374d8',runtime:'llama.cpp-vectors1',dtype:'text-q8_0+mmproj-q8_0',dim:768}}));
 readline.createInterface({input:process.stdin}).on('line', line => {
  const request = JSON.parse(line);
- if(request.op === 'quit') {${acceptQuit ? 'process.exit(0);' : 'return;'}}
+ if(request.op === 'quit') {${acceptQuit ? "process.stdout.write('', () => process.exit(0)); return;" : 'return;'}}
  ${response}
 });
 `,
