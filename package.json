@@ -42,6 +42,7 @@
     "compat:report": "ts-node src/scripts/compatibility-report.ts",
     "voice:memory-probe": "ts-node src/scripts/voice-memory-probe.ts",
     "memory:backfill-embeddings": "ts-node src/scripts/backfill-memory-embeddings.ts",
+    "memory:backfill-embeddings:prod": "node build/src/scripts/backfill-memory-embeddings.js",
     "files:backfill-thumbnails": "ts-node src/scripts/backfill-thumbnail-keys.ts",
     "explore:upload-artwork": "ts-node src/scripts/upload-explore-artwork.ts",
     "capsules:backfill-recipients": "ts-node src/scripts/backfill-capsule-recipients.ts",

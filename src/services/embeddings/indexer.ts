@@ -108,13 +108,14 @@ async function upsert(items: Item[]): Promise<number> {
 
 /** Stories changed since `since` (or all, for the backfill), in order. */
 export async function indexStories(
-  options: {since?: Date; user?: string; limit?: number} = {},
-): Promise<number> {
+  options: {since?: Date; user?: string; limit?: number; skip?: number} = {},
+): Promise<{embedded: number; seen: number}> {
   const filter: Record<string, unknown> = {type: 'story'};
   if (options.since) filter.updated_at = {$gte: options.since};
   if (options.user) filter.user = options.user;
   const stories = await Memory.find(filter)
     .sort({updated_at: 1})
+    .skip(options.skip ?? 0)
     .limit(options.limit ?? SWEEP_LIMIT)
     .select('user title body status created_at')
     .lean();
@@ -162,22 +163,23 @@ export async function indexStories(
     });
     for (const user of gone) forgetCachedVectors(String(user));
   }
-  return upsert(items);
+  return {embedded: await upsert(items), seen: stories.length};
 }
 
 /** The host's own chat and voice lines written since `since` (or all). */
 export async function indexMessages(
-  options: {since?: Date; user?: string; limit?: number} = {},
-): Promise<number> {
+  options: {since?: Date; user?: string; limit?: number; skip?: number} = {},
+): Promise<{embedded: number; seen: number}> {
   const filter: Record<string, unknown> = {role: 'user'};
   if (options.since) filter.created_at = {$gte: options.since};
   if (options.user) filter.user = options.user;
   const messages = await Message.find(filter)
     .sort({created_at: 1})
+    .skip(options.skip ?? 0)
     .limit(options.limit ?? SWEEP_LIMIT)
     .select('user memory text created_at')
     .lean();
-  return upsert(
+  const embedded = await upsert(
     messages
       .filter(
         message =>
@@ -195,6 +197,7 @@ export async function indexMessages(
           : undefined,
       })),
   );
+  return {embedded, seen: messages.length};
 }
 
 /** Embeddings whose story or message no longer exists (hard deletes). */
@@ -234,5 +237,5 @@ export async function runEmbeddingSweep(
   const since = new Date(now.getTime() - windowMs);
   const stories = await indexStories({since});
   const messages = await indexMessages({since});
-  return {stories, messages};
+  return {stories: stories.embedded, messages: messages.embedded};
 }
