@@ -57,6 +57,18 @@ box: ~1.2 ms ping, 113–147 ms per search query.
    time; from the API box,
    `curl -s -H "Authorization: Bearer $TOKEN" http://<private-ip>:8790/health`.
 
+## Deploying changes
+
+Changes to `server.mjs` or the unit deploy from `dev` through
+`.github/workflows/deploy-embedding-server.yml` (also runnable by hand). It
+tests the server, then pipes the two files over SSH to the box. The CI key
+(secrets `EMBED_SSH_KEY`, `EMBED_SSH_KNOWN_HOSTS`, `EMBED_SSH_HOST`) is
+pinned in root's `authorized_keys` to
+`command="/usr/local/sbin/memento-embed-deploy"` with no pty or forwarding,
+so it can only run `deploy.sh`: install, restart, check `/health`, and
+restore the previous version if it is not healthy. Changes to `deploy.sh`
+itself are installed by hand.
+
 ## Point the API at it
 
 In the API and worker `.env` (both processes), then restart them:
