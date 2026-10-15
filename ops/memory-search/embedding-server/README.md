@@ -16,6 +16,16 @@ locally as before. When the server is down, search falls back to words.
 - Inputs (story text) pass through in memory only; nothing is logged but
   counts and timings.
 
+## How dev reaches it (15 Oct 2026)
+
+Neither server has a Hetzner private network, so they are joined by a
+WireGuard tunnel: embedding box `wg0` 10.77.0.1, API box `wg0` 10.77.0.2
+(`/etc/wireguard/wg0.conf` on each, `wg-quick@wg0` enabled). UFW allows
+51820/udp only from the other box's public IP, and 8790/tcp only on `wg0`
+from 10.77.0.2. The service listens on 10.77.0.1 and starts after the
+tunnel (`memento-embed.service.d/wireguard.conf`). Round trip from the API
+box: ~1.2 ms ping, 113–147 ms per search query.
+
 ## Install
 
 1. Node 20+: `apt install nodejs` from NodeSource, `node -v`.
