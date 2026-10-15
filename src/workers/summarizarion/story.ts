@@ -8,6 +8,7 @@ import {
 } from '../../utils';
 import {buildMemoryContent} from '../../module/api/ai/utils';
 import gemini, {GEMINI_MODEL} from '../../services/gemini';
+import {forgetUserContext} from '../../services/user-context-cache';
 
 export default async function summarizeStory(memoryId: string): Promise<void> {
   try {
@@ -32,11 +33,13 @@ export default async function summarizeStory(memoryId: string): Promise<void> {
 
     const summaryData = extractJson(summaryResponse.text);
     if (summaryData) {
-      await Memory.findByIdAndUpdate(memoryId, {
+      const summarised = await Memory.findByIdAndUpdate(memoryId, {
         summary: summaryData?.summary,
         topics: summaryData?.topics || [],
         last_summarized_at: new Date(),
       });
+      // New summaries change the context that starts calls and chats.
+      if (summarised) void forgetUserContext(String(summarised.user));
     }
 
     return summaryData;

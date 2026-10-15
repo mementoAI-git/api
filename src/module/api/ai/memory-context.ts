@@ -1,10 +1,13 @@
 import {FilterQuery} from 'mongoose';
 import Memory, {IMemory} from '../../database/model/memory';
+import {cachedUserContext} from '../../../services/user-context-cache';
 
 const MEMORY_CONTEXT_LIMIT = 12;
 const MEMORY_TEXT_LIMIT = 2000;
 
 export interface MemoryContextEntry {
+  /** The story or conversation, so the current one can be left out. */
+  id?: string;
   title: string;
   summary: string;
   topics: string[];
@@ -42,61 +45,81 @@ function timestamp(value?: string): string {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString();
 }
 
+/**
+ * The host's latest stories and summarised conversations, newest first,
+ * leaving out the one being discussed. Cached briefly per user (shared by
+ * every call and chat), so one extra of each type is loaded to still have
+ * MEMORY_CONTEXT_LIMIT after leaving one out.
+ */
 export async function getMemorySummaries(
   userId: string,
   excludeMemoryId?: string,
 ): Promise<MemoryContextEntry[]> {
   try {
-    const query: FilterQuery<IMemory> = {
-      user: userId,
-      status: {$nin: ['draft', 'deleted']},
-      ...(excludeMemoryId && {_id: {$ne: excludeMemoryId}}),
-    };
-
-    // Read saved stories directly: summary generation is asynchronous and may
-    // be unavailable. Creation time identifies the newest post, even when an
-    // older story has just been edited or enriched by a worker.
-    const [stories, conversations] = await Promise.all([
-      Memory.find({...query, type: 'story'})
-        .sort({created_at: -1, _id: -1})
-        .limit(MEMORY_CONTEXT_LIMIT)
-        .select('title body summary topics type created_at updated_at'),
-      Memory.find({
-        ...query,
-        type: 'conversation',
-        summary: {$exists: true, $ne: null},
-      })
-        .sort({created_at: -1, _id: -1})
-        .limit(MEMORY_CONTEXT_LIMIT)
-        .select('title summary topics type created_at updated_at'),
-    ]);
-
-    return [...stories, ...conversations]
-      .sort(
-        (a, b) =>
-          (new Date(b.created_at || 0).getTime() || 0) -
-          (new Date(a.created_at || 0).getTime() || 0),
-      )
-      .map(memory => ({
-        title:
-          memory.title ||
-          (memory.type === 'story'
-            ? 'Untitled story'
-            : 'Untitled conversation'),
-        // Prefer the current body over a potentially stale story summary.
-        summary:
-          (memory.type === 'story' && storyExcerpt(memory.body || '')) ||
-          (memory.summary || '').slice(0, MEMORY_TEXT_LIMIT) ||
-          '[No text content available; do not infer attachment contents.]',
-        topics: memory.topics || [],
-        type: memory.type,
-        created_at: timestamp(memory.created_at),
-        updated_at: timestamp(memory.updated_at),
-      }));
+    const entries = await cachedUserContext(
+      'memory-summaries',
+      String(userId),
+      () => loadMemorySummaries(String(userId)),
+    );
+    const kept = {story: 0, conversation: 0} as Record<string, number>;
+    return entries.filter(entry => {
+      if (excludeMemoryId && entry.id === String(excludeMemoryId)) return false;
+      kept[entry.type] = (kept[entry.type] || 0) + 1;
+      return kept[entry.type] <= MEMORY_CONTEXT_LIMIT;
+    });
   } catch (error) {
     console.error('Error fetching memory context:', error);
     return [];
   }
+}
+
+async function loadMemorySummaries(
+  userId: string,
+): Promise<MemoryContextEntry[]> {
+  const query: FilterQuery<IMemory> = {
+    user: userId,
+    status: {$nin: ['draft', 'deleted']},
+  };
+
+  // Read saved stories directly: summary generation is asynchronous and may
+  // be unavailable. Creation time identifies the newest post, even when an
+  // older story has just been edited or enriched by a worker.
+  const [stories, conversations] = await Promise.all([
+    Memory.find({...query, type: 'story'})
+      .sort({created_at: -1, _id: -1})
+      .limit(MEMORY_CONTEXT_LIMIT + 1)
+      .select('title body summary topics type created_at updated_at'),
+    Memory.find({
+      ...query,
+      type: 'conversation',
+      summary: {$exists: true, $ne: null},
+    })
+      .sort({created_at: -1, _id: -1})
+      .limit(MEMORY_CONTEXT_LIMIT + 1)
+      .select('title summary topics type created_at updated_at'),
+  ]);
+
+  return [...stories, ...conversations]
+    .sort(
+      (a, b) =>
+        (new Date(b.created_at || 0).getTime() || 0) -
+        (new Date(a.created_at || 0).getTime() || 0),
+    )
+    .map(memory => ({
+      id: String(memory._id),
+      title:
+        memory.title ||
+        (memory.type === 'story' ? 'Untitled story' : 'Untitled conversation'),
+      // Prefer the current body over a potentially stale story summary.
+      summary:
+        (memory.type === 'story' && storyExcerpt(memory.body || '')) ||
+        (memory.summary || '').slice(0, MEMORY_TEXT_LIMIT) ||
+        '[No text content available; do not infer attachment contents.]',
+      topics: memory.topics || [],
+      type: memory.type,
+      created_at: timestamp(memory.created_at),
+      updated_at: timestamp(memory.updated_at),
+    }));
 }
 
 export function buildMemoriesContext(memories: MemoryContextEntry[]): string {

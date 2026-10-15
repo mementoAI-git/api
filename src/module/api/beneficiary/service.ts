@@ -24,6 +24,7 @@ import otp from '../../../services/otp';
 import {acquireUsageSlot, applyUsageDelta} from '../billing/usage-accounting';
 import mongoose from 'mongoose';
 import {activatePair, isPairBlocked} from '../people/connection';
+import {forgetUserContext} from '../../../services/user-context-cache';
 
 export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   const {
@@ -124,6 +125,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
     );
   }
 
+  void forgetUserContext(user_id);
   return {message: 'Beneficiary added successfully', data};
 }
 
@@ -216,6 +218,7 @@ export async function del(id: string, user_id: string) {
     user_id,
   );
 
+  void forgetUserContext(user_id);
   return {message: 'Beneficiary deleted successfully', data: beneficiary!};
 }
 
@@ -289,6 +292,7 @@ export async function update(
     user_id,
   );
 
+  void forgetUserContext(user_id);
   return {message: 'Beneficiary updated successfully', data};
 }
 
@@ -365,6 +369,9 @@ export async function acceptInvite(payload: IAcceptInivite) {
   if (beneficiary.access_scope === 'shared_only') {
     await activatePair(beneficiary.benefactor, user.id);
   }
+  // Both sides' overviews list their people.
+  void forgetUserContext(String(beneficiary.benefactor));
+  void forgetUserContext(user.id);
 
   return {message: 'Invite retrieved successfully', data: {token}};
 }

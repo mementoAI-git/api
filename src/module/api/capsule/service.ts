@@ -12,6 +12,7 @@ import {EXCLUDED_STORAGE_PROVIDER} from '../../../utils/constant';
 import {normalizeCapsuleRecipients} from './recipients';
 import {acquireUsageSlot, applyUsageDelta} from '../billing/usage-accounting';
 import mongoose from 'mongoose';
+import {forgetUserContext} from '../../../services/user-context-cache';
 export {
   exchangeExternalViewToken,
   getExternalCapsule,
@@ -158,6 +159,7 @@ export async function createCapsule(
     user_id,
   );
 
+  void forgetUserContext(user_id);
   return {message: 'Capsule created successfully', data: capsule.toObject()};
 }
 
@@ -304,6 +306,7 @@ export async function updateCapsule(
     user_id,
   );
 
+  void forgetUserContext(user_id);
   return {message: 'Capsule updated successfully', data: updateCapsule};
 }
 
@@ -359,6 +362,7 @@ export async function scheduleCapsule(id: string, userId: string) {
     scheduledCapsule!.id,
     scheduledCapsule!.schedule_date!,
   );
+  void forgetUserContext(userId);
   return {message: 'Capsule scheduled successfully', data: scheduledCapsule!};
 }
 
@@ -465,6 +469,7 @@ export async function deleteCapsule(id: string, user: string) {
     user,
   );
 
+  void forgetUserContext(user);
   return {message: 'Time capsule deleted successfully', data: capsule!};
 }
 

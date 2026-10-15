@@ -3,6 +3,7 @@ import Beneficiary from '../../../database/model/beneficiary';
 import Capsule from '../../../database/model/capsule';
 import Memory from '../../../database/model/memory';
 import * as people from '../../people/service';
+import {cachedUserContext} from '../../../../services/user-context-cache';
 
 /**
  * A short sheet of what the host keeps in Memento, put in the voice call's
@@ -136,7 +137,14 @@ async function reflectionsLine(userId: string): Promise<string> {
   return prompts ? `Recent reflections: ${prompts}.` : '';
 }
 
+/** Cached briefly per user; cleared when their stories, people or capsules change. */
 export async function buildHostOverview(userId: string): Promise<string> {
+  return cachedUserContext('host-overview', String(userId), () =>
+    loadHostOverview(userId),
+  );
+}
+
+async function loadHostOverview(userId: string): Promise<string> {
   const lines = await Promise.all(
     [peopleLine, storiesLine, capsulesLine, reflectionsLine].map(line =>
       line(userId).catch(() => ''),

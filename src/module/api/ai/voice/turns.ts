@@ -4,6 +4,7 @@ import {assertOwnedMemory} from '../../memory/access';
 import {updateStreak} from '../../user/service';
 import {updateMemoryTitle} from '../utils';
 import {queueMemorySearch} from '../../../../services/queues/memory-search';
+import {forgetUserContext} from '../../../../services/user-context-cache';
 
 export type VoiceTurnInput = {
   index: number;
@@ -81,6 +82,7 @@ export async function recordVoiceTurns(
       },
     );
     void queueMemorySearch(userId, memoryId);
+    void forgetUserContext(userId);
     void updateStreak(userId).catch(error =>
       console.error('Error updating voice streak:', error),
     );

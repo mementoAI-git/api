@@ -28,6 +28,19 @@ export type VoiceSessionContext = {
   memoryId?: string;
 };
 
+/** Stands in for the recalled memories until they arrive. */
+const LONG_TERM_PLACEHOLDER = '\u0000LONG_TERM_CONTEXT\u0000';
+
+function reflectionTopicOf(
+  memory: {prompt_text?: unknown; type?: unknown; title?: unknown} | null,
+): string | undefined {
+  return (
+    String(memory?.prompt_text || '').trim() ||
+    (memory?.type === 'story' ? String(memory?.title || '').trim() : '') ||
+    undefined
+  );
+}
+
 function stripHtml(value: string): string {
   return value
     .replace(/<[^>]+>/g, ' ')
@@ -52,78 +65,97 @@ export async function buildVoiceSessionContext(
   const time = <T>(name: string, work: () => Promise<T>) =>
     options.timer ? options.timer.time(`context.${name}`, work) : work();
 
+  // Every read below is a database round trip, so they all start at once:
+  // the conversation, its recent lines, the host overview and the base
+  // context. Only the recall waits, for the topic it looks up.
+
   // Unowned, malformed or stale IDs must never block a call or leak another
   // user's data. Promise.resolve().then() also catches synchronous throws.
-  const memory = memoryId
-    ? await time('memory', () =>
+  const memoryReady = memoryId
+    ? time('memory', () =>
         Promise.resolve()
           .then(() => findOwnedMemory(memoryId, userId))
           .catch(() => null),
       )
-    : null;
-  const ownedMemoryId = memory ? String(memory._id) : undefined;
+    : Promise.resolve(null);
+  // Scoped to the host's own messages, so an unowned ID finds nothing.
+  const linesReady = memoryId
+    ? time('lines', () =>
+        Promise.resolve()
+          .then(() =>
+            getRecentConversationLines(userId, memoryId, MAX_TRANSCRIPT_LINES),
+          )
+          .catch(() => []),
+      )
+    : Promise.resolve([]);
 
-  const reflectionTopic =
-    String(memory?.prompt_text || '').trim() ||
-    (memory?.type === 'story' ? String(memory?.title || '').trim() : '') ||
-    undefined;
+  // What to recall at the start: the reflection, else what the host last
+  // said in this conversation. Without either there is nothing specific to
+  // look up, and the host overview and profile already cover the basics.
+  const longTermReady = Promise.all([memoryReady, linesReady]).then(
+    ([memory, recent]) => {
+      const lastHostLine = [...recent]
+        .reverse()
+        .find(line => line.speaker === 'Host')?.text;
+      const topic =
+        reflectionTopicOf(memory) ||
+        lastHostLine ||
+        (MEMORY_RETRIEVAL === 'supermemory'
+          ? 'ongoing life, recent conversations and people'
+          : '');
+      return time('recall', () =>
+        getLongTermContext(userId, topic).catch(() => ''),
+      );
+    },
+  );
+
+  // The base context only needs the recall for one block, so it is built
+  // with a placeholder there and does not wait for it.
+  const baseReady = linesReady.then(recent =>
+    time('base', () =>
+      prompts.createSystemContext(
+        user,
+        memoryId,
+        null,
+        LONG_TERM_PLACEHOLDER,
+        recent.filter(line => line.speaker === 'Host').length,
+      ),
+    ).catch(error => {
+      console.error(
+        'Failed to build base system context for voice mode:',
+        error,
+      );
+      return '';
+    }),
+  );
+
+  const [memory, lines, longTermContext, hostOverview, base] =
+    await Promise.all([
+      memoryReady,
+      linesReady,
+      withTimeout(
+        longTermReady,
+        options.longTermTimeoutMs ?? DEFAULT_LONG_TERM_TIMEOUT_MS,
+        '',
+      ),
+      withTimeout(
+        time('overview', () => buildHostOverview(userId).catch(() => '')),
+        HOST_OVERVIEW_TIMEOUT_MS,
+        '',
+      ),
+      baseReady,
+    ]);
+  const ownedMemoryId = memory ? String(memory._id) : undefined;
+  const reflectionTopic = reflectionTopicOf(memory);
   const memoryNotes =
     memory?.type === 'story'
       ? stripHtml(String(memory?.body || '')).slice(0, MAX_NOTES_CHARS) ||
         undefined
       : undefined;
-
-  const linesReady = ownedMemoryId
-    ? time('lines', () =>
-        getRecentConversationLines(userId, ownedMemoryId, MAX_TRANSCRIPT_LINES),
-      )
-    : Promise.resolve([]);
-  // What to recall at the start: the reflection, else what the host last
-  // said in this conversation. Without either there is nothing specific to
-  // look up, and the host overview and profile already cover the basics.
-  const longTermReady = linesReady.then(recent => {
-    const lastHostLine = [...recent]
-      .reverse()
-      .find(line => line.speaker === 'Host')?.text;
-    const topic =
-      reflectionTopic ||
-      lastHostLine ||
-      (MEMORY_RETRIEVAL === 'supermemory'
-        ? 'ongoing life, recent conversations and people'
-        : '');
-    return time('recall', () =>
-      getLongTermContext(userId, topic).catch(() => ''),
-    );
-  });
-  const [lines, longTermContext, hostOverview] = await Promise.all([
-    linesReady,
-    withTimeout(
-      longTermReady,
-      options.longTermTimeoutMs ?? DEFAULT_LONG_TERM_TIMEOUT_MS,
-      '',
-    ),
-    withTimeout(
-      time('overview', () => buildHostOverview(userId).catch(() => '')),
-      HOST_OVERVIEW_TIMEOUT_MS,
-      '',
-    ),
-  ]);
-
-  const hostTurns = lines.filter(line => line.speaker === 'Host').length;
-  let baseContext = '';
-  try {
-    baseContext = await time('base', () =>
-      prompts.createSystemContext(
-        user,
-        ownedMemoryId,
-        null,
-        longTermContext,
-        hostTurns,
-      ),
-    );
-  } catch (error) {
-    console.error('Failed to build base system context for voice mode:', error);
-  }
+  const baseContext = base.replace(
+    LONG_TERM_PLACEHOLDER,
+    () => longTermContext,
+  );
 
   const name = String(
     (user as any).nickname || (user as any).first_name || '',
