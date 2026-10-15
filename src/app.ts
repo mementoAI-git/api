@@ -12,6 +12,7 @@ import {CORS_ALLOWED_ORIGINS, JSON_BODY_LIMIT, PORT} from './utils/config';
 import {logger} from './utils';
 import {ForbiddenException} from './utils/service-error';
 import requestContext from './middleware/request-context';
+import {warmUpEmbeddings} from './services/embeddings';
 
 export function createServer(): Application {
   const app = express();
@@ -80,5 +81,8 @@ export function createServer(): Application {
 export function startServer(app: express.Application) {
   app.listen(PORT, () => {
     logger.info(`Application running on port ${PORT}...`);
+    warmUpEmbeddings(error =>
+      logger.warn({err: error}, 'Memory embedding model failed to load'),
+    );
   });
 }

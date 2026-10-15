@@ -10,6 +10,7 @@ import startExploreQuestionWorker from './explore-questions';
 import startMemorySearchWorker from './memory-search';
 import {logger} from '../utils';
 import {startReadyWorkerHeartbeat} from '../services/worker-heartbeat';
+import {warmUpEmbeddings} from '../services/embeddings';
 
 async function startWorkers() {
   await connectMongodb();
@@ -20,6 +21,10 @@ async function startWorkers() {
   }
 
   logger.info('Starting background workers...');
+  // The embedding sweep runs here; load the model before its first run.
+  warmUpEmbeddings(error =>
+    logger.warn({err: error}, 'Memory embedding model failed to load'),
+  );
 
   const insightsWorker = startInsightsExtractionWorker(connection);
   const quickCaptureWorker = startQuickCaptureWorker(connection);

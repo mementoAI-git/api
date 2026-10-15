@@ -1,7 +1,7 @@
 import MemoryEmbedding, {
   type EmbeddingSource,
 } from '../../module/database/model/memory-embedding';
-import {embed, pack, similarity} from '.';
+import {EMBEDDING_MIN_SCORE, EMBEDDING_MODEL, embed, pack, similarity} from '.';
 
 /**
  * Finds what the host wrote or said that is closest in meaning to a
@@ -14,8 +14,6 @@ import {embed, pack, similarity} from '.';
 
 const CACHE_MS = 5 * 60_000;
 const MAX_CACHED_USERS = 200;
-/** Below this, a match is noise. */
-const MIN_SCORE = 0.5;
 /** Matches far below the best one are dropped. */
 const MAX_GAP = 0.12;
 
@@ -48,7 +46,11 @@ export function forgetCachedVectors(user: string): void {
 async function vectorsFor(user: string): Promise<Cached['items']> {
   const hit = cache.get(user);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.items;
-  const rows = await MemoryEmbedding.find({user})
+  const rows = await MemoryEmbedding.find({
+    user,
+    // Only vectors from the current model compare meaningfully.
+    embedding_model: EMBEDDING_MODEL,
+  })
     .select('source source_id memory text written_at vector')
     .lean();
   const items = rows.map(row => ({
@@ -81,7 +83,7 @@ export async function semanticSearch(
   const wanted = pack(values);
   const scored = items
     .map(item => ({...item, score: similarity(item.vector, wanted)}))
-    .filter(item => item.score >= MIN_SCORE)
+    .filter(item => item.score >= EMBEDDING_MIN_SCORE)
     .sort((a, b) => b.score - a.score);
   if (!scored.length) return [];
   const best = scored[0].score;

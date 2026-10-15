@@ -86,6 +86,7 @@
     "@bull-board/express": "^6.16.2",
     "@google-cloud/storage": "^7.14.0",
     "@google/genai": "^1.20.0",
+    "@huggingface/transformers": "3.8.1",
     "@simplewebauthn/server": "^13.3.0",
     "@types/ejs": "^3.1.5",
     "archiver": "^8.0.0",
