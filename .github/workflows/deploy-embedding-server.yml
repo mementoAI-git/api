@@ -21,6 +21,7 @@ on:
     branches: [dev]
     paths:
       - ops/memory-search/embedding-server/**
+      - test/memory-search/embedding-server.test.ts
       - .github/workflows/deploy-embedding-server.yml
   workflow_dispatch:
 
