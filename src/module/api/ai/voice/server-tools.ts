@@ -1,13 +1,17 @@
 import dayjs from 'dayjs';
 import User from '../../../database/model/user';
+import VoiceAction from '../../../database/model/voice-action';
 import * as users from '../../user/service';
 import {CONTENT_ACTION_HANDLERS} from './content-actions';
 import {findStory} from './find-story';
-import type {VoiceToolOutcome} from './server-tool-types';
+import type {VoiceToolOutcome, VoiceToolRun} from './server-tool-types';
 import {
   OPEN_STORY_TOOL_NAME,
+  UNDO_LAST_ACTION_TOOL_NAME,
   UPDATE_PROFILE_TOOL_NAME,
 } from './server-tool-declarations';
+import {failed} from './tool-errors';
+import {undoLastAction} from './undo';
 
 export {SERVER_TOOL_NAMES} from './server-tool-declarations';
 
@@ -21,6 +25,10 @@ export {SERVER_TOOL_NAMES} from './server-tool-declarations';
  * (refresh a cached screen, open a screen or a story). The app applies only
  * the effect types it knows, so new tools can be added here without an app
  * release as long as they use existing effect types.
+ *
+ * Every action is logged with how to reverse it ("undo that"). When the app
+ * sends Gemini's call id, a repeated call (Gemini resends after a reconnect)
+ * gets the first result back instead of acting twice.
  */
 
 export type {VoiceToolEffect, VoiceToolOutcome} from './server-tool-types';
@@ -50,8 +58,9 @@ function text(value: unknown): string | undefined {
 async function updateProfile(
   userId: string,
   args: Record<string, unknown>,
-): Promise<VoiceToolOutcome> {
+): Promise<VoiceToolRun> {
   const update: Record<string, unknown> = {};
+  const restore: Record<string, unknown> = {};
   const changed: string[] = [];
   // What each field was, so Memento can answer "what was it before?" and
   // change it back.
@@ -66,6 +75,7 @@ async function updateProfile(
     const value = text(args[arg]);
     if (value === undefined) continue;
     update[field] = value;
+    restore[field] = before[field] ?? null;
     changed.push(`${label} from ${was(before[field])} to "${value}"`);
   }
   if (args.birthday !== undefined) {
@@ -85,6 +95,7 @@ async function updateProfile(
       };
     }
     update.dob = `${given}T00:00:00.000Z`;
+    restore.dob = before.dob ?? null;
     const previous = before.dob
       ? dayjs(before.dob as Date).format('D MMMM YYYY')
       : undefined;
@@ -100,8 +111,14 @@ async function updateProfile(
     };
   }
 
-  await users.updateProfile(update, userId);
+  try {
+    await users.updateProfile(update, userId);
+  } catch (error) {
+    return failed(error);
+  }
   return {
+    undo: {kind: 'profile', fields: restore},
+    summary: `changed their ${changed.join(', ')}`,
     result: `Done: changed their ${changed.join(', ')}. Their profile is now on screen. Tell them briefly and offer to change it back.`,
     effects: [
       {type: 'refresh', what: 'profile'},
@@ -131,21 +148,95 @@ async function openStory(
 
 const HANDLERS: Record<
   string,
-  (userId: string, args: Record<string, unknown>) => Promise<VoiceToolOutcome>
+  (userId: string, args: Record<string, unknown>) => Promise<VoiceToolRun>
 > = {
   [UPDATE_PROFILE_TOOL_NAME]: updateProfile,
   [OPEN_STORY_TOOL_NAME]: openStory,
+  [UNDO_LAST_ACTION_TOOL_NAME]: userId => undoLastAction(userId),
   ...CONTENT_ACTION_HANDLERS,
 };
+
+/** How long a repeated call waits for the first one to finish. */
+const REPEAT_WAIT_MS = 15_000;
+const REPEAT_POLL_MS = 250;
+
+function isDuplicateKey(error: unknown): boolean {
+  return (error as {code?: number})?.code === 11000;
+}
+
+/** The first run's outcome for a repeated call id. */
+async function replay(
+  userId: string,
+  callId: string,
+  waitMs: number,
+): Promise<VoiceToolOutcome> {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    const first = await VoiceAction.findOne({user: userId, call_id: callId})
+      .select('running outcome')
+      .lean();
+    if (first && !first.running && first.outcome) {
+      return first.outcome as VoiceToolOutcome;
+    }
+    if (!first || Date.now() >= deadline) break;
+    await new Promise(resolve => setTimeout(resolve, REPEAT_POLL_MS));
+  }
+  return {
+    result:
+      'That request is already being handled. Do not call it again; tell the host it is on its way.',
+    effects: [],
+  };
+}
 
 export async function runVoiceServerTool(
   userId: string,
   name: string,
   args: Record<string, unknown>,
+  options: {callId?: string; repeatWaitMs?: number} = {},
 ): Promise<VoiceToolOutcome> {
   const handler = Object.prototype.hasOwnProperty.call(HANDLERS, name)
     ? HANDLERS[name]
     : undefined;
   if (!handler) throw new UnknownVoiceToolError(name);
-  return handler(userId, args ?? {});
+  const {callId} = options;
+
+  let claim: string | undefined;
+  if (callId) {
+    try {
+      const created = await VoiceAction.create({
+        user: userId,
+        tool: name,
+        call_id: callId,
+        running: true,
+      });
+      claim = String(created._id);
+    } catch (error) {
+      if (!isDuplicateKey(error)) throw error;
+      return replay(userId, callId, options.repeatWaitMs ?? REPEAT_WAIT_MS);
+    }
+  }
+
+  let run: VoiceToolRun;
+  try {
+    run = await handler(userId, args ?? {});
+  } catch (error) {
+    // Free the call id so a retry can run.
+    if (claim) await VoiceAction.deleteOne({_id: claim});
+    throw error;
+  }
+  const outcome: VoiceToolOutcome = {result: run.result, effects: run.effects};
+  const entry = {
+    outcome,
+    ...(run.undo && {undo: run.undo}),
+    ...(run.summary && {summary: run.summary}),
+  };
+  if (claim) {
+    await VoiceAction.updateOne(
+      {_id: claim},
+      {$set: {...entry, running: false}},
+    );
+  } else if (run.undo) {
+    await VoiceAction.create({user: userId, tool: name, ...entry});
+  }
+  return outcome;
 }

@@ -25,6 +25,7 @@ import * as capsuleService from '../../src/module/api/capsule/service';
 import * as feedbackService from '../../src/module/api/feedback/service';
 import * as memoryService from '../../src/module/api/memory/service';
 import Beneficiary from '../../src/module/database/model/beneficiary';
+import Bookmark from '../../src/module/database/model/bookmarks';
 import Capsule from '../../src/module/database/model/capsule';
 import Memory from '../../src/module/database/model/memory';
 import {SERVER_TOOL_DECLARATIONS} from '../../src/module/api/ai/voice/server-tool-declarations';
@@ -35,6 +36,7 @@ import {
   connectTestDatabase,
 } from '../helpers/database';
 import {createUserFixture} from '../helpers/factories';
+import {ServiceError} from '../../src/utils/service-error';
 
 /** The code from a "Nothing has happened yet" read-back. */
 function codeIn(result: string): string {
@@ -128,6 +130,8 @@ describe('voice content actions', () => {
       const lagos = await story(user.id, 'Trip to Lagos');
 
       await runVoiceServerTool(user.id, 'bookmark_story', {query: 'Lagos'});
+      // The service is mocked, so record the bookmark it would have made.
+      await Bookmark.create({memory: String(lagos._id), user: user.id});
       await runVoiceServerTool(user.id, 'bookmark_story', {
         query: 'Lagos',
         bookmarked: false,
@@ -238,14 +242,23 @@ describe('voice content actions', () => {
     it('says plainly when a service refuses', async () => {
       const user = await createUserFixture();
       vi.mocked(memoryService.quickCaptureMemory).mockRejectedValueOnce(
-        new Error('Storage is full'),
+        new ServiceError(
+          'Storage quota exceeded',
+          413,
+          null,
+          'failed',
+          undefined,
+          'storage_quota_exceeded',
+        ),
       );
 
       const outcome = await runVoiceServerTool(user.id, 'quick_note', {
         text: 'x',
       });
 
-      expect(outcome.result).toContain('That did not work: Storage is full');
+      expect(outcome.result).toContain(
+        'That did not work: their Memento storage is full',
+      );
     });
   });
 

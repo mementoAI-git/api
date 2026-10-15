@@ -145,6 +145,8 @@ export const voiceToolSchema = z.object({
   }),
   body: z.strictObject({
     args: z.record(z.string(), z.unknown()).default({}),
+    /** Gemini's tool call id: a repeated id returns the first result. */
+    call_id: z.string().trim().min(1).max(128).optional(),
   }),
 });
 
