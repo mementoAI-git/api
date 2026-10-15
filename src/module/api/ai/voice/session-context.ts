@@ -15,6 +15,7 @@ import {
 import {withTimeout} from './with-timeout';
 import {buildHostOverview} from './host-overview';
 import {describeHostNow} from './local-time';
+import type {StepTimer} from '../../../../utils/step-timer';
 
 const DEFAULT_LONG_TERM_TIMEOUT_MS = 1_500;
 const HOST_OVERVIEW_TIMEOUT_MS = 1_500;
@@ -44,16 +45,21 @@ export async function buildVoiceSessionContext(
     serverTools?: boolean;
     screenControl?: boolean;
     timeZone?: string;
+    timer?: StepTimer;
   } = {},
 ): Promise<VoiceSessionContext> {
   const userId = String(user._id);
+  const time = <T>(name: string, work: () => Promise<T>) =>
+    options.timer ? options.timer.time(`context.${name}`, work) : work();
 
   // Unowned, malformed or stale IDs must never block a call or leak another
   // user's data. Promise.resolve().then() also catches synchronous throws.
   const memory = memoryId
-    ? await Promise.resolve()
-        .then(() => findOwnedMemory(memoryId, userId))
-        .catch(() => null)
+    ? await time('memory', () =>
+        Promise.resolve()
+          .then(() => findOwnedMemory(memoryId, userId))
+          .catch(() => null),
+      )
     : null;
   const ownedMemoryId = memory ? String(memory._id) : undefined;
 
@@ -68,7 +74,9 @@ export async function buildVoiceSessionContext(
       : undefined;
 
   const linesReady = ownedMemoryId
-    ? getRecentConversationLines(userId, ownedMemoryId, MAX_TRANSCRIPT_LINES)
+    ? time('lines', () =>
+        getRecentConversationLines(userId, ownedMemoryId, MAX_TRANSCRIPT_LINES),
+      )
     : Promise.resolve([]);
   // What to recall at the start: the reflection, else what the host last
   // said in this conversation. Without either there is nothing specific to
@@ -83,7 +91,9 @@ export async function buildVoiceSessionContext(
       (MEMORY_RETRIEVAL === 'supermemory'
         ? 'ongoing life, recent conversations and people'
         : '');
-    return getLongTermContext(userId, topic).catch(() => '');
+    return time('recall', () =>
+      getLongTermContext(userId, topic).catch(() => ''),
+    );
   });
   const [lines, longTermContext, hostOverview] = await Promise.all([
     linesReady,
@@ -93,7 +103,7 @@ export async function buildVoiceSessionContext(
       '',
     ),
     withTimeout(
-      buildHostOverview(userId).catch(() => ''),
+      time('overview', () => buildHostOverview(userId).catch(() => '')),
       HOST_OVERVIEW_TIMEOUT_MS,
       '',
     ),
@@ -102,12 +112,14 @@ export async function buildVoiceSessionContext(
   const hostTurns = lines.filter(line => line.speaker === 'Host').length;
   let baseContext = '';
   try {
-    baseContext = await prompts.createSystemContext(
-      user,
-      ownedMemoryId,
-      null,
-      longTermContext,
-      hostTurns,
+    baseContext = await time('base', () =>
+      prompts.createSystemContext(
+        user,
+        ownedMemoryId,
+        null,
+        longTermContext,
+        hostTurns,
+      ),
     );
   } catch (error) {
     console.error('Failed to build base system context for voice mode:', error);

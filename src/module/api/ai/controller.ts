@@ -12,6 +12,8 @@ import {UnknownVoiceToolError, runVoiceServerTool} from './voice/server-tools';
 import {parseVoiceClientCapabilities} from './live-session-config';
 import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
 import {NotFoundException} from '../../../utils/service-error';
+import {StepTimer} from '../../../utils/step-timer';
+import logger from '../../../utils/logger';
 
 export async function autogenerateTags(
   req: IRequest,
@@ -127,8 +129,13 @@ export async function getEphemeralToken(
   res: Response,
   next: NextFunction,
 ) {
+  const timer = new StepTimer();
   try {
-    await assertAccess(req.auth.id, 'voice_mode');
+    // The plan check runs alongside preparing the session (both wait on the
+    // database); the session is only returned once access is confirmed.
+    const access = timer.time('access', () =>
+      assertAccess(req.auth.id, 'voice_mode'),
+    );
     const memoryId =
       typeof req.query.memory_id === 'string' && req.query.memory_id.trim()
         ? req.query.memory_id.trim()
@@ -146,7 +153,7 @@ export async function getEphemeralToken(
     const timeZone = validTimeZone(req.query.timezone);
     const {memoryTool, callActions, serverTools, screenControl} =
       parseVoiceClientCapabilities(req.query.capabilities);
-    const {message, data} = await service.createEphemeralToken(
+    const prepared = service.createEphemeralToken(
       req.auth.id,
       memoryId,
       resumeHandle,
@@ -157,7 +164,16 @@ export async function getEphemeralToken(
         serverTools,
         screenControl,
         timeZone,
+        timer,
       },
+    );
+    // If access is refused, the prepared session is dropped unseen.
+    prepared.catch(() => {});
+    await access;
+    const {message, data} = await prepared;
+    logger.info(
+      {userId: req.auth.id, ms: timer.total(), steps: timer.steps},
+      'Voice session prepared',
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
