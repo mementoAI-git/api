@@ -2,7 +2,7 @@
 
 **Purpose:** let a person find content already saved in Memento by describing it, even when their search uses different words. This is application search, not a search of the person's computer.
 
-**Status:** backend and frontend wiring have been implemented locally, with tests. Semantic search is **not active on the existing development server**. Its `/memories/search` request currently fails and the frontend uses the existing word-search endpoint. A Linux runtime build and test-server access check are being prepared. No hosted activation has been performed.
+**Status (14 October 2026):** the search backend is deployed on the development/test server, and text description search is enabled for the approved test owner only. The pinned Linux helper and models passed server probes. Activation checked both running services and readiness successfully. The app on port 5173 has returned `hybrid` mode with content preparation in progress. Photo-description search remains disabled. Hosted paraphrase checks have succeeded for a story and a saved chat, including their normal opening flows. Preparation is still running, and the response also reports partial availability (`limited: true`); failed sources have a ten-minute retry cooldown. Full library coverage and the user's relevance review remain open.
 
 ## 1. Intended experience
 
@@ -58,7 +58,7 @@ For photos, the worker uses the existing authorized storage adapter. It does not
 
 DigUp's embedding worker is an external server executable. Memento uses its embedding protocol; it does not launch the desktop app, use its folder crawler, or install it on users' devices.
 
-The previously tested executable was for Apple Silicon/macOS. Before deployment, build and verify the Linux helper for the actual test-server platform. The proposed build pins:
+The native Linux helper has now been built and verified for the test server. The build pins:
 
 - DigUp source commit `ca6e877be139997ef259e1a5f84881394c46332c`.
 - The upstream pinned llama.cpp build and patch.
@@ -69,7 +69,7 @@ The native Linux package must contain its required runtime libraries and license
 
 Before installation, run the real helper through the authenticated API against fictional stories/public test photos in a temporary database. Measure query startup and response time on Linux. The current per-query model timeout is three seconds: if the server cannot reliably meet it, startup/model reuse or the execution budget needs engineering work before activation. Do not silently relax limits or claim success because the UI falls back to words.
 
-**Prepared files:** `ops/memory-search/Dockerfile`, `ops/memory-search/build-linux.sh`, and `.github/workflows/memory-search-prepare.yml` in the isolated rollout checkout. These are not yet a verified Linux release.
+**Verified build files:** `ops/memory-search/Dockerfile`, `ops/memory-search/build-linux.sh`, and `.github/workflows/memory-search-prepare.yml`. The native package passed the Linux integration checks and three query probes on the test server within the three-second deadline.
 
 ## 6. Initial limits for review
 
@@ -93,7 +93,7 @@ Accounts or transcripts outside these bounds use word search. These are pilot bo
 7. **Prepare app content and test in the app.** Use the app on port 5173 against the updated test backend. Confirm the response is actually `hybrid`, not the compatibility fallback. Validate useful paraphrases and correct story/chat opening.
 8. **Evaluate before expansion.** Review relevance, latency, failures and privacy. Enable photos only after storage reads and file-access checks pass. Broader accounts and production require a separate rollout decision.
 
-The preparation workflow currently proposed only builds/tests the runtime and performs a read-only server/platform check. It does **not** deploy the app or enable the feature by itself.
+The preparation workflow builds/tests the runtime and checks the server platform. The normal development workflow deploys the backend. A separate activation workflow installs the verified runtime, applies the account allowlist, checks both running processes and restores the prior settings if activation fails.
 
 Server-only settings, shared by API and worker:
 
@@ -123,9 +123,9 @@ These settings and credentials must not be put in Vite/client configuration or c
 
 ## 9. Evidence and work still open
 
-Existing focused backend, frontend, privacy and routing tests have passed during implementation. Actual Mac-model testing on a small fictional development set returned the expected memory first for 19 of 20 positive queries and no results for four of five negative queries. This set was used during development; it is not an independent accuracy benchmark, and it did not establish production chat-search quality.
+The full backend suite passed with 666 tests and four skips, and the normal development deployment passed its checks. Focused frontend, privacy and routing tests have also passed during implementation. Actual Linux-model testing on a small fictional development set returned the expected memory first for 19 of 20 positive queries and no results for four of five negative queries. This set was used during development; it is not an independent accuracy benchmark, and it did not establish production chat-search quality.
 
-The hosted search endpoint has not been updated. Linux native packaging/performance, clean-branch deployment gates, installation, test-account activation and hosted end-to-end semantic checks remain rollout work. Existing unrelated frontend test/type-check failures have been documented separately and must not be mistaken for a completely clean repository baseline.
+The hosted search endpoint is deployed. The Linux package, server query probes and development deployment are verified. Account activation succeeded in [workflow run 38627178043](https://github.com/mementoAI-git/api/actions/runs/38627178043), and the authenticated app has returned `hybrid` mode. Hosted checks through the app on port 5173 found “Waiting for the sunset meeting” from “appointment at dusk” and the saved salary/salt-allowance conversation from “compensation derived from edible minerals”. The latter wording is absent from the chat, apart from the common word “from”. Clicking the story opened the standard View Story modal without a 404, and clicking the chat opened its saved conversation route. Content preparation is still running and some sources have entered the retry cooldown; full coverage, failure diagnosis and broader relevance review remain open. These two examples establish basic end-to-end operation, not a general accuracy benchmark. Activation explicitly supplies the five pilot settings in PM2 app configuration because ecosystem reloads replace the nested app environment; private temporary configuration files are removed after use. Both failed earlier activation attempts restored the previous configuration. Existing unrelated frontend test/type-check failures have been documented separately and must not be mistaken for a completely clean repository baseline.
 
 ### Developer review requested
 
