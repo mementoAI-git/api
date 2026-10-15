@@ -1,27 +1,38 @@
 #!/usr/bin/env node
 /**
- * Memento embedding server: keeps one DigUp worker (EmbeddingGemma 2)
- * loaded and answers embedding requests from the API and workers over the
- * private network. Loading the model once is what makes search fast enough
- * for voice; spawning DigUp per query reloads the model every time.
+ * Memento embedding server: keeps EmbeddingGemma 2 (through the verified
+ * DigUp worker) loaded and answers embedding requests from the API and
+ * workers over the private network. Loading the model once is what makes
+ * search fast enough for voice; spawning DigUp per query reloads it each time.
+ *
+ * Two lanes, each its own DigUp worker, so a search never waits behind
+ * indexing: "query" (short search queries, more threads) and "index" (story
+ * and chat text, which takes seconds per chunk on CPU).
  *
  * No dependencies beyond Node 20. Never logs inputs, vectors or paths.
  *
- *   POST /v1/embed   {batches: [{op: 'text', inputs: [...]}, ...]}
+ *   POST /v1/embed   {lane?: 'query'|'index', batches: [{op: 'text', inputs: [...]}, ...]}
  *                    -> {info, replies: [{count, vectors}]}  (base64 float32)
- *   GET  /health     -> {ready, info, restarts, queued}
+ *   GET  /health     -> {ready, info, lanes: {query, index}}
  *
  * Every request needs "Authorization: Bearer $EMBEDDING_SERVER_TOKEN".
  *
  * Environment:
  *   DIGUP_PATH, DIGUP_MODELS     absolute paths to the verified runtime/models
  *   EMBEDDING_SERVER_TOKEN       shared secret, at least 32 characters
- *   EMBEDDING_SERVER_HOST        private-network address to listen on
+ *   EMBEDDING_SERVER_HOST        address to listen on (default 127.0.0.1)
  *   EMBEDDING_SERVER_PORT        default 8790
  *   EMBEDDING_TEXT_ONLY          default true (photos off: skips the image encoder)
+ *   EMBEDDING_QUERY_THREADS      default 2
+ *   EMBEDDING_INDEX_THREADS      default 2
+ *
+ * Keep the two thread counts within the machine's cores: llama.cpp threads
+ * spin while they wait, so oversubscribing slows a search from ~140 ms to
+ * ~2.8 s while indexing runs (measured on a 4-vCPU Hetzner box).
  */
 import {spawn} from 'node:child_process';
 import {timingSafeEqual} from 'node:crypto';
+import {existsSync} from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -33,9 +44,12 @@ const DIM = 768;
 const MAX_BATCHES = 128;
 const MAX_INPUTS = 16;
 const MAX_INPUT_CHARS = 8_000;
+/** A query-lane request: a few short inputs, never a story. */
+const MAX_QUERY_INPUTS = 4;
+const MAX_QUERY_CHARS = 1_000;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 /** One batch should never take this long; the worker is restarted if it does. */
-const BATCH_TIMEOUT_MS = 60_000;
+const BATCH_TIMEOUT_MS = 120_000;
 const MAX_QUEUED = 512;
 const BUDGET = 140;
 
@@ -59,27 +73,6 @@ function log(event, fields = {}) {
   console.log(JSON.stringify({at: new Date().toISOString(), event, ...fields}));
 }
 
-/** The running DigUp worker, its readiness, and requests waiting on it. */
-const engine = {
-  child: null,
-  info: null,
-  ready: null,
-  nextId: 1,
-  pending: new Map(),
-  restarts: 0,
-  /** Batches run one at a time, in order. */
-  chain: Promise.resolve(),
-  queued: 0,
-};
-
-function failPending(error) {
-  for (const {reject, timer} of engine.pending.values()) {
-    clearTimeout(timer);
-    reject(error);
-  }
-  engine.pending.clear();
-}
-
 function validInfo(info) {
   return (
     info &&
@@ -90,118 +83,167 @@ function validInfo(info) {
   );
 }
 
-function start() {
-  engine.info = null;
-  const child = spawn(
-    executable,
-    ['worker', ...(textOnly ? ['--text-only'] : [])],
-    {
+/**
+ * The verified runtime's `digup` wrapper pins two threads; when its binary
+ * sits next to it, run that directly so each lane picks its own count.
+ */
+function command(threads) {
+  const dir = path.dirname(executable);
+  const binary = path.join(dir, 'digup.bin');
+  const env = {
+    PATH: process.env.PATH,
+    HOME: process.env.HOME,
+    TMPDIR: process.env.TMPDIR,
+    DIGUP_MODELS: models,
+  };
+  const args = ['worker', ...(textOnly ? ['--text-only'] : [])];
+  if (existsSync(binary)) {
+    return {
+      file: binary,
+      args,
       env: {
-        PATH: process.env.PATH,
-        HOME: process.env.HOME,
-        TMPDIR: process.env.TMPDIR,
-        DIGUP_MODELS: models,
+        ...env,
+        DIGUP_BACKENDS: path.join(dir, 'lib'),
+        DIGUP_THREADS: String(threads),
       },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    },
-  );
-  engine.child = child;
-  const began = Date.now();
-  engine.ready = new Promise((resolve, reject) => {
-    const lines = readline.createInterface({input: child.stdout});
-    let first = true;
-    lines.on('line', line => {
-      let message;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        return;
-      }
-      if (first) {
-        first = false;
-        if (message.ready === true && validInfo(message.info)) {
-          engine.info = message.info;
-          log('engine_ready', {ms: Date.now() - began, textOnly});
-          resolve();
-        } else {
-          log('engine_incompatible');
-          reject(new Error('incompatible engine'));
-          child.kill('SIGKILL');
-        }
-        return;
-      }
-      const waiting = engine.pending.get(message.id);
-      if (!waiting) return;
-      engine.pending.delete(message.id);
-      clearTimeout(waiting.timer);
-      waiting.resolve(message);
-    });
-  });
-  engine.ready.catch(() => {});
-  child.stderr.resume();
-  child.stdin.on('error', () => {});
-  child.on('error', () => log('engine_spawn_failed'));
-  child.on('exit', code => {
-    if (engine.child !== child) return;
-    engine.child = null;
-    engine.info = null;
-    failPending(new Error('engine stopped'));
-    engine.restarts++;
-    const delay = Math.min(30_000, 1_000 * 2 ** Math.min(engine.restarts, 5));
-    log('engine_exit', {code, restartInMs: delay});
-    setTimeout(start, delay);
-  });
-}
-
-function restart(reason) {
-  log('engine_restart', {reason});
-  engine.child?.kill('SIGKILL');
-}
-
-async function runBatch(batch) {
-  await engine.ready;
-  const child = engine.child;
-  if (!child || !engine.info) throw new Error('engine not ready');
-  const id = engine.nextId++;
-  const reply = new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      engine.pending.delete(id);
-      reject(new Error('batch timed out'));
-      restart('timeout');
-    }, BATCH_TIMEOUT_MS);
-    engine.pending.set(id, {resolve, reject, timer});
-  });
-  child.stdin.write(
-    JSON.stringify({id, op: batch.op, inputs: batch.inputs, budget: BUDGET}) +
-      '\n',
-  );
-  const message = await reply;
-  const bytes = Buffer.from(String(message.vectors || ''), 'base64');
-  if (
-    message.ok !== true ||
-    message.dim !== DIM ||
-    message.count !== batch.inputs.length ||
-    bytes.length !== batch.inputs.length * DIM * 4
-  ) {
-    throw new Error('incomplete reply');
+    };
   }
-  return {count: message.count, vectors: message.vectors};
+  return {file: executable, args, env};
 }
 
-/** Queues a request's batches behind earlier ones. */
-function embed(batches) {
-  engine.queued++;
-  const run = engine.chain.then(async () => {
-    const replies = [];
-    for (const batch of batches) replies.push(await runBatch(batch));
-    return replies;
-  });
-  engine.chain = run.catch(() => {}).finally(() => engine.queued--);
-  return run;
+/** One DigUp worker: its readiness, and the batches waiting on it, in order. */
+function createLane(name, threads) {
+  const lane = {
+    name,
+    child: null,
+    info: null,
+    ready: null,
+    nextId: 1,
+    pending: new Map(),
+    restarts: 0,
+    chain: Promise.resolve(),
+    queued: 0,
+  };
+
+  function failPending(error) {
+    for (const {reject, timer} of lane.pending.values()) {
+      clearTimeout(timer);
+      reject(error);
+    }
+    lane.pending.clear();
+  }
+
+  function start() {
+    lane.info = null;
+    const {file, args, env} = command(threads);
+    const child = spawn(file, args, {env, stdio: ['pipe', 'pipe', 'pipe']});
+    lane.child = child;
+    const began = Date.now();
+    lane.ready = new Promise((resolve, reject) => {
+      const lines = readline.createInterface({input: child.stdout});
+      let first = true;
+      lines.on('line', line => {
+        let message;
+        try {
+          message = JSON.parse(line);
+        } catch {
+          return;
+        }
+        if (first) {
+          first = false;
+          if (message.ready === true && validInfo(message.info)) {
+            lane.info = message.info;
+            log('engine_ready', {lane: name, threads, ms: Date.now() - began});
+            resolve();
+          } else {
+            log('engine_incompatible', {lane: name});
+            reject(new Error('incompatible engine'));
+            child.kill('SIGKILL');
+          }
+          return;
+        }
+        const waiting = lane.pending.get(message.id);
+        if (!waiting) return;
+        lane.pending.delete(message.id);
+        clearTimeout(waiting.timer);
+        waiting.resolve(message);
+      });
+    });
+    lane.ready.catch(() => {});
+    child.stderr.resume();
+    child.stdin.on('error', () => {});
+    child.on('error', () => log('engine_spawn_failed', {lane: name}));
+    child.on('exit', code => {
+      if (lane.child !== child) return;
+      lane.child = null;
+      lane.info = null;
+      failPending(new Error('engine stopped'));
+      lane.restarts++;
+      const delay = Math.min(30_000, 1_000 * 2 ** Math.min(lane.restarts, 5));
+      log('engine_exit', {lane: name, code, restartInMs: delay});
+      setTimeout(start, delay);
+    });
+  }
+
+  async function runBatch(batch) {
+    await lane.ready;
+    const child = lane.child;
+    if (!child || !lane.info) throw new Error('engine not ready');
+    const id = lane.nextId++;
+    const reply = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        lane.pending.delete(id);
+        reject(new Error('batch timed out'));
+        log('engine_restart', {lane: name, reason: 'timeout'});
+        child.kill('SIGKILL');
+      }, BATCH_TIMEOUT_MS);
+      lane.pending.set(id, {resolve, reject, timer});
+    });
+    child.stdin.write(
+      JSON.stringify({id, op: batch.op, inputs: batch.inputs, budget: BUDGET}) +
+        '\n',
+    );
+    const message = await reply;
+    const bytes = Buffer.from(String(message.vectors || ''), 'base64');
+    if (
+      message.ok !== true ||
+      message.dim !== DIM ||
+      message.count !== batch.inputs.length ||
+      bytes.length !== batch.inputs.length * DIM * 4
+    ) {
+      throw new Error('incomplete reply');
+    }
+    return {count: message.count, vectors: message.vectors};
+  }
+
+  /** Queues a request's batches behind earlier ones on this lane. */
+  lane.embed = batches => {
+    lane.queued++;
+    const run = lane.chain.then(async () => {
+      const replies = [];
+      for (const batch of batches) replies.push(await runBatch(batch));
+      return replies;
+    });
+    lane.chain = run.catch(() => {}).finally(() => lane.queued--);
+    return run;
+  };
+  lane.start = start;
+  lane.stop = () => {
+    const child = lane.child;
+    lane.child = null;
+    child?.stdin.end(JSON.stringify({id: 0, op: 'quit'}) + '\n');
+  };
+  return lane;
 }
+
+const lanes = {
+  query: createLane('query', Number(process.env.EMBEDDING_QUERY_THREADS || 2)),
+  index: createLane('index', Number(process.env.EMBEDDING_INDEX_THREADS || 2)),
+};
 
 function invalid(body) {
   const batches = body?.batches;
+  if (body?.lane !== undefined && !(body.lane in lanes)) return 'unknown lane';
   if (
     !Array.isArray(batches) ||
     !batches.length ||
@@ -220,6 +262,14 @@ function invalid(body) {
       )
     )
       return 'inputs must be 1-16 strings';
+  }
+  if (body.lane === 'query') {
+    const inputs = batches.flatMap(batch => batch.inputs);
+    if (
+      inputs.length > MAX_QUERY_INPUTS ||
+      inputs.some(input => input.length > MAX_QUERY_CHARS)
+    )
+      return 'the query lane takes up to 4 short inputs';
   }
   return null;
 }
@@ -242,17 +292,25 @@ function send(response, status, body) {
 const server = http.createServer((request, response) => {
   if (!authorised(request)) return send(response, 401, {error: 'unauthorised'});
   if (request.method === 'GET' && request.url === '/health') {
-    return send(response, engine.info ? 200 : 503, {
-      ready: Boolean(engine.info),
-      info: engine.info,
-      restarts: engine.restarts,
-      queued: engine.queued,
+    const ready = Object.values(lanes).every(lane => lane.info);
+    return send(response, ready ? 200 : 503, {
+      ready,
+      info: lanes.query.info || lanes.index.info,
+      lanes: Object.fromEntries(
+        Object.entries(lanes).map(([name, lane]) => [
+          name,
+          {
+            ready: Boolean(lane.info),
+            restarts: lane.restarts,
+            queued: lane.queued,
+          },
+        ]),
+      ),
     });
   }
   if (request.method !== 'POST' || request.url !== '/v1/embed') {
     return send(response, 404, {error: 'not found'});
   }
-  if (engine.queued >= MAX_QUEUED) return send(response, 503, {error: 'busy'});
   const chunks = [];
   let size = 0;
   request.on('data', chunk => {
@@ -272,20 +330,26 @@ const server = http.createServer((request, response) => {
     }
     const problem = invalid(body);
     if (problem) return send(response, 400, {error: problem});
+    const lane = lanes[body.lane || 'index'];
+    if (lane.queued >= MAX_QUEUED) return send(response, 503, {error: 'busy'});
     const began = Date.now();
     try {
-      const replies = await embed(body.batches);
+      const replies = await lane.embed(body.batches);
       const inputs = body.batches.reduce((sum, b) => sum + b.inputs.length, 0);
-      log('embedded', {inputs, ms: Date.now() - began});
-      send(response, 200, {info: engine.info, replies});
+      log('embedded', {lane: lane.name, inputs, ms: Date.now() - began});
+      send(response, 200, {info: lane.info, replies});
     } catch (error) {
-      log('embed_failed', {reason: error.message, ms: Date.now() - began});
+      log('embed_failed', {
+        lane: lane.name,
+        reason: error.message,
+        ms: Date.now() - began,
+      });
       send(response, 503, {error: 'engine unavailable'});
     }
   });
 });
 
-start();
+for (const lane of Object.values(lanes)) lane.start();
 server.listen(port, host, () =>
   log('listening', {host, port: server.address().port}),
 );
@@ -293,9 +357,7 @@ server.listen(port, host, () =>
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
     server.close();
-    const child = engine.child;
-    engine.child = null;
-    child?.stdin.end(JSON.stringify({id: 0, op: 'quit'}) + '\n');
+    for (const lane of Object.values(lanes)) lane.stop();
     setTimeout(() => process.exit(0), 2_000).unref();
   });
 }

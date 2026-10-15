@@ -67,6 +67,7 @@ async function embedRemote(
   batches: EmbeddingInput[],
   config: RemoteEngineConfig,
   timeoutMs: number,
+  lane: EmbeddingLane,
 ): Promise<number[][][]> {
   if (remoteActive >= MAX_REMOTE_IN_FLIGHT)
     throw new Error('Description search is busy');
@@ -80,7 +81,7 @@ async function embedRemote(
           authorization: `Bearer ${config.token}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({batches}),
+        body: JSON.stringify({lane, batches}),
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
@@ -111,11 +112,18 @@ async function embedRemote(
   }
 }
 
+/**
+ * Which worker on the embedding server: searches use "query" so they never
+ * wait behind story indexing, which takes seconds per chunk.
+ */
+export type EmbeddingLane = 'query' | 'index';
+
 /** Rejects incompatible models, invalid vectors and partial inputs. */
 export async function embedInputs(
   batches: EmbeddingInput[],
   config: EngineConfig | null = engineConfig(),
   timeoutMs = 120_000,
+  lane: EmbeddingLane = 'index',
 ): Promise<number[][][]> {
   if (!config) throw new Error('Description search is not configured');
   if (!batches.length) return [];
@@ -124,7 +132,7 @@ export async function embedInputs(
     batches.length > 128
   )
     throw new Error('Embedding input exceeds pilot limits');
-  if ('url' in config) return embedRemote(batches, config, timeoutMs);
+  if ('url' in config) return embedRemote(batches, config, timeoutMs, lane);
   return embedLocal(batches, config, timeoutMs);
 }
 
@@ -234,6 +242,7 @@ export async function embedQuery(query: string): Promise<number[]> {
       [{op: 'text', inputs: [`task: search result | query: ${query}`]}],
       undefined,
       3000,
+      'query',
     )
   )[0][0];
 }

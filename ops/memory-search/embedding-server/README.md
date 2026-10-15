@@ -36,7 +36,11 @@ locally as before. When the server is down, search falls back to words.
    EMBEDDING_SERVER_HOST=<this machine's private IP>
    EMBEDDING_SERVER_PORT=8790
    EMBEDDING_TEXT_ONLY=true
+   EMBEDDING_QUERY_THREADS=2
+   EMBEDDING_INDEX_THREADS=2
    ```
+
+   The two thread counts should add up to the core count, no more.
 
 5. `cp memento-embed.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now memento-embed`
 6. Check: `journalctl -u memento-embed -f` shows `engine_ready` with its load
@@ -54,3 +58,13 @@ MEMORY_SEARCH_ENGINE_TOKEN=<same token>
 
 `MEMORY_SEARCH_ENABLED` and `MEMORY_SEARCH_USER_IDS` still decide who gets
 description search.
+
+## Measured (4 vCPU Skylake, 7.6 GB, Hetzner nbg1, 15 Oct 2026)
+
+| | |
+|---|---|
+| DigUp spawned per query (before) | 1.8–2.2 s per query |
+| Model load at service start | ~1.7 s per lane, ~465 MB RAM per lane |
+| Search query, idle | p50 159 ms, p95 190 ms |
+| Search query while indexing | p50 140 ms, p95 160 ms, max 169 ms |
+| Indexing, 1,800-character story chunk | ~3.1 s each (8 chunks in 25 s) |

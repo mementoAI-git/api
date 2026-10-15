@@ -46,9 +46,12 @@ require('node:readline').createInterface({input: process.stdin}).on('line', line
   if (request.op === 'quit') return process.stdout.write('', () => process.exit(0));
   if (request.inputs.includes('crash')) process.exit(3);
   if (request.inputs.includes('hang')) return;
+  const answer = () => {
   const values = Buffer.alloc(request.inputs.length * 768 * 4);
   request.inputs.forEach((input, row) => values.writeFloatLE(input.length, row * 768 * 4));
   console.log(JSON.stringify({id: request.id, ok: true, dim: 768, count: request.inputs.length, vectors: values.toString('base64'), errors: request.inputs.map(() => null)}));
+  };
+  if (request.inputs.includes('slow')) setTimeout(answer, 2000); else answer();
 });
 `,
     {mode: 0o700},
@@ -101,7 +104,39 @@ describe('embedding server', () => {
     // First value is the input length before normalising, so after
     // normalising it is 1 for every row.
     expect(results.every(r => r.length === 2 && r[0][0][0] === 1)).toBe(true);
-    expect(await readFile(digup.starts, 'utf8')).toBe('x');
+    // One model load per lane (query and index), however many requests.
+    expect(await readFile(digup.starts, 'utf8')).toBe('xx');
+  });
+
+  it('keeps a search fast while a big indexing job runs', async () => {
+    const digup = await fakeDigup();
+    const {url} = await startServer(digup.executable, digup.folder);
+    const config = {url, token: TOKEN};
+
+    await embedInputs([text('warm')], config, 5_000, 'index');
+    await embedInputs([text('warm')], config, 5_000, 'query');
+    // "slow" holds the index worker for 2 seconds.
+    const indexing = embedInputs([text('slow')], config, 10_000, 'index');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const began = Date.now();
+    await embedInputs([text('query')], config, 5_000, 'query');
+
+    expect(Date.now() - began).toBeLessThan(500);
+    await indexing;
+  });
+
+  it('keeps stories off the query lane', async () => {
+    const digup = await fakeDigup();
+    const {url} = await startServer(digup.executable, digup.folder);
+
+    await expect(
+      embedInputs(
+        [text('x'.repeat(1_500))],
+        {url, token: TOKEN},
+        5_000,
+        'query',
+      ),
+    ).rejects.toThrow('unavailable');
   });
 
   it('refuses a wrong token', async () => {
@@ -125,7 +160,7 @@ describe('embedding server', () => {
       .poll(() => events.filter(e => e.event === 'engine_ready').length, {
         timeout: 8_000,
       })
-      .toBe(2);
+      .toBe(3);
     const [[vector]] = await embedInputs([text('back')], config, 5_000);
     expect(vector[0]).toBe(1);
   }, 15_000);
