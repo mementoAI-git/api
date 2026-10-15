@@ -56,19 +56,20 @@ export async function getMemorySummaries(
     // Read saved stories directly: summary generation is asynchronous and may
     // be unavailable. Creation time identifies the newest post, even when an
     // older story has just been edited or enriched by a worker.
-    const stories = await Memory.find({...query, type: 'story'})
-      .sort({created_at: -1, _id: -1})
-      .limit(MEMORY_CONTEXT_LIMIT)
-      .select('title body summary topics type created_at updated_at');
-
-    const conversations = await Memory.find({
-      ...query,
-      type: 'conversation',
-      summary: {$exists: true, $ne: null},
-    })
-      .sort({created_at: -1, _id: -1})
-      .limit(MEMORY_CONTEXT_LIMIT)
-      .select('title summary topics type created_at updated_at');
+    const [stories, conversations] = await Promise.all([
+      Memory.find({...query, type: 'story'})
+        .sort({created_at: -1, _id: -1})
+        .limit(MEMORY_CONTEXT_LIMIT)
+        .select('title body summary topics type created_at updated_at'),
+      Memory.find({
+        ...query,
+        type: 'conversation',
+        summary: {$exists: true, $ne: null},
+      })
+        .sort({created_at: -1, _id: -1})
+        .limit(MEMORY_CONTEXT_LIMIT)
+        .select('title summary topics type created_at updated_at'),
+    ]);
 
     return [...stories, ...conversations]
       .sort(

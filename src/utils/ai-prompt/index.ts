@@ -63,24 +63,26 @@ async function createSystemContext(
   longTermContext?: string,
   sessionTurnCount = 0,
 ): Promise<string> {
-  let userContext = persona || ({} as IPersona);
-  if (!persona) {
-    userContext = await Persona.findOne({user: user._id});
-  }
+  const userId = String(user._id);
+  // Independent reads, each a database round trip: run them together.
+  const [
+    storedPersona,
+    summaries,
+    pendingInsightsContext,
+    sessionCtx,
+    recentReflectionsContext,
+  ] = await Promise.all([
+    persona ? Promise.resolve(persona) : Persona.findOne({user: user._id}),
+    getMemorySummaries(user._id, currentMemoryId),
+    buildPendingInsightsPromptSection(userId),
+    getSessionContext(userId, {user, persona}),
+    getRecentReflectionsContext(userId),
+  ]);
+  const userContext = storedPersona || ({} as IPersona);
 
   const userPreferences = user.preferences || {};
-
-  const summaries = await getMemorySummaries(user._id, currentMemoryId);
   const pastContext = buildMemoriesContext(summaries);
-  const pendingInsightsContext = await buildPendingInsightsPromptSection(
-    String(user._id),
-  );
-
-  const sessionCtx = await getSessionContext(String(user._id));
   const sessionContextString = buildSessionContextPrompt(sessionCtx);
-  const recentReflectionsContext = await getRecentReflectionsContext(
-    String(user._id),
-  );
 
   return buildSystemContext(
     user,
@@ -648,24 +650,34 @@ export interface ISessionContext {
 
 export async function getSessionContext(
   userId: string,
+  /** Already loaded by the caller; read here otherwise. */
+  loaded: {user?: IUser | null; persona?: IPersona | null} = {},
 ): Promise<ISessionContext> {
-  const user = await User.findById(userId).lean();
-  const persona = await Persona.findOne({user: userId}).lean();
+  const conversationFilter = {user: userId, type: 'conversation'};
+  // Independent reads, each a database round trip: run them together.
+  const [
+    user,
+    persona,
+    sessionCount,
+    newestConversation,
+    discussedDimensions,
+    enrichment,
+  ] = await Promise.all([
+    loaded.user ?? User.findById(userId).lean(),
+    loaded.persona ?? Persona.findOne({user: userId}).lean(),
+    Memory.countDocuments(conversationFilter),
+    Memory.findOne(conversationFilter)
+      .sort({created_at: -1})
+      .select('summary topics created_at')
+      .lean(),
+    Memory.distinct('dimensions', conversationFilter),
+    // Context generation must still work if enrichment computation fails.
+    computeEnrichmentScore(userId).catch(() => null),
+  ]);
 
   const priorityDimensions =
     (user?.preferences as any)?.priority_dimensions || [];
   const openThreads = (persona?.open_threads as string[]) || [];
-
-  const conversationFilter = {user: userId, type: 'conversation'};
-  const [sessionCount, newestConversation, discussedDimensions] =
-    await Promise.all([
-      Memory.countDocuments(conversationFilter),
-      Memory.findOne(conversationFilter)
-        .sort({created_at: -1})
-        .select('summary topics created_at')
-        .lean(),
-      Memory.distinct('dimensions', conversationFilter),
-    ]);
 
   // Only call something the last session if it is actually the newest conversation.
   // If the newest conversation is not summarized yet, return null instead of
@@ -691,13 +703,9 @@ export async function getSessionContext(
     allDiscussedDimensions,
   );
 
-  let enrichmentScore: number | null = null;
-  try {
-    const enrichment = await computeEnrichmentScore(userId);
-    enrichmentScore = enrichment.enrichment_score;
-  } catch (e) {
-    // Context generation must still work if enrichment computation fails.
-  }
+  const enrichmentScore: number | null = enrichment
+    ? enrichment.enrichment_score
+    : null;
 
   return {
     lastSession,

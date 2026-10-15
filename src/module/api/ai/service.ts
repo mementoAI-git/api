@@ -103,6 +103,7 @@ import {
 } from '../../../services/ai/chat-user-backoff';
 import {getLongTermContext} from '../../../services/embeddings/long-term';
 import {withTimeout} from './voice/with-timeout';
+import {StepTimer} from '../../../utils/step-timer';
 
 const CHAT_LONG_TERM_TIMEOUT_MS = 2_500;
 
@@ -1076,10 +1077,12 @@ export async function createEphemeralToken(
     screenControl?: boolean;
     /** The device's IANA time zone, validated. */
     timeZone?: string;
+    timer?: StepTimer;
   } = {},
 ) {
+  const timer = client.timer ?? new StepTimer();
   // Resolve the user with profile and voice preferences
-  const user = await User.findById(userId);
+  const user = await timer.time('user', () => User.findById(userId));
   if (!user) {
     throw new NotFoundException('User not found');
   }
@@ -1099,6 +1102,7 @@ export async function createEphemeralToken(
     serverTools,
     screenControl,
     timeZone: client.timeZone,
+    timer,
   });
 
   const expireTime = dayjs().add(30, 'minute').toDate();
@@ -1115,32 +1119,34 @@ export async function createEphemeralToken(
     provider: 'gemini',
   });
 
-  const token = await geminiAuthClient.authTokens.create({
-    config: {
-      uses: 1,
-      // No lockAdditionalFields: every field below is locked as-is. Passing []
-      // makes the SDK send a field mask built from the config, which includes
-      // `tools.0`; Gemini rejects that ("field_mask is invalid for
-      // BidiGenerateContentSetup") and every voice call fails.
-      expireTime: expireTime.toISOString(),
-      newSessionExpireTime: newSessionExpireTime.toISOString(),
-      liveConnectConstraints: {
-        model: live.model,
-        // Constraints lock every LiveConnectConfig field. Client config is
-        // ignored, so all voice context must be built here.
-        config: buildLiveConnectConfig(
-          live.voice.name,
-          voiceContext.systemInstruction,
-          resumeHandle,
-          {memoryTool, callActions, serverTools, screenControl},
-          turnDetection,
-        ),
+  const token = await timer.time('token', () =>
+    geminiAuthClient.authTokens.create({
+      config: {
+        uses: 1,
+        // No lockAdditionalFields: every field below is locked as-is. Passing []
+        // makes the SDK send a field mask built from the config, which includes
+        // `tools.0`; Gemini rejects that ("field_mask is invalid for
+        // BidiGenerateContentSetup") and every voice call fails.
+        expireTime: expireTime.toISOString(),
+        newSessionExpireTime: newSessionExpireTime.toISOString(),
+        liveConnectConstraints: {
+          model: live.model,
+          // Constraints lock every LiveConnectConfig field. Client config is
+          // ignored, so all voice context must be built here.
+          config: buildLiveConnectConfig(
+            live.voice.name,
+            voiceContext.systemInstruction,
+            resumeHandle,
+            {memoryTool, callActions, serverTools, screenControl},
+            turnDetection,
+          ),
+        },
+        httpOptions: {
+          apiVersion: 'v1alpha',
+        },
       },
-      httpOptions: {
-        apiVersion: 'v1alpha',
-      },
-    },
-  });
+    }),
+  );
 
   void recordAiMetric({
     event: 'prompt_version_used',
