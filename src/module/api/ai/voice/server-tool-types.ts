@@ -14,3 +14,28 @@ export type VoiceToolEffect =
   | {type: 'open_story'; id: string};
 
 export type VoiceToolOutcome = {result: string; effects: VoiceToolEffect[]};
+
+/** How to reverse something Memento did by voice ("undo that"). */
+export type VoiceUndo =
+  | {kind: 'profile'; fields: Record<string, unknown>}
+  | {kind: 'story_fields'; id: string; title?: string; tags?: string[]}
+  | {kind: 'bookmark'; id: string; on: boolean}
+  | {kind: 'remove_story'; id: string}
+  | {kind: 'restore_story'; id: string}
+  | {kind: 'remove_capsule'; id: string}
+  | {
+      kind: 'unschedule_capsule';
+      id: string;
+      status: string;
+      schedule_date?: string;
+    }
+  | {kind: 'remove_beneficiary'; id: string; email: string};
+
+/**
+ * What a handler returns: the outcome, plus how to undo it and a short
+ * summary for the action log. Only the outcome reaches the app.
+ */
+export type VoiceToolRun = VoiceToolOutcome & {
+  undo?: VoiceUndo;
+  summary?: string;
+};

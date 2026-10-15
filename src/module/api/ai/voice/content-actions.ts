@@ -1,5 +1,6 @@
 import dayjs from 'dayjs';
 import Beneficiary from '../../../database/model/beneficiary';
+import Bookmark from '../../../database/model/bookmarks';
 import Capsule from '../../../database/model/capsule';
 import User from '../../../database/model/user';
 import * as beneficiaries from '../../beneficiary/service';
@@ -11,7 +12,8 @@ import {JWT_SECRET} from '../../../../utils/config';
 import {confirmationCode, isConfirmed} from './confirmation';
 import {escapeRegex} from './memory-search';
 import {findStory} from './find-story';
-import type {VoiceToolOutcome} from './server-tool-types';
+import type {VoiceToolOutcome, VoiceToolRun} from './server-tool-types';
+import {failed} from './tool-errors';
 
 /**
  * Things Memento can do with the host's content by voice, through the same
@@ -35,7 +37,7 @@ const MAX_TAGS = 10;
 type Handler = (
   userId: string,
   args: Record<string, unknown>,
-) => Promise<VoiceToolOutcome>;
+) => Promise<VoiceToolRun>;
 
 function str(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
@@ -60,17 +62,6 @@ function say(result: string): VoiceToolOutcome {
 const NO_STORY = say(
   'No story matched. Tell the host you could not find it and ask what it was called.',
 );
-
-/** A service refusal (validation, not found) as something Memento can say. */
-function failed(error: unknown): VoiceToolOutcome {
-  const message =
-    error instanceof Error && error.message
-      ? error.message
-      : 'something went wrong';
-  return say(
-    `That did not work: ${message}. Tell the host plainly and suggest doing it in the app.`,
-  );
-}
 
 function secret(): string {
   return JWT_SECRET || 'memento-voice-confirmation';
@@ -111,6 +102,8 @@ const saveStory: Handler = async (userId, args) => {
         {type: 'refresh', what: 'memories'},
         {type: 'open_story', id: String((data as {_id: unknown})._id)},
       ],
+      undo: {kind: 'remove_story', id: String((data as {_id: unknown})._id)},
+      summary: `saved the story "${title}"`,
     };
   } catch (error) {
     return failed(error);
@@ -122,10 +115,12 @@ const quickNote: Handler = async (userId, args) => {
   if (!text)
     return say('There is nothing to note yet. Ask what to write down.');
   try {
-    await memories.quickCaptureMemory({body: text}, userId);
+    const {data} = await memories.quickCaptureMemory({body: text}, userId);
     return {
       result: 'Saved as a quick note. Tell them in a few words.',
       effects: [{type: 'refresh', what: 'memories'}],
+      undo: {kind: 'remove_story', id: String((data as {_id: unknown})._id)},
+      summary: 'saved the quick note',
     };
   } catch (error) {
     return failed(error);
@@ -137,6 +132,12 @@ const bookmarkStory: Handler = async (userId, args) => {
   if (!story) return NO_STORY;
   const id = String(story._id);
   const on = args.bookmarked !== false;
+  const was = Boolean(await Bookmark.exists({memory: id, user: userId}));
+  if (was === on) {
+    return say(
+      `"${story.title || 'Untitled'}" was already ${on ? 'bookmarked' : 'not bookmarked'}. Nothing changed.`,
+    );
+  }
   try {
     if (on) await memories.bookmark(id, userId);
     else await memories.unbookmark(id, userId);
@@ -146,6 +147,8 @@ const bookmarkStory: Handler = async (userId, args) => {
   return {
     result: `${on ? 'Bookmarked' : 'Removed the bookmark from'} "${story.title || 'Untitled'}".`,
     effects: [{type: 'refresh', what: 'memories'}],
+    undo: {kind: 'bookmark', id, on: was},
+    summary: `${on ? 'bookmarked' : 'removed the bookmark from'} "${story.title || 'Untitled'}"`,
   };
 };
 
@@ -168,6 +171,8 @@ const tagStory: Handler = async (userId, args) => {
   return {
     result: `"${story.title || 'Untitled'}" tags were ${current.join(', ') || 'none'}; now ${tags.join(', ') || 'none'}.`,
     effects: [{type: 'refresh', what: 'memories'}],
+    undo: {kind: 'story_fields', id: String(story._id), tags: story.tags ?? []},
+    summary: `changed the tags on "${story.title || 'Untitled'}"`,
   };
 };
 
@@ -187,6 +192,12 @@ const renameStory: Handler = async (userId, args) => {
       {type: 'refresh', what: 'memories'},
       {type: 'open_story', id: String(story._id)},
     ],
+    undo: {
+      kind: 'story_fields',
+      id: String(story._id),
+      title: story.title ?? '',
+    },
+    summary: `renamed "${story.title || 'Untitled'}" to "${title}"`,
   };
 };
 
@@ -214,8 +225,9 @@ const draftCapsule: Handler = async (userId, args) => {
       `"${recipientName}" is not one of their beneficiaries. Ask who it is for, or offer to add them as a beneficiary first.`,
     );
   }
+  let created: {_id?: unknown};
   try {
-    await capsules.createCapsule(
+    ({data: created} = await capsules.createCapsule(
       {
         title,
         body: message,
@@ -231,11 +243,13 @@ const draftCapsule: Handler = async (userId, args) => {
           : [],
       } as never,
       userId,
-    );
+    ));
   } catch (error) {
     return failed(error);
   }
   return {
+    undo: {kind: 'remove_capsule', id: String(created._id)},
+    summary: `drafted the capsule "${title}"`,
     result: `Drafted a capsule "${title}"${recipient ? ` for ${recipient.name}` : ''}. It is saved as a draft and not scheduled. Their capsules are on screen.`,
     effects: [
       {type: 'refresh', what: 'capsules'},
@@ -294,6 +308,15 @@ const scheduleCapsule: Handler = async (userId, args) => {
   }
   return {
     result: `Scheduled "${capsule.title}" for ${date.format('D MMMM YYYY')}.`,
+    undo: {
+      kind: 'unschedule_capsule',
+      id: String(capsule._id),
+      status: capsule.status,
+      schedule_date: capsule.schedule_date
+        ? new Date(capsule.schedule_date).toISOString()
+        : undefined,
+    },
+    summary: `scheduled the capsule "${capsule.title}"`,
     effects: [
       {type: 'refresh', what: 'capsules'},
       {type: 'open', destination: 'time_capsules'},
@@ -319,16 +342,21 @@ const addBeneficiary: Handler = async (userId, args) => {
     `Add ${name} (${relationship}) as a beneficiary. This emails an invitation to ${email}.`,
   );
   if (pending) return pending;
+  let added: {_id?: unknown} | undefined;
   try {
-    await beneficiaries.create(
+    ({data: added} = await beneficiaries.create(
       {email, name, relationship, about: ''} as CreateBeneficiaryBody,
       userId,
-    );
+    ));
   } catch (error) {
     return failed(error);
   }
   return {
     result: `Added ${name} as a beneficiary and sent the invitation to ${email}.`,
+    undo: added
+      ? {kind: 'remove_beneficiary', id: String(added._id), email}
+      : undefined,
+    summary: `added ${name} as a beneficiary`,
     effects: [
       {type: 'refresh', what: 'beneficiaries'},
       {type: 'open', destination: 'beneficiaries'},
@@ -355,8 +383,10 @@ const deleteStory: Handler = async (userId, args) => {
     return failed(error);
   }
   return {
-    result: `Deleted "${story.title || 'Untitled'}". It can be restored from the app for a while.`,
+    result: `Deleted "${story.title || 'Untitled'}". It can be brought back if they change their mind.`,
     effects: [{type: 'refresh', what: 'memories'}],
+    undo: {kind: 'restore_story', id: String(story._id)},
+    summary: `deleted the story "${story.title || 'Untitled'}"`,
   };
 };
 

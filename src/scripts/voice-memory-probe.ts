@@ -47,6 +47,10 @@ const ACTION_RESULTS: Record<string, string> = {
   press_button: 'Pressed "Save".',
   open_story:
     'Opened their story "Trip to Lagos" on screen. Say so in a few words.',
+  rename_story:
+    'Renamed "Trip to Lagos" to "Beach Day". Offer to change it back.',
+  undo_last_action:
+    'Undone: renamed "Trip to Lagos" to "Beach Day" has been reversed. Tell them in a few words.',
 };
 
 /** What the search tool returns for every query in this probe. */
@@ -210,6 +214,16 @@ const EXPECTATIONS: Expectation[] = [
     confirmed: true,
   },
   {question: 'Cancel my subscription.', noAction: true},
+  {
+    question: 'Rename my story about Lagos to Beach Day.',
+    followUp: 'Actually, change it back.',
+    tools: ['rename_story', 'undo_last_action'],
+  },
+  {
+    question: 'Change my nickname to Yo.',
+    followUp: 'Hmm, undo that.',
+    tools: ['update_profile', 'undo_last_action'],
+  },
   {
     question: 'Change my nickname to Yo.',
     tool: 'update_profile',

@@ -244,4 +244,28 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
         );
     },
   },
+  {
+    // Voice actions: "undo that" reads a user's latest; a repeated tool call
+    // id runs once; entries expire after a week.
+    id: '202610150001_voice_action_indexes',
+    up: async db => {
+      const actions = db.collection('voice_actions');
+      await actions.createIndex(
+        {user: 1, created_at: -1},
+        {name: 'voice_action_user'},
+      );
+      await actions.createIndex(
+        {user: 1, call_id: 1},
+        {
+          unique: true,
+          name: 'voice_action_call_unique',
+          partialFilterExpression: {call_id: {$type: 'string'}},
+        },
+      );
+      await actions.createIndex(
+        {created_at: 1},
+        {name: 'voice_action_ttl', expireAfterSeconds: 7 * 24 * 60 * 60},
+      );
+    },
+  },
 ];

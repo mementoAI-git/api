@@ -8,6 +8,7 @@ import {Behavior, FunctionDeclaration, Type} from '@google/genai';
 
 export const UPDATE_PROFILE_TOOL_NAME = 'update_profile';
 export const OPEN_STORY_TOOL_NAME = 'open_story';
+export const UNDO_LAST_ACTION_TOOL_NAME = 'undo_last_action';
 
 export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
   {
@@ -239,6 +240,12 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
       },
       required: ['message'],
     },
+  },
+  {
+    name: UNDO_LAST_ACTION_TOOL_NAME,
+    behavior: Behavior.BLOCKING,
+    description:
+      'Reverse the last thing you did for the host (a profile change, a save, a rename, tags, a bookmark, a capsule, a deleted story, a beneficiary) when they say "undo that", "change it back" or "put it back". Each call undoes one action, newest first, from the last half hour. Feedback that was sent cannot be unsent.',
   },
 ];
 

@@ -244,6 +244,7 @@ export async function runVoiceTool(
       req.auth.id,
       String(req.params.name),
       (req.body.args ?? {}) as Record<string, unknown>,
+      {callId: req.body.call_id as string | undefined},
     );
     return responsHandler(res, StatusCodes.OK, 'Voice tool complete', outcome);
   } catch (error) {
