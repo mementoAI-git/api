@@ -1,0 +1,25 @@
+[Unit]
+Description=Memento embedding server (EmbeddingGemma 2 via DigUp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=memento-embed
+Group=memento-embed
+EnvironmentFile=/etc/memento-embed.env
+ExecStart=/usr/bin/node /opt/memento-embed/server.mjs
+Restart=always
+RestartSec=2
+# Hardening: the service only needs its runtime, models and a temp dir.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/memento-embed
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+MemoryMax=6G
+
+[Install]
+WantedBy=multi-user.target
