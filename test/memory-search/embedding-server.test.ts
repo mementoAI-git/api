@@ -32,7 +32,9 @@ afterEach(async () => {
  */
 async function fakeDigup(info = INFO) {
   const folder = await mkdtemp(path.join(tmpdir(), 'memento-embed-server-'));
-  cleanup.push(() => rm(folder, {recursive: true, force: true}));
+  cleanup.push(() =>
+    rm(folder, {recursive: true, force: true, maxRetries: 5, retryDelay: 50}),
+  );
   const starts = path.join(folder, 'starts');
   const executable = path.join(folder, 'digup');
   await writeFile(
@@ -70,9 +72,20 @@ async function startServer(executable: string, folder: string) {
       EMBEDDING_SERVER_PORT: '0',
     },
     stdio: ['ignore', 'pipe', 'inherit'],
+    // Its own process group, so cleanup also stops the DigUp workers it
+    // started; otherwise one can still write to the temp folder as it is
+    // removed (ENOTEMPTY).
+    detached: true,
   });
-  cleanup.push(() => {
-    child.kill('SIGKILL');
+  cleanup.push(async () => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    const exited = new Promise(resolve => child.once('exit', resolve));
+    try {
+      process.kill(-child.pid!, 'SIGKILL');
+    } catch {
+      child.kill('SIGKILL');
+    }
+    await exited;
   });
   const lines = readline.createInterface({input: child.stdout!});
   const events: Record<string, unknown>[] = [];
