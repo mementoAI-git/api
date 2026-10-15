@@ -50,6 +50,7 @@ import {persistUploadedFiles} from '../file/service';
 import {getStorageUsageSummary} from '../billing/storage-quota';
 import {toPublicMemory} from './public-dto';
 import {withOperationLock} from '../../../services/operation-lock';
+import {forgetUserContext} from '../../../services/user-context-cache';
 
 export {getConversationEnrichment};
 
@@ -324,6 +325,7 @@ export async function createMemory(
   }
 
   void queueMemorySearch(user_id, memory.id);
+  void forgetUserContext(user_id);
   return {
     message: 'Memory created successfully',
     data: memory,
@@ -498,6 +500,7 @@ export async function quickCaptureMemory(
   void updateStreak(user_id);
 
   void queueMemorySearch(user_id, memory.id);
+  void forgetUserContext(user_id);
   return {
     message: 'Thought saved',
     data: memory,
@@ -857,6 +860,7 @@ export async function updateMemory(
   }
 
   void queueMemorySearch(user_id, memory.id);
+  void forgetUserContext(user_id);
   return {
     data: updatedMemory ?? memory,
     message: 'Memory updated successfully',
@@ -909,6 +913,7 @@ export async function deleteMemory(
     }
   }
 
+  void forgetUserContext(user_id);
   return {data: memory, message: 'Memory deleted successfully'};
 }
 
@@ -938,6 +943,7 @@ export async function restoreMemory(_id: string, user_id: string) {
   );
 
   void queueMemorySearch(user_id, memory.id);
+  void forgetUserContext(user_id);
   return {data: memory, message: 'Memory restored successfully'};
 }
 
@@ -1023,6 +1029,7 @@ export async function removeFileFromSpecificMemory(
   if (!memory) throw new NotFoundException('Memory not found');
 
   void queueMemorySearch(user_id, memory.id);
+  void forgetUserContext(user_id);
   return {
     data: memory,
     message: 'File detached from memory successfully',
@@ -1086,6 +1093,7 @@ export async function addMessageToMemory(
   }
 
   void queueMemorySearch(user_id, memory.id);
+  void forgetUserContext(user_id);
   return {
     data: messages,
     message: 'Message added to memory successfully',
