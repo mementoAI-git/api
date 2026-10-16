@@ -1454,6 +1454,95 @@
         ]
       }
     },
+    "/ai/spoken-reply": {
+      "post": {
+        "description": "Exact-text WAV narration. Voice selection comes from the authenticated profile. Audio is returned without persistence; maximum 20 clips per minute per IP. Long replies should be split into ordered clips of up to 2000 characters.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "audioBase64": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "enum": [
+                            "audio/wav"
+                          ],
+                          "type": "string"
+                        },
+                        "voiceName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "audioBase64",
+                        "mimeType",
+                        "voiceName"
+                      ],
+                      "type": "object"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "WAV audio, base64 encoded"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Voice feature disabled"
+          },
+          "422": {
+            "description": "Invalid narration text or unsupported request fields"
+          },
+          "429": {
+            "description": "Rate limited; do not retry automatically"
+          },
+          "503": {
+            "description": "Speech generation unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read a completed reply aloud using the saved Gemini voice",
+        "tags": [
+          "AI"
+        ]
+      }
+    },
     "/ai/transcribe-audio": {
       "post": {
         "description": "Transcribe audio to text. Send a multipart file (maximum 15 MB) for transient dictation, or a JSON file_id for an existing stored recording. Multipart audio is processed in memory and is not saved to file storage. Dictation returns full_text only for low latency; stored recordings also return timed segments.",

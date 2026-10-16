@@ -1,3 +1,4 @@
+import {synthesizeSpokenReply} from '../../../services/spoken-replies';
 import type {TranscriptionInput} from './transcription-input';
 import {Response} from 'express';
 import {FilterQuery} from 'mongoose';
@@ -1837,5 +1838,24 @@ export async function getAiPromptGovernanceStatus() {
         rollback_supported_via_env_overrides: true,
       },
     },
+  };
+}
+
+export async function getSpokenReply(
+  userId: string,
+  text: string,
+  signal?: AbortSignal,
+) {
+  const user = await User.findById(userId).select(
+    'chat_voice chat_voice_provider',
+  );
+  if (!user) throw new NotFoundException('User not found');
+  const {voiceName} = resolveGeminiVoiceName(
+    user.chat_voice ?? undefined,
+    user.chat_voice_provider ?? undefined,
+  );
+  return {
+    message: 'Spoken reply generated',
+    data: await synthesizeSpokenReply(text, voiceName, signal),
   };
 }

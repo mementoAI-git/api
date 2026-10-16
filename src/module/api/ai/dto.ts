@@ -196,3 +196,7 @@ export type AiPromptGovernanceQuery = z.infer<
 >['query'];
 export type AiVoicesQuery = z.infer<typeof aiVoicesSchema>['query'];
 export type AiVoicePreviewBody = z.infer<typeof aiVoicePreviewSchema>['body'];
+
+export const spokenReplySchema = z.object({
+  body: z.strictObject({text: z.string().trim().min(1).max(2000)}),
+});
