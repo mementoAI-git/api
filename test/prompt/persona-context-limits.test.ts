@@ -10,7 +10,11 @@ vi.mock('../../src/services/redis', () => ({
 }));
 
 import {prompts} from '../../src/utils';
-import {PERSONA_PROMPT_LIMITS} from '../../src/utils/ai-prompt';
+import {
+  PERSONA_COMPACT_LIMITS,
+  PERSONA_PROMPT_LIMITS,
+} from '../../src/utils/ai-prompt';
+import Memory from '../../src/module/database/model/memory';
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -64,5 +68,55 @@ describe('stored host lists in the prompt', () => {
       } as never,
     );
     expect(context).toContain('- None stored');
+  });
+});
+
+describe('compact context for voice calls', () => {
+  beforeAll(connectTestDatabase);
+  afterEach(clearTestDatabase);
+  afterAll(closeTestDatabase);
+
+  it('lists stories by title without their text, and fewer profile items', async () => {
+    const user = await createUserFixture();
+    await Memory.create({
+      user: user.id,
+      type: 'story',
+      status: 'save',
+      title: 'Grandma soup',
+      body: '<p>The pepper soup recipe she never wrote down.</p>',
+    });
+    const persona = {
+      important_notes: numbered('note', 20),
+      emotional_state_trends: numbered('trend', 20),
+    };
+
+    const full = await prompts.createSystemContext(
+      user as never,
+      undefined,
+      persona as never,
+    );
+    const compact = await prompts.createSystemContext(
+      user as never,
+      undefined,
+      persona as never,
+      '',
+      0,
+      {compact: true},
+    );
+
+    expect(full).toContain('The pepper soup recipe she never wrote down');
+    expect(compact).toContain('"Grandma soup"');
+    expect(compact).not.toContain(
+      'The pepper soup recipe she never wrote down',
+    );
+    expect(compact).toContain('search_memories');
+    expect(compact).toContain(`- note 20.`);
+    expect(compact).not.toContain(
+      `- note ${20 - PERSONA_COMPACT_LIMITS.important_notes}.`,
+    );
+    expect(compact).not.toContain(
+      `- trend ${20 - PERSONA_COMPACT_LIMITS.emotional_state_trends}.`,
+    );
+    expect(compact.length).toBeLessThan(full.length);
   });
 });

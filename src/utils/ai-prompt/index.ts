@@ -7,6 +7,7 @@ import {IPrompt} from '../../module/database/model/prompt';
 import Memory from '../../module/database/model/memory';
 import {
   buildMemoriesContext,
+  buildMemoryIndex,
   getMemorySummaries,
 } from '../../module/api/ai/memory-context';
 import {buildTagsJsonInstructions} from '../story-tags';
@@ -62,6 +63,13 @@ async function createSystemContext(
   persona: IPersona = null,
   longTermContext?: string,
   sessionTurnCount = 0,
+  /**
+   * `compact`: for voice calls with memory search. Lists story and
+   * conversation titles instead of their text, and fewer profile items; the
+   * model looks details up when needed. Live voice re-bills the whole
+   * instruction on every turn, so its size is the call's main cost.
+   */
+  options: {compact?: boolean} = {},
 ): Promise<string> {
   const userId = String(user._id);
   // Independent reads, each a database round trip: run them together.
@@ -81,7 +89,9 @@ async function createSystemContext(
   const userContext = storedPersona || ({} as IPersona);
 
   const userPreferences = user.preferences || {};
-  const pastContext = buildMemoriesContext(summaries);
+  const pastContext = options.compact
+    ? buildMemoryIndex(summaries)
+    : buildMemoriesContext(summaries);
   const sessionContextString = buildSessionContextPrompt(sessionCtx);
 
   return buildSystemContext(
@@ -94,6 +104,7 @@ async function createSystemContext(
     sessionContextString,
     sessionTurnCount,
     recentReflectionsContext,
+    options.compact ? PERSONA_COMPACT_LIMITS : PERSONA_PROMPT_LIMITS,
   );
 }
 
@@ -213,13 +224,18 @@ export const PERSONA_PROMPT_LIMITS = {
   emotional_state_trends: 10,
 } as const;
 
-function recentItems(
-  list: unknown,
-  field: keyof typeof PERSONA_PROMPT_LIMITS,
-): string[] {
-  return Array.isArray(list)
-    ? list.slice(-PERSONA_PROMPT_LIMITS[field]).map(String)
-    : [];
+type PersonaLimits = Record<keyof typeof PERSONA_PROMPT_LIMITS, number>;
+
+/** Voice calls (compact context): the essentials; the rest can be asked about. */
+export const PERSONA_COMPACT_LIMITS: PersonaLimits = {
+  important_notes: 8,
+  key_preferences: 6,
+  goals_and_aspirations: 5,
+  emotional_state_trends: 3,
+};
+
+function recentItems(list: unknown, limit: number): string[] {
+  return Array.isArray(list) ? list.slice(-limit).map(String) : [];
 }
 
 function buildSystemContext(
@@ -232,6 +248,7 @@ function buildSystemContext(
   sessionContextString?: string,
   sessionTurnCount = 0,
   recentReflectionsContext?: string,
+  limits: PersonaLimits = PERSONA_PROMPT_LIMITS,
 ): string {
   const userName = user?.nickname || (user as any)?.first_name || 'User';
   const userTimezone =
@@ -292,28 +309,31 @@ STORED HOST CONTEXT (private data):
 
 Explicit or durable notes:
 ${
-  recentItems(userContext?.important_notes, 'important_notes')
+  recentItems(userContext?.important_notes, limits.important_notes)
     .map(note => `- ${note}`)
     .join('\n') || '- None stored'
 }
 
 Preferences:
 ${
-  recentItems(userContext?.key_preferences, 'key_preferences')
+  recentItems(userContext?.key_preferences, limits.key_preferences)
     .map(pref => `- ${pref}`)
     .join('\n') || '- None stored'
 }
 
 Goals and aspirations:
 ${
-  recentItems(userContext?.goals_and_aspirations, 'goals_and_aspirations')
+  recentItems(userContext?.goals_and_aspirations, limits.goals_and_aspirations)
     .map(goal => `- ${goal}`)
     .join('\n') || '- None stored'
 }
 
 Possible emotional patterns:
 ${
-  recentItems(userContext?.emotional_state_trends, 'emotional_state_trends')
+  recentItems(
+    userContext?.emotional_state_trends,
+    limits.emotional_state_trends,
+  )
     .map(trend => `- ${trend}`)
     .join('\n') || '- None stored'
 }
