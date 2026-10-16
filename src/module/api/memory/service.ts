@@ -1,3 +1,10 @@
+import logger from '../../../utils/logger';
+import {
+  moveMemoryToDeleted,
+  recoverDeletedMemory,
+  requestMemoryPurge,
+  backfillMemoryRecovery,
+} from '../../../services/memory-lifecycle';
 import {checkVoiceMessageAccess} from './voice-message-access';
 import dayjs from 'dayjs';
 import {FilterQuery} from 'mongoose';
@@ -164,6 +171,7 @@ export async function memoryStats(user_id: string) {
     user: user_id,
     type: 'story',
     status: 'deleted',
+    purge_requested_at: null,
   });
   const quick_capture_pending_count = await Memory.countDocuments({
     user: user_id,
@@ -584,10 +592,13 @@ export async function getMemories(
     deleted = false,
     status,
   } = payload;
+  if ((deleted || status === 'deleted') && Memory.db.db)
+    await backfillMemoryRecovery(Memory.db.db, new Date(), user_id);
   const filters = filterGenerator({search}, ['title', 'body', 'tags']);
 
   filters.push({
     user: user_id,
+    purge_requested_at: null,
     status: status || (deleted ? 'deleted' : {$nin: ['draft', 'deleted']}),
   });
 
@@ -606,11 +617,14 @@ export async function getConversationMemories(
 ) {
   const {page, limit, search, bookmarked = false, deleted = false} = payload;
 
+  if (deleted && Memory.db.db)
+    await backfillMemoryRecovery(Memory.db.db, new Date(), user_id);
   const filters = filterGenerator({search}, ['title', 'body', 'tags']);
 
   filters.push({
     user: user_id,
     type: 'conversation',
+    purge_requested_at: null,
     status: deleted ? 'deleted' : {$nin: ['draft', 'deleted']},
   });
 
@@ -636,10 +650,13 @@ export async function getStoryMemories(
     status,
   } = payload;
 
+  if (deleted && Memory.db.db)
+    await backfillMemoryRecovery(Memory.db.db, new Date(), user_id);
   const filters = filterGenerator({search}, ['title', 'body', 'tags']);
   filters.push({
     user: user_id,
     type: 'story',
+    purge_requested_at: null,
     status: status || (deleted ? 'deleted' : {$nin: ['draft', 'deleted']}),
   });
 
@@ -739,7 +756,11 @@ export async function updateMemory(
     beneficiaries: beneficiaryIds,
     visibility: visibilityRaw,
   } = payload;
-  const memory = await Memory.findOne({_id, user: user_id});
+  const memory = await Memory.findOne({
+    _id,
+    user: user_id,
+    status: {$ne: 'deleted'},
+  });
   if (!memory) {
     throw new NotFoundException('Memory not found');
   }
@@ -812,8 +833,8 @@ export async function updateMemory(
     );
   }
 
-  const updatedMemory = await Memory.findByIdAndUpdate(
-    _id,
+  const updatedMemory = await Memory.findOneAndUpdate(
+    {_id, user: user_id, status: {$ne: 'deleted'}},
     {
       $set: setPayload,
       ...(validatedAttachmentIds.length > 0 && {
@@ -822,6 +843,8 @@ export async function updateMemory(
     },
     {new: true},
   );
+
+  if (!updatedMemory) throw new NotFoundException('Memory not found');
 
   const hasChanges =
     (updatedMemory?.title && updatedMemory?.title !== memory?.title) ||
@@ -872,66 +895,38 @@ export async function deleteMemory(
   user_id: string,
 ) {
   const {memory_id, delete_permanently = false} = payload;
-  const memory = await Memory.findOne({_id: memory_id, user: user_id});
-
-  if (!memory) {
-    throw new NotFoundException('Memory not found');
-  }
-
-  if (delete_permanently) {
-    // Delete all associated messages
-    await Message.deleteMany({memory: memory.id});
-
-    // Delete all associated bookmarks
-    await Bookmark.deleteMany({memory: memory.id});
-
-    // Mark all associated files as deleted
-    if (memory.attachments && memory.attachments.length > 0) {
-      await File.updateMany({_id: {$in: memory.attachments}}, {deleted: true});
-    }
-
-    // Delete active prompt if it references this memory
-    await ActivePrompt.deleteMany({memory: memory.id});
-
-    // Permanently delete the memory
-    await Memory.findByIdAndDelete(memory.id);
-  } else {
-    // Soft delete - just mark as deleted
-    await memory.updateOne({status: 'deleted'});
-
-    if (memory.status !== MEMORY_STATUS.DRAFT) {
-      await track(
-        {
-          title: 'Memory Deleted',
-          description: `Deleted memory: "${memory.title}"`,
-          type: 'memory',
-          action: 'deleted',
-          reference: memory.id,
-        },
-        user_id,
-      );
-    }
-  }
-
+  const memory = delete_permanently
+    ? await requestMemoryPurge(memory_id, user_id)
+    : await moveMemoryToDeleted(memory_id, user_id);
   void forgetUserContext(user_id);
-  return {data: memory, message: 'Memory deleted successfully'};
+  void invalidateEnrichmentCache(user_id).catch(error =>
+    logger.warn({err: error}, 'Could not invalidate memory enrichment cache'),
+  );
+  if (!delete_permanently && memory.previous_status !== MEMORY_STATUS.DRAFT) {
+    void track(
+      {
+        title: 'Memory Deleted',
+        description: `Deleted memory: "${memory.title}"`,
+        type: 'memory',
+        action: 'deleted',
+        reference: memory.id,
+      },
+      user_id,
+    ).catch(error =>
+      logger.warn({err: error}, 'Could not record memory deletion activity'),
+    );
+  }
+  return {
+    data: memory,
+    message: delete_permanently
+      ? 'Memory permanently deleted'
+      : 'Memory moved to Deleted for 30 days',
+  };
 }
 
 export async function restoreMemory(_id: string, user_id: string) {
-  const memory = await Memory.findOne({_id, user: user_id});
-  if (!memory) {
-    throw new NotFoundException('Memory not found');
-  }
-
-  if (memory.status !== 'deleted') {
-    throw new BadRequestException('Memory is not deleted');
-  }
-
-  // Restore to 'save' status (or you could restore to previous status if you track it)
-  await memory.updateOne({status: 'save'});
-  void invalidateEnrichmentCache(user_id);
-
-  await track(
+  const memory = await recoverDeletedMemory(_id, user_id);
+  void track(
     {
       title: 'Memory Restored',
       description: `Restored memory: "${memory.title}"`,
@@ -940,8 +935,12 @@ export async function restoreMemory(_id: string, user_id: string) {
       reference: memory.id,
     },
     user_id,
+  ).catch(error =>
+    logger.warn({err: error}, 'Could not record memory restoration activity'),
   );
-
+  void invalidateEnrichmentCache(user_id).catch(error =>
+    logger.warn({err: error}, 'Could not invalidate memory enrichment cache'),
+  );
   void queueMemorySearch(user_id, memory.id);
   void forgetUserContext(user_id);
   return {data: memory, message: 'Memory restored successfully'};

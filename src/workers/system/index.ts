@@ -1,3 +1,8 @@
+import mongoose from 'mongoose';
+import {
+  backfillMemoryRecovery,
+  purgeExpiredMemories,
+} from '../../services/memory-lifecycle';
 import {RedisConnection} from '../../services/redis';
 import {Worker} from 'bullmq';
 import dayjs from 'dayjs';
@@ -87,6 +92,14 @@ export default function startSystemWorker(connection: RedisConnection) {
   return new Worker(
     queueNames.system.id,
     async job => {
+      if (
+        compareStrings(job.name, queueNames.system.jobs.purgeDeletedMemories)
+      ) {
+        if (!mongoose.connection.db)
+          throw new Error('Memory cleanup requires a database connection');
+        await backfillMemoryRecovery(mongoose.connection.db);
+        await purgeExpiredMemories();
+      }
       if (compareStrings(job.name, queueNames.system.jobs.resetStreak)) {
         await resetStreak();
       }

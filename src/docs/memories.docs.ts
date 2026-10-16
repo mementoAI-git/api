@@ -181,6 +181,18 @@ const memoriesDocs = {
                       tags: {type: 'array', items: {type: 'string'}},
                       attachments: {type: 'array', items: {type: 'string'}},
                       status: {type: 'string', example: 'save'},
+                      deleted_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        description:
+                          'Actual deletion time, present only while recoverable in Deleted',
+                      },
+                      delete_after: {
+                        type: 'string',
+                        format: 'date-time',
+                        description:
+                          'Recovery deadline, 30 days after deletion',
+                      },
                       created_at: {
                         type: 'string',
                         format: 'date-time',
@@ -649,6 +661,18 @@ const memoriesDocs = {
                       status: {type: 'string', example: 'save'},
                       prompt: {type: 'string', nullable: true},
                       session_id: {type: 'string', nullable: true},
+                      deleted_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        description:
+                          'Actual deletion time, present only while recoverable in Deleted',
+                      },
+                      delete_after: {
+                        type: 'string',
+                        format: 'date-time',
+                        description:
+                          'Recovery deadline, 30 days after deletion',
+                      },
                       created_at: {
                         type: 'string',
                         format: 'date-time',
@@ -774,7 +798,7 @@ const memoriesDocs = {
       tags: ['Memories'],
       summary: 'Delete Memory',
       description:
-        'Delete a memory (soft delete by default, permanent if delete_permanently is true)',
+        'Move an owned memory to Deleted for 30 days. Returns the updated memory with deleted_at and delete_after (UTC ISO timestamps). Repeated deletes do not extend the deadline. delete_permanently=true requires an already deleted memory: it disappears from lists immediately, cannot be recovered, and durable worker cleanup removes its unshared media.',
       security: [{bearerAuth: []}],
       parameters: [
         {
@@ -794,7 +818,8 @@ const memoriesDocs = {
                 delete_permanently: {
                   type: 'boolean',
                   default: false,
-                  description: 'If true, permanently delete the memory',
+                  description:
+                    'If true, irreversibly delete a memory already in Deleted; cleanup runs in the background',
                   example: false,
                 },
               },
@@ -813,9 +838,16 @@ const memoriesDocs = {
                   status: {type: 'string', example: 'success'},
                   message: {
                     type: 'string',
-                    example: 'Memory deleted successfully',
+                    example: 'Memory moved to Deleted for 30 days',
                   },
-                  data: {type: 'object'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      status: {type: 'string', example: 'deleted'},
+                      deleted_at: {type: 'string', format: 'date-time'},
+                      delete_after: {type: 'string', format: 'date-time'},
+                    },
+                  },
                 },
               },
             },
@@ -844,7 +876,8 @@ const memoriesDocs = {
     post: {
       tags: ['Memories'],
       summary: 'Restore Memory',
-      description: 'Restore a soft-deleted memory',
+      description:
+        'Restore an owned deleted memory before delete_after, returning its active status and clearing deletion timestamps. Creation time is preserved. Returns 400 once the recovery window has expired or permanent cleanup has been claimed.',
       security: [{bearerAuth: []}],
       parameters: [
         {
