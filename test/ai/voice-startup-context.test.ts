@@ -63,6 +63,17 @@ describe('voice session context', () => {
     expect(systemInstruction).not.toContain('\u0000');
   });
 
+  it('uses the compact context only when the app can search memories', async () => {
+    vi.mocked(getLongTermContext).mockResolvedValue('');
+    await buildVoiceSessionContext(user, 'chat-1', {memoryTool: true});
+    await buildVoiceSessionContext(user, 'chat-1', {memoryTool: false});
+
+    const compactFlags = vi
+      .mocked(prompts.createSystemContext)
+      .mock.calls.map(call => (call as unknown[])[5]);
+    expect(compactFlags).toEqual([{compact: true}, {compact: false}]);
+  });
+
   it('leaves the block empty when the recall times out', async () => {
     vi.mocked(getLongTermContext).mockReturnValue(new Promise(() => {}));
 

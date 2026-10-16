@@ -119,6 +119,8 @@ export async function buildVoiceSessionContext(
         null,
         LONG_TERM_PLACEHOLDER,
         recent.filter(line => line.speaker === 'Host').length,
+        // With memory search, details are looked up instead of carried.
+        {compact: Boolean(options.memoryTool)},
       ),
     ).catch(error => {
       console.error(
