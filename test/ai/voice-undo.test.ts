@@ -4,6 +4,9 @@ import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 vi.mock('../../src/services/redis', () => ({
   default: null,
   getRedisConnection: () => null,
+  getCachedJson: async () => null,
+  setCachedJson: async () => {},
+  deleteCacheValue: async () => {},
 }));
 vi.mock('../../src/module/mail', () => ({
   default: {
