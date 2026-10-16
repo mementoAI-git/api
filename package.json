@@ -49,7 +49,8 @@
     "contracts:export": "ts-node src/scripts/export-openapi.ts",
     "contracts:check": "ts-node src/scripts/export-openapi.ts --check",
     "test:auth:redis": "node --test -r ts-node/register test/auth/reset-token.integration.ts",
-    "search:trial": "ts-node src/scripts/memory-search-trial/index.ts"
+    "search:trial": "ts-node src/scripts/memory-search-trial/index.ts",
+    "staff:account": "ts-node src/scripts/staff-account.ts"
   },
   "author": "Frank",
   "license": "MIT",

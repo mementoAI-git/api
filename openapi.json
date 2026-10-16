@@ -452,6 +452,11 @@
         "bearerFormat": "JWT",
         "scheme": "bearer",
         "type": "http"
+      },
+      "staffCookie": {
+        "in": "cookie",
+        "name": "memento_staff",
+        "type": "apiKey"
       }
     }
   },
@@ -5370,6 +5375,59 @@
         ]
       }
     },
+    "/feature-flags/evaluate/{key}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "data contains enabled and source"
+          },
+          "401": {
+            "description": "Customer authentication required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Evaluate one flag for the current customer",
+        "tags": [
+          "Features"
+        ]
+      }
+    },
+    "/feature-flags/evaluated": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "data is a map from flag key to {enabled:boolean, source:string}"
+          },
+          "401": {
+            "description": "Customer authentication required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Customer-specific evaluated booleans and sources, without management metadata",
+        "tags": [
+          "Features"
+        ]
+      }
+    },
     "/feedback": {
       "post": {
         "description": "Submit user feedback, bug reports, or feature requests",
@@ -8139,24 +8197,6 @@
         ]
       }
     },
-    "/metrics": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "Queue, delivery, purge, usage, and compatibility signals"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Aggregate operational signals",
-        "tags": [
-          "Health"
-        ]
-      }
-    },
     "/persona/pending-insights": {
       "get": {
         "description": "Retrieve a list of pending insights extracted from user memories that need approval or rejection",
@@ -9306,6 +9346,825 @@
         "summary": "Dependency and worker readiness check",
         "tags": [
           "Health"
+        ]
+      }
+    },
+    "/staff/accounts": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "maxLength": 254,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Safe account directory; accounts:read. Returns items, total, page, limit (25). Exact email or ObjectId lookup.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/accounts/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-fA-F0-9]{24}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          },
+          "404": {
+            "description": "Account not found"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Account metadata, effective subscription access, recorded usage and processing failure counts; accounts:read. No credentials or private content.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "domain",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "List definitions and operational metadata (flags:read)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Flag definition, overrides and effective value (flags:read)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}/audit": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Recent flag changes with staff:ID attribution (flags:read)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}/default": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Update default (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}/overrides/{scopeType}/{scopeId}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "enum": [
+                "global",
+                "environment",
+                "user"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Remove scoped override (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      },
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "enum": [
+                "global",
+                "environment",
+                "user"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  },
+                  "rolloutPercentage": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "nullable": true,
+                    "type": "number"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Set scoped override (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}/rollout/{scopeType}/{scopeId}": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "enum": [
+                "global",
+                "environment",
+                "user"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  },
+                  "rolloutPercentage": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "nullable": true,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "rolloutPercentage"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Update rollout (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/bulk": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "prefix": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "prefix",
+                  "value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Set global overrides for a literal key prefix (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/login": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "pattern": "^[0-9]{6}$",
+                    "type": "string"
+                  },
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  },
+                  "password": {
+                    "maxLength": 72,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password",
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          },
+          "429": {
+            "description": "Too many sign-in attempts"
+          }
+        },
+        "security": [],
+        "summary": "Staff password and TOTP sign-in; 30-minute HttpOnly cookie",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/logout": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Revoke current staff session",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/metrics": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Queue, delivery, purge, usage, and compatibility signals"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Aggregate operational signals (operations:read)",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/staff/operations": {
+      "get": {
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Current operational counts; operations:read. Each count is a non-negative integer or null when unavailable; collected_at is ISO 8601.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/session": {
+      "get": {
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Current staff identity, permissions and absolute expiresAt",
+        "tags": [
+          "Staff"
         ]
       }
     },

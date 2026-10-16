@@ -79,9 +79,9 @@ describe('runtime security configuration', () => {
       'SENTRY_TUNNEL_ALLOWED_HOSTS',
     ],
     [
-      'enabled Bull Board without administrators',
-      {BULL_BOARD_ENABLED: 'true', FEATURE_FLAGS_ADMIN_EMAILS: undefined},
-      'FEATURE_FLAGS_ADMIN_EMAILS',
+      'staff console without encryption key',
+      {STAFF_ORIGIN: 'https://staff.example.com', STAFF_TOTP_KEY: undefined},
+      'STAFF_TOTP_KEY',
     ],
     [
       'enabled Google RTDN without authenticated push configuration',

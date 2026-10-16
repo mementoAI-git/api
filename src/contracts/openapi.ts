@@ -1,6 +1,7 @@
 import {createHash} from 'crypto';
 import activitiesDocs from '../docs/activities.docs';
 import aiDocs from '../docs/ai.docs';
+import staffDocs from '../docs/staff.docs';
 import authDocs from '../docs/auth.docs';
 import beneficiariesDocs from '../docs/beneficiaries.docs';
 import billingDocs from '../docs/billing.docs';
@@ -259,6 +260,7 @@ export function buildOpenApiDocument(
     components: {
       securitySchemes: {
         bearerAuth: {type: 'http', scheme: 'bearer', bearerFormat: 'JWT'},
+        staffCookie: {type: 'apiKey', in: 'cookie', name: 'memento_staff'},
       },
       schemas,
     },
@@ -302,11 +304,11 @@ export function buildOpenApiDocument(
           },
         },
       },
-      '/metrics': {
+      '/staff/metrics': {
         get: {
           tags: ['Health'],
-          summary: 'Aggregate operational signals',
-          security: [{bearerAuth: []}],
+          summary: 'Aggregate operational signals (operations:read)',
+          security: [{staffCookie: []}],
           responses: {
             '200': {
               description:
@@ -315,6 +317,7 @@ export function buildOpenApiDocument(
           },
         },
       },
+      ...staffDocs,
       ...authDocs,
       ...usersDocs,
       ...beneficiariesDocs,

@@ -113,11 +113,19 @@ export function validateRuntimeConfig(env: Environment): RuntimeConfig {
       throw new Error('SENTRY_TUNNEL_ALLOWED_PROJECT_IDS is required');
     }
   }
-  if (
-    bullBoardEnabled &&
-    commaSeparated(env, 'FEATURE_FLAGS_ADMIN_EMAILS').length === 0
-  ) {
-    throw new Error('FEATURE_FLAGS_ADMIN_EMAILS is required');
+  if (env.STAFF_ORIGIN || env.STAFF_TOTP_KEY) {
+    if (!env.STAFF_ORIGIN) throw new Error('STAFF_ORIGIN is required');
+    const origin = new URL(env.STAFF_ORIGIN);
+    if (
+      origin.origin !== env.STAFF_ORIGIN ||
+      (isProduction && origin.protocol !== 'https:')
+    ) {
+      throw new Error(
+        'STAFF_ORIGIN must be an exact origin, using HTTPS in production',
+      );
+    }
+    if (!/^[a-f\d]{64}$/i.test(env.STAFF_TOTP_KEY || ''))
+      throw new Error('STAFF_TOTP_KEY must be 64 hexadecimal characters');
   }
 
   return {

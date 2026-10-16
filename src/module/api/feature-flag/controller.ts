@@ -82,8 +82,9 @@ export async function upsertOverride(
       scopeId: String(req.params.scopeId),
       value: Boolean(req.body?.value),
       rolloutPercentage:
+        req.body?.rolloutPercentage === null ||
         req.body?.rolloutPercentage === undefined
-          ? undefined
+          ? req.body?.rolloutPercentage
           : Number(req.body.rolloutPercentage),
       actor: req.auth?.id,
       reason: req.body?.reason,
@@ -157,6 +158,24 @@ export async function bulk(req: IRequest, res: Response, next: NextFunction) {
       reason: req.body?.reason,
     });
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function evaluatedFlags(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      'Feature flags evaluated',
+      await service.evaluateCustomerFlags({userId: req.auth?.id}),
+    );
   } catch (error) {
     next(error);
   }

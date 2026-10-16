@@ -268,4 +268,20 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
       );
     },
   },
+  {
+    id: '202610160001_staff_identity_indexes',
+    up: async db => {
+      await db
+        .collection('staff_accounts')
+        .createIndex({email: 1}, {unique: true});
+      await db
+        .collection('staff_sessions')
+        .createIndex({token_hash: 1}, {unique: true});
+      await db.collection('staff_sessions').createIndex({staff_id: 1});
+      await db
+        .collection('staff_sessions')
+        .createIndex({expires_at: 1}, {expireAfterSeconds: 0});
+      await db.collection('staff_audits').createIndex({staff_id: 1});
+    },
+  },
 ];

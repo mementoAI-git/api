@@ -3,6 +3,7 @@ import {
   FeatureOverride,
   FeatureScopeType,
   IFeatureOverride,
+  IFeatureDefinition,
 } from '../../database/model/feature-flag';
 import {FeatureFlagAudit} from '../../database/model/feature-flag-audit';
 import {
@@ -74,7 +75,10 @@ export async function listFeatureFlags(payload: {
   const limit = Math.min(200, Math.max(1, Number(payload.limit || 25)));
   const query: Record<string, unknown> = {};
   if (payload.search) {
-    const regex = new RegExp(payload.search, 'i');
+    const regex = new RegExp(
+      payload.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      'i',
+    );
     query.$or = [{key: regex}, {description: regex}];
   }
   if (payload.domain) query.domain = payload.domain;
@@ -180,6 +184,14 @@ export async function evaluateFeatureFlag(
 ) {
   const {definition, overrides} = await loadFlag(key);
   if (!definition) return {enabled: true, source: 'missing_default_true'};
+  return evaluateDefinition(definition, overrides, context);
+}
+
+function evaluateDefinition(
+  definition: IFeatureDefinition,
+  overrides: IFeatureOverride[],
+  context: FeatureContext,
+) {
   const environment = context.environment || FEATURE_FLAG_ENVIRONMENT;
 
   const user = context.userId
@@ -208,6 +220,38 @@ export async function evaluateFeatureFlag(
   );
   if (global) return {enabled: global.value, source: 'global'};
   return {enabled: definition.default_value, source: 'default'};
+}
+
+export async function evaluateCustomerFlags(context: FeatureContext) {
+  const [definitions, overrides] = await Promise.all([
+    FeatureDefinition.find({}).lean(),
+    FeatureOverride.find({
+      $or: [
+        {scope_type: 'global', scope_id: 'global'},
+        {
+          scope_type: 'environment',
+          scope_id: context.environment || FEATURE_FLAG_ENVIRONMENT,
+        },
+        {scope_type: 'user', scope_id: context.userId},
+      ],
+    }).lean(),
+  ]);
+  const grouped = new Map<string, IFeatureOverride[]>();
+  for (const override of overrides) {
+    const group = grouped.get(override.key) || [];
+    group.push(override);
+    grouped.set(override.key, group);
+  }
+  return Object.fromEntries(
+    definitions.map(definition => [
+      definition.key,
+      evaluateDefinition(
+        definition,
+        grouped.get(definition.key) || [],
+        context,
+      ),
+    ]),
+  );
 }
 
 async function writeAudit(input: {
