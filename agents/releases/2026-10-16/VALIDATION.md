@@ -1,55 +1,42 @@
-# Branch validation — 16 October 2026
+# Shipping validation — 16 October 2026
 
-Checks run in isolated preparation worktrees, not the original browser-serving checkouts. No deployment, live database migration, external email, payment or production-storage test was performed during branch preparation.
+Checks ran in isolated worktrees. No deployment, live migration, hosted-storage deletion, payment or new browser acceptance run is claimed by this shipping pass. Original mixed Web/API checkouts remain untouched.
 
 ## API
 
-Validated second-pass application tip: `1e2fa9f`, rebuilt on API dev `53e240c`. The customer flag endpoint/contract are now upstream; the last layer adds only isolation/authentication tests. First-pass reports are archived in `first-pass/`.
-
-| Check | Result |
+| Layer | Fresh pre-push checks |
 |---|---|
-| Dependency installation | Matching dev dependencies installed with frozen Yarn lockfile; original checkout dependencies unchanged |
-| `npm run lint` | Passed; 0 errors, 143 warnings |
-| `npm run build` | Passed (TypeScript compilation) |
-| `npm run contracts:check` | Passed; OpenAPI artifacts current |
-| `npm test -- --maxWorkers=2` | Passed; 143 suites passed, 3 skipped; 763 tests passed, 4 skipped |
-| About boundary checks | 6 focused tests passed on the rebuilt branch |
-| Spoken reply checks | 9 focused tests passed on the rebuilt branch |
-| Memory recovery checks | 47 focused recovery/voice-content/Undo tests passed on the rebuilt branch |
-| Customer evaluation checks | 2 tests passed: customer authentication and per-account isolation; no admin-management test in this layer |
+| About (#87) | Formatter, lint, TypeScript build, contracts and 18 focused tests passed |
+| Customer flag tests (#88) | Formatter, lint, build and 2 authentication/isolation tests passed |
+| Narration (#89) | Formatter, lint, build, contracts and 9 focused tests passed |
+| Memory recovery (#90) | Formatter, lint, build, contracts, 12 lifecycle/list tests and 35 voice-action/Undo regressions passed |
 
-The initial combined API run exposed an unhandled cache invalidation rejection. A new regression also caught draft deletions creating activity. The fix is retained in rebuilt commit `5eeea64`; the final combined run above has no unhandled errors. An API baseline full run was canceled, so this report does not claim a completed baseline API suite. No broad formatter rewrite was performed; the repository's `bun run fix` gate remains required before pushing, with any resulting changes reviewed and retested.
+API application source on shipping recovery tip `f67b036` is byte-identical to the previously fully tested second-pass application source `1e2fa9f`. That complete run passed **143 suites, 763 tests**, with 3 suites/4 tests skipped. It is prior combined evidence, not a new full run for every shipping PR. The independent flag-test PR is intentionally outside the feature stack. API lint reports existing warnings (143), with no errors.
 
 ## Web
 
-Baseline `db8952b1`: 249 suites passed; 1,285 tests passed, 10 skipped. Baseline lint: 0 errors, 174 warnings.
+All layers passed fresh `npm run lint` followed by `npm run build`, then their changed-file focused suites:
 
-| Layer/check | Result |
+| Layer | Focused tests |
 |---|---|
-| Session/shared UI | 35 suites, 139 tests passed; production build passed |
-| Profile/billing | 36 suites, 152 tests passed; production build passed |
-| People | 17 suites, 51 tests passed; production build passed |
-| Chat | 40 suites, 200 tests passed; production build passed |
-| Stories/capture/search | 34 suites passed in focused run; 2 editor suites timed out under concurrent load, then passed serially (90 passed, 10 skipped); production build passed |
-| Dashboard/utilities | 18 suites, 136 tests passed; production build passed |
-| Local preview | 4 suites, 27 tests passed; production build passed |
-| Customer flags | 2 suites, 3 tests passed; production build passed |
-| Final lint | Passed; 0 errors, 139 warnings |
-| Final complete unit suite | Passed; 323 suites, 1708 tests passed, 10 skipped; `npm test -- --maxWorkers=1` on application tip `59131b43` |
+| Shared UI/session (#74) | 33 suites; 161 passed |
+| Profile/billing (#75) | 10 suites; 85 passed |
+| People (#76) | 14 suites; 48 passed |
+| Continuous Chat (#77) | 18 suites; 90 passed |
+| Stories/capture/search (#78) | 35 suites; 306 passed, 10 skipped |
+| Dashboard/utilities (#79) | 16 suites; 103 passed |
+| Local preview | 4 suites; 27 passed |
 
-The production build reports large chunks, a stale browser-baseline mapping and a mixed static/dynamic PDF import. Build completion is not a performance guarantee. No standalone Web TypeScript gate is claimed: this repository's build script is Vite. Development-preview marker checks found no fixture/transport markers in generated production JavaScript.
+Fresh full combined run on Web shipping application tip `7a883e60`, rebuilt on dev `7c75e134`: **323 passed (323) suites; 1708 passed | 10 skipped (1718) tests** (`npm test -- --maxWorkers=1`). The 10 skipped cases are not counted as passed.
 
-## Second-pass Web checks
+Production bundle inspection checked 17 JavaScript files: no preview UI, installer or fixture markers (`New user preview`, `Dev Admin Tools`, `preview-prompt-`, `installPreviewAxios`). DEV import guards remain in the application entry point and both API transports. Source differences from the earlier prepared application are limited to upstream admin removal and the preserved spoken-reply test stabilization.
 
-The application source is unchanged from the 323-suite / 1,708-test full run. The second pass ran four focused suites covering customer flags, the real dashboard layout, continuous Chat entry and capture save transport: **23 tests passed**. Every prepared Web branch was scanned for new missing relative/alias import targets; none were found. Snapshot differences were inspected and match exclusions, integration wiring or whitespace normalization. Two stray backslashes in a documentation CSS sample were corrected. No browser or live-service rerun is claimed.
+Web lint has existing warnings and no errors. The Vite build has existing chunk-size/browser-baseline/PDF import warnings; it is not a standalone TypeScript or performance certification.
 
-## Preservation checks
+## Review boundaries
 
-- Original Web/API working-file hashes match the frozen manifests after extraction.
-- Existing Web admin components/pages/provider match the Web baseline; API flag/staff services/routes, middleware and central route registry match the new API baseline. Admin management is outside this review.
-- Remote API environment loader, embeddings, voice tools, metrics and context-cache changes are retained.
-- All branches are local; no remote branch or deployed application was changed.
+Each branch was checked for whitespace errors, clean working tree and merge conflicts against fetched dev before pushing. PR bases isolate each incremental layer. GitHub mergeability is a point-in-time observation and must be rechecked after changes to dev. Web #74 runs hosted PR validation. Its first run caught seven stale backdrop-sensitive assertions in two files that had been assigned to later layers. These were reproduced locally, corrected on the foundation branch (17 affected tests passed), and merged forward without rewriting published history. Each updated branch reran lint/build and affected tests. Stacked feature-base PRs and API PRs showed no registered checks at inspection; local validation does not substitute for reviewer approval.
 
-## Required release checks
+Docs-only layers run their repository's formatter/lint/build/contract gates as applicable before push; runtime suites are not duplicated for Markdown-only edits.
 
-Re-fetch and resolve any new collaborator changes, run project push gates on the actual final PR tips, and verify deployed SHA/configuration before promotion. In staging, exercise API + worker memory recovery/purge with disposable files, Web read-aloud, customer flags/account isolation, People sharing/blocking and the existing mobile client. Historical live/manual checks are documented in the original audit; they do not prove this newly rebased assembly has passed a fresh browser or device run.
+Real provider/storage readiness, matching API/worker deployment, purge activation, existing mobile compatibility and production SHAs still require staging/release review. The earlier audit records separate historical browser and user-assisted checks. OS reduced-motion acceptance was deferred by the user. Admin panel work remains out of scope.

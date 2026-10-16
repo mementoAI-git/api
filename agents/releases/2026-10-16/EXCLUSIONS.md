@@ -1,3 +1,5 @@
+> Historical preparation record, before shipping reconciliation. See HANDOFF.md for current PRs and upstream state. In the shipping branches, upstream admin removal is preserved and Web customer flags are already merged.
+
 # Preserved work outside the prepared customer release
 
 No original files were deleted or reset. Frozen working-file snapshots, patches and manifests are stored beside this document. These are local recovery artifacts, not deployment inputs; do not bulk-commit them.

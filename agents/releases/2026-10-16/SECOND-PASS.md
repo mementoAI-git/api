@@ -1,3 +1,5 @@
+> Historical preparation record, before shipping reconciliation. See HANDOFF.md for current PRs and upstream state. In the shipping branches, upstream admin removal is preserved and Web customer flags are already merged.
+
 # Second-pass release audit — 16 October 2026
 
 ## Findings and corrections
