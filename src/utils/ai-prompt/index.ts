@@ -200,6 +200,28 @@ Do not try to demonstrate empathy, intelligence, memory, or insight. Notice the 
 `.trim();
 }
 
+/**
+ * How many of each stored host list go into a prompt: the most recent. The
+ * lists only grow (emotional patterns are never consolidated), and every
+ * chat reply and voice call carries them, so without a cap a long-time
+ * host's prompt keeps getting bigger, slower and costlier.
+ */
+export const PERSONA_PROMPT_LIMITS = {
+  important_notes: 15,
+  key_preferences: 12,
+  goals_and_aspirations: 12,
+  emotional_state_trends: 10,
+} as const;
+
+function recentItems(
+  list: unknown,
+  field: keyof typeof PERSONA_PROMPT_LIMITS,
+): string[] {
+  return Array.isArray(list)
+    ? list.slice(-PERSONA_PROMPT_LIMITS[field]).map(String)
+    : [];
+}
+
 function buildSystemContext(
   user: IUser,
   userPreferences: any,
@@ -270,27 +292,29 @@ STORED HOST CONTEXT (private data):
 
 Explicit or durable notes:
 ${
-  userContext?.important_notes?.map((note: string) => `- ${note}`).join('\n') ||
-  '- None stored'
+  recentItems(userContext?.important_notes, 'important_notes')
+    .map(note => `- ${note}`)
+    .join('\n') || '- None stored'
 }
 
 Preferences:
 ${
-  userContext?.key_preferences?.map((pref: string) => `- ${pref}`).join('\n') ||
-  '- None stored'
+  recentItems(userContext?.key_preferences, 'key_preferences')
+    .map(pref => `- ${pref}`)
+    .join('\n') || '- None stored'
 }
 
 Goals and aspirations:
 ${
-  userContext?.goals_and_aspirations
-    ?.map((goal: string) => `- ${goal}`)
+  recentItems(userContext?.goals_and_aspirations, 'goals_and_aspirations')
+    .map(goal => `- ${goal}`)
     .join('\n') || '- None stored'
 }
 
 Possible emotional patterns:
 ${
-  userContext?.emotional_state_trends
-    ?.map((trend: string) => `- ${trend}`)
+  recentItems(userContext?.emotional_state_trends, 'emotional_state_trends')
+    .map(trend => `- ${trend}`)
     .join('\n') || '- None stored'
 }
 
@@ -593,6 +617,7 @@ Return only valid JSON:
 }
 
 RULES:
+- Return at most ${PERSONA_PROMPT_LIMITS[fieldType]} items. If there are more, merge related ones and drop the least useful, keeping the most recent and most durable.
 - Merge items only when they clearly describe the same subject.
 - Preserve names, dates, places, relationships, and other details that remain useful.
 - Do not strengthen claims while merging them.
