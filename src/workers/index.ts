@@ -1,4 +1,5 @@
-import 'dotenv/config';
+// Loads .env first; under PM2 the file wins over stale copies (see load-env).
+import '../utils/load-env';
 import mongoose from 'mongoose';
 import {connectMongodb} from '../module/database/connection';
 import {getRedisConnection} from '../services/redis';

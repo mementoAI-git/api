@@ -1,4 +1,5 @@
-import 'dotenv/config';
+// Loads .env first; under PM2 the file wins over stale copies (see load-env).
+import './load-env';
 import os from 'os';
 
 export const JWT_SECRET = process.env.JWT_SECRET;
