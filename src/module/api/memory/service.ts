@@ -1093,7 +1093,6 @@ export async function addMessageToMemory(
   }
 
   void queueMemorySearch(user_id, memory.id);
-  void forgetUserContext(user_id);
   return {
     data: messages,
     message: 'Message added to memory successfully',
