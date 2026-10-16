@@ -2,12 +2,7 @@ import {Application} from 'express';
 import {
   initializeConversationSummary,
   initializePersonaSummarization,
-  summarizationQueue,
 } from './summarization';
-import {ExpressAdapter} from '@bull-board/express';
-import {createBullBoard} from '@bull-board/api';
-import {BullMQAdapter} from '@bull-board/api/bullMQAdapter';
-import {insightQueue} from './insights';
 import {
   initializeCapsuleReveal,
   initializeAccountPurgeDispatcher,
@@ -19,47 +14,17 @@ import {
   initializeBillingUsageReconciliation,
   initializeStoreNotificationDispatcher,
   initializeArchiveExportDispatcher,
-  systemQueue,
 } from './system';
 import logger from '../../utils/logger';
 import {BULL_BOARD_ENABLED} from '../../utils/config';
-import gaurd from '../../middleware/gaurd';
-import {requireAdmin} from '../../middleware/admin';
-import {exploreQuestionQueue} from './explore-questions';
 
-export function setupBullBoard(app: Application): boolean {
-  if (!BULL_BOARD_ENABLED) {
-    logger.info('Bull Board is disabled');
-    return false;
+export function setupBullBoard(_app: Application): boolean {
+  // Queue payloads contain private conversations. Staff access is limited to
+  // aggregate /staff/metrics until a deliberately redacted queue UI exists.
+  if (BULL_BOARD_ENABLED) {
+    logger.warn('Raw queue dashboard is disabled to protect customer content');
   }
-
-  const serverAdapter = new ExpressAdapter();
-
-  const path = '/queues';
-
-  serverAdapter.setBasePath(path);
-
-  const queues = [
-    summarizationQueue,
-    insightQueue,
-    systemQueue,
-    exploreQuestionQueue,
-  ]
-    .filter((queue): queue is NonNullable<typeof queue> => Boolean(queue))
-    .map(queue => new BullMQAdapter(queue));
-
-  if (queues.length === 0) {
-    logger.warn('No BullMQ queues available; skipping queue dashboard setup');
-    return false;
-  }
-
-  createBullBoard({
-    queues,
-    serverAdapter,
-  });
-
-  app.use(path, gaurd, requireAdmin, serverAdapter.getRouter());
-  return true;
+  return false;
 }
 
 export async function initializeScheduler() {

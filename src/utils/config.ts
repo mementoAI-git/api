@@ -305,3 +305,10 @@ export const WEBAUTHN_ORIGINS = (
  */
 export const MEMORY_RETRIEVAL: 'inhouse' | 'supermemory' =
   process.env.MEMORY_RETRIEVAL === 'supermemory' ? 'supermemory' : 'inhouse';
+
+// Read on use so operational key/config changes do not create duplicate config logic.
+export const staffConfig = () => ({
+  origin: process.env.STAFF_ORIGIN || '',
+  totpKey: process.env.STAFF_TOTP_KEY || '',
+  secureCookies: process.env.NODE_ENV === 'production',
+});

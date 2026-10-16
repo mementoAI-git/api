@@ -22,7 +22,7 @@ describe('readiness', () => {
   });
 
   it('keeps aggregate operational signals behind authentication', async () => {
-    const response = await request(createTestApp()).get('/metrics');
+    const response = await request(createTestApp()).get('/staff/metrics');
 
     expect(response.status).toBe(401);
   });

@@ -24,11 +24,10 @@ import publicProfileRoutes from './public-profile/routes';
 import webhookRoutes from './webhook/routes';
 import {SENTRY_TUNNEL_ENABLED} from '../../utils/config';
 import {getReadiness} from '../../services/readiness';
-import {collectOperationalSignals} from '../../services/operational-signals';
-import gaurd from '../../middleware/gaurd';
-import {requireAdmin} from '../../middleware/admin';
+import staffRoutes from './staff/routes';
 
 const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
+  {path: 'staff', router: staffRoutes},
   {path: 'activities', router: activityRoutes},
   {path: 'exports', router: archiveRoutes},
   {path: 'ai', router: aiRoutes},
@@ -85,15 +84,6 @@ async function ready(_req: Request, res: Response) {
   return responsHandler(res, StatusCodes.OK, 'Ready', readiness);
 }
 
-async function metrics(_req: Request, res: Response) {
-  return responsHandler(
-    res,
-    StatusCodes.OK,
-    'Operational signals',
-    await collectOperationalSignals(),
-  );
-}
-
 function router(app: Application) {
   for (const route of API_ROUTES) {
     app.use(`/${route.path}`, route.router);
@@ -101,7 +91,6 @@ function router(app: Application) {
 
   app.get('/health', health);
   app.get('/ready', ready);
-  app.get('/metrics', gaurd, requireAdmin, metrics);
   app.use((_req, res, _next) => {
     return errorResponsHandler(
       res,
