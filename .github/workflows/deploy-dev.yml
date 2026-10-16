@@ -45,17 +45,21 @@ env:
 
 jobs:
   # ────────────────────────────────────────────────────────────
-  # 1. Lint + Test + Build
+  # 1. Lint, Test and Build, side by side
   #
-  # It is safe to cancel an obsolete build because it has not
+  # Private-repo runners have 2 CPUs, so one job ran the test
+  # files one at a time (~3 min). Lint, three test shards and
+  # the build now run in parallel jobs; deploy waits for all.
+  #
+  # It is safe to cancel obsolete runs because they have not
   # touched the server yet.
   # ────────────────────────────────────────────────────────────
-  build:
-    name: Lint, Test & Build
+  lint:
+    name: Lint & Contract
     runs-on: ubuntu-latest
 
     concurrency:
-      group: backend-build-dev
+      group: backend-lint-dev
       cancel-in-progress: true
 
     steps:
@@ -74,11 +78,60 @@ jobs:
       - name: Run linter
         run: yarn lint
 
-      - name: Run tests
-        run: yarn test
-
       - name: Verify API contract artifact
         run: yarn contracts:check
+
+  test:
+    name: Test (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        shard: [1, 2, 3]
+
+    concurrency:
+      group: backend-test-dev-${{ matrix.shard }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # Two workers on the 2-CPU runner: the tests mostly wait on
+      # the in-memory database, so both CPUs stay busy.
+      - name: Run tests
+        run: yarn test --shard=${{ matrix.shard }}/3 --maxWorkers=2
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    concurrency:
+      group: backend-build-dev
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
 
       - name: Build
         run: yarn build
@@ -167,7 +220,7 @@ jobs:
   # ────────────────────────────────────────────────────────────
   deploy:
     name: Deploy
-    needs: build
+    needs: [lint, test, build]
     runs-on: ubuntu-latest
     environment: development
 
@@ -1033,6 +1086,8 @@ jobs:
   notify:
     name: Notify
     needs:
+      - lint
+      - test
       - build
       - deploy
 
@@ -1044,7 +1099,8 @@ jobs:
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
 
-      BUILD_RESULT: ${{ needs.build.result }}
+      # The first of lint, test and build that did not succeed.
+      BUILD_RESULT: ${{ (needs.lint.result != 'success' && needs.lint.result) || (needs.test.result != 'success' && needs.test.result) || needs.build.result }}
       DEPLOY_RESULT: ${{ needs.deploy.result }}
 
       COMMIT_SHA: ${{ github.sha }}
