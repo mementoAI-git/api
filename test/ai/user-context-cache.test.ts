@@ -52,6 +52,14 @@ describe('user context cache', () => {
     );
   });
 
+  it('never rejects when clearing fails, so writes are not affected', async () => {
+    const redis = await import('../../src/services/redis');
+    vi.mocked(redis.deleteCacheValue).mockRejectedValueOnce(
+      new Error('redis gone'),
+    );
+    await expect(forgetUserContext('u1')).resolves.toBeUndefined();
+  });
+
   it('does not cache a failed build', async () => {
     const load = vi
       .fn<() => Promise<string>>()

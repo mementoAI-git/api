@@ -22,17 +22,26 @@ export async function cachedUserContext<T>(
   userId: string,
   load: () => Promise<T>,
 ): Promise<T> {
-  const hit = await getCachedJson<{value: T}>(key(kind, userId));
+  const hit = await getCachedJson<{value: T}>(key(kind, userId)).catch(
+    () => null,
+  );
   if (hit) return hit.value;
   const value = await load();
-  void setCachedJson(key(kind, userId), {value}, TTL_SECONDS);
+  setCachedJson(key(kind, userId), {value}, TTL_SECONDS).catch(() => {});
   return value;
 }
 
-/** Call after a write that changes a user's stories, chats, people or plans. */
+/**
+ * Call after a write that changes a user's stories, chats, people or plans.
+ * Callers do not wait for it, so it never rejects.
+ */
 export async function forgetUserContext(userId: string): Promise<void> {
   if (!userId) return;
-  await Promise.all(
-    KINDS.map(kind => deleteCacheValue(key(kind, String(userId)))),
-  );
+  try {
+    await Promise.all(
+      KINDS.map(kind => deleteCacheValue(key(kind, String(userId)))),
+    );
+  } catch {
+    // The TTL clears it instead.
+  }
 }
