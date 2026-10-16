@@ -1,3 +1,5 @@
+// Loads .env first; under PM2 the file wins over stale copies (see load-env).
+import './utils/load-env';
 import logger from './utils/logger';
 import {loadAndValidateRuntimeConfig} from './utils/runtime-config';
 
