@@ -6840,6 +6840,16 @@
                           "format": "date-time",
                           "type": "string"
                         },
+                        "delete_after": {
+                          "description": "Recovery deadline, 30 days after deletion",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "deleted_at": {
+                          "description": "Actual deletion time, present only while recoverable in Deleted",
+                          "format": "date-time",
+                          "type": "string"
+                        },
                         "level": {
                           "example": 1,
                           "type": "number"
@@ -6922,7 +6932,7 @@
     },
     "/memories/{id}": {
       "delete": {
-        "description": "Delete a memory (soft delete by default, permanent if delete_permanently is true)",
+        "description": "Move an owned memory to Deleted for 30 days. Returns the updated memory with deleted_at and delete_after (UTC ISO timestamps). Repeated deletes do not extend the deadline. delete_permanently=true requires an already deleted memory: it disappears from lists immediately, cannot be recovered, and durable worker cleanup removes its unshared media.",
         "parameters": [
           {
             "description": "Memory ID",
@@ -6942,7 +6952,7 @@
                 "properties": {
                   "delete_permanently": {
                     "default": false,
-                    "description": "If true, permanently delete the memory",
+                    "description": "If true, irreversibly delete a memory already in Deleted; cleanup runs in the background",
                     "example": false,
                     "type": "boolean"
                   }
@@ -6959,10 +6969,24 @@
                 "schema": {
                   "properties": {
                     "data": {
+                      "properties": {
+                        "delete_after": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "deleted_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "status": {
+                          "example": "deleted",
+                          "type": "string"
+                        }
+                      },
                       "type": "object"
                     },
                     "message": {
-                      "example": "Memory deleted successfully",
+                      "example": "Memory moved to Deleted for 30 days",
                       "type": "string"
                     },
                     "status": {
@@ -7045,6 +7069,16 @@
                         },
                         "created_at": {
                           "example": "2024-01-01T00:00:00.000Z",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "delete_after": {
+                          "description": "Recovery deadline, 30 days after deletion",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "deleted_at": {
+                          "description": "Actual deletion time, present only while recoverable in Deleted",
                           "format": "date-time",
                           "type": "string"
                         },
@@ -7468,7 +7502,7 @@
     },
     "/memories/{id}/restore": {
       "post": {
-        "description": "Restore a soft-deleted memory",
+        "description": "Restore an owned deleted memory before delete_after, returning its active status and clearing deletion timestamps. Creation time is preserved. Returns 400 once the recovery window has expired or permanent cleanup has been claimed.",
         "parameters": [
           {
             "description": "Memory ID",

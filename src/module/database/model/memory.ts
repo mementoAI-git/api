@@ -20,6 +20,11 @@ export interface IMemory {
   level: number;
   refrence: string;
   status: string | 'draft' | 'save' | 'queued' | 'on_chain' | 'deleted';
+  deleted_at?: Date;
+  delete_after?: Date;
+  previous_status?: string;
+  purge_requested_at?: Date;
+  purge_processing_at?: Date;
   prompt?: string;
   /** AI daily prompt text when there is no Prompt catalog document */
   prompt_text?: string;
@@ -64,6 +69,11 @@ const memory = new Schema<IMemory>(
       type: String,
       default: 'draft',
     },
+    deleted_at: Date,
+    delete_after: Date,
+    previous_status: String,
+    purge_requested_at: Date,
+    purge_processing_at: Date,
     attachments: [
       {
         type: String,
@@ -158,12 +168,18 @@ const memory = new Schema<IMemory>(
     toJSON: {
       transform: (_doc, ret) => {
         delete ret.search_index;
+        delete ret.previous_status;
+        delete ret.purge_requested_at;
+        delete ret.purge_processing_at;
         return ret;
       },
     },
     toObject: {
       transform: (_doc, ret) => {
         delete ret.search_index;
+        delete ret.previous_status;
+        delete ret.purge_requested_at;
+        delete ret.purge_processing_at;
         return ret;
       },
     },
@@ -174,6 +190,7 @@ const memory = new Schema<IMemory>(
   },
 );
 
+memory.index({status: 1, delete_after: 1});
 memory.plugin(mongoosePaginate);
 
 const Memory = model<IMemory, PaginateModel<IMemory>>('memory', memory);

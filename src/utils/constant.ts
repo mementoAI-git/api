@@ -100,6 +100,7 @@ export const queueNames = {
       processAttachmentThumbnail: 'process-attachment-thumbnail',
       scheduleCapsuleReveals: 'schedule-capsule-reveals',
       recoverStalePending: 'recover-stale-pending',
+      purgeDeletedMemories: 'purge-deleted-memories',
       revealCapsules: 'reveal-capsules',
       dispatchAccountPurges: 'dispatch-account-purges',
       accountPurge: 'account-purge',
