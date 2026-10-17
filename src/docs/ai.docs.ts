@@ -988,6 +988,61 @@ const aiDocs = {
       },
     },
   },
+  '/ai/spoken-reply': {
+    post: {
+      tags: ['AI'],
+      summary: 'Read a completed reply aloud using the saved Gemini voice',
+      description:
+        'Exact-text WAV narration. Voice selection comes from the authenticated profile. Audio is returned without persistence; maximum 20 clips per minute per IP. Long replies should be split into ordered clips of up to 2000 characters.',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['text'],
+              properties: {
+                text: {type: 'string', minLength: 1, maxLength: 2000},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'WAV audio, base64 encoded',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: {type: 'boolean'},
+                  data: {
+                    type: 'object',
+                    required: ['audioBase64', 'mimeType', 'voiceName'],
+                    properties: {
+                      audioBase64: {type: 'string'},
+                      mimeType: {type: 'string', enum: ['audio/wav']},
+                      voiceName: {type: 'string'},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {description: 'Authentication required'},
+        403: {description: 'Voice feature disabled'},
+        422: {
+          description: 'Invalid narration text or unsupported request fields',
+        },
+        429: {description: 'Rate limited; do not retry automatically'},
+        503: {description: 'Speech generation unavailable'},
+      },
+    },
+  },
   '/ai/voices': {
     get: {
       tags: ['AI'],

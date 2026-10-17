@@ -343,3 +343,28 @@ export async function getVoicePreview(
     next(error);
   }
 }
+
+export async function getSpokenReply(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  const controller = new AbortController();
+  const onClose = () => {
+    if (!res.writableEnded) controller.abort();
+  };
+  res.once('close', onClose);
+  try {
+    const {message, data} = await service.getSpokenReply(
+      req.auth.id,
+      req.body.text,
+      controller.signal,
+    );
+    res.setHeader('Cache-Control', 'no-store');
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    if (!controller.signal.aborted) next(error);
+  } finally {
+    res.off('close', onClose);
+  }
+}
