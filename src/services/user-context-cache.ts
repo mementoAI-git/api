@@ -1,4 +1,5 @@
 import {deleteCacheValue, getCachedJson, setCachedJson} from './redis';
+import {forgetRecallCollection} from './memory-search/recall';
 
 /**
  * Short-lived Redis copies of context that is slow to build from the
@@ -37,6 +38,8 @@ export async function cachedUserContext<T>(
  */
 export async function forgetUserContext(userId: string): Promise<void> {
   if (!userId) return;
+  // This process's copy of their indexed stories and chats, for recall.
+  forgetRecallCollection(String(userId));
   try {
     await Promise.all(
       KINDS.map(kind => deleteCacheValue(key(kind, String(userId)))),

@@ -153,16 +153,16 @@ export const DEEPSEEK_MODEL_CHAT_FALLBACK =
 export const GROQ_BASE_URL =
   process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
 export const GROQ_MODEL_CHAT_PRIMARY =
-  process.env.GROQ_MODEL_CHAT_PRIMARY || 'llama-3.3-70b-versatile';
+  process.env.GROQ_MODEL_CHAT_PRIMARY || 'openai/gpt-oss-120b';
 export const GROQ_MODEL_CHAT_FALLBACK =
-  process.env.GROQ_MODEL_CHAT_FALLBACK || 'llama-3.1-8b-instant';
+  process.env.GROQ_MODEL_CHAT_FALLBACK || 'openai/gpt-oss-20b';
 export const GROQ_FAST_MODE_ENABLED =
   process.env.GROQ_FAST_MODE_ENABLED !== 'false';
 export const GROQ_FAST_MODE_MAX_INPUT_CHARS = Number(
   process.env.GROQ_FAST_MODE_MAX_INPUT_CHARS || 320,
 );
 export const GROQ_MODEL_CHAT_FAST_PRIMARY =
-  process.env.GROQ_MODEL_CHAT_FAST_PRIMARY || 'llama-3.1-8b-instant';
+  process.env.GROQ_MODEL_CHAT_FAST_PRIMARY || 'openai/gpt-oss-20b';
 export const GROQ_MODEL_CHAT_FAST_FALLBACK =
   process.env.GROQ_MODEL_CHAT_FAST_FALLBACK || GROQ_MODEL_CHAT_PRIMARY;
 

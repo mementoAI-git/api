@@ -138,7 +138,7 @@ export function isCoolingDown(
   );
 }
 
-function cosine(a: number[], b: number[]): number {
+export function cosine(a: number[], b: number[]): number {
   if (a.length !== b.length || !a.length) return 0;
   let dot = 0,
     aa = 0,

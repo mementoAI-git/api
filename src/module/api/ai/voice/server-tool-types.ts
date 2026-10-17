@@ -17,8 +17,20 @@ export type VoiceToolOutcome = {result: string; effects: VoiceToolEffect[]};
 
 /** How to reverse something Memento did by voice ("undo that"). */
 export type VoiceUndo =
-  | {kind: 'profile'; fields: Record<string, unknown>}
-  | {kind: 'story_fields'; id: string; title?: string; tags?: string[]}
+  | {
+      kind: 'profile';
+      fields: Record<string, unknown>;
+      /** What the action set, so undo can tell the host changed it since. */
+      expect?: Record<string, unknown>;
+    }
+  | {
+      kind: 'story_fields';
+      id: string;
+      title?: string;
+      tags?: string[];
+      expectTitle?: string;
+      expectTags?: string[];
+    }
   | {kind: 'bookmark'; id: string; on: boolean}
   | {kind: 'remove_story'; id: string}
   | {kind: 'restore_story'; id: string}

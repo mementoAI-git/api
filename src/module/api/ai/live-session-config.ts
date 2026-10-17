@@ -12,6 +12,8 @@ import {SERVER_TOOL_DECLARATIONS} from './voice/server-tool-declarations';
 import {
   SCREEN_CONTROL_CAPABILITY,
   SCREEN_CONTROL_DECLARATIONS,
+  SCREEN_FIELDS_CAPABILITY,
+  SCREEN_FIELDS_DECLARATIONS,
 } from './voice/screen-control-declarations';
 
 export const SEARCH_MEMORIES_TOOL_NAME = 'search_memories';
@@ -34,6 +36,7 @@ export function parseVoiceClientCapabilities(raw: unknown): {
   callActions: boolean;
   serverTools: boolean;
   screenControl: boolean;
+  screenFields: boolean;
 } {
   const capabilities =
     typeof raw === 'string' ? raw.split(',').map(value => value.trim()) : [];
@@ -44,6 +47,7 @@ export function parseVoiceClientCapabilities(raw: unknown): {
     callActions: capabilities.includes(CALL_ACTIONS_CAPABILITY),
     serverTools: capabilities.includes(SERVER_TOOLS_CAPABILITY),
     screenControl: capabilities.includes(SCREEN_CONTROL_CAPABILITY),
+    screenFields: capabilities.includes(SCREEN_FIELDS_CAPABILITY),
   };
 }
 
@@ -155,6 +159,7 @@ export type VoiceToolOptions = {
   callActions?: boolean;
   serverTools?: boolean;
   screenControl?: boolean;
+  screenFields?: boolean;
 };
 
 /** All enabled declarations go in one Tool, as the Live API expects. */
@@ -164,6 +169,9 @@ export function buildVoiceTools(options: VoiceToolOptions): Tool[] | undefined {
     ...(options.callActions ? CALL_ACTION_DECLARATIONS : []),
     ...(options.serverTools ? SERVER_TOOL_DECLARATIONS : []),
     ...(options.screenControl ? SCREEN_CONTROL_DECLARATIONS : []),
+    ...(options.screenControl && options.screenFields
+      ? SCREEN_FIELDS_DECLARATIONS
+      : []),
   ];
   return declarations.length
     ? [{functionDeclarations: declarations}]
