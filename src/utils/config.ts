@@ -312,3 +312,6 @@ export const staffConfig = () => ({
   totpKey: process.env.STAFF_TOTP_KEY || '',
   secureCookies: process.env.NODE_ENV === 'production',
 });
+
+export const GEMINI_TTS_MODEL_VERSION =
+  process.env.GEMINI_TTS_MODEL_VERSION || 'gemini-3.8-flash-tts';

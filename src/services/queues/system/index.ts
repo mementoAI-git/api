@@ -358,3 +358,18 @@ export async function queueAttachmentThumbnailProcessing(
 
   return true;
 }
+
+/** Memory retention is enforced by workers; no provider calls in delete requests. */
+export async function initializeMemoryPurge(): Promise<void> {
+  if (!systemQueue) {
+    logger.error(
+      'System queue unavailable; deleted-memory cleanup cannot be scheduled',
+    );
+    return;
+  }
+  await systemQueue.upsertJobScheduler(
+    queueNames.system.jobs.purgeDeletedMemories,
+    {every: 60 * 1000},
+    {opts: {removeOnComplete: true, removeOnFail: 10}},
+  );
+}

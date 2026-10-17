@@ -1,3 +1,4 @@
+import rateLimiter from '../../../middleware/rate-limiter';
 import {Router, type IRouter} from 'express';
 import fileUploadMiddleware from '../../../middleware/file-upload';
 import gaurd from '../../../middleware/gaurd';
@@ -92,6 +93,14 @@ router.post(
   gaurd,
   validate(dto.voiceCallSummarySchema),
   ctrl.summarizeVoiceCall,
+);
+router.post(
+  '/spoken-reply',
+  gaurd,
+  requireFeature('ai.voices'),
+  rateLimiter(1, 20, 'rl:spoken-replies:'),
+  validate(dto.spokenReplySchema),
+  ctrl.getSpokenReply,
 );
 router.get(
   '/voices',

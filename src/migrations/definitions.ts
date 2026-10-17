@@ -1,3 +1,4 @@
+import {backfillMemoryRecovery} from '../services/memory-lifecycle';
 import type {mongo} from 'mongoose';
 import type {DatabaseMigration} from './index';
 import {createHash, randomUUID} from 'crypto';
@@ -266,6 +267,13 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
         {created_at: 1},
         {name: 'voice_action_ttl', expireAfterSeconds: 7 * 24 * 60 * 60},
       );
+    },
+  },
+  {
+    id: '202610150001_memory_recovery_window',
+    up: async db => {
+      await backfillMemoryRecovery(db);
+      await db.collection('memories').createIndex({status: 1, delete_after: 1});
     },
   },
   {
