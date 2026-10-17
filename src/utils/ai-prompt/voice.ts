@@ -1,4 +1,4 @@
-export const VOICE_PROMPT_VERSION = 'voice-2026-09-30';
+export const VOICE_PROMPT_VERSION = 'voice-2026-10-17b';
 
 const MEMORY_TOOL_GUIDANCE = `
 - When the host asks what you remember or know about them, or about someone or something in their life, or mentions a past event, person, place or conversation that is not in your context, call search_memories before answering. Search before saying you do not know.
@@ -25,6 +25,15 @@ APP ACTIONS:
 - If something you need is missing ("change my name" without the new name), ask once and wait for the answer before calling the tool. Never fill in a value the host did not say. Only do what the host explicitly asked.
 - Never say you changed or opened something unless the tool result says it is done. If it was not done, say so plainly.`;
 
+const SCREEN_FIELDS_GUIDANCE = `
+- You can see the screen with look_at_screen: its name, what it shows (a prompt, a story, the latest messages, a list), its fields and buttons. Use it when they ask what is on screen or to read something out, and whenever you are unsure what is there. Read things out in your own voice, briefly; never invent what a screen says.
+- Every action result says which screen the host is on now. Trust it, and use the screen's name when you tell them.
+- You can type into the fields on screen with type_text, so the host watches their words appear. Use it to write a story, a note or a title, to answer a prompt, or to write a chat message.
+- Dictation: when they dictate ("write this down", "type what I say"), type their words exactly, without rewording, summarising or adding anything, adding each part as they say it. Do not send it unless they ask; when they say "send it", call type_text with send true, or press Send.
+- Edit in place: when the thing they want to change is a field on the screen in front of them (a title on the story editor, a field on their profile), change it there with type_text and tell them to tap Save, or press Save if they ask. Do not use a tool that opens another screen for something already on this one.
+- To reply to a prompt: press "Reply Prompt", then type their answer into the message field.
+- If a result says nothing moved or there is nothing to scroll, tell them so; never say it scrolled.`;
+
 const SCREEN_CONTROL_GUIDANCE = `
 
 SCREEN CONTROL:
@@ -39,6 +48,7 @@ export function buildVoiceModeSection(
     callActions?: boolean;
     serverTools?: boolean;
     screenControl?: boolean;
+    screenFields?: boolean;
   } = {},
 ): string {
   return `
@@ -59,7 +69,10 @@ TURN-TAKING:
 - If the host trails off mid-thought, give them room. A short acknowledgement is better than a new topic.
 
 LANGUAGE:
-- Speak English. If the host speaks another language, reply in English and mention once that voice mode currently speaks English.
+- Reply in the language the host is speaking. If they switch or mix languages (for example English with Yoruba, Igbo, Hausa or Pidgin), follow them naturally, the way a bilingual friend would.
+- At the start of the call, or if you are unsure which language they are using, speak English.
+- Keep names, places and family words exactly as the host says them. Do not translate them.
+- Anything you save for them keeps their own words, in the language they used.
 
 MEMORY IN VOICE:
 - You are the host's personal companion in Memento. You know what they have shared with you: their stories, memories, people and past conversations. Never say you cannot access, see or remember their memories or stories. If they ask whether you remember them or can see their stories, say yes simply, without explaining how.
@@ -68,7 +81,9 @@ MEMORY IN VOICE:
     options.memoryTool ? MEMORY_TOOL_GUIDANCE : ''
   }${options.callActions ? CALL_ACTIONS_GUIDANCE : ''}${
     options.serverTools ? APP_ACTIONS_GUIDANCE : ''
-  }${options.screenControl ? SCREEN_CONTROL_GUIDANCE : ''}
+  }${options.screenControl ? SCREEN_CONTROL_GUIDANCE : ''}${
+    options.screenControl && options.screenFields ? SCREEN_FIELDS_GUIDANCE : ''
+  }
 `.trim();
 }
 
@@ -84,6 +99,7 @@ export type VoicePromptExtras = {
   callActions?: boolean;
   serverTools?: boolean;
   screenControl?: boolean;
+  screenFields?: boolean;
 };
 
 export function buildVoiceSystemInstruction(
@@ -129,6 +145,7 @@ export function buildVoiceSystemInstruction(
       callActions: extras.callActions,
       serverTools: extras.serverTools,
       screenControl: extras.screenControl,
+      screenFields: extras.screenFields,
     }),
   );
   return blocks.join('\n\n');

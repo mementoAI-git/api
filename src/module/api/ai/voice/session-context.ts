@@ -16,6 +16,7 @@ import {withTimeout} from './with-timeout';
 import {buildHostOverview} from './host-overview';
 import {describeHostNow} from './local-time';
 import type {StepTimer} from '../../../../utils/step-timer';
+import {getCachedJson, setCachedJson} from '../../../../services/redis';
 
 const DEFAULT_LONG_TERM_TIMEOUT_MS = 1_500;
 const HOST_OVERVIEW_TIMEOUT_MS = 1_500;
@@ -57,6 +58,7 @@ export async function buildVoiceSessionContext(
     callActions?: boolean;
     serverTools?: boolean;
     screenControl?: boolean;
+    screenFields?: boolean;
     timeZone?: string;
     timer?: StepTimer;
   } = {},
@@ -174,6 +176,7 @@ export async function buildVoiceSessionContext(
       callActions: options.callActions,
       serverTools: options.serverTools,
       screenControl: options.screenControl,
+      screenFields: options.screenFields,
     }),
     greetingInstruction: buildVoiceGreetingInstruction({
       name: name || undefined,
@@ -182,4 +185,53 @@ export async function buildVoiceSessionContext(
     }),
     memoryId: ownedMemoryId,
   };
+}
+
+/** Longer than a call can sensibly reconnect within; the token lasts 30 min. */
+export const VOICE_CONTEXT_REUSE_SECONDS = 35 * 60;
+
+type ContextOptions = NonNullable<
+  Parameters<typeof buildVoiceSessionContext>[2]
+>;
+
+/** One key per call setup: same host, conversation, abilities and time zone. */
+export function voiceContextKey(
+  userId: string,
+  memoryId: string | undefined,
+  options: ContextOptions,
+): string {
+  const flags = [
+    options.memoryTool && 'm',
+    options.callActions && 'a',
+    options.serverTools && 's',
+    options.screenControl && 'c',
+    options.screenFields && 'f',
+  ]
+    .filter(Boolean)
+    .join('');
+  return `voice-ctx:${userId}:${memoryId ?? '-'}:${flags}:${options.timeZone ?? '-'}`;
+}
+
+/**
+ * The call context for a token. A reconnect (it carries a resume handle)
+ * reuses the context its call started with instead of reading everything
+ * again: faster when the network is already struggling, and the resumed
+ * session keeps exactly the instructions it had. A new call always builds
+ * afresh and stores what it built.
+ */
+export async function voiceSessionContextFor(
+  user: HydratedDocument<IUser>,
+  memoryId: string | undefined,
+  options: ContextOptions & {resuming?: boolean},
+  build: typeof buildVoiceSessionContext = buildVoiceSessionContext,
+): Promise<VoiceSessionContext & {reused: boolean}> {
+  const {resuming, ...buildOptions} = options;
+  const key = voiceContextKey(String(user._id), memoryId, buildOptions);
+  if (resuming) {
+    const hit = await getCachedJson<VoiceSessionContext>(key).catch(() => null);
+    if (hit?.systemInstruction) return {...hit, reused: true};
+  }
+  const context = await build(user, memoryId, buildOptions);
+  setCachedJson(key, context, VOICE_CONTEXT_REUSE_SECONDS).catch(() => {});
+  return {...context, reused: false};
 }

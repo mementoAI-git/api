@@ -46,6 +46,11 @@ export const SCREEN_CONTROL_DECLARATIONS: FunctionDeclaration[] = [
           description:
             'Only for switches and options: true when the host wants it on or selected, false when they want it off. Leave out for ordinary buttons.',
         },
+        which: {
+          type: Type.INTEGER,
+          description:
+            'Only when the result said several buttons have these words and the host said which: 1 for the first on screen, 2 for the second, and so on.',
+        },
       },
       required: ['label'],
     },
@@ -53,5 +58,57 @@ export const SCREEN_CONTROL_DECLARATIONS: FunctionDeclaration[] = [
 ];
 
 export const SCREEN_CONTROL_TOOL_NAMES = SCREEN_CONTROL_DECLARATIONS.map(
+  declaration => declaration.name as string,
+);
+
+/**
+ * Builds that can read the screen and type into its fields. A separate
+ * capability, so builds with only screen_control are never offered tools
+ * they cannot run.
+ */
+export const SCREEN_FIELDS_CAPABILITY = 'screen_fields';
+
+export const SCREEN_FIELDS_DECLARATIONS: FunctionDeclaration[] = [
+  {
+    name: 'look_at_screen',
+    behavior: Behavior.BLOCKING,
+    description:
+      'See the screen the host is looking at: its name, what it says (a prompt, a story, the latest messages, a list), its fields and what is in them, and its buttons. Use it when they ask what is on screen or to read something, and before typing or pressing when you are not sure what is there.',
+  },
+  {
+    name: 'type_text',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Type into a field on the screen in front of the host, so they see the words appear: a chat message, a reply to a prompt, a story, a title, a note, a profile field. Use their own words exactly. Adds to what is there unless mode is replace.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        text: {
+          type: Type.STRING,
+          description: 'The words to type, exactly as the host said them.',
+        },
+        field: {
+          type: Type.STRING,
+          description:
+            'Which field, by its name from look_at_screen ("message", "title", "story", "note", "Nickname"). Leave out when the screen has one field.',
+        },
+        mode: {
+          type: Type.STRING,
+          enum: ['append', 'replace'],
+          description:
+            'append (default) adds after what is there, for dictation; replace swaps the whole field, for "change the title to …".',
+        },
+        send: {
+          type: Type.BOOLEAN,
+          description:
+            'True only when the host asked to send it ("send it", "send that"). Sends the message after typing.',
+        },
+      },
+      required: ['text'],
+    },
+  },
+];
+
+export const SCREEN_FIELDS_TOOL_NAMES = SCREEN_FIELDS_DECLARATIONS.map(
   declaration => declaration.name as string,
 );

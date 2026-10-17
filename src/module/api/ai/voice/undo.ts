@@ -1,3 +1,6 @@
+import dayjs from 'dayjs';
+import Memory from '../../../database/model/memory';
+import User from '../../../database/model/user';
 import VoiceAction from '../../../database/model/voice-action';
 import * as beneficiaries from '../../beneficiary/service';
 import * as capsules from '../../capsule/service';
@@ -19,10 +22,83 @@ import {failed} from './tool-errors';
 
 export const UNDO_WINDOW_MS = 30 * 60_000;
 
+/** The host changed it again after Memento did, so undo would overwrite them. */
+export class UndoConflictError extends Error {}
+
+function sameValue(
+  field: string,
+  current: unknown,
+  expected: unknown,
+): boolean {
+  const empty = (value: unknown) =>
+    value === undefined || value === null || value === '';
+  if (empty(current) && empty(expected)) return true;
+  if (field === 'dob') {
+    return (
+      !empty(current) &&
+      !empty(expected) &&
+      dayjs(current as Date)
+        .toISOString()
+        .slice(0, 10) ===
+        dayjs(expected as string)
+          .toISOString()
+          .slice(0, 10)
+    );
+  }
+  return String(current) === String(expected);
+}
+
+function sameTags(current: unknown, expected: string[]): boolean {
+  const a = (Array.isArray(current) ? current : []).map(tag =>
+    String(tag).toLowerCase(),
+  );
+  const b = expected.map(tag => tag.toLowerCase());
+  return a.length === b.length && a.every((tag, i) => tag === b[i]);
+}
+
+/** Throws UndoConflictError when what Memento set is no longer there. */
+async function assertUnchanged(userId: string, undo: VoiceUndo): Promise<void> {
+  if (undo.kind === 'profile' && undo.expect) {
+    const fields = Object.keys(undo.expect);
+    const current = ((await User.findById(userId)
+      .select(fields.join(' '))
+      .lean()) ?? {}) as Record<string, unknown>;
+    if (
+      fields.some(
+        field => !sameValue(field, current[field], undo.expect![field]),
+      )
+    ) {
+      throw new UndoConflictError();
+    }
+  }
+  if (
+    undo.kind === 'story_fields' &&
+    (undo.expectTitle !== undefined || undo.expectTags !== undefined)
+  ) {
+    const story = (await Memory.findOne({_id: undo.id, user: userId})
+      .select('title tags')
+      .lean()) as {title?: unknown; tags?: unknown} | null;
+    if (!story) throw new UndoConflictError();
+    if (
+      undo.expectTitle !== undefined &&
+      !sameValue('title', story.title, undo.expectTitle)
+    ) {
+      throw new UndoConflictError();
+    }
+    if (
+      undo.expectTags !== undefined &&
+      !sameTags(story.tags, undo.expectTags)
+    ) {
+      throw new UndoConflictError();
+    }
+  }
+}
+
 async function reverse(
   userId: string,
   undo: VoiceUndo,
 ): Promise<{effects: VoiceToolEffect[]; note?: string}> {
+  await assertUnchanged(userId, undo);
   switch (undo.kind) {
     case 'profile':
       await users.updateProfile(undo.fields as never, userId);
@@ -89,10 +165,14 @@ async function reverse(
 
 export async function undoLastAction(
   userId: string,
-  now = Date.now(),
+  options: {sessionId?: string; now?: number} = {},
 ): Promise<VoiceToolOutcome> {
+  const now = options.now ?? Date.now();
   const latest = await VoiceAction.findOne({
     user: userId,
+    // Within this call only, when the app says which call it is: "undo that"
+    // must not reach into another call or device.
+    ...(options.sessionId && {session_id: options.sessionId}),
     undo: {$exists: true},
     undone_at: {$exists: false},
     running: false,
@@ -124,6 +204,13 @@ export async function undoLastAction(
       effects,
     };
   } catch (error) {
+    if (error instanceof UndoConflictError) {
+      // Left as it is: the host's newer change wins.
+      return {
+        result: `I did not undo it: ${claimed.summary || claimed.tool}, but it has been changed again since, so I left it as it is now. Tell them, and that they can change it in the app.`,
+        effects: [],
+      };
+    }
     await VoiceAction.updateOne({_id: claimed._id}, {$unset: {undone_at: 1}});
     return failed(error, 'undo_last_action');
   }

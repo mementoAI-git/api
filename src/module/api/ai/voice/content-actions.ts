@@ -171,7 +171,12 @@ const tagStory: Handler = async (userId, args) => {
   return {
     result: `"${story.title || 'Untitled'}" tags were ${current.join(', ') || 'none'}; now ${tags.join(', ') || 'none'}.`,
     effects: [{type: 'refresh', what: 'memories'}],
-    undo: {kind: 'story_fields', id: String(story._id), tags: story.tags ?? []},
+    undo: {
+      kind: 'story_fields',
+      id: String(story._id),
+      tags: story.tags ?? [],
+      expectTags: tags,
+    },
     summary: `changed the tags on "${story.title || 'Untitled'}"`,
   };
 };
@@ -196,6 +201,7 @@ const renameStory: Handler = async (userId, args) => {
       kind: 'story_fields',
       id: String(story._id),
       title: story.title ?? '',
+      expectTitle: title,
     },
     summary: `renamed "${story.title || 'Untitled'}" to "${title}"`,
   };

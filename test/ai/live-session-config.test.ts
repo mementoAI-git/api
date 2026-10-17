@@ -234,6 +234,7 @@ describe('voice client capabilities', () => {
       callActions: true,
       serverTools: false,
       screenControl: false,
+      screenFields: false,
     });
   });
 
@@ -245,6 +246,7 @@ describe('voice client capabilities', () => {
       callActions: true,
       serverTools: true,
       screenControl: false,
+      screenFields: false,
     });
   });
 
@@ -264,6 +266,7 @@ describe('voice client capabilities', () => {
       callActions: false,
       serverTools: false,
       screenControl: false,
+      screenFields: false,
     });
   });
 
@@ -273,18 +276,21 @@ describe('voice client capabilities', () => {
       callActions: true,
       serverTools: false,
       screenControl: false,
+      screenFields: false,
     });
     expect(parseVoiceClientCapabilities(undefined)).toEqual({
       memoryTool: false,
       callActions: false,
       serverTools: false,
       screenControl: false,
+      screenFields: false,
     });
     expect(parseVoiceClientCapabilities(['search_memories'])).toEqual({
       memoryTool: false,
       callActions: false,
       serverTools: false,
       screenControl: false,
+      screenFields: false,
     });
   });
 });

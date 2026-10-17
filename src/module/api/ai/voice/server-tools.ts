@@ -117,7 +117,7 @@ async function updateProfile(
     return failed(error);
   }
   return {
-    undo: {kind: 'profile', fields: restore},
+    undo: {kind: 'profile', fields: restore, expect: update},
     summary: `changed their ${changed.join(', ')}`,
     result: `Done: changed their ${changed.join(', ')}. Their profile is now on screen. Tell them briefly and offer to change it back.`,
     effects: [
@@ -146,13 +146,21 @@ async function openStory(
   };
 }
 
+/** The voice call a tool runs in, as the app identifies it. */
+export type VoiceToolContext = {sessionId?: string};
+
 const HANDLERS: Record<
   string,
-  (userId: string, args: Record<string, unknown>) => Promise<VoiceToolRun>
+  (
+    userId: string,
+    args: Record<string, unknown>,
+    context: VoiceToolContext,
+  ) => Promise<VoiceToolRun>
 > = {
   [UPDATE_PROFILE_TOOL_NAME]: updateProfile,
   [OPEN_STORY_TOOL_NAME]: openStory,
-  [UNDO_LAST_ACTION_TOOL_NAME]: userId => undoLastAction(userId),
+  [UNDO_LAST_ACTION_TOOL_NAME]: (userId, _args, context) =>
+    undoLastAction(userId, {sessionId: context.sessionId}),
   ...CONTENT_ACTION_HANDLERS,
 };
 
@@ -168,13 +176,22 @@ function isDuplicateKey(error: unknown): boolean {
 async function replay(
   userId: string,
   callId: string,
+  name: string,
   waitMs: number,
 ): Promise<VoiceToolOutcome> {
   const deadline = Date.now() + waitMs;
   for (;;) {
     const first = await VoiceAction.findOne({user: userId, call_id: callId})
-      .select('running outcome')
+      .select('tool running outcome')
       .lean();
+    // The same id for a different tool is not a repeat; never hand one
+    // tool's result to another.
+    if (first && first.tool !== name) {
+      return {
+        result: `${name} did not run. Tell the host it did not work and that they can try again.`,
+        effects: [],
+      };
+    }
     if (first && !first.running && first.outcome) {
       return first.outcome as VoiceToolOutcome;
     }
@@ -192,13 +209,14 @@ export async function runVoiceServerTool(
   userId: string,
   name: string,
   args: Record<string, unknown>,
-  options: {callId?: string; repeatWaitMs?: number} = {},
+  options: {callId?: string; sessionId?: string; repeatWaitMs?: number} = {},
 ): Promise<VoiceToolOutcome> {
   const handler = Object.prototype.hasOwnProperty.call(HANDLERS, name)
     ? HANDLERS[name]
     : undefined;
   if (!handler) throw new UnknownVoiceToolError(name);
-  const {callId} = options;
+  const {callId, sessionId} = options;
+  const session = sessionId ? {session_id: sessionId} : {};
 
   let claim: string | undefined;
   if (callId) {
@@ -207,18 +225,24 @@ export async function runVoiceServerTool(
         user: userId,
         tool: name,
         call_id: callId,
+        ...session,
         running: true,
       });
       claim = String(created._id);
     } catch (error) {
       if (!isDuplicateKey(error)) throw error;
-      return replay(userId, callId, options.repeatWaitMs ?? REPEAT_WAIT_MS);
+      return replay(
+        userId,
+        callId,
+        name,
+        options.repeatWaitMs ?? REPEAT_WAIT_MS,
+      );
     }
   }
 
   let run: VoiceToolRun;
   try {
-    run = await handler(userId, args ?? {});
+    run = await handler(userId, args ?? {}, {sessionId});
   } catch (error) {
     // Free the call id so a retry can run.
     if (claim) await VoiceAction.deleteOne({_id: claim});
@@ -236,7 +260,7 @@ export async function runVoiceServerTool(
       {$set: {...entry, running: false}},
     );
   } else if (run.undo) {
-    await VoiceAction.create({user: userId, tool: name, ...entry});
+    await VoiceAction.create({user: userId, tool: name, ...session, ...entry});
   }
   return outcome;
 }

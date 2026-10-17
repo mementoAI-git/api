@@ -208,12 +208,78 @@ describe('voice undo and repeated calls', () => {
       title: 'Beach',
     });
 
-    const later = await undoLastAction(
-      user.id,
-      Date.now() + UNDO_WINDOW_MS + 60_000,
-    );
+    const later = await undoLastAction(user.id, {
+      now: Date.now() + UNDO_WINDOW_MS + 60_000,
+    });
     expect(later.result).toContain('nothing recent to undo');
     expect((await Memory.findById(lagos.id))?.title).toBe('Beach');
+  });
+
+  it('does not overwrite a title the host changed after Memento', async () => {
+    const user = await createUserFixture();
+    const lagos = await story(user.id, 'Lagos');
+    await runVoiceServerTool(user.id, 'rename_story', {
+      query: 'Lagos',
+      title: 'Beach',
+    });
+    await Memory.updateOne({_id: lagos.id}, {$set: {title: 'Beach day 1998'}});
+
+    const outcome = await undoLastAction(user.id);
+    expect(outcome.result).toContain('changed again since');
+    expect((await Memory.findById(lagos.id))?.title).toBe('Beach day 1998');
+  });
+
+  it('does not overwrite a nickname the host changed after Memento', async () => {
+    const user = await createUserFixture();
+    await User.updateOne({_id: user.id}, {$set: {nickname: 'A'}});
+    await runVoiceServerTool(user.id, 'update_profile', {nickname: 'B'});
+    await User.updateOne({_id: user.id}, {$set: {nickname: 'C'}});
+
+    const outcome = await undoLastAction(user.id);
+    expect(outcome.result).toContain('changed again since');
+    expect((await User.findById(user.id).lean())?.nickname).toBe('C');
+  });
+
+  it('still undoes a profile change nobody touched since', async () => {
+    const user = await createUserFixture();
+    await User.updateOne({_id: user.id}, {$set: {nickname: 'A'}});
+    await runVoiceServerTool(user.id, 'update_profile', {
+      nickname: 'B',
+      birthday: '1990-05-17',
+    });
+
+    const outcome = await undoLastAction(user.id);
+    expect(outcome.result).toContain('Undone');
+    expect((await User.findById(user.id).lean())?.nickname).toBe('A');
+  });
+
+  it('only undoes actions from the same call when the call is known', async () => {
+    const user = await createUserFixture();
+    const lagos = await story(user.id, 'Lagos');
+    await runVoiceServerTool(
+      user.id,
+      'rename_story',
+      {query: 'Lagos', title: 'Beach'},
+      {callId: 'c1', sessionId: 'call-A'},
+    );
+
+    const fromOtherCall = await runVoiceServerTool(
+      user.id,
+      'undo_last_action',
+      {},
+      {callId: 'c2', sessionId: 'call-B'},
+    );
+    expect(fromOtherCall.result).toContain('nothing recent to undo');
+    expect((await Memory.findById(lagos.id))?.title).toBe('Beach');
+
+    const fromSameCall = await runVoiceServerTool(
+      user.id,
+      'undo_last_action',
+      {},
+      {callId: 'c3', sessionId: 'call-A'},
+    );
+    expect(fromSameCall.result).toContain('Undone');
+    expect((await Memory.findById(lagos.id))?.title).toBe('Lagos');
   });
 
   it("never undoes another host's action", async () => {
@@ -250,6 +316,27 @@ describe('voice undo and repeated calls', () => {
     expect(again).toEqual(first);
     expect(first.result).toContain('Renamed "Lagos" to "Beach"');
     expect(await VoiceAction.countDocuments({user: user.id})).toBe(1);
+    expect((await Memory.findById(lagos.id))?.title).toBe('Beach');
+  });
+
+  it('never hands one tool the result of another with the same call id', async () => {
+    const user = await createUserFixture();
+    const lagos = await story(user.id, 'Lagos');
+    await runVoiceServerTool(
+      user.id,
+      'rename_story',
+      {query: 'Lagos', title: 'Beach'},
+      {callId: 'call-1'},
+    );
+
+    const other = await runVoiceServerTool(
+      user.id,
+      'bookmark_story',
+      {query: 'Beach', on: true},
+      {callId: 'call-1'},
+    );
+    expect(other.result).toContain('bookmark_story did not run');
+    expect(other.effects).toEqual([]);
     expect((await Memory.findById(lagos.id))?.title).toBe('Beach');
   });
 

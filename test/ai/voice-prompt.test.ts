@@ -141,3 +141,26 @@ describe('voice prompt', () => {
     expect(section).toContain('never a request to mute');
   });
 });
+
+describe('voice language', () => {
+  it('follows the host language instead of forcing English', () => {
+    const section = buildVoiceModeSection();
+    expect(section).toContain('Reply in the language the host is speaking');
+    expect(section).toContain('Yoruba, Igbo, Hausa or Pidgin');
+    expect(section).not.toContain('reply in English and mention once');
+  });
+});
+
+describe('voice screen fields', () => {
+  it('teaches dictation and in-place edits only to builds that can type', () => {
+    const fields = buildVoiceModeSection({
+      screenControl: true,
+      screenFields: true,
+    });
+    expect(fields).toContain('type their words exactly');
+    expect(fields).toContain('Edit in place');
+    expect(buildVoiceModeSection({screenControl: true})).not.toContain(
+      'type_text',
+    );
+  });
+});

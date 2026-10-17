@@ -11,6 +11,8 @@ export interface IVoiceAction {
   tool: string;
   /** Gemini's id for the tool call, when the app sends it. */
   call_id?: string;
+  /** The app's id for the voice call, so "undo" stays within one call. */
+  session_id?: string;
   /** Set while the call runs, so a repeat waits for the first one. */
   running: boolean;
   /** What the host heard and the app applied. */
@@ -29,6 +31,7 @@ const voiceActionSchema = new Schema<IVoiceAction>(
     user: {type: String, ref: 'user', required: true},
     tool: {type: String, required: true},
     call_id: {type: String, default: undefined},
+    session_id: {type: String, default: undefined},
     running: {type: Boolean, default: false},
     outcome: {type: Schema.Types.Mixed, default: undefined},
     undo: {type: Schema.Types.Mixed, default: undefined},
