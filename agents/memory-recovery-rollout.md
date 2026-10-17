@@ -6,7 +6,7 @@ Permanent deletion requires a memory already in Deleted. It disappears from list
 
 ## Activation
 
-1. Review `feat/api-memory-recovery-20261016` and deploy its API and worker together before the Web Stories recovery package. This extracted branch has not been pushed or deployed. Preserve the newer dev embedding/voice workers and migrations included in its base.
+1. Review [API PR #90](https://github.com/mementoAI-git/api/pull/90) (`pr/api-memory-recovery-20261016`) and deploy its API and worker together before the Web Stories recovery package. The branch is pushed for review; this shipping task has not merged or deployed it. Preserve the newer dev embedding/voice workers and migrations included in its base.
 2. Run the normal migration workflow in the target environment. `202610150001_memory_recovery_window` adds the retention index and grants existing deleted memories a fresh 30-day window. It does not infer dates from old activity timestamps. The owner opening Deleted and the scheduled sweep also initialize missing legacy windows idempotently.
 3. Restart the API scheduler and system worker with MongoDB, Redis and storage credentials configured. `purge-deleted-memories` runs every minute, in batches of up to 100. Existing system queue limits and storage retries can delay physical cleanup beyond the deadline; recovery is denied at the exact deadline regardless.
 4. Check scheduler logs for `deleted memory cleanup`, the BullMQ job `purge-deleted-memories`, and absence of repeated `Memory purge failed` errors. Do not enable a TTL index: deleting database rows first would lose cleanup keys.
