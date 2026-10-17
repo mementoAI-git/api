@@ -650,7 +650,7 @@ const usersDocs = {
               properties: {
                 self_description: {
                   type: 'string',
-                  maxLength: 500,
+                  maxLength: 2000,
                   description: 'User self-description',
                   example: 'I am a software developer',
                 },
@@ -849,7 +849,7 @@ const usersDocs = {
                   items: {type: 'string'},
                 },
                 goals_and_aspirations: {type: 'array', items: {type: 'string'}},
-                self_description: {type: 'string', maxLength: 500},
+                self_description: {type: 'string', maxLength: 2000},
                 current_priority: {type: 'array', items: {type: 'string'}},
                 join_reasons: {type: 'array', items: {type: 'string'}},
               },

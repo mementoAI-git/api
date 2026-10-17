@@ -10556,7 +10556,7 @@
                   "self_description": {
                     "description": "User self-description",
                     "example": "I am a software developer",
-                    "maxLength": 500,
+                    "maxLength": 2000,
                     "type": "string"
                   }
                 },
@@ -10962,7 +10962,7 @@
                     "type": "array"
                   },
                   "self_description": {
-                    "maxLength": 500,
+                    "maxLength": 2000,
                     "type": "string"
                   }
                 },
