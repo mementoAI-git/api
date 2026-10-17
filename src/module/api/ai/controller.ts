@@ -53,6 +53,10 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
       response.stream,
       res,
       response.modelLabel,
+      {
+        userText: response.userText,
+        userMessageSaved: response.userMessageSaved,
+      },
     );
   } catch (error) {
     next(error);
@@ -151,7 +155,7 @@ export async function getEphemeralToken(
         ? req.query.device_model.trim().slice(0, 100)
         : undefined;
     const timeZone = validTimeZone(req.query.timezone);
-    const {memoryTool, callActions, serverTools, screenControl} =
+    const {memoryTool, callActions, serverTools, screenControl, screenFields} =
       parseVoiceClientCapabilities(req.query.capabilities);
     const prepared = service.createEphemeralToken(
       req.auth.id,
@@ -163,6 +167,7 @@ export async function getEphemeralToken(
         callActions,
         serverTools,
         screenControl,
+        screenFields,
         timeZone,
         timer,
       },
@@ -248,6 +253,12 @@ export async function searchVoiceMemories(
   }
 }
 
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim()
+    ? value.trim().slice(0, 200)
+    : undefined;
+}
+
 /** Runs a server-side voice tool the app forwarded from Gemini Live. */
 export async function runVoiceTool(
   req: IRequest,
@@ -260,7 +271,10 @@ export async function runVoiceTool(
       req.auth.id,
       String(req.params.name),
       (req.body.args ?? {}) as Record<string, unknown>,
-      {callId: req.body.call_id as string | undefined},
+      {
+        callId: stringOrUndefined(req.body.call_id),
+        sessionId: stringOrUndefined(req.body.session_id),
+      },
     );
     return responsHandler(res, StatusCodes.OK, 'Voice tool complete', outcome);
   } catch (error) {
