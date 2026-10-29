@@ -200,13 +200,11 @@ jobs:
           echo "Deployment artifact prepared:"
           find release -maxdepth 2 -type f | sort
 
-      - name: Upload deployment artifact
-        uses: actions/upload-artifact@v4
+      # Artifacts count against the account's storage quota; the Actions cache does not.
+      - name: Save deployment bundle
+        uses: actions/cache/save@v4
         with:
-          name: backend-dev-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          retention-days: 1
-          if-no-files-found: error
-          include-hidden-files: true
+          key: backend-dev-${{ github.sha }}-${{ github.run_id }}
           path: release/
 
   # ────────────────────────────────────────────────────────────
@@ -238,11 +236,12 @@ jobs:
       RELEASE_ID: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     steps:
-      - name: Download deployment artifact
-        uses: actions/download-artifact@v4
+      - name: Restore deployment bundle
+        uses: actions/cache/restore@v4
         with:
-          name: backend-dev-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: release
+          key: backend-dev-${{ github.sha }}-${{ github.run_id }}
+          path: release/
+          fail-on-cache-miss: true
 
       # ────────────────────────────────────────────────────────
       # SSH
