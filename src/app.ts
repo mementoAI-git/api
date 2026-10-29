@@ -48,6 +48,11 @@ export function createServer(): Application {
       },
     }),
   );
+  // Helmet defaults to same-origin; the web app plays these tracks from another origin.
+  app.use('/assets/audio', (_req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  });
   app.use('/assets', express.static(path.join(process.cwd(), 'public')));
   app.use(
     '/.well-known',

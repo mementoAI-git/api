@@ -78,6 +78,8 @@ export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const BACKEND_URL = process.env.BACKEND_URL;
+/** Optional CDN folder for background music; defaults to the API's own /assets/audio. */
+export const BACKGROUND_MUSIC_BASE_URL = process.env.BACKGROUND_MUSIC_BASE_URL;
 export const FILE_URL_SIGNING_KEYS = process.env.FILE_URL_SIGNING_KEYS || '';
 export const FILE_URL_TTL_SECONDS = Number(
   process.env.FILE_URL_TTL_SECONDS || 3600,
