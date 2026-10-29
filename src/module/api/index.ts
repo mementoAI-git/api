@@ -13,6 +13,7 @@ import featureFlagRoutes from './feature-flag/routes';
 import feedbackRoutes from './feedback/routes';
 import fileRoutes from './file/routes';
 import groupRoutes from './group/routes';
+import mediaRoutes from './media/routes';
 import memoryRoutes from './memory/routes';
 import personaRoutes from './persona/routes';
 import peopleRoutes from './people/routes';
@@ -39,6 +40,7 @@ const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
   {path: 'feedback', router: feedbackRoutes},
   {path: 'files', router: fileRoutes},
   {path: 'groups', router: groupRoutes},
+  {path: 'media', router: mediaRoutes},
   {path: 'memories', router: memoryRoutes},
   {path: 'persona', router: personaRoutes},
   {path: 'people', router: peopleRoutes},
