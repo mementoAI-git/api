@@ -1,3 +1,4 @@
+import {connectionEngaged} from '../../../services/growth-events';
 import Memory from '../../database/model/memory';
 import File from '../../database/model/file';
 import SharedItem, {SHARED_ITEM_TYPES} from '../../database/model/shared-item';
@@ -38,6 +39,7 @@ export async function recordReference(
     },
     {upsert: true},
   );
+  await connectionEngaged(viewerId, personId, sourceId);
 }
 export async function share(
   personId: string,

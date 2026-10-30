@@ -10,7 +10,8 @@ bun.lock
 yarn.lock
 *.lock*
 google-storage.json
-/docs
+/docs/*
+!/docs/GROWTH_ANALYTICS.md
 yarn.lock
 .claude
 # Keep repo-level AI guidance versioned with the backend.

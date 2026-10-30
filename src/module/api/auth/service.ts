@@ -1,3 +1,4 @@
+import {accountCreated} from '../../../services/growth-events';
 import {referrals} from '../user/referrals';
 import bcrypt from 'bcryptjs';
 import speakeasy from 'speakeasy';
@@ -308,6 +309,7 @@ export async function oauthAuthorization(
       picture,
       ...keys,
     });
+    await accountCreated(user, 'oauth');
   }
 
   assertCanAuthenticate(user);
@@ -608,7 +610,7 @@ export async function register(
   const keys = generateKeys();
 
   const picture = generateDefaultAvatarUrl(email);
-  await User.create({
+  const createdUser = await User.create({
     last_name,
     first_name,
     password,
@@ -617,6 +619,7 @@ export async function register(
     referred_by: await referrals.inviter(payload.referral_code),
     ...keys,
   });
+  await accountCreated(createdUser, 'email');
   const deliveryMode = emailDelivery(context, payload.delivery);
   await mail.sendLink(
     email,

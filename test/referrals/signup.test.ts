@@ -13,6 +13,9 @@ import mail from '../../src/module/mail';
 
 vi.hoisted(() => {
   process.env.FRONTEND_URL = 'https://dev.mymemento.io';
+  // The mocked ID-token audience must not inherit a developer's OAuth client.
+  process.env.GOOGLE_ID =
+    '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com';
 });
 
 describe('personal invite signup tracking', () => {

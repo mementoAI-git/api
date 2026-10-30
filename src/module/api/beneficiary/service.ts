@@ -1,3 +1,8 @@
+import {
+  accountCreated,
+  invitationDelivered,
+  connectionActivated,
+} from '../../../services/growth-events';
 import mail from '../../mail';
 import {
   compareStrings,
@@ -64,7 +69,9 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
       due_at: dayjs().add(3, 'days').toDate(),
     });
     await beneficiary.save();
-    await mail.sendBeneficiaryInvite(beneficiary);
+    if ((await mail.sendBeneficiaryInvite(beneficiary)) === true) {
+      await invitationDelivered(beneficiary, Boolean(user));
+    }
     return {message: 'Connection invitation sent', data: beneficiary};
   }
 
@@ -112,7 +119,9 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   }
 
   if (data) {
-    await mail.sendBeneficiaryInvite(data);
+    if ((await mail.sendBeneficiaryInvite(data)) === true) {
+      await invitationDelivered(data, Boolean(user));
+    }
     await track(
       {
         title: 'Beneficiary Invited',
@@ -314,7 +323,9 @@ export async function resendInvite(
 
   await beneficiary.updateOne({due_at: dayjs().add(3, 'days').toDate()});
 
-  await mail.sendBeneficiaryInvite(beneficiary);
+  if ((await mail.sendBeneficiaryInvite(beneficiary)) === true) {
+    await invitationDelivered(beneficiary, Boolean(beneficiary.user));
+  }
   return {message: 'Invite sent successfully', data: beneficiary};
 }
 
@@ -355,6 +366,8 @@ export async function acceptInvite(payload: IAcceptInivite) {
       picture,
     });
 
+    await accountCreated(user, 'invitation');
+
     // Generate reset token using Redis OTP service
     token = await otp.create(email, 'reset');
   }
@@ -365,6 +378,11 @@ export async function acceptInvite(payload: IAcceptInivite) {
   beneficiary.status = 'accepted';
   beneficiary.accepted_at = dayjs().toISOString();
   await beneficiary.save();
+  await connectionActivated(
+    String(beneficiary.benefactor),
+    user.id,
+    new Date(beneficiary.accepted_at),
+  );
 
   if (beneficiary.access_scope === 'shared_only') {
     await activatePair(beneficiary.benefactor, user.id);

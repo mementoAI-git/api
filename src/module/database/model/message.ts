@@ -6,6 +6,8 @@ export interface IMessage {
   text: string;
   role: string; // user, ai
   ai_model?: string;
+  /** Set only after an API-owned AI generation successfully completes. */
+  server_completed?: boolean;
   attatchments: string[];
   memory: string;
   is_voice: boolean;
@@ -31,6 +33,7 @@ const message = new Schema<IMessage>(
     text: String,
     role: String,
     ai_model: String,
+    server_completed: {type: Boolean, default: undefined, select: false},
     memory: {
       type: String,
       ref: 'memory',

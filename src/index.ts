@@ -2,6 +2,7 @@
 import './utils/load-env';
 import logger from './utils/logger';
 import {loadAndValidateRuntimeConfig} from './utils/runtime-config';
+import {startGrowthAnalytics} from './services/growth-analytics';
 
 async function bootstrap(): Promise<void> {
   try {
@@ -39,10 +40,17 @@ async function bootstrap(): Promise<void> {
       logger.error(reason, 'Unhandled rejection');
     });
 
-    process.on('SIGINT', () => {
+    const stopGrowthAnalytics = startGrowthAnalytics();
+    let shuttingDown = false;
+    const shutdown = async () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
       logger.info('Application shutting down...');
+      await stopGrowthAnalytics();
       process.exit(0); // eslint-disable-line n/no-process-exit
-    });
+    };
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
 
     // Create and start server
     const app = appModule.createServer();

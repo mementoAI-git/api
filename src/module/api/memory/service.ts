@@ -1,3 +1,4 @@
+import {memoryCaptured, memoryShared} from '../../../services/growth-events';
 import logger from '../../../utils/logger';
 import {
   moveMemoryToDeleted,
@@ -298,6 +299,8 @@ export async function createMemory(
       tags.length === 0 && {enrichment_status: 'pending'}),
   });
 
+  await memoryCaptured(user_id, memory);
+
   // Track activity only if published
   if (status !== MEMORY_STATUS.DRAFT) {
     await track(
@@ -476,6 +479,8 @@ export async function quickCaptureMemory(
     ...promptFields,
     ...(!isEmpty(validBeneficiaryIds) && {beneficiaries: validBeneficiaryIds}),
   });
+
+  await memoryCaptured(user_id, memory);
 
   if (promptFields.prompt) {
     const activePrompt = await ActivePrompt.findOne({
@@ -845,6 +850,14 @@ export async function updateMemory(
   );
 
   if (!updatedMemory) throw new NotFoundException('Memory not found');
+  // A draft first counts when it is actually saved. Re-edits keep the original milestone.
+  if (memory.status === MEMORY_STATUS.DRAFT) {
+    await memoryCaptured(user_id, updatedMemory, new Date());
+  }
+
+  if (beneficiaryIds !== undefined || groupIds !== undefined) {
+    await memoryShared(user_id, updatedMemory);
+  }
 
   const hasChanges =
     (updatedMemory?.title && updatedMemory?.title !== memory?.title) ||

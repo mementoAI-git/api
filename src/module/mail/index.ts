@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import addressparser from 'nodemailer/lib/addressparser';
 import {MailOptions} from 'nodemailer/lib/sendmail-transport';
 import {
   DEV_MAILS,
@@ -77,7 +78,7 @@ class MailService {
   //   }
   // }
 
-  async send(payload: MailOptions) {
+  async send(payload: MailOptions): Promise<boolean> {
     const start = Date.now();
     try {
       const recipients = [payload.to].filter(Boolean).join(', ');
@@ -100,11 +101,27 @@ class MailService {
         },
         'mail.send: SMTP send completed',
       );
+      const expected = addressparser(recipients, {flatten: true}).map(
+        recipient => recipient.address.trim().toLowerCase(),
+      );
+      const normalize = (value: string | {address: string}) =>
+        (typeof value === 'string' ? value : value.address)
+          .trim()
+          .toLowerCase();
+      const accepted = new Set((info.accepted || []).map(normalize));
+      const rejected = new Set((info.rejected || []).map(normalize));
+      return (
+        expected.length > 0 &&
+        expected.every(
+          recipient => accepted.has(recipient) && !rejected.has(recipient),
+        )
+      );
     } catch (error) {
       logger.error(
         {error, ms: Date.now() - start},
         'mail.send: SMTP send failed',
       );
+      return false;
     }
   }
 
@@ -181,7 +198,7 @@ class MailService {
       isConnection,
     });
 
-    await this.send({
+    return this.send({
       to: email,
       subject: isConnection
         ? '[Memento] Connection Invite'

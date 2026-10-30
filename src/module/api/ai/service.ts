@@ -1,3 +1,4 @@
+import {conversationPersisted} from '../../../services/growth-events';
 import {synthesizeSpokenReply} from '../../../services/spoken-replies';
 import type {TranscriptionInput} from './transcription-input';
 import {Response} from 'express';
@@ -326,7 +327,7 @@ const CHAT_LONG_TERM_PLACEHOLDER = '\u0000CHAT_LONG_TERM\u0000';
 function saveUserMessage(
   payload: IPrompt & {memory: string},
   user_id: string,
-): Promise<void> {
+): Promise<boolean> {
   return Message.create({
     user: user_id,
     memory: payload.memory,
@@ -335,12 +336,13 @@ function saveUserMessage(
     text: payload?.text,
     ...(payload.replyTo ? {replyTo: payload.replyTo} : {}),
   }).then(
-    () => undefined,
+    () => true,
     error => {
       logger.error(
         {err: error, userId: user_id},
         'Saving the chat message failed',
       );
+      return false;
     },
   );
 }
@@ -482,7 +484,7 @@ export async function prompt(
   // saving the reply, so the two stay in order.
   const userMessageSaved = routing.recordUserMessageInDb
     ? saveUserMessage(payload, user_id)
-    : Promise.resolve();
+    : Promise.resolve(false);
   logger.info(
     {userId: user_id, ms: timer.total(), steps: timer.steps},
     'Chat reply started',
@@ -503,10 +505,11 @@ export async function handleStreaming(
   res: Response,
   modelLabel?: string,
   /** What the host just said, and the save of it still under way. */
-  sent: {userText?: string; userMessageSaved?: Promise<void>} = {},
+  sent: {userText?: string; userMessageSaved?: Promise<void | boolean>} = {},
 ) {
   let text = '';
   const userMessage = sent.userText ?? '';
+  let streamCompleted = false;
 
   try {
     for await (const chunk of payload) {
@@ -516,6 +519,7 @@ export async function handleStreaming(
         res.write(sanitizedChunk);
       }
     }
+    streamCompleted = true;
   } catch (error) {
     res.write(`ERROR: ${error?.message}`);
   } finally {
@@ -534,13 +538,19 @@ export async function handleStreaming(
   async function persistReply() {
     const finalText = sanitizeMementoText(text).trim();
     // The host's message first, so the two stay in order.
-    await sent.userMessageSaved;
+    const userSaved = await sent.userMessageSaved;
+    const completed =
+      streamCompleted &&
+      userSaved === true &&
+      finalText.length > 0 &&
+      !modelLabel?.startsWith('fallback:');
 
     await Message.create({
       text: finalText,
       user,
       memory,
       role: 'ai',
+      server_completed: completed,
       ai_model: modelLabel || 'unknown',
     });
 
@@ -549,6 +559,7 @@ export async function handleStreaming(
       $inc: {message_count: 2},
       $set: {last_active: dayjs().toDate()},
     });
+    if (completed) await conversationPersisted(user, memory, 'text');
     void queueMemorySearch(user, memory);
 
     if (userMessage && isSignificantMessage(userMessage)) {
@@ -876,6 +887,7 @@ export async function startConversation(
         user: user_id,
         memory: memory.id,
         role: 'ai',
+        server_completed: Boolean(responseText),
         text: responseText,
         created_at: now.add(1, 'second').toDate(),
       },
@@ -884,6 +896,7 @@ export async function startConversation(
       $inc: {message_count: 2},
       $set: {last_active: now.toDate()},
     });
+    await conversationPersisted(user_id, memory.id, 'text');
     void queueMemorySearch(user_id, memory.id);
     if (isEmpty(memory.title)) {
       void updateMemoryTitle(memory.id, payload.text, responseText);
@@ -1062,6 +1075,7 @@ export async function startConversation(
       user: user_id,
       memory: memory.id,
       role: 'ai',
+      server_completed: Boolean(responseText),
       text: responseText,
       created_at: now.add(1, 'second').toDate(),
     },
@@ -1071,6 +1085,7 @@ export async function startConversation(
     $inc: {message_count: 2},
     $set: {last_active: now.toDate()},
   });
+  await conversationPersisted(user_id, memory.id, 'text');
   void queueMemorySearch(user_id, memory.id);
 
   if (isEmpty(memory.title)) {
