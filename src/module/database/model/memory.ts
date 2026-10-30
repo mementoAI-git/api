@@ -2,6 +2,13 @@ import {model, PaginateModel, Schema} from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
 import {IFile} from './file';
 
+export interface IMemorySearchIndex {
+  fingerprint: string;
+  version: string;
+  retry_after?: Date;
+  chunks: {kind: 'story' | 'photo'; vector: number[]; file_id?: string}[];
+}
+
 export interface IMemory {
   _id?: string;
   title: string;
@@ -13,6 +20,11 @@ export interface IMemory {
   level: number;
   refrence: string;
   status: string | 'draft' | 'save' | 'queued' | 'on_chain' | 'deleted';
+  deleted_at?: Date;
+  delete_after?: Date;
+  previous_status?: string;
+  purge_requested_at?: Date;
+  purge_processing_at?: Date;
   prompt?: string;
   /** AI daily prompt text when there is no Prompt catalog document */
   prompt_text?: string;
@@ -40,6 +52,8 @@ export interface IMemory {
   category?: string;
   /** Who can discover the story; default private. `everyone` must be sent explicitly. */
   visibility?: 'private' | 'everyone';
+  /** Private derived search data; never part of API serialization. */
+  search_index?: IMemorySearchIndex;
 }
 
 const memory = new Schema<IMemory>(
@@ -55,6 +69,11 @@ const memory = new Schema<IMemory>(
       type: String,
       default: 'draft',
     },
+    deleted_at: Date,
+    delete_after: Date,
+    previous_status: String,
+    purge_requested_at: Date,
+    purge_processing_at: Date,
     attachments: [
       {
         type: String,
@@ -124,8 +143,46 @@ const memory = new Schema<IMemory>(
       enum: ['private', 'everyone'],
       default: 'private',
     },
+    search_index: {
+      type: new Schema<IMemorySearchIndex>(
+        {
+          fingerprint: {type: String, required: true},
+          version: {type: String, required: true},
+          retry_after: Date,
+          chunks: [
+            {
+              _id: false,
+              kind: {type: String, enum: ['story', 'photo']},
+              vector: [Number],
+              file_id: String,
+            },
+          ],
+        },
+        {_id: false},
+      ),
+      select: false,
+      default: undefined,
+    },
   },
   {
+    toJSON: {
+      transform: (_doc, ret) => {
+        delete ret.search_index;
+        delete ret.previous_status;
+        delete ret.purge_requested_at;
+        delete ret.purge_processing_at;
+        return ret;
+      },
+    },
+    toObject: {
+      transform: (_doc, ret) => {
+        delete ret.search_index;
+        delete ret.previous_status;
+        delete ret.purge_requested_at;
+        delete ret.purge_processing_at;
+        return ret;
+      },
+    },
     timestamps: {
       createdAt: 'created_at',
       updatedAt: 'updated_at',
@@ -133,6 +190,7 @@ const memory = new Schema<IMemory>(
   },
 );
 
+memory.index({status: 1, delete_after: 1});
 memory.plugin(mongoosePaginate);
 
 const Memory = model<IMemory, PaginateModel<IMemory>>('memory', memory);

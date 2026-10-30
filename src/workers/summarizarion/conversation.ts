@@ -6,6 +6,7 @@ import Message from '../../module/database/model/message';
 import logger from '../../utils/logger';
 import dayjs from 'dayjs';
 import summarizeStory from './story';
+import {forgetUserContext} from '../../services/user-context-cache';
 
 const INACTIVITY_MINUTES = 10;
 const MIN_MESSAGES_FOR_INACTIVE_SUMMARY = 2; // Lower threshold for inactive conversations
@@ -33,11 +34,13 @@ export async function summarizeConversation(memoryId: string): Promise<void> {
 
     const result = extractJson(response);
     if (result) {
-      await Memory.findByIdAndUpdate(memoryId, {
+      const summarised = await Memory.findByIdAndUpdate(memoryId, {
         summary: result?.summary || '',
         topics: result?.topics || [],
         last_summarized_at: new Date(),
       });
+      // New summaries change the context that starts calls and chats.
+      if (summarised) void forgetUserContext(String(summarised.user));
     }
 
     logger.debug(`Generated summary for memory ${memoryId}`);

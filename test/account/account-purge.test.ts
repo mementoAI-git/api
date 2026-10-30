@@ -18,6 +18,8 @@ import {FeatureFlagAudit} from '../../src/module/database/model/feature-flag-aud
 import Group from '../../src/module/database/model/group';
 import Memory from '../../src/module/database/model/memory';
 import Message from '../../src/module/database/model/message';
+import MemoryEmbedding from '../../src/module/database/model/memory-embedding';
+import VoiceAction from '../../src/module/database/model/voice-action';
 import PendingInsight from '../../src/module/database/model/pending-insight';
 import Persona from '../../src/module/database/model/persona';
 import PurgeCommand from '../../src/module/database/model/purge-command';
@@ -111,6 +113,7 @@ describe('account purge pipeline', () => {
         'IapSubscriptionChain',
         'IapTransaction',
         'Memory',
+        'MemoryEmbedding',
         'Message',
         'PendingInsight',
         'Persona',
@@ -119,6 +122,7 @@ describe('account purge pipeline', () => {
         'Subscription',
         'Usage',
         'User',
+        'VoiceAction',
       ].sort(),
     );
 
@@ -177,6 +181,21 @@ describe('account purge pipeline', () => {
         user: user.id,
         name: 'Private group',
         members: [beneficiary.id],
+      }),
+      MemoryEmbedding.create({
+        user: user.id,
+        source: 'story',
+        source_id: String(memory._id),
+        memory: String(memory._id),
+        text: 'private words',
+        text_hash: 'hash',
+        vector: Buffer.alloc(8),
+        embedding_model: 'test',
+      }),
+      VoiceAction.create({
+        user: user.id,
+        tool: 'rename_story',
+        summary: 'renamed a story',
       }),
       Message.create({
         user: user.id,
@@ -296,6 +315,8 @@ describe('account purge pipeline', () => {
     });
     expect(await ActivePrompt.countDocuments({user: user.id})).toBe(0);
     expect(await Activity.countDocuments({user: user.id})).toBe(0);
+    expect(await MemoryEmbedding.countDocuments({user: user.id})).toBe(0);
+    expect(await VoiceAction.countDocuments({user: user.id})).toBe(0);
     expect(await AiMetric.countDocuments({user: user.id})).toBe(0);
     expect(await AuthCode.countDocuments({email: user.email})).toBe(0);
     expect(await AuthSession.countDocuments({user_id: user.id})).toBe(0);

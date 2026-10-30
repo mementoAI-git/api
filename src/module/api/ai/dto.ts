@@ -139,9 +139,21 @@ export const voiceTurnsSchema = z.object({
   }),
 });
 
+export const voiceToolSchema = z.object({
+  params: z.strictObject({
+    name: z.string().regex(/^[a-z_]{1,64}$/, 'Unknown tool'),
+  }),
+  body: z.strictObject({
+    args: z.record(z.string(), z.unknown()).default({}),
+    /** Gemini's tool call id: a repeated id returns the first result. */
+    call_id: z.string().trim().min(1).max(128).optional(),
+  }),
+});
+
 export const voiceMemorySearchSchema = z.object({
   body: z.strictObject({
     query: z.string().trim().min(1, 'Query is required').max(200),
+    also: z.array(z.string().trim().max(100)).max(5).optional(),
   }),
 });
 
@@ -184,3 +196,7 @@ export type AiPromptGovernanceQuery = z.infer<
 >['query'];
 export type AiVoicesQuery = z.infer<typeof aiVoicesSchema>['query'];
 export type AiVoicePreviewBody = z.infer<typeof aiVoicePreviewSchema>['body'];
+
+export const spokenReplySchema = z.object({
+  body: z.strictObject({text: z.string().trim().min(1).max(2000)}),
+});

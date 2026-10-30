@@ -9,7 +9,12 @@ import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
   CALL_ACTION_TOOL_NAMES,
+  parseVoiceClientCapabilities,
+  chooseVoiceTurnDetection,
+  describeVoiceTurnDetection,
   SEARCH_MEMORIES_TOOL_NAME,
+  VOICE_TURN_CONTROL,
+  VOICE_TURN_FAST,
   VOICE_SCREEN_DESTINATIONS,
   VOICE_TOOLS,
 } from '../../src/module/api/ai/live-session-config';
@@ -41,7 +46,6 @@ describe('Gemini Live session descriptor', () => {
       responseModalities: [Modality.AUDIO],
       systemInstruction: 'Always answer in English.',
       speechConfig: {
-        languageCode: 'en-US',
         voiceConfig: {
           prebuiltVoiceConfig: {voiceName: 'Fenrir'},
         },
@@ -58,6 +62,15 @@ describe('Gemini Live session descriptor', () => {
         },
       },
     });
+  });
+
+  // gemini-3.8-live is a native-audio model: Google documents that it picks
+  // the language itself and does not support setting it, and that
+  // thinking_config must be omitted. Unsupported fields risk setup failures.
+  it('does not lock fields the native-audio Live model does not support', () => {
+    const config = buildLiveConnectConfig('Fenrir', 'hi');
+    expect(config.speechConfig).not.toHaveProperty('languageCode');
+    expect(config).not.toHaveProperty('thinkingConfig');
   });
 
   it('omits an empty system instruction from the locked config', () => {
@@ -205,5 +218,153 @@ describe('Gemini Live session descriptor', () => {
     for (const name of CALL_ACTION_TOOL_NAMES)
       expect(serialized).toContain(name);
     expect(serialized).toContain('time_capsules');
+  });
+});
+
+describe('voice client capabilities', () => {
+  // The exact query string current app builds send (mobile
+  // CLIENT_CAPABILITIES = [SEARCH_MEMORIES_TOOL, CALL_ACTIONS_CAPABILITY]).
+  // The API used to check only `memory_search`, so the memory tool was never
+  // locked into any app call.
+  it('enables memory search for the name the app actually sends', () => {
+    expect(
+      parseVoiceClientCapabilities('search_memories,call_actions'),
+    ).toEqual({
+      memoryTool: true,
+      callActions: true,
+      serverTools: false,
+      screenControl: false,
+      screenFields: false,
+    });
+  });
+
+  it('enables server tools only for builds that can forward them', () => {
+    expect(
+      parseVoiceClientCapabilities('search_memories,call_actions,server_tools'),
+    ).toEqual({
+      memoryTool: true,
+      callActions: true,
+      serverTools: true,
+      screenControl: false,
+      screenFields: false,
+    });
+  });
+
+  it('enables screen control only for builds that run it', () => {
+    expect(
+      parseVoiceClientCapabilities('search_memories,screen_control')
+        .screenControl,
+    ).toBe(true);
+    expect(parseVoiceClientCapabilities('search_memories').screenControl).toBe(
+      false,
+    );
+  });
+
+  it('still accepts the documented memory_search name', () => {
+    expect(parseVoiceClientCapabilities('memory_search')).toEqual({
+      memoryTool: true,
+      callActions: false,
+      serverTools: false,
+      screenControl: false,
+      screenFields: false,
+    });
+  });
+
+  it('ignores whitespace, unknown names and missing values', () => {
+    expect(parseVoiceClientCapabilities(' call_actions , unknown ')).toEqual({
+      memoryTool: false,
+      callActions: true,
+      serverTools: false,
+      screenControl: false,
+      screenFields: false,
+    });
+    expect(parseVoiceClientCapabilities(undefined)).toEqual({
+      memoryTool: false,
+      callActions: false,
+      serverTools: false,
+      screenControl: false,
+      screenFields: false,
+    });
+    expect(parseVoiceClientCapabilities(['search_memories'])).toEqual({
+      memoryTool: false,
+      callActions: false,
+      serverTools: false,
+      screenControl: false,
+      screenFields: false,
+    });
+  });
+});
+
+describe('voice turn detection A/B', () => {
+  const userIds = Array.from({length: 1_000}, (_, index) => `user-${index}`);
+
+  it('keeps everyone on control at 0% and moves everyone at 100%', () => {
+    expect(
+      userIds.every(
+        id => chooseVoiceTurnDetection(id, 0) === VOICE_TURN_CONTROL,
+      ),
+    ).toBe(true);
+    expect(
+      userIds.every(
+        id => chooseVoiceTurnDetection(id, 100) === VOICE_TURN_FAST,
+      ),
+    ).toBe(true);
+  });
+
+  it('gives each user the same arm on every call and splits users evenly', () => {
+    const arms = userIds.map(id => chooseVoiceTurnDetection(id, 50));
+    expect(userIds.map(id => chooseVoiceTurnDetection(id, 50))).toEqual(arms);
+    const fast = arms.filter(arm => arm === VOICE_TURN_FAST).length;
+    expect(fast).toBeGreaterThan(420);
+    expect(fast).toBeLessThan(580);
+  });
+
+  it('keeps users already in the fast arm there when the rollout grows', () => {
+    const at20 = userIds.filter(
+      id => chooseVoiceTurnDetection(id, 20) === VOICE_TURN_FAST,
+    );
+    expect(
+      at20.every(id => chooseVoiceTurnDetection(id, 50) === VOICE_TURN_FAST),
+    ).toBe(true);
+  });
+
+  it('differs from control only in the silence window', () => {
+    const {silenceDurationMs: fastSilence, ...fastRest} =
+      VOICE_TURN_FAST.settings;
+    const {silenceDurationMs: controlSilence, ...controlRest} =
+      VOICE_TURN_CONTROL.settings;
+    expect(fastRest).toEqual(controlRest);
+    expect(fastSilence).toBeLessThan(controlSilence);
+  });
+
+  it('locks the chosen arm into the live config and reports it', () => {
+    const config = buildLiveConnectConfig(
+      'Fenrir',
+      'hi',
+      undefined,
+      {},
+      VOICE_TURN_FAST,
+    );
+    expect(
+      config.realtimeInputConfig?.automaticActivityDetection,
+    ).toMatchObject({disabled: false, ...VOICE_TURN_FAST.settings});
+    expect(
+      buildLiveConnectConfig('Fenrir', 'hi').realtimeInputConfig
+        ?.automaticActivityDetection,
+    ).toMatchObject(VOICE_TURN_CONTROL.settings);
+    expect(describeVoiceTurnDetection(VOICE_TURN_FAST)).toEqual({
+      variant: VOICE_TURN_FAST.variant,
+      silenceDurationMs: VOICE_TURN_FAST.settings.silenceDurationMs,
+      prefixPaddingMs: VOICE_TURN_FAST.settings.prefixPaddingMs,
+    });
+  });
+
+  it('describes the memory tool for general recall, not only specific events', () => {
+    const declaration = VOICE_TOOLS[0].functionDeclarations?.[0];
+    expect(declaration?.name).toBe('search_memories');
+    expect(declaration?.description).toMatch(
+      /what you remember or know about them/,
+    );
+    expect(declaration?.description).toMatch(/past conversations/);
   });
 });

@@ -1,3 +1,8 @@
+import mongoose from 'mongoose';
+import {
+  backfillMemoryRecovery,
+  purgeExpiredMemories,
+} from '../../services/memory-lifecycle';
 import {RedisConnection} from '../../services/redis';
 import {Worker} from 'bullmq';
 import dayjs from 'dayjs';
@@ -20,6 +25,10 @@ import {
   expireStorageReservations,
   reconcileBillingUsage,
 } from './billing-usage';
+import {
+  pruneOrphans,
+  runEmbeddingSweep,
+} from '../../services/embeddings/indexer';
 
 /** Sweep for memories stuck at enrichment_status:'pending' for > 15 minutes.
  *  - If the quick-capture queue is available: re-enqueue for proper AI enrichment.
@@ -83,6 +92,14 @@ export default function startSystemWorker(connection: RedisConnection) {
   return new Worker(
     queueNames.system.id,
     async job => {
+      if (
+        compareStrings(job.name, queueNames.system.jobs.purgeDeletedMemories)
+      ) {
+        if (!mongoose.connection.db)
+          throw new Error('Memory cleanup requires a database connection');
+        await backfillMemoryRecovery(mongoose.connection.db);
+        await purgeExpiredMemories();
+      }
       if (compareStrings(job.name, queueNames.system.jobs.resetStreak)) {
         await resetStreak();
       }
@@ -129,6 +146,16 @@ export default function startSystemWorker(connection: RedisConnection) {
         )
       ) {
         await expireStorageReservations();
+      }
+      if (
+        compareStrings(job.name, queueNames.system.jobs.sweepMemoryEmbeddings)
+      ) {
+        await runEmbeddingSweep();
+      }
+      if (
+        compareStrings(job.name, queueNames.system.jobs.pruneMemoryEmbeddings)
+      ) {
+        await pruneOrphans();
       }
       if (
         compareStrings(job.name, queueNames.system.jobs.reconcileBillingUsage)

@@ -15,7 +15,17 @@ describe('store token vault', () => {
 
     expect(encrypted).not.toContain('private-store-payload');
     expect(decryptStoreSecret(encrypted)).toBe('private-store-payload');
-    expect(() => decryptStoreSecret(`${encrypted.slice(0, -1)}x`)).toThrow();
+    // Flip a real ciphertext byte. Replacing the last character with "x"
+    // changed nothing whenever it already was "x" (random IV, about 1 run in
+    // 64) or only touched unused base64 bits, so the test failed at random.
+    const [version, iv, tag, data] = encrypted.split('.');
+    const tampered = Buffer.from(data, 'base64url');
+    tampered[0] ^= 0xff;
+    expect(() =>
+      decryptStoreSecret(
+        [version, iv, tag, tampered.toString('base64url')].join('.'),
+      ),
+    ).toThrow();
   });
 
   it('fails closed when the configured key is missing or malformed', () => {

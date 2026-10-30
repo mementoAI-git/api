@@ -20,3 +20,6 @@ process.env.TALLY_WEBHOOK_ENABLED = 'true';
 process.env.TALLY_WEBHOOK_SECRET =
   'test-tally-webhook-secret-at-least-32-characters';
 process.env.TALLY_WEBHOOK_RATE_LIMIT_PER_MINUTE = '100';
+
+process.env.STAFF_ORIGIN = 'http://localhost:5174';
+process.env.STAFF_TOTP_KEY = 'a'.repeat(64);

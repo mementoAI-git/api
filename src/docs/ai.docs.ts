@@ -614,9 +614,9 @@ const aiDocs = {
           name: 'capabilities',
           in: 'query',
           required: false,
-          schema: {type: 'string', example: 'memory_search'},
+          schema: {type: 'string', example: 'search_memories,call_actions'},
           description:
-            'Comma-separated client capabilities. memory_search locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen. Only send a capability from builds that handle those tool calls.',
+            'Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen; server_tools locks the server-run tools listed in `serverTools`, which the app forwards to POST /ai/voice/tools/{name}. screen_control locks scroll, go_back and press_button, which the app runs itself. Only send a capability from builds that handle those tool calls.',
         },
         {
           name: 'device_model',
@@ -625,6 +625,14 @@ const aiDocs = {
           schema: {type: 'string'},
           description:
             'Device model name, used for the speaker full-duplex policy.',
+        },
+        {
+          name: 'timezone',
+          in: 'query',
+          required: false,
+          schema: {type: 'string', example: 'Africa/Lagos'},
+          description:
+            "The device's IANA time zone, so Memento knows the host's local date and time. Invalid values are ignored.",
         },
       ],
       responses: {
@@ -651,7 +659,23 @@ const aiDocs = {
                       memoryId: {type: 'string', nullable: true},
                       promptVersion: {type: 'string'},
                       tools: {type: 'array', items: {type: 'string'}},
+                      serverTools: {
+                        type: 'array',
+                        items: {type: 'string'},
+                        description:
+                          'Tools the app forwards to POST /ai/voice/tools/{name}. Empty unless the server_tools capability was sent.',
+                      },
                       speakerFullDuplex: {type: 'boolean'},
+                      turnDetection: {
+                        type: 'object',
+                        description:
+                          'Turn detection locked into this session, for client metrics.',
+                        properties: {
+                          variant: {type: 'string', example: 'silence-800'},
+                          silenceDurationMs: {type: 'integer', example: 800},
+                          prefixPaddingMs: {type: 'integer', example: 200},
+                        },
+                      },
                     },
                   },
                 },
@@ -722,6 +746,83 @@ const aiDocs = {
       },
     },
   },
+  '/ai/voice/tools/{name}': {
+    post: {
+      tags: ['AI'],
+      summary: 'Run Voice Tool',
+      description:
+        "Runs a server-side Gemini Live tool (listed in the ephemeral token's `serverTools`) as the signed-in host. The app forwards the model's tool call here, returns `result` as the tool response, and applies `effects` it recognises. Requires voice mode access.",
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'name',
+          in: 'path',
+          required: true,
+          schema: {type: 'string', example: 'update_profile'},
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                args: {type: 'object', additionalProperties: true},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'Tool result for the model, and effects for the app',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  status: {type: 'string', example: 'success'},
+                  data: {
+                    type: 'object',
+                    properties: {
+                      result: {type: 'string'},
+                      effects: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            type: {
+                              type: 'string',
+                              enum: ['refresh', 'open', 'open_story'],
+                            },
+                            what: {
+                              type: 'string',
+                              enum: [
+                                'profile',
+                                'memories',
+                                'capsules',
+                                'beneficiaries',
+                              ],
+                            },
+                            destination: {type: 'string', example: 'profile'},
+                            id: {type: 'string'},
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        402: {description: 'Voice mode requires Pro or Legacy'},
+        404: {description: 'Unknown voice tool'},
+        422: {description: 'Invalid request'},
+      },
+    },
+  },
   '/ai/voice/memory-search': {
     post: {
       tags: ['AI'],
@@ -736,7 +837,16 @@ const aiDocs = {
             schema: {
               type: 'object',
               required: ['query'],
-              properties: {query: {type: 'string', maxLength: 200}},
+              properties: {
+                query: {type: 'string', maxLength: 200},
+                also: {
+                  type: 'array',
+                  maxItems: 5,
+                  items: {type: 'string', maxLength: 100},
+                  description:
+                    'Other ways to say it the model suggested (names, synonyms).',
+                },
+              },
             },
           },
         },
@@ -875,6 +985,61 @@ const aiDocs = {
         },
         404: {description: 'Voice call not found'},
         503: {description: 'The summary could not be generated. Try again.'},
+      },
+    },
+  },
+  '/ai/spoken-reply': {
+    post: {
+      tags: ['AI'],
+      summary: 'Read a completed reply aloud using the saved Gemini voice',
+      description:
+        'Exact-text WAV narration. Voice selection comes from the authenticated profile. Audio is returned without persistence; maximum 20 clips per minute per IP. Long replies should be split into ordered clips of up to 2000 characters.',
+      security: [{bearerAuth: []}],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['text'],
+              properties: {
+                text: {type: 'string', minLength: 1, maxLength: 2000},
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: 'WAV audio, base64 encoded',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: {type: 'boolean'},
+                  data: {
+                    type: 'object',
+                    required: ['audioBase64', 'mimeType', 'voiceName'],
+                    properties: {
+                      audioBase64: {type: 'string'},
+                      mimeType: {type: 'string', enum: ['audio/wav']},
+                      voiceName: {type: 'string'},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {description: 'Authentication required'},
+        403: {description: 'Voice feature disabled'},
+        422: {
+          description: 'Invalid narration text or unsupported request fields',
+        },
+        429: {description: 'Rate limited; do not retry automatically'},
+        503: {description: 'Speech generation unavailable'},
       },
     },
   },

@@ -3,6 +3,7 @@ import {
   FeatureOverride,
   FeatureScopeType,
   IFeatureOverride,
+  IFeatureDefinition,
 } from '../../database/model/feature-flag';
 import {FeatureFlagAudit} from '../../database/model/feature-flag-audit';
 import {
@@ -60,6 +61,7 @@ export async function seedFeatureDefinitions() {
       tags: [keyToDomain(key)],
     })),
   );
+  forgetFeatureFlags();
 }
 
 export async function listFeatureFlags(payload: {
@@ -73,7 +75,10 @@ export async function listFeatureFlags(payload: {
   const limit = Math.min(200, Math.max(1, Number(payload.limit || 25)));
   const query: Record<string, unknown> = {};
   if (payload.search) {
-    const regex = new RegExp(payload.search, 'i');
+    const regex = new RegExp(
+      payload.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      'i',
+    );
     query.$or = [{key: regex}, {description: regex}];
   }
   if (payload.domain) query.domain = payload.domain;
@@ -140,14 +145,54 @@ export async function getFeatureFlagDetail(key: string) {
   };
 }
 
+/**
+ * Flags are read on every gated request, and the database is a network round
+ * trip away, so each flag is kept for a short while. Changes made here clear
+ * it at once; other API processes see them within FLAG_CACHE_MS.
+ */
+const FLAG_CACHE_MS = process.env.NODE_ENV === 'test' ? 0 : 30_000;
+async function fetchFlag(key: string) {
+  const [definition, overrides] = await Promise.all([
+    FeatureDefinition.findOne({key}).lean(),
+    FeatureOverride.find({key}).lean(),
+  ]);
+  return {definition, overrides};
+}
+const flagCache = new Map<
+  string,
+  {at: number; load: ReturnType<typeof fetchFlag>}
+>();
+
+export function forgetFeatureFlags(): void {
+  flagCache.clear();
+}
+
+function loadFlag(key: string) {
+  const hit = flagCache.get(key);
+  if (hit && Date.now() - hit.at < FLAG_CACHE_MS) return hit.load;
+  const load = fetchFlag(key);
+  if (FLAG_CACHE_MS > 0) {
+    flagCache.set(key, {at: Date.now(), load});
+    load.catch(() => flagCache.delete(key));
+  }
+  return load;
+}
+
 export async function evaluateFeatureFlag(
   key: string,
   context: FeatureContext,
 ) {
-  const definition = await FeatureDefinition.findOne({key}).lean();
+  const {definition, overrides} = await loadFlag(key);
   if (!definition) return {enabled: true, source: 'missing_default_true'};
+  return evaluateDefinition(definition, overrides, context);
+}
+
+function evaluateDefinition(
+  definition: IFeatureDefinition,
+  overrides: IFeatureOverride[],
+  context: FeatureContext,
+) {
   const environment = context.environment || FEATURE_FLAG_ENVIRONMENT;
-  const overrides = await FeatureOverride.find({key}).lean();
 
   const user = context.userId
     ? overrides.find(
@@ -175,6 +220,38 @@ export async function evaluateFeatureFlag(
   );
   if (global) return {enabled: global.value, source: 'global'};
   return {enabled: definition.default_value, source: 'default'};
+}
+
+export async function evaluateCustomerFlags(context: FeatureContext) {
+  const [definitions, overrides] = await Promise.all([
+    FeatureDefinition.find({}).lean(),
+    FeatureOverride.find({
+      $or: [
+        {scope_type: 'global', scope_id: 'global'},
+        {
+          scope_type: 'environment',
+          scope_id: context.environment || FEATURE_FLAG_ENVIRONMENT,
+        },
+        {scope_type: 'user', scope_id: context.userId},
+      ],
+    }).lean(),
+  ]);
+  const grouped = new Map<string, IFeatureOverride[]>();
+  for (const override of overrides) {
+    const group = grouped.get(override.key) || [];
+    group.push(override);
+    grouped.set(override.key, group);
+  }
+  return Object.fromEntries(
+    definitions.map(definition => [
+      definition.key,
+      evaluateDefinition(
+        definition,
+        grouped.get(definition.key) || [],
+        context,
+      ),
+    ]),
+  );
 }
 
 async function writeAudit(input: {
@@ -213,6 +290,7 @@ export async function updateDefaultValue(payload: {
     reason: payload.reason,
     actor: payload.actor,
   });
+  forgetFeatureFlags();
   return {message: 'Default value updated', data: current};
 }
 
@@ -273,6 +351,7 @@ export async function upsertOverride(payload: {
     },
   });
 
+  forgetFeatureFlags();
   return {message: 'Feature override saved', data: next};
 }
 
@@ -301,6 +380,7 @@ export async function deleteOverride(payload: {
     actor: payload.actor,
     payload: {old_rollout_percentage: old.rollout_percentage ?? null},
   });
+  forgetFeatureFlags();
   return {message: 'Feature override deleted', data: old};
 }
 
@@ -346,6 +426,7 @@ export async function updateRollout(payload: {
       rollout_percentage: payload.rolloutPercentage,
     },
   });
+  forgetFeatureFlags();
   return {message: 'Rollout updated', data: current};
 }
 
@@ -382,5 +463,6 @@ export async function bulkSetByPrefix(payload: {
       }),
     ),
   );
+  forgetFeatureFlags();
   return {message: 'Bulk update complete', data: {count: results.length}};
 }

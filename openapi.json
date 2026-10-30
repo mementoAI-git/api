@@ -452,6 +452,11 @@
         "bearerFormat": "JWT",
         "scheme": "bearer",
         "type": "http"
+      },
+      "staffCookie": {
+        "in": "cookie",
+        "name": "memento_staff",
+        "type": "apiKey"
       }
     }
   },
@@ -782,12 +787,12 @@
             }
           },
           {
-            "description": "Comma-separated client capabilities. memory_search locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen. Only send a capability from builds that handle those tool calls.",
+            "description": "Comma-separated client capabilities. search_memories (or the older memory_search) locks the search_memories tool into the session; call_actions locks end_call, set_microphone and open_screen; server_tools locks the server-run tools listed in `serverTools`, which the app forwards to POST /ai/voice/tools/{name}. screen_control locks scroll, go_back and press_button, which the app runs itself. Only send a capability from builds that handle those tool calls.",
             "in": "query",
             "name": "capabilities",
             "required": false,
             "schema": {
-              "example": "memory_search",
+              "example": "search_memories,call_actions",
               "type": "string"
             }
           },
@@ -797,6 +802,16 @@
             "name": "device_model",
             "required": false,
             "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "The device's IANA time zone, so Memento knows the host's local date and time. Invalid values are ignored.",
+            "in": "query",
+            "name": "timezone",
+            "required": false,
+            "schema": {
+              "example": "Africa/Lagos",
               "type": "string"
             }
           }
@@ -827,6 +842,13 @@
                         "promptVersion": {
                           "type": "string"
                         },
+                        "serverTools": {
+                          "description": "Tools the app forwards to POST /ai/voice/tools/{name}. Empty unless the server_tools capability was sent.",
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
                         "speakerFullDuplex": {
                           "type": "boolean"
                         },
@@ -838,6 +860,24 @@
                             "type": "string"
                           },
                           "type": "array"
+                        },
+                        "turnDetection": {
+                          "description": "Turn detection locked into this session, for client metrics.",
+                          "properties": {
+                            "prefixPaddingMs": {
+                              "example": 200,
+                              "type": "integer"
+                            },
+                            "silenceDurationMs": {
+                              "example": 800,
+                              "type": "integer"
+                            },
+                            "variant": {
+                              "example": "silence-800",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
                         },
                         "voice": {
                           "type": "object"
@@ -1414,6 +1454,95 @@
         ]
       }
     },
+    "/ai/spoken-reply": {
+      "post": {
+        "description": "Exact-text WAV narration. Voice selection comes from the authenticated profile. Audio is returned without persistence; maximum 20 clips per minute per IP. Long replies should be split into ordered clips of up to 2000 characters.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "audioBase64": {
+                          "type": "string"
+                        },
+                        "mimeType": {
+                          "enum": [
+                            "audio/wav"
+                          ],
+                          "type": "string"
+                        },
+                        "voiceName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "audioBase64",
+                        "mimeType",
+                        "voiceName"
+                      ],
+                      "type": "object"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "WAV audio, base64 encoded"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Voice feature disabled"
+          },
+          "422": {
+            "description": "Invalid narration text or unsupported request fields"
+          },
+          "429": {
+            "description": "Rate limited; do not retry automatically"
+          },
+          "503": {
+            "description": "Speech generation unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read a completed reply aloud using the saved Gemini voice",
+        "tags": [
+          "AI"
+        ]
+      }
+    },
     "/ai/transcribe-audio": {
       "post": {
         "description": "Transcribe audio to text. Send a multipart file (maximum 15 MB) for transient dictation, or a JSON file_id for an existing stored recording. Multipart audio is processed in memory and is not saved to file storage. Dictation returns full_text only for low latency; stored recordings also return timed segments.",
@@ -1776,6 +1905,15 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "also": {
+                    "description": "Other ways to say it the model suggested (names, synonyms).",
+                    "items": {
+                      "maxLength": 100,
+                      "type": "string"
+                    },
+                    "maxItems": 5,
+                    "type": "array"
+                  },
                   "query": {
                     "maxLength": 200,
                     "type": "string"
@@ -1828,6 +1966,114 @@
           }
         ],
         "summary": "Voice Memory Search",
+        "tags": [
+          "AI"
+        ]
+      }
+    },
+    "/ai/voice/tools/{name}": {
+      "post": {
+        "description": "Runs a server-side Gemini Live tool (listed in the ephemeral token's `serverTools`) as the signed-in host. The app forwards the model's tool call here, returns `result` as the tool response, and applies `effects` it recognises. Requires voice mode access.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "example": "update_profile",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "args": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "effects": {
+                          "items": {
+                            "properties": {
+                              "destination": {
+                                "example": "profile",
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "enum": [
+                                  "refresh",
+                                  "open",
+                                  "open_story"
+                                ],
+                                "type": "string"
+                              },
+                              "what": {
+                                "enum": [
+                                  "profile",
+                                  "memories",
+                                  "capsules",
+                                  "beneficiaries"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "result": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Tool result for the model, and effects for the app"
+          },
+          "402": {
+            "description": "Voice mode requires Pro or Legacy"
+          },
+          "404": {
+            "description": "Unknown voice tool"
+          },
+          "422": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Run Voice Tool",
         "tags": [
           "AI"
         ]
@@ -5218,6 +5464,59 @@
         ]
       }
     },
+    "/feature-flags/evaluate/{key}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "data contains enabled and source"
+          },
+          "401": {
+            "description": "Customer authentication required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Evaluate one flag for the current customer",
+        "tags": [
+          "Features"
+        ]
+      }
+    },
+    "/feature-flags/evaluated": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "data is a map from flag key to {enabled:boolean, source:string}"
+          },
+          "401": {
+            "description": "Customer authentication required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Customer-specific evaluated booleans and sources, without management metadata",
+        "tags": [
+          "Features"
+        ]
+      }
+    },
     "/feedback": {
       "post": {
         "description": "Submit user feedback, bug reports, or feature requests",
@@ -6541,6 +6840,16 @@
                           "format": "date-time",
                           "type": "string"
                         },
+                        "delete_after": {
+                          "description": "Recovery deadline, 30 days after deletion",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "deleted_at": {
+                          "description": "Actual deletion time, present only while recoverable in Deleted",
+                          "format": "date-time",
+                          "type": "string"
+                        },
                         "level": {
                           "example": 1,
                           "type": "number"
@@ -6623,7 +6932,7 @@
     },
     "/memories/{id}": {
       "delete": {
-        "description": "Delete a memory (soft delete by default, permanent if delete_permanently is true)",
+        "description": "Move an owned memory to Deleted for 30 days. Returns the updated memory with deleted_at and delete_after (UTC ISO timestamps). Repeated deletes do not extend the deadline. delete_permanently=true requires an already deleted memory: it disappears from lists immediately, cannot be recovered, and durable worker cleanup removes its unshared media.",
         "parameters": [
           {
             "description": "Memory ID",
@@ -6643,7 +6952,7 @@
                 "properties": {
                   "delete_permanently": {
                     "default": false,
-                    "description": "If true, permanently delete the memory",
+                    "description": "If true, irreversibly delete a memory already in Deleted; cleanup runs in the background",
                     "example": false,
                     "type": "boolean"
                   }
@@ -6660,10 +6969,24 @@
                 "schema": {
                   "properties": {
                     "data": {
+                      "properties": {
+                        "delete_after": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "deleted_at": {
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "status": {
+                          "example": "deleted",
+                          "type": "string"
+                        }
+                      },
                       "type": "object"
                     },
                     "message": {
-                      "example": "Memory deleted successfully",
+                      "example": "Memory moved to Deleted for 30 days",
                       "type": "string"
                     },
                     "status": {
@@ -6746,6 +7069,16 @@
                         },
                         "created_at": {
                           "example": "2024-01-01T00:00:00.000Z",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "delete_after": {
+                          "description": "Recovery deadline, 30 days after deletion",
+                          "format": "date-time",
+                          "type": "string"
+                        },
+                        "deleted_at": {
+                          "description": "Actual deletion time, present only while recoverable in Deleted",
                           "format": "date-time",
                           "type": "string"
                         },
@@ -7169,7 +7502,7 @@
     },
     "/memories/{id}/restore": {
       "post": {
-        "description": "Restore a soft-deleted memory",
+        "description": "Restore an owned deleted memory before delete_after, returning its active status and clearing deletion timestamps. Creation time is preserved. Returns 400 once the recovery window has expired or permanent cleanup has been claimed.",
         "parameters": [
           {
             "description": "Memory ID",
@@ -7735,6 +8068,90 @@
         ]
       }
     },
+    "/memories/search": {
+      "get": {
+        "description": "Search only content saved inside Memento: owned stories, supported attached photos, and saved chat messages. No device folders or arbitrary local files are indexed. Description search requires explicit server configuration and an allowlisted account. Falls back to keyword search when unavailable or outside preparation limits. Excludes drafts, deleted memories and all other owners. Results use the existing attachment access contract; private vectors and internal chat transcripts are never returned.",
+        "parameters": [
+          {
+            "description": "A word or a description of a memory",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "docs": {
+                          "items": {
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "search": {
+                          "properties": {
+                            "limited": {
+                              "description": "Some sources are temporarily available only to word search after a preparation failure",
+                              "type": "boolean"
+                            },
+                            "mode": {
+                              "enum": [
+                                "hybrid",
+                                "keyword"
+                              ],
+                              "type": "string"
+                            },
+                            "preparing": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "preparing"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Up to 20 current memory results with search readiness"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "422": {
+            "description": "Invalid search query"
+          },
+          "429": {
+            "description": "Search rate limit exceeded"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Search the signed-in owner’s memories by words and description",
+        "tags": [
+          "Memories"
+        ]
+      }
+    },
     "/memories/stats": {
       "get": {
         "description": "Get statistics about user memories",
@@ -7900,24 +8317,6 @@
         "summary": "Get Story Memories",
         "tags": [
           "Memories"
-        ]
-      }
-    },
-    "/metrics": {
-      "get": {
-        "responses": {
-          "200": {
-            "description": "Queue, delivery, purge, usage, and compatibility signals"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Aggregate operational signals",
-        "tags": [
-          "Health"
         ]
       }
     },
@@ -9073,6 +9472,825 @@
         ]
       }
     },
+    "/staff/accounts": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "maxLength": 254,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Safe account directory; accounts:read. Returns items, total, page, limit (25). Exact email or ObjectId lookup.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/accounts/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-fA-F0-9]{24}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          },
+          "404": {
+            "description": "Account not found"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Account metadata, effective subscription access, recorded usage and processing failure counts; accounts:read. No credentials or private content.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "domain",
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "List definitions and operational metadata (flags:read)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Flag definition, overrides and effective value (flags:read)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}/audit": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Recent flag changes with staff:ID attribution (flags:read)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}/default": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Update default (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}/overrides/{scopeType}/{scopeId}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "enum": [
+                "global",
+                "environment",
+                "user"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Remove scoped override (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      },
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "enum": [
+                "global",
+                "environment",
+                "user"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  },
+                  "rolloutPercentage": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "nullable": true,
+                    "type": "number"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Set scoped override (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/{key}/rollout/{scopeType}/{scopeId}": {
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "enum": [
+                "global",
+                "environment",
+                "user"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  },
+                  "rolloutPercentage": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "nullable": true,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "rolloutPercentage"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Update rollout (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/feature-flags/bulk": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "prefix": {
+                    "maxLength": 128,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "reason": {
+                    "maxLength": 500,
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "prefix",
+                  "value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Set global overrides for a literal key prefix (flags:write)",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/login": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "pattern": "^[0-9]{6}$",
+                    "type": "string"
+                  },
+                  "email": {
+                    "format": "email",
+                    "type": "string"
+                  },
+                  "password": {
+                    "maxLength": 72,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "password",
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          },
+          "429": {
+            "description": "Too many sign-in attempts"
+          }
+        },
+        "security": [],
+        "summary": "Staff password and TOTP sign-in; 30-minute HttpOnly cookie",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/logout": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Must exactly match STAFF_ORIGIN for every mutation, including login/logout.",
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Revoke current staff session",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/metrics": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Queue, delivery, purge, usage, and compatibility signals"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Aggregate operational signals (operations:read)",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/staff/operations": {
+      "get": {
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Current operational counts; operations:read. Each count is a non-negative integer or null when unavailable; collected_at is ISO 8601.",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
+    "/staff/session": {
+      "get": {
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Standard API response envelope"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Staff login required or session expired"
+          },
+          "403": {
+            "description": "Permission or request origin rejected"
+          }
+        },
+        "security": [
+          {
+            "staffCookie": []
+          }
+        ],
+        "summary": "Current staff identity, permissions and absolute expiresAt",
+        "tags": [
+          "Staff"
+        ]
+      }
+    },
     "/users/2fa/disable": {
       "delete": {
         "description": "Disable two-factor authentication for the user",
@@ -9461,7 +10679,7 @@
                   "self_description": {
                     "description": "User self-description",
                     "example": "I am a software developer",
-                    "maxLength": 500,
+                    "maxLength": 2000,
                     "type": "string"
                   }
                 },
@@ -9867,7 +11085,7 @@
                     "type": "array"
                   },
                   "self_description": {
-                    "maxLength": 500,
+                    "maxLength": 2000,
                     "type": "string"
                   }
                 },

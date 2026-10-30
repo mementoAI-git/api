@@ -1,3 +1,4 @@
+import https from 'https';
 import axios from 'axios';
 import {Readable} from 'stream';
 import {
@@ -18,11 +19,25 @@ function isConfigured() {
   return Boolean(GROQ_API_KEY);
 }
 
+/**
+ * One warm connection to Groq, reused by every request: a fresh TLS
+ * handshake per chat message added about 300 ms before the first word.
+ */
+const groqAgent = new https.Agent({keepAlive: true, maxSockets: 32});
+
 function getHeaders() {
   return {
     Authorization: `Bearer ${GROQ_API_KEY}`,
     'Content-Type': 'application/json',
   };
+}
+
+/**
+ * gpt-oss models think before they answer; for chat replies a little
+ * thinking is plenty and the first word comes sooner.
+ */
+export function reasoningFor(model: string): {reasoning_effort?: 'low'} {
+  return /gpt-oss/i.test(model) ? {reasoning_effort: 'low'} : {};
 }
 
 async function streamWithModel(params: {
@@ -38,11 +53,13 @@ async function streamWithModel(params: {
       messages: params.messages,
       temperature: params.temperature ?? 0.7,
       stream: true,
+      ...reasoningFor(params.model),
     },
     {
       headers: getHeaders(),
       responseType: 'stream',
       timeout: params.timeoutMs,
+      httpsAgent: groqAgent,
     },
   );
 
@@ -65,6 +82,7 @@ async function generateWithModel(params: {
     {
       headers: getHeaders(),
       timeout: params.timeoutMs,
+      httpsAgent: groqAgent,
     },
   );
 

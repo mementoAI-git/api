@@ -7,7 +7,13 @@ import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
 import * as voiceTurns from './voice/turns';
 import {searchMemoriesForVoice} from './voice/memory-search';
+import {validTimeZone} from './voice/local-time';
+import {UnknownVoiceToolError, runVoiceServerTool} from './voice/server-tools';
+import {parseVoiceClientCapabilities} from './live-session-config';
 import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
+import {NotFoundException} from '../../../utils/service-error';
+import {StepTimer} from '../../../utils/step-timer';
+import logger from '../../../utils/logger';
 
 export async function autogenerateTags(
   req: IRequest,
@@ -47,6 +53,10 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
       response.stream,
       res,
       response.modelLabel,
+      {
+        userText: response.userText,
+        userMessageSaved: response.userMessageSaved,
+      },
     );
   } catch (error) {
     next(error);
@@ -123,8 +133,13 @@ export async function getEphemeralToken(
   res: Response,
   next: NextFunction,
 ) {
+  const timer = new StepTimer();
   try {
-    await assertAccess(req.auth.id, 'voice_mode');
+    // The plan check runs alongside preparing the session (both wait on the
+    // database); the session is only returned once access is confirmed.
+    const access = timer.time('access', () =>
+      assertAccess(req.auth.id, 'voice_mode'),
+    );
     const memoryId =
       typeof req.query.memory_id === 'string' && req.query.memory_id.trim()
         ? req.query.memory_id.trim()
@@ -139,19 +154,31 @@ export async function getEphemeralToken(
       typeof req.query.device_model === 'string'
         ? req.query.device_model.trim().slice(0, 100)
         : undefined;
-    const capabilities =
-      typeof req.query.capabilities === 'string'
-        ? req.query.capabilities.split(',').map(value => value.trim())
-        : [];
-    const {message, data} = await service.createEphemeralToken(
+    const timeZone = validTimeZone(req.query.timezone);
+    const {memoryTool, callActions, serverTools, screenControl, screenFields} =
+      parseVoiceClientCapabilities(req.query.capabilities);
+    const prepared = service.createEphemeralToken(
       req.auth.id,
       memoryId,
       resumeHandle,
       {
         deviceModel,
-        memoryTool: capabilities.includes('memory_search'),
-        callActions: capabilities.includes('call_actions'),
+        memoryTool,
+        callActions,
+        serverTools,
+        screenControl,
+        screenFields,
+        timeZone,
+        timer,
       },
+    );
+    // If access is refused, the prepared session is dropped unseen.
+    prepared.catch(() => {});
+    await access;
+    const {message, data} = await prepared;
+    logger.info(
+      {userId: req.auth.id, ms: timer.total(), steps: timer.steps},
+      'Voice session prepared',
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
@@ -215,11 +242,45 @@ export async function searchVoiceMemories(
 ) {
   try {
     await assertAccess(req.auth.id, 'voice_mode');
-    const result = await searchMemoriesForVoice(req.auth.id, req.body.query);
+    const result = await searchMemoriesForVoice(req.auth.id, req.body.query, {
+      also: req.body.also,
+    });
     return responsHandler(res, StatusCodes.OK, 'Memory search complete', {
       result,
     });
   } catch (error) {
+    next(error);
+  }
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim()
+    ? value.trim().slice(0, 200)
+    : undefined;
+}
+
+/** Runs a server-side voice tool the app forwarded from Gemini Live. */
+export async function runVoiceTool(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await assertAccess(req.auth.id, 'voice_mode');
+    const outcome = await runVoiceServerTool(
+      req.auth.id,
+      String(req.params.name),
+      (req.body.args ?? {}) as Record<string, unknown>,
+      {
+        callId: stringOrUndefined(req.body.call_id),
+        sessionId: stringOrUndefined(req.body.session_id),
+      },
+    );
+    return responsHandler(res, StatusCodes.OK, 'Voice tool complete', outcome);
+  } catch (error) {
+    if (error instanceof UnknownVoiceToolError) {
+      return next(new NotFoundException('Unknown voice tool', null));
+    }
     next(error);
   }
 }
@@ -294,5 +355,30 @@ export async function getVoicePreview(
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);
+  }
+}
+
+export async function getSpokenReply(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  const controller = new AbortController();
+  const onClose = () => {
+    if (!res.writableEnded) controller.abort();
+  };
+  res.once('close', onClose);
+  try {
+    const {message, data} = await service.getSpokenReply(
+      req.auth.id,
+      req.body.text,
+      controller.signal,
+    );
+    res.setHeader('Cache-Control', 'no-store');
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    if (!controller.signal.aborted) next(error);
+  } finally {
+    res.off('close', onClose);
   }
 }

@@ -4,6 +4,7 @@ vi.mock('../../src/services/supermemory', () => ({
   getContextForUser: vi.fn().mockResolvedValue({formatedText: ''}),
 }));
 
+import {GoogleGenAI} from '@google/genai';
 import {geminiAuthClient} from '../../src/services/gemini';
 import Memory from '../../src/module/database/model/memory';
 import Message from '../../src/module/database/model/message';
@@ -14,6 +15,7 @@ import {
   connectTestDatabase,
 } from '../helpers/database';
 import {createUserFixture} from '../helpers/factories';
+import {SERVER_TOOL_NAMES} from '../../src/module/api/ai/voice/server-tool-declarations';
 
 describe('createEphemeralToken', () => {
   beforeAll(connectTestDatabase);
@@ -51,6 +53,42 @@ describe('createEphemeralToken', () => {
     expect(data.memoryId).toBe(memory.id);
     expect(data.promptVersion).toMatch(/^voice-/);
     expect(data).not.toHaveProperty('systemInstruction');
+  });
+
+  it('sends Gemini no field mask, which would be invalid with tools locked in', async () => {
+    // Runs the real SDK request shaping; only the network call is stubbed.
+    // `lockAdditionalFields: []` made the SDK send a field mask containing
+    // `tools.0`, which Gemini rejects ("field_mask is invalid for
+    // BidiGenerateContentSetup"), so every voice call failed with a 500.
+    // A client with a dummy key keeps this independent of GEMINI_API_KEY and
+    // of Google default credentials, which CI has neither of.
+    const sdk = new GoogleGenAI({
+      apiKey: 'test-key',
+      httpOptions: {apiVersion: 'v1alpha'},
+    });
+    vi.spyOn(geminiAuthClient.authTokens, 'create').mockImplementation(params =>
+      sdk.authTokens.create(params),
+    );
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({name: 'authTokens/real-sdk'}), {
+        status: 200,
+        headers: {'content-type': 'application/json'},
+      }),
+    );
+    const user = await createUserFixture();
+
+    const {data} = await createEphemeralToken(user.id, undefined, undefined, {
+      memoryTool: true,
+      callActions: true,
+    });
+
+    const call = fetchSpy.mock.calls.find(([, init]) =>
+      String(init?.body ?? '').includes('bidiGenerateContentSetup'),
+    );
+    const body = JSON.parse(String(call?.[1]?.body));
+    expect(body.bidiGenerateContentSetup.tools).toBeDefined();
+    expect(body).not.toHaveProperty('fieldMask');
+    expect(data.token).toBe('authTokens/real-sdk');
   });
 
   it('locks the resume handle into the token when reconnecting', async () => {
@@ -100,6 +138,24 @@ describe('createEphemeralToken', () => {
     expect(data.speakerFullDuplex).toBe(true);
   });
 
+  it('reports the turn detection it locked into the token', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/turns'} as any);
+    const user = await createUserFixture();
+
+    const {data} = await createEphemeralToken(user.id);
+
+    const detection =
+      create.mock.calls[0][0].config.liveConnectConstraints.config
+        .realtimeInputConfig.automaticActivityDetection;
+    expect(data.turnDetection).toEqual({
+      variant: expect.any(String),
+      silenceDurationMs: detection.silenceDurationMs,
+      prefixPaddingMs: detection.prefixPaddingMs,
+    });
+  });
+
   it('locks call actions in for clients that send the call_actions capability', async () => {
     const create = vi
       .spyOn(geminiAuthClient.authTokens, 'create')
@@ -122,5 +178,61 @@ describe('createEphemeralToken', () => {
       'set_microphone',
       'open_screen',
     ]);
+  });
+
+  it('locks server tools in, and lists them for the app to forward, only for clients that can', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/server-tools'} as any);
+    const user = await createUserFixture();
+
+    const without = await createEphemeralToken(user.id, undefined, undefined, {
+      memoryTool: true,
+    });
+    expect(without.data.serverTools).toEqual([]);
+    expect(
+      JSON.stringify(
+        create.mock.calls[0][0].config.liveConnectConstraints.config.tools,
+      ),
+    ).not.toContain('update_profile');
+
+    const {data} = await createEphemeralToken(user.id, undefined, undefined, {
+      memoryTool: true,
+      serverTools: true,
+    });
+
+    const locked = create.mock.calls[1][0].config.liveConnectConstraints.config;
+    expect(JSON.stringify(locked.tools)).toContain('update_profile');
+    expect(String(locked.systemInstruction)).toContain('APP ACTIONS');
+    expect(data.serverTools).toEqual(SERVER_TOOL_NAMES);
+    expect(data.serverTools).toEqual(
+      expect.arrayContaining([
+        'update_profile',
+        'open_story',
+        'save_story',
+        'add_beneficiary',
+      ]),
+    );
+    expect(data.tools).toEqual(['search_memories', ...SERVER_TOOL_NAMES]);
+  });
+
+  it('locks screen control in, as tools the app runs itself, only for clients that can', async () => {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/screen'} as any);
+    const user = await createUserFixture();
+
+    const {data} = await createEphemeralToken(user.id, undefined, undefined, {
+      screenControl: true,
+    });
+
+    const locked = create.mock.calls[0][0].config.liveConnectConstraints.config;
+    const serialized = JSON.stringify(locked.tools);
+    expect(serialized).toContain('press_button');
+    expect(serialized).toContain('"behavior":"BLOCKING"');
+    expect(String(locked.systemInstruction)).toContain('SCREEN CONTROL');
+    expect(data.tools).toEqual(['scroll', 'go_back', 'press_button']);
+    // Run by the app, not forwarded to the server.
+    expect(data.serverTools).toEqual([]);
   });
 });

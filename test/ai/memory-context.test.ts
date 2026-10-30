@@ -62,10 +62,10 @@ function mockMemories(t: TestContext, rows: Row[]) {
         return chain;
       },
       async select(fields: string) {
+        // Like MongoDB, _id comes back unless excluded.
         return selected.map(row =>
           Object.fromEntries(
-            fields
-              .split(' ')
+            ['_id', ...fields.split(' ')]
               .filter(field => field in row)
               .map(field => [field, row[field as keyof Row]]),
           ),

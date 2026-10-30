@@ -110,12 +110,12 @@ describe('canonical OpenAPI artifact', () => {
 
     expect(spec.paths).toHaveProperty('/health');
     expect(spec.paths).toHaveProperty('/ready');
-    expect(spec.paths).toHaveProperty('/metrics');
+    expect(spec.paths).toHaveProperty('/staff/metrics');
     expect(spec.components.schemas).toHaveProperty('Readiness');
     expect(spec.components.schemas).toHaveProperty('OperationalSignals');
-    const metrics = spec.paths['/metrics'] as {
-      get: {security: Array<{bearerAuth: never[]}>};
+    const metrics = spec.paths['/staff/metrics'] as {
+      get: {security: Array<{staffCookie: never[]}>};
     };
-    expect(metrics.get.security).toEqual([{bearerAuth: []}]);
+    expect(metrics.get.security).toEqual([{staffCookie: []}]);
   });
 });

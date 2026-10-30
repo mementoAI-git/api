@@ -1,3 +1,4 @@
+import {synthesizeSpokenReply} from '../../../services/spoken-replies';
 import type {TranscriptionInput} from './transcription-input';
 import {Response} from 'express';
 import {FilterQuery} from 'mongoose';
@@ -34,7 +35,7 @@ import {buildPromptOwnershipScope} from '../prompt/explore-contract';
 import AiMetric from '../../database/model/ai-metric';
 import {updateStreak} from '../user/service';
 import {addToInsightsBuffer} from '../../../services/queues/insights';
-import * as supermemory from '../../../services/supermemory';
+import {queueMemorySearch} from '../../../services/queues/memory-search';
 import {OpenRouterMessage} from '../../../services/ai/openrouter';
 import {
   generateTextWithProviderFallback,
@@ -49,11 +50,18 @@ import {
   buildLiveConnectConfig,
   buildLiveSessionDescriptor,
   CALL_ACTION_TOOL_NAMES,
+  chooseVoiceTurnDetection,
+  describeVoiceTurnDetection,
   SEARCH_MEMORIES_TOOL_NAME,
 } from './live-session-config';
 import {recordAiMetric} from '../../../services/ai/metrics';
-import {buildVoiceSessionContext} from './voice/session-context';
+import {voiceSessionContextFor} from './voice/session-context';
 import {allowsSpeakerFullDuplex} from './voice/device-policy';
+import {SERVER_TOOL_NAMES} from './voice/server-tool-declarations';
+import {
+  SCREEN_CONTROL_TOOL_NAMES,
+  SCREEN_FIELDS_TOOL_NAMES,
+} from './voice/screen-control-declarations';
 import {VOICE_PROMPT_VERSION} from '../../../utils/ai-prompt/voice';
 import {
   shouldRunAsrShadow,
@@ -78,6 +86,7 @@ import {
   ELEVENLABS_BASE_URL,
   ELEVENLABS_TTS_MODEL_ID,
   OPENROUTER_CRITICAL_ENABLED,
+  VOICE_TURN_AB_PERCENT,
 } from '../../../utils/config';
 import {
   ensureStoryAutogenTagCount,
@@ -96,6 +105,12 @@ import {
   isProviderRateLimited,
   setUserBackoffWindow,
 } from '../../../services/ai/chat-user-backoff';
+import {getLongTermContext} from '../../../services/embeddings/long-term';
+import {withTimeout} from './voice/with-timeout';
+import {StepTimer} from '../../../utils/step-timer';
+import logger from '../../../utils/logger';
+
+const CHAT_LONG_TERM_TIMEOUT_MS = 2_500;
 
 const tagsOutputSchema = z.object({
   tags: z.array(z.string()).default([]),
@@ -304,27 +319,38 @@ function getSessionTurnCount(
   ).length;
 }
 
+/** Stands in for the recalled memories until they arrive. */
+const CHAT_LONG_TERM_PLACEHOLDER = '\u0000CHAT_LONG_TERM\u0000';
+
+/** Never rejects: a failed save is logged, and the reply still streams. */
+function saveUserMessage(
+  payload: IPrompt & {memory: string},
+  user_id: string,
+): Promise<void> {
+  return Message.create({
+    user: user_id,
+    memory: payload.memory,
+    role: 'user',
+    attatchments: payload?.attachments || [],
+    text: payload?.text,
+    ...(payload.replyTo ? {replyTo: payload.replyTo} : {}),
+  }).then(
+    () => undefined,
+    error => {
+      logger.error(
+        {err: error, userId: user_id},
+        'Saving the chat message failed',
+      );
+    },
+  );
+}
+
 export async function prompt(
   payload: IPrompt & {memory: string},
   user_id: string,
 ) {
   const requestStart = Date.now();
-  const user = await User.findById(user_id);
-  if (!user) {
-    throw new NotFoundException('User not found');
-  }
-
-  let messages = await Message.find({
-    user: user_id,
-    memory: payload.memory,
-  })
-    .sort({created_at: -1})
-    .limit(25);
-
-  messages = messages.reverse();
-
-  const sessionTurnCount = getSessionTurnCount(messages);
-
+  const timer = new StepTimer();
   const userText = (payload.text ?? '').trim();
   const hasAttachments = !isEmpty(payload?.attachments);
 
@@ -332,24 +358,49 @@ export async function prompt(
     throw new BadRequestException('Prompt must contain text or attachments');
   }
 
-  const content: PartListUnion = [];
-  if (userText) {
-    content.push(userText);
-  }
-
-  let longTermContext = '';
-  if (isSignificantMessage(userText)) {
-    const context = await supermemory.getContextForUser(user_id, payload.text);
-    longTermContext = context.formatedText;
-  }
-
-  const systemInstruction = await prompts.createSystemContext(
-    user,
-    payload.memory,
-    null,
-    longTermContext,
-    sessionTurnCount,
+  // Every read is a database round trip before the first word: start them
+  // all at once. The recall only needs the text.
+  const userReady = timer.time('user', () => User.findById(user_id));
+  const historyReady = timer.time('history', () =>
+    Message.find({user: user_id, memory: payload.memory})
+      .sort({created_at: -1})
+      .limit(25),
   );
+  // Capped: a slow lookup must not hold up the reply.
+  const recallReady = isSignificantMessage(userText)
+    ? timer.time('recall', () =>
+        withTimeout(
+          getLongTermContext(user_id, payload.text).catch(() => ''),
+          CHAT_LONG_TERM_TIMEOUT_MS,
+          '',
+        ),
+      )
+    : Promise.resolve('');
+  // Not left unhandled if an earlier step throws.
+  recallReady.catch(() => {});
+
+  const [user, history] = await Promise.all([userReady, historyReady]);
+  if (!user) {
+    throw new NotFoundException('User not found');
+  }
+  const messages = history.reverse();
+  const sessionTurnCount = getSessionTurnCount(messages);
+
+  // The context is built while the recall finishes; its block is filled in
+  // when it arrives.
+  const systemInstruction = await timer.time('context', async () => {
+    const [base, longTermContext] = await Promise.all([
+      prompts.createSystemContext(
+        user,
+        payload.memory,
+        null,
+        CHAT_LONG_TERM_PLACEHOLDER,
+        sessionTurnCount,
+      ),
+      recallReady,
+    ]);
+    return base.replace(CHAT_LONG_TERM_PLACEHOLDER, () => longTermContext);
+  });
   const chatPrimaryPromptVersion = getPromptVersion('chat_primary');
   void recordAiMetric({
     event: 'prompt_version_used',
@@ -358,6 +409,11 @@ export async function prompt(
     user: user_id,
     prompt_version: chatPrimaryPromptVersion,
   });
+
+  const content: PartListUnion = [];
+  if (userText) {
+    content.push(userText);
+  }
 
   if (hasAttachments) {
     const chat = gemini.chats.create({
@@ -374,15 +430,12 @@ export async function prompt(
       );
     }
     const response = await chat.sendMessageStream({message: content});
-    await Message.create({
-      user: user_id,
-      memory: payload.memory,
-      role: 'user',
-      attatchments: payload?.attachments || [],
-      text: payload?.text,
-      ...(payload.replyTo ? {replyTo: payload.replyTo} : {}),
-    });
-    return {stream: response, modelLabel: `gemini:${GEMINI_MODEL}`};
+    return {
+      stream: response,
+      modelLabel: `gemini:${GEMINI_MODEL}`,
+      userText,
+      userMessageSaved: saveUserMessage(payload, user_id),
+    };
   }
 
   const groqHistory = createChatHistory(messages).map(message => ({
@@ -390,49 +443,57 @@ export async function prompt(
     content: message.parts?.[0]?.text || '',
   })) as GroqMessage[];
 
-  const routing = await streamCriticalChatResponse({
-    userId: user_id,
-    requestStart,
-    userTextForGroqRouting: userText || payload.text,
-    systemInstruction,
-    groqHistory,
-    latestUserText: userText || payload.text,
-    task: 'chat_primary',
-    metricsEndpoint: '/ai/prompt',
-    memoryIdForMetrics: payload.memory,
-    createGeminiStream: async () => {
-      const chat = gemini.chats.create({
-        model: GEMINI_MODEL,
-        config: {systemInstruction},
-        history: createChatHistory(messages),
-      });
-      const messageContent: PartListUnion =
-        content.length > 0 ? content : [userText || 'Hello'];
-      return chat.sendMessageStream({message: messageContent});
-    },
-    buildOpenRouterMessages: (): OpenRouterMessage[] => [
-      {role: 'system', content: systemInstruction},
-      ...createChatHistory(messages).map(message => ({
-        role:
-          message.role === 'model' ? ('assistant' as const) : ('user' as const),
-        content: message.parts?.[0]?.text || '',
-      })),
-      {role: 'user', content: userText || payload.text || 'Hello'},
-    ],
-  });
+  const routing = await timer.time('model', () =>
+    streamCriticalChatResponse({
+      userId: user_id,
+      requestStart,
+      userTextForGroqRouting: userText || payload.text,
+      systemInstruction,
+      groqHistory,
+      latestUserText: userText || payload.text,
+      task: 'chat_primary',
+      metricsEndpoint: '/ai/prompt',
+      memoryIdForMetrics: payload.memory,
+      createGeminiStream: async () => {
+        const chat = gemini.chats.create({
+          model: GEMINI_MODEL,
+          config: {systemInstruction},
+          history: createChatHistory(messages),
+        });
+        const messageContent: PartListUnion =
+          content.length > 0 ? content : [userText || 'Hello'];
+        return chat.sendMessageStream({message: messageContent});
+      },
+      buildOpenRouterMessages: (): OpenRouterMessage[] => [
+        {role: 'system', content: systemInstruction},
+        ...createChatHistory(messages).map(message => ({
+          role:
+            message.role === 'model'
+              ? ('assistant' as const)
+              : ('user' as const),
+          content: message.parts?.[0]?.text || '',
+        })),
+        {role: 'user', content: userText || payload.text || 'Hello'},
+      ],
+    }),
+  );
 
-  if (routing.recordUserMessageInDb) {
-    await Message.create({
-      user: user_id,
-      memory: payload.memory,
-      role: 'user',
-      attatchments: payload?.attachments || [],
-      text: payload?.text,
-      ...(payload.replyTo ? {replyTo: payload.replyTo} : {}),
-    });
-  }
+  // Saved while the reply streams; handleStreaming waits for it before
+  // saving the reply, so the two stay in order.
+  const userMessageSaved = routing.recordUserMessageInDb
+    ? saveUserMessage(payload, user_id)
+    : Promise.resolve();
+  logger.info(
+    {userId: user_id, ms: timer.total(), steps: timer.steps},
+    'Chat reply started',
+  );
 
-  return {stream: routing.stream, modelLabel: routing.modelLabel};
+  return {
+    stream: routing.stream,
+    modelLabel: routing.modelLabel,
+    userText,
+    userMessageSaved,
+  };
 }
 
 export async function handleStreaming(
@@ -441,22 +502,13 @@ export async function handleStreaming(
   payload: AsyncGenerator<{text?: string}, any, any>,
   res: Response,
   modelLabel?: string,
+  /** What the host just said, and the save of it still under way. */
+  sent: {userText?: string; userMessageSaved?: Promise<void>} = {},
 ) {
   let text = '';
-  let userMessage = ''; // Store the user's message
+  const userMessage = sent.userText ?? '';
 
   try {
-    // Get the user's last message for analysis
-    const lastUserMessage = await Message.findOne({
-      user,
-      memory,
-      role: 'user',
-    }).sort({created_at: -1});
-
-    if (lastUserMessage) {
-      userMessage = lastUserMessage.text;
-    }
-
     for await (const chunk of payload) {
       if (chunk.text) {
         const sanitizedChunk = sanitizeMementoText(chunk.text);
@@ -467,34 +519,45 @@ export async function handleStreaming(
   } catch (error) {
     res.write(`ERROR: ${error?.message}`);
   } finally {
-    if (!isEmpty(text)) {
-      const finalText = sanitizeMementoText(text).trim();
-
-      await Message.create({
-        text: finalText,
-        user,
-        memory,
-        role: 'ai',
-        ai_model: modelLabel || 'unknown',
-      });
-
-      // Update message count and last_active for summarization tracking
-      await Memory.findByIdAndUpdate(memory, {
-        $inc: {message_count: 2},
-        $set: {last_active: dayjs().toDate()},
-      });
-
-      if (userMessage && isSignificantMessage(userMessage)) {
-        addToInsightsBuffer(user, memory, userMessage, finalText).catch(
-          error => {
-            console.error('Error queueing insights extraction:', error);
-          },
-        );
-      }
-
-      void triggerSummarization(memory);
-    }
+    // The reply is complete for the app; saving happens after.
     res.end();
+    if (!isEmpty(text)) {
+      await persistReply().catch(error => {
+        logger.error(
+          {err: error, userId: user},
+          'Saving the chat reply failed',
+        );
+      });
+    }
+  }
+
+  async function persistReply() {
+    const finalText = sanitizeMementoText(text).trim();
+    // The host's message first, so the two stay in order.
+    await sent.userMessageSaved;
+
+    await Message.create({
+      text: finalText,
+      user,
+      memory,
+      role: 'ai',
+      ai_model: modelLabel || 'unknown',
+    });
+
+    // Update message count and last_active for summarization tracking
+    await Memory.findByIdAndUpdate(memory, {
+      $inc: {message_count: 2},
+      $set: {last_active: dayjs().toDate()},
+    });
+    void queueMemorySearch(user, memory);
+
+    if (userMessage && isSignificantMessage(userMessage)) {
+      addToInsightsBuffer(user, memory, userMessage, finalText).catch(error => {
+        console.error('Error queueing insights extraction:', error);
+      });
+    }
+
+    void triggerSummarization(memory);
   }
 }
 
@@ -769,8 +832,14 @@ export async function startConversation(
   const userText = (payload.text ?? '').trim();
   const hasAttachments = !isEmpty(payload?.attachments);
 
+  // The app opens the conversation first and sends the message through
+  // /ai/prompt (streamed). With nothing to say yet, just hand back the
+  // conversation instead of rejecting the request.
   if (!userText && !hasAttachments) {
-    throw new BadRequestException('Prompt must contain text or attachments');
+    return {
+      message: 'Conversation ready',
+      data: {response: '', memory_id: memory.id},
+    };
   }
 
   const content: PartListUnion = [];
@@ -815,6 +884,7 @@ export async function startConversation(
       $inc: {message_count: 2},
       $set: {last_active: now.toDate()},
     });
+    void queueMemorySearch(user_id, memory.id);
     if (isEmpty(memory.title)) {
       void updateMemoryTitle(memory.id, payload.text, responseText);
     }
@@ -1001,6 +1071,7 @@ export async function startConversation(
     $inc: {message_count: 2},
     $set: {last_active: now.toDate()},
   });
+  void queueMemorySearch(user_id, memory.id);
 
   if (isEmpty(memory.title)) {
     void updateMemoryTitle(memory.id, payload.text, responseText);
@@ -1056,10 +1127,17 @@ export async function createEphemeralToken(
     deviceModel?: string;
     memoryTool?: boolean;
     callActions?: boolean;
+    serverTools?: boolean;
+    screenControl?: boolean;
+    screenFields?: boolean;
+    /** The device's IANA time zone, validated. */
+    timeZone?: string;
+    timer?: StepTimer;
   } = {},
 ) {
+  const timer = client.timer ?? new StepTimer();
   // Resolve the user with profile and voice preferences
-  const user = await User.findById(userId);
+  const user = await timer.time('user', () => User.findById(userId));
   if (!user) {
     throw new NotFoundException('User not found');
   }
@@ -1071,9 +1149,18 @@ export async function createEphemeralToken(
 
   const memoryTool = client.memoryTool === true;
   const callActions = client.callActions === true;
-  const voiceContext = await buildVoiceSessionContext(user, memoryId, {
+  const serverTools = client.serverTools === true;
+  const screenControl = client.screenControl === true;
+  const screenFields = screenControl && client.screenFields === true;
+  const voiceContext = await voiceSessionContextFor(user, memoryId, {
     memoryTool,
     callActions,
+    serverTools,
+    screenControl,
+    screenFields,
+    timeZone: client.timeZone,
+    timer,
+    resuming: Boolean(resumeHandle),
   });
 
   const expireTime = dayjs().add(30, 'minute').toDate();
@@ -1081,36 +1168,43 @@ export async function createEphemeralToken(
   // even on slow networks or after a brief app backgrounding.
   const newSessionExpireTime = dayjs().add(10, 'minutes').toDate();
 
+  // Same user, same arm: reconnects within a call keep their turn detection.
+  const turnDetection = chooseVoiceTurnDetection(userId, VOICE_TURN_AB_PERCENT);
+
   const live = buildLiveSessionDescriptor(GEMINI_LIVE_MODEL, {
     id: voiceId,
     name: voiceName,
     provider: 'gemini',
   });
 
-  const token = await geminiAuthClient.authTokens.create({
-    config: {
-      uses: 1,
-      // Keep model/audio constraints locked, while allowing client voice,
-      // system context and transcription settings to take effect.
-      lockAdditionalFields: [],
-      expireTime: expireTime.toISOString(),
-      newSessionExpireTime: newSessionExpireTime.toISOString(),
-      liveConnectConstraints: {
-        model: live.model,
-        // Constraints lock every LiveConnectConfig field. Client config is
-        // ignored, so all voice context must be built here.
-        config: buildLiveConnectConfig(
-          live.voice.name,
-          voiceContext.systemInstruction,
-          resumeHandle,
-          {memoryTool, callActions},
-        ),
+  const token = await timer.time('token', () =>
+    geminiAuthClient.authTokens.create({
+      config: {
+        uses: 1,
+        // No lockAdditionalFields: every field below is locked as-is. Passing []
+        // makes the SDK send a field mask built from the config, which includes
+        // `tools.0`; Gemini rejects that ("field_mask is invalid for
+        // BidiGenerateContentSetup") and every voice call fails.
+        expireTime: expireTime.toISOString(),
+        newSessionExpireTime: newSessionExpireTime.toISOString(),
+        liveConnectConstraints: {
+          model: live.model,
+          // Constraints lock every LiveConnectConfig field. Client config is
+          // ignored, so all voice context must be built here.
+          config: buildLiveConnectConfig(
+            live.voice.name,
+            voiceContext.systemInstruction,
+            resumeHandle,
+            {memoryTool, callActions, serverTools, screenControl, screenFields},
+            turnDetection,
+          ),
+        },
+        httpOptions: {
+          apiVersion: 'v1alpha',
+        },
       },
-      httpOptions: {
-        apiVersion: 'v1alpha',
-      },
-    },
-  });
+    }),
+  );
 
   void recordAiMetric({
     event: 'prompt_version_used',
@@ -1133,8 +1227,14 @@ export async function createEphemeralToken(
       tools: [
         ...(memoryTool ? [SEARCH_MEMORIES_TOOL_NAME] : []),
         ...(callActions ? CALL_ACTION_TOOL_NAMES : []),
+        ...(serverTools ? SERVER_TOOL_NAMES : []),
+        ...(screenControl ? SCREEN_CONTROL_TOOL_NAMES : []),
+        ...(screenFields ? SCREEN_FIELDS_TOOL_NAMES : []),
       ],
+      // The app forwards these to POST /ai/voice/tools/:name.
+      serverTools: serverTools ? SERVER_TOOL_NAMES : [],
       speakerFullDuplex: allowsSpeakerFullDuplex(client.deviceModel),
+      turnDetection: describeVoiceTurnDetection(turnDetection),
     },
   };
 }
@@ -1796,5 +1896,24 @@ export async function getAiPromptGovernanceStatus() {
         rollback_supported_via_env_overrides: true,
       },
     },
+  };
+}
+
+export async function getSpokenReply(
+  userId: string,
+  text: string,
+  signal?: AbortSignal,
+) {
+  const user = await User.findById(userId).select(
+    'chat_voice chat_voice_provider',
+  );
+  if (!user) throw new NotFoundException('User not found');
+  const {voiceName} = resolveGeminiVoiceName(
+    user.chat_voice ?? undefined,
+    user.chat_voice_provider ?? undefined,
+  );
+  return {
+    message: 'Spoken reply generated',
+    data: await synthesizeSpokenReply(text, voiceName, signal),
   };
 }

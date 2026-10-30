@@ -7,6 +7,7 @@ import {IPrompt} from '../../module/database/model/prompt';
 import Memory from '../../module/database/model/memory';
 import {
   buildMemoriesContext,
+  buildMemoryIndex,
   getMemorySummaries,
 } from '../../module/api/ai/memory-context';
 import {buildTagsJsonInstructions} from '../story-tags';
@@ -62,25 +63,36 @@ async function createSystemContext(
   persona: IPersona = null,
   longTermContext?: string,
   sessionTurnCount = 0,
+  /**
+   * `compact`: for voice calls with memory search. Lists story and
+   * conversation titles instead of their text, and fewer profile items; the
+   * model looks details up when needed. Live voice re-bills the whole
+   * instruction on every turn, so its size is the call's main cost.
+   */
+  options: {compact?: boolean} = {},
 ): Promise<string> {
-  let userContext = persona || ({} as IPersona);
-  if (!persona) {
-    userContext = await Persona.findOne({user: user._id});
-  }
+  const userId = String(user._id);
+  // Independent reads, each a database round trip: run them together.
+  const [
+    storedPersona,
+    summaries,
+    pendingInsightsContext,
+    sessionCtx,
+    recentReflectionsContext,
+  ] = await Promise.all([
+    persona ? Promise.resolve(persona) : Persona.findOne({user: user._id}),
+    getMemorySummaries(user._id, currentMemoryId),
+    buildPendingInsightsPromptSection(userId),
+    getSessionContext(userId, {user, persona}),
+    getRecentReflectionsContext(userId),
+  ]);
+  const userContext = storedPersona || ({} as IPersona);
 
   const userPreferences = user.preferences || {};
-
-  const summaries = await getMemorySummaries(user._id, currentMemoryId);
-  const pastContext = buildMemoriesContext(summaries);
-  const pendingInsightsContext = await buildPendingInsightsPromptSection(
-    String(user._id),
-  );
-
-  const sessionCtx = await getSessionContext(String(user._id));
+  const pastContext = options.compact
+    ? buildMemoryIndex(summaries)
+    : buildMemoriesContext(summaries);
   const sessionContextString = buildSessionContextPrompt(sessionCtx);
-  const recentReflectionsContext = await getRecentReflectionsContext(
-    String(user._id),
-  );
 
   return buildSystemContext(
     user,
@@ -92,6 +104,7 @@ async function createSystemContext(
     sessionContextString,
     sessionTurnCount,
     recentReflectionsContext,
+    options.compact ? PERSONA_COMPACT_LIMITS : PERSONA_PROMPT_LIMITS,
   );
 }
 
@@ -198,6 +211,33 @@ Do not try to demonstrate empathy, intelligence, memory, or insight. Notice the 
 `.trim();
 }
 
+/**
+ * How many of each stored host list go into a prompt: the most recent. The
+ * lists only grow (emotional patterns are never consolidated), and every
+ * chat reply and voice call carries them, so without a cap a long-time
+ * host's prompt keeps getting bigger, slower and costlier.
+ */
+export const PERSONA_PROMPT_LIMITS = {
+  important_notes: 15,
+  key_preferences: 12,
+  goals_and_aspirations: 12,
+  emotional_state_trends: 10,
+} as const;
+
+type PersonaLimits = Record<keyof typeof PERSONA_PROMPT_LIMITS, number>;
+
+/** Voice calls (compact context): the essentials; the rest can be asked about. */
+export const PERSONA_COMPACT_LIMITS: PersonaLimits = {
+  important_notes: 8,
+  key_preferences: 6,
+  goals_and_aspirations: 5,
+  emotional_state_trends: 3,
+};
+
+function recentItems(list: unknown, limit: number): string[] {
+  return Array.isArray(list) ? list.slice(-limit).map(String) : [];
+}
+
 function buildSystemContext(
   user: IUser,
   userPreferences: any,
@@ -208,6 +248,7 @@ function buildSystemContext(
   sessionContextString?: string,
   sessionTurnCount = 0,
   recentReflectionsContext?: string,
+  limits: PersonaLimits = PERSONA_PROMPT_LIMITS,
 ): string {
   const userName = user?.nickname || (user as any)?.first_name || 'User';
   const userTimezone =
@@ -268,27 +309,32 @@ STORED HOST CONTEXT (private data):
 
 Explicit or durable notes:
 ${
-  userContext?.important_notes?.map((note: string) => `- ${note}`).join('\n') ||
-  '- None stored'
+  recentItems(userContext?.important_notes, limits.important_notes)
+    .map(note => `- ${note}`)
+    .join('\n') || '- None stored'
 }
 
 Preferences:
 ${
-  userContext?.key_preferences?.map((pref: string) => `- ${pref}`).join('\n') ||
-  '- None stored'
+  recentItems(userContext?.key_preferences, limits.key_preferences)
+    .map(pref => `- ${pref}`)
+    .join('\n') || '- None stored'
 }
 
 Goals and aspirations:
 ${
-  userContext?.goals_and_aspirations
-    ?.map((goal: string) => `- ${goal}`)
+  recentItems(userContext?.goals_and_aspirations, limits.goals_and_aspirations)
+    .map(goal => `- ${goal}`)
     .join('\n') || '- None stored'
 }
 
 Possible emotional patterns:
 ${
-  userContext?.emotional_state_trends
-    ?.map((trend: string) => `- ${trend}`)
+  recentItems(
+    userContext?.emotional_state_trends,
+    limits.emotional_state_trends,
+  )
+    .map(trend => `- ${trend}`)
     .join('\n') || '- None stored'
 }
 
@@ -591,6 +637,7 @@ Return only valid JSON:
 }
 
 RULES:
+- Return at most ${PERSONA_PROMPT_LIMITS[fieldType]} items. If there are more, merge related ones and drop the least useful, keeping the most recent and most durable.
 - Merge items only when they clearly describe the same subject.
 - Preserve names, dates, places, relationships, and other details that remain useful.
 - Do not strengthen claims while merging them.
@@ -648,24 +695,34 @@ export interface ISessionContext {
 
 export async function getSessionContext(
   userId: string,
+  /** Already loaded by the caller; read here otherwise. */
+  loaded: {user?: IUser | null; persona?: IPersona | null} = {},
 ): Promise<ISessionContext> {
-  const user = await User.findById(userId).lean();
-  const persona = await Persona.findOne({user: userId}).lean();
+  const conversationFilter = {user: userId, type: 'conversation'};
+  // Independent reads, each a database round trip: run them together.
+  const [
+    user,
+    persona,
+    sessionCount,
+    newestConversation,
+    discussedDimensions,
+    enrichment,
+  ] = await Promise.all([
+    loaded.user ?? User.findById(userId).lean(),
+    loaded.persona ?? Persona.findOne({user: userId}).lean(),
+    Memory.countDocuments(conversationFilter),
+    Memory.findOne(conversationFilter)
+      .sort({created_at: -1})
+      .select('summary topics created_at')
+      .lean(),
+    Memory.distinct('dimensions', conversationFilter),
+    // Context generation must still work if enrichment computation fails.
+    computeEnrichmentScore(userId).catch(() => null),
+  ]);
 
   const priorityDimensions =
     (user?.preferences as any)?.priority_dimensions || [];
   const openThreads = (persona?.open_threads as string[]) || [];
-
-  const conversationFilter = {user: userId, type: 'conversation'};
-  const [sessionCount, newestConversation, discussedDimensions] =
-    await Promise.all([
-      Memory.countDocuments(conversationFilter),
-      Memory.findOne(conversationFilter)
-        .sort({created_at: -1})
-        .select('summary topics created_at')
-        .lean(),
-      Memory.distinct('dimensions', conversationFilter),
-    ]);
 
   // Only call something the last session if it is actually the newest conversation.
   // If the newest conversation is not summarized yet, return null instead of
@@ -691,13 +748,9 @@ export async function getSessionContext(
     allDiscussedDimensions,
   );
 
-  let enrichmentScore: number | null = null;
-  try {
-    const enrichment = await computeEnrichmentScore(userId);
-    enrichmentScore = enrichment.enrichment_score;
-  } catch (e) {
-    // Context generation must still work if enrichment computation fails.
-  }
+  const enrichmentScore: number | null = enrichment
+    ? enrichment.enrichment_score
+    : null;
 
   return {
     lastSession,

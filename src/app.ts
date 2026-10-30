@@ -12,6 +12,7 @@ import {CORS_ALLOWED_ORIGINS, JSON_BODY_LIMIT, PORT} from './utils/config';
 import {logger} from './utils';
 import {ForbiddenException} from './utils/service-error';
 import requestContext from './middleware/request-context';
+import {warmUpEmbeddings} from './services/embeddings';
 
 export function createServer(): Application {
   const app = express();
@@ -47,6 +48,11 @@ export function createServer(): Application {
       },
     }),
   );
+  // Helmet defaults to same-origin; the web app plays these tracks from another origin.
+  app.use('/assets/audio', (_req, res, next) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    next();
+  });
   app.use('/assets', express.static(path.join(process.cwd(), 'public')));
   app.use(
     '/.well-known',
@@ -80,5 +86,8 @@ export function createServer(): Application {
 export function startServer(app: express.Application) {
   app.listen(PORT, () => {
     logger.info(`Application running on port ${PORT}...`);
+    warmUpEmbeddings(error =>
+      logger.warn({err: error}, 'Memory embedding model failed to load'),
+    );
   });
 }

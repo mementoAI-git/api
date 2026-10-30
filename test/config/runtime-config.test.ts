@@ -79,9 +79,9 @@ describe('runtime security configuration', () => {
       'SENTRY_TUNNEL_ALLOWED_HOSTS',
     ],
     [
-      'enabled Bull Board without administrators',
-      {BULL_BOARD_ENABLED: 'true', FEATURE_FLAGS_ADMIN_EMAILS: undefined},
-      'FEATURE_FLAGS_ADMIN_EMAILS',
+      'staff console without encryption key',
+      {STAFF_ORIGIN: 'https://staff.example.com', STAFF_TOTP_KEY: undefined},
+      'STAFF_TOTP_KEY',
     ],
     [
       'enabled Google RTDN without authenticated push configuration',
@@ -123,5 +123,18 @@ describe('runtime security configuration', () => {
         FILE_URL_SIGNING_KEYS: undefined,
       }),
     ).toThrow('FILE_URL_SIGNING_KEYS');
+  });
+
+  it('accepts a voice turn A/B percentage from 0 to 100 only', () => {
+    for (const value of ['0', '50', '100']) {
+      expect(() =>
+        validateRuntimeConfig({...productionEnv, VOICE_TURN_AB_PERCENT: value}),
+      ).not.toThrow();
+    }
+    for (const value of ['-1', '101', '50%', 'half', '12.5']) {
+      expect(() =>
+        validateRuntimeConfig({...productionEnv, VOICE_TURN_AB_PERCENT: value}),
+      ).toThrow('VOICE_TURN_AB_PERCENT');
+    }
   });
 });

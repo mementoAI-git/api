@@ -26,6 +26,8 @@ import PurgeCommand, {
   type IPurgeCommand,
 } from '../../module/database/model/purge-command';
 import PurgeStage from '../../module/database/model/purge-stage';
+import MemoryEmbedding from '../../module/database/model/memory-embedding';
+import VoiceAction from '../../module/database/model/voice-action';
 import PushDevice from '../../module/database/model/push-device';
 import Subscription from '../../module/database/model/subscription';
 import Usage from '../../module/database/model/usage';
@@ -64,6 +66,7 @@ export const PURGE_MANIFEST = [
   {model: 'File', disposition: 'provider-delete'},
   {model: 'Group', disposition: 'delete'},
   {model: 'Memory', disposition: 'delete'},
+  {model: 'MemoryEmbedding', disposition: 'delete'},
   {model: 'Message', disposition: 'delete'},
   {model: 'PendingInsight', disposition: 'delete'},
   {model: 'Persona', disposition: 'delete'},
@@ -71,6 +74,7 @@ export const PURGE_MANIFEST = [
   {model: 'Subscription', disposition: 'delete'},
   {model: 'Usage', disposition: 'delete'},
   {model: 'User', disposition: 'tombstone'},
+  {model: 'VoiceAction', disposition: 'delete'},
 ] as const;
 
 function errorCode(error: unknown): string {
@@ -345,6 +349,8 @@ async function deleteDomainRecords(command: IPurgeCommand): Promise<void> {
     {model: Subscription, filter: {user_id: userId}},
     {model: Usage, filter: {user_id: userId}},
     {model: Memory, filter: {user: userId}},
+    {model: MemoryEmbedding, filter: {user: userId}},
+    {model: VoiceAction, filter: {user: userId}},
   ];
 
   for (const deletion of deletions) {

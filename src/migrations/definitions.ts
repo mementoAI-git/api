@@ -1,3 +1,4 @@
+import {backfillMemoryRecovery} from '../services/memory-lifecycle';
 import type {mongo} from 'mongoose';
 import type {DatabaseMigration} from './index';
 import {createHash, randomUUID} from 'crypto';
@@ -226,6 +227,69 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
       await db
         .collection('users')
         .createIndex({referred_by: 1}, {name: 'referred_by_1'});
+    },
+  },
+  {
+    // In-house memory search: one user's vectors are loaded by user; each
+    // story piece or message has one embedding.
+    id: '202610120001_memory_embedding_indexes',
+    up: async db => {
+      await db
+        .collection('memory_embeddings')
+        .createIndex({user: 1}, {name: 'embedding_user'});
+      await db
+        .collection('memory_embeddings')
+        .createIndex(
+          {source: 1, source_id: 1, chunk: 1},
+          {unique: true, name: 'embedding_source_unique'},
+        );
+    },
+  },
+  {
+    // Voice actions: "undo that" reads a user's latest; a repeated tool call
+    // id runs once; entries expire after a week.
+    id: '202610150001_voice_action_indexes',
+    up: async db => {
+      const actions = db.collection('voice_actions');
+      await actions.createIndex(
+        {user: 1, created_at: -1},
+        {name: 'voice_action_user'},
+      );
+      await actions.createIndex(
+        {user: 1, call_id: 1},
+        {
+          unique: true,
+          name: 'voice_action_call_unique',
+          partialFilterExpression: {call_id: {$type: 'string'}},
+        },
+      );
+      await actions.createIndex(
+        {created_at: 1},
+        {name: 'voice_action_ttl', expireAfterSeconds: 7 * 24 * 60 * 60},
+      );
+    },
+  },
+  {
+    id: '202610150001_memory_recovery_window',
+    up: async db => {
+      await backfillMemoryRecovery(db);
+      await db.collection('memories').createIndex({status: 1, delete_after: 1});
+    },
+  },
+  {
+    id: '202610160001_staff_identity_indexes',
+    up: async db => {
+      await db
+        .collection('staff_accounts')
+        .createIndex({email: 1}, {unique: true});
+      await db
+        .collection('staff_sessions')
+        .createIndex({token_hash: 1}, {unique: true});
+      await db.collection('staff_sessions').createIndex({staff_id: 1});
+      await db
+        .collection('staff_sessions')
+        .createIndex({expires_at: 1}, {expireAfterSeconds: 0});
+      await db.collection('staff_audits').createIndex({staff_id: 1});
     },
   },
 ];

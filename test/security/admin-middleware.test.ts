@@ -36,12 +36,12 @@ describe('administrator middleware', () => {
     expect(response.status).toBe(403);
   });
 
-  it('allows an active user on the explicit email allowlist', async () => {
+  it('rejects customer credentials even on the former email allowlist', async () => {
     const admin = await createUserFixture({email: 'admin@example.com'});
     const response = await request(createAdminTestApp())
       .get('/admin')
       .set('Authorization', `Bearer ${issueLegacyAccessToken(admin)}`);
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(403);
   });
 
   it('rejects a deleted allowlisted user', async () => {

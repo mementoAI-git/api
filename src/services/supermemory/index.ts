@@ -1,5 +1,9 @@
 import Supermemory from 'supermemory';
-import {IS_PRODUCTION, SUPERMEMORY_API_KEY} from '../../utils/config';
+import {
+  IS_PRODUCTION,
+  MEMORY_RETRIEVAL,
+  SUPERMEMORY_API_KEY,
+} from '../../utils/config';
 import logger from '../../utils/logger';
 
 export function getContainerTag(userId: string): string {
@@ -104,13 +108,17 @@ export async function getContextForUser(
 }
 
 /**
- * Store host-approved insight text in Supermemory. No-op when disabled or content empty.
- * Throws on API failure when the client is configured (caller can avoid deleting pending rows).
+ * Store host-approved insight text in Supermemory, only while Supermemory is
+ * the retrieval store (MEMORY_RETRIEVAL=supermemory). Otherwise nothing is
+ * sent: the host's words stay on our own servers, and an outside service
+ * being down never blocks approving an insight. No-op for empty content.
+ * Throws on API failure when used (caller can avoid deleting pending rows).
  */
 export async function addApprovedMemory(
   userId: string,
   content: string,
 ): Promise<void> {
+  if (MEMORY_RETRIEVAL !== 'supermemory') return;
   const c = getClient();
   if (!c) {
     return;

@@ -1,4 +1,5 @@
-import 'dotenv/config';
+// Loads .env first; under PM2 the file wins over stale copies (see load-env).
+import './load-env';
 import os from 'os';
 
 export const JWT_SECRET = process.env.JWT_SECRET;
@@ -77,6 +78,8 @@ export const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
 
 export const FRONTEND_URL = process.env.FRONTEND_URL;
 export const BACKEND_URL = process.env.BACKEND_URL;
+/** Optional CDN folder for background music; defaults to the API's own /assets/audio. */
+export const BACKGROUND_MUSIC_BASE_URL = process.env.BACKGROUND_MUSIC_BASE_URL;
 export const FILE_URL_SIGNING_KEYS = process.env.FILE_URL_SIGNING_KEYS || '';
 export const FILE_URL_TTL_SECONDS = Number(
   process.env.FILE_URL_TTL_SECONDS || 3600,
@@ -101,6 +104,12 @@ export const VOICE_SPEAKER_DUPLEX_DENYLIST = (
   .split(',')
   .map(entry => entry.trim().toLowerCase())
   .filter(Boolean);
+
+// Percentage of users (0-100) whose voice calls use the faster end-of-turn
+// silence window. Validated at startup by runtime-config.
+export const VOICE_TURN_AB_PERCENT = Number(
+  process.env.VOICE_TURN_AB_PERCENT || 0,
+);
 
 export const VOICE_PROVIDER_DEFAULT = (
   process.env.VOICE_PROVIDER_DEFAULT || 'gemini'
@@ -146,16 +155,16 @@ export const DEEPSEEK_MODEL_CHAT_FALLBACK =
 export const GROQ_BASE_URL =
   process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
 export const GROQ_MODEL_CHAT_PRIMARY =
-  process.env.GROQ_MODEL_CHAT_PRIMARY || 'llama-3.3-70b-versatile';
+  process.env.GROQ_MODEL_CHAT_PRIMARY || 'openai/gpt-oss-120b';
 export const GROQ_MODEL_CHAT_FALLBACK =
-  process.env.GROQ_MODEL_CHAT_FALLBACK || 'llama-3.1-8b-instant';
+  process.env.GROQ_MODEL_CHAT_FALLBACK || 'openai/gpt-oss-20b';
 export const GROQ_FAST_MODE_ENABLED =
   process.env.GROQ_FAST_MODE_ENABLED !== 'false';
 export const GROQ_FAST_MODE_MAX_INPUT_CHARS = Number(
   process.env.GROQ_FAST_MODE_MAX_INPUT_CHARS || 320,
 );
 export const GROQ_MODEL_CHAT_FAST_PRIMARY =
-  process.env.GROQ_MODEL_CHAT_FAST_PRIMARY || 'llama-3.1-8b-instant';
+  process.env.GROQ_MODEL_CHAT_FAST_PRIMARY || 'openai/gpt-oss-20b';
 export const GROQ_MODEL_CHAT_FAST_FALLBACK =
   process.env.GROQ_MODEL_CHAT_FAST_FALLBACK || GROQ_MODEL_CHAT_PRIMARY;
 
@@ -290,3 +299,21 @@ export const WEBAUTHN_ORIGINS = (
   .split(',')
   .map(v => v.trim())
   .filter(Boolean);
+
+/**
+ * Where long-term memory comes from: 'inhouse' (default) searches the host's
+ * stories, chats and calls by meaning, with embeddings stored in MongoDB;
+ * 'supermemory' restores the previous Supermemory profile lookups.
+ */
+export const MEMORY_RETRIEVAL: 'inhouse' | 'supermemory' =
+  process.env.MEMORY_RETRIEVAL === 'supermemory' ? 'supermemory' : 'inhouse';
+
+// Read on use so operational key/config changes do not create duplicate config logic.
+export const staffConfig = () => ({
+  origin: process.env.STAFF_ORIGIN || '',
+  totpKey: process.env.STAFF_TOTP_KEY || '',
+  secureCookies: process.env.NODE_ENV === 'production',
+});
+
+export const GEMINI_TTS_MODEL_VERSION =
+  process.env.GEMINI_TTS_MODEL_VERSION || 'gemini-3.8-flash-tts';

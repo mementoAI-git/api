@@ -33,6 +33,19 @@ describe('voice prompt', () => {
     expect(result).toContain('It was at a bakery.');
   });
 
+  it('puts the host overview after the base context and before the conversation', () => {
+    const prompt = buildVoiceSystemInstruction('BASE', {
+      hostOverview: 'ABOUT THE HOST (private data):\nPeople: Emeka (brother).',
+      recentTranscript: 'Host: hi',
+    });
+    expect(prompt.indexOf('BASE')).toBeLessThan(
+      prompt.indexOf('ABOUT THE HOST'),
+    );
+    expect(prompt.indexOf('ABOUT THE HOST')).toBeLessThan(
+      prompt.indexOf('THIS CONVERSATION SO FAR'),
+    );
+  });
+
   it('omits empty optional blocks', () => {
     const result = buildVoiceSystemInstruction('BASE', {
       recentTranscript: '  ',
@@ -67,13 +80,51 @@ describe('voice prompt', () => {
     );
   });
 
+  // Asked "can you see my stories?", Gemini denied having any access: the
+  // prompt forbade mentioning stored data and never said what to do instead.
+  it('never lets Memento deny knowing the host', () => {
+    for (const section of [
+      buildVoiceModeSection(),
+      buildVoiceModeSection({memoryTool: true}),
+    ]) {
+      expect(section).toMatch(/Never say you cannot (access|see|remember)/);
+    }
+  });
+
+  it('searches for general recall, not only specific events', () => {
+    const section = buildVoiceModeSection({memoryTool: true});
+    expect(section).toMatch(/what you remember or know about them/);
+    expect(section).toMatch(/search before saying you do not know/i);
+  });
+
+  it('never narrates a search beyond a brief acknowledgement', () => {
+    const section = buildVoiceModeSection({memoryTool: true});
+    expect(section).toContain('Mm, let me think');
+    expect(section).toMatch(
+      /Never say you are searching, looking something up/,
+    );
+  });
+
+  it('adds screen control guidance only when screen control is enabled', () => {
+    expect(buildVoiceModeSection()).not.toContain('SCREEN CONTROL');
+    const section = buildVoiceModeSection({screenControl: true});
+    expect(section).toContain('press_button');
+    expect(section).toMatch(/Never guess/);
+    expect(section).toMatch(/need the host's own tap/);
+  });
+
   it('adds call action guidance only when call actions are enabled', () => {
     expect(buildVoiceModeSection()).not.toContain('CALL ACTIONS');
     const section = buildVoiceModeSection({callActions: true});
     expect(section).toContain('CALL ACTIONS');
     expect(section).toContain('call end_call');
     expect(section).toContain('set_microphone');
-    expect(section).toMatch(/keep talking while they look or wrap up/);
+    // Asking "keep talking?" on every screen change was a hiccup: the call
+    // stays with the host on the new screen unless they said to stop.
+    expect(section).toMatch(/Do not ask whether they want to keep talking/);
+    expect(section).not.toMatch(
+      /ask whether they want to keep talking while they look or wrap up/,
+    );
     expect(buildVoiceSystemInstruction('BASE', {callActions: true})).toContain(
       'CALL ACTIONS',
     );
@@ -88,5 +139,28 @@ describe('voice prompt', () => {
     expect(section).toContain('call set_microphone with muted true first');
     expect(section).toContain('Only set_microphone does');
     expect(section).toContain('never a request to mute');
+  });
+});
+
+describe('voice language', () => {
+  it('follows the host language instead of forcing English', () => {
+    const section = buildVoiceModeSection();
+    expect(section).toContain('Reply in the language the host is speaking');
+    expect(section).toContain('Yoruba, Igbo, Hausa or Pidgin');
+    expect(section).not.toContain('reply in English and mention once');
+  });
+});
+
+describe('voice screen fields', () => {
+  it('teaches dictation and in-place edits only to builds that can type', () => {
+    const fields = buildVoiceModeSection({
+      screenControl: true,
+      screenFields: true,
+    });
+    expect(fields).toContain('type their words exactly');
+    expect(fields).toContain('Edit in place');
+    expect(buildVoiceModeSection({screenControl: true})).not.toContain(
+      'type_text',
+    );
   });
 });

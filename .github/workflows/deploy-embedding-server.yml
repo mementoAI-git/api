@@ -1,0 +1,71 @@
+# ──────────────────────────────────────────────────────────────
+# Embedding server — deploy
+#
+# The embedding box (EmbeddingGemma 2 via DigUp, see
+# ops/memory-search/embedding-server/README.md) runs server.mjs under
+# systemd. On a change to it on dev, or by hand:
+#   1. Test the server against a fake DigUp
+#   2. Send server.mjs + the unit over SSH with a key that can only run
+#      /usr/local/sbin/memento-embed-deploy (forced command)
+#   3. The box installs, restarts, checks /health, and restores the
+#      previous version if it is not healthy
+#
+# Runtime and model files are not deployed here: they change rarely and are
+# installed by hand with checksums (README).
+# ──────────────────────────────────────────────────────────────
+
+name: 'Embedding Server: Deploy'
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - ops/memory-search/embedding-server/**
+      - test/memory-search/embedding-server.test.ts
+      - .github/workflows/deploy-embedding-server.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embedding-server-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - name: Install
+        run: yarn install --frozen-lockfile
+
+      - name: Test the server
+        run: npx vitest run test/memory-search/embedding-server.test.ts
+
+      - name: Deploy to the embedding box
+        env:
+          SSH_HOST: ${{ secrets.EMBED_SSH_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.EMBED_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.EMBED_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key=$(mktemp)
+          hosts=$(mktemp)
+          trap 'rm -f "$key" "$hosts"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$hosts"
+          tar -C ops/memory-search/embedding-server -cf - server.mjs memento-embed.service |
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+              -o "UserKnownHostsFile=$hosts" -o ConnectTimeout=15 -i "$key" \
+              "root@$SSH_HOST"

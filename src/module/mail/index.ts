@@ -173,15 +173,19 @@ class MailService {
 
   async sendBeneficiaryInvite(payload: IBeneficiary) {
     const {email, name, id} = payload;
+    const isConnection = payload.access_scope === 'shared_only';
     const html = await this.renderTemplate('beneficiary-invite', {
       name,
       email,
       url: `${FRONTEND_URL}/accept-invite/${id}`,
+      isConnection,
     });
 
     await this.send({
       to: email,
-      subject: '[Memento] Beneficiary Invite',
+      subject: isConnection
+        ? '[Memento] Connection Invite'
+        : '[Memento] Beneficiary Invite',
       html,
     });
   }

@@ -42,6 +42,12 @@ export interface IPasskey {
 }
 
 export interface IUser {
+  connection_memento_state?: 'private' | 'ready' | 'active';
+  connection_memento?: {
+    approved_context: string;
+    revision: string;
+    updated_at: Date;
+  };
   referral_code?: string;
   referred_by?: Types.ObjectId;
   _id?: string;
@@ -99,6 +105,22 @@ export interface IUser {
 
 const user = new Schema<IUser>(
   {
+    connection_memento_state: {
+      type: String,
+      enum: ['private', 'ready', 'active'],
+      default: 'private',
+    },
+    connection_memento: {
+      type: new Schema(
+        {
+          approved_context: {type: String, default: ''},
+          revision: String,
+          updated_at: Date,
+        },
+        {_id: false},
+      ),
+      select: false,
+    },
     referral_code: {type: String, unique: true, sparse: true, select: false},
     referred_by: {
       type: Schema.Types.ObjectId,

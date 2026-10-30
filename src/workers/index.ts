@@ -1,4 +1,5 @@
-import 'dotenv/config';
+// Loads .env first; under PM2 the file wins over stale copies (see load-env).
+import '../utils/load-env';
 import mongoose from 'mongoose';
 import {connectMongodb} from '../module/database/connection';
 import {getRedisConnection} from '../services/redis';
@@ -7,8 +8,10 @@ import startQuickCaptureWorker from './quick-capture';
 import startSummarizationWorker from './summarizarion';
 import startSystemWorker from './system';
 import startExploreQuestionWorker from './explore-questions';
+import startMemorySearchWorker from './memory-search';
 import {logger} from '../utils';
 import {startReadyWorkerHeartbeat} from '../services/worker-heartbeat';
+import {warmUpEmbeddings} from '../services/embeddings';
 
 async function startWorkers() {
   await connectMongodb();
@@ -19,6 +22,10 @@ async function startWorkers() {
   }
 
   logger.info('Starting background workers...');
+  // The embedding sweep runs here; load the model before its first run.
+  warmUpEmbeddings(error =>
+    logger.warn({err: error}, 'Memory embedding model failed to load'),
+  );
 
   const insightsWorker = startInsightsExtractionWorker(connection);
   const quickCaptureWorker = startQuickCaptureWorker(connection);
@@ -31,6 +38,8 @@ async function startWorkers() {
     systemWorker,
     startExploreQuestionWorker(connection),
   ];
+  const memorySearchWorker = startMemorySearchWorker(connection);
+  if (memorySearchWorker) workers.push(memorySearchWorker);
   const heartbeat = await startReadyWorkerHeartbeat(
     workers,
     undefined,
