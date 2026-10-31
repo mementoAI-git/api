@@ -82,12 +82,17 @@ describe('voice prompt', () => {
 
   // Asked "can you see my stories?", Gemini denied having any access: the
   // prompt forbade mentioning stored data and never said what to do instead.
-  it('never lets Memento deny knowing the host', () => {
+  it('uses available host memories without claiming unsupported recall', () => {
     for (const section of [
       buildVoiceModeSection(),
       buildVoiceModeSection({memoryTool: true}),
     ]) {
-      expect(section).toMatch(/Never say you cannot (access|see|remember)/);
+      expect(section).toContain(
+        'stories, memories, people and conversations actually available',
+      );
+      expect(section).toContain(
+        'Never claim to remember a detail you do not have',
+      );
     }
   });
 

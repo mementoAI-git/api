@@ -79,7 +79,7 @@ describe('voiceSessionContextFor', () => {
     expect(resumed.reused).toBe(false);
   });
 
-  it('never reuses across conversations, abilities or time zones', () => {
+  it('never reuses across conversations, abilities, time zones or AI names', () => {
     const base = voiceContextKey('u1', 'm1', {
       memoryTool: true,
       timeZone: 'Africa/Lagos',
@@ -94,6 +94,13 @@ describe('voiceSessionContextFor', () => {
       voiceContextKey('u1', 'm1', {
         memoryTool: true,
         timeZone: 'Europe/London',
+      }),
+    ).not.toBe(base);
+    expect(
+      voiceContextKey('u1', 'm1', {
+        memoryTool: true,
+        timeZone: 'Africa/Lagos',
+        digitalMindName: 'Ada',
       }),
     ).not.toBe(base);
     expect(

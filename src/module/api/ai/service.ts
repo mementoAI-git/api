@@ -398,6 +398,7 @@ export async function prompt(
         null,
         CHAT_LONG_TERM_PLACEHOLDER,
         sessionTurnCount,
+        {digitalMindName: payload.digitalMindName},
       ),
       recallReady,
     ]);
@@ -831,6 +832,7 @@ export async function startConversation(
     prompt,
     memory.id,
     sessionTurnCount,
+    {digitalMindName: payload.digitalMindName},
   );
   const chatBootstrapPromptVersion = getPromptVersion('chat_bootstrap');
   void recordAiMetric({
@@ -1140,6 +1142,7 @@ export async function createEphemeralToken(
   resumeHandle?: string,
   client: {
     deviceModel?: string;
+    digitalMindName?: string;
     memoryTool?: boolean;
     callActions?: boolean;
     serverTools?: boolean;
@@ -1174,6 +1177,7 @@ export async function createEphemeralToken(
     screenControl,
     screenFields,
     timeZone: client.timeZone,
+    digitalMindName: client.digitalMindName,
     timer,
     resuming: Boolean(resumeHandle),
   });

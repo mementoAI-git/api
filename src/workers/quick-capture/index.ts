@@ -1,3 +1,7 @@
+import {
+  GENERIC_QUICK_CAPTURE_TITLE_RE as GENERIC_TITLE_RE,
+  shouldOverwriteQuickCaptureTitle,
+} from '../../utils/quick-note';
 import {Worker} from 'bullmq';
 import dayjs from 'dayjs';
 import type {RedisConnection} from '../../services/redis';
@@ -23,10 +27,6 @@ function stripHtml(html: string): string {
     .replace(/\s+/g, ' ')
     .trim();
 }
-
-/** Titles the model must not use when the entry has real substance. */
-const GENERIC_TITLE_RE =
-  /^(thought|thoughts|quick capture|quick note|a note|note|memory|untitled|new memory|my thought|a passing thought|voice note|photo note|journal entry)\.?$/i;
 
 const ALLOWED_CATEGORIES = new Set([
   'family',
@@ -104,14 +104,6 @@ function resolveEnrichmentTitle(
   }
 
   return trimmed;
-}
-
-function shouldOverwriteQuickCaptureTitle(currentTitle: string): boolean {
-  const trimmed = (currentTitle || '').trim();
-
-  if (!trimmed) return true;
-
-  return GENERIC_TITLE_RE.test(trimmed);
 }
 
 function normalizeCategory(value: string | undefined): string | undefined {
@@ -322,7 +314,10 @@ ${plain || '(empty)'}
 
         const shouldSetQuickCaptureTitle =
           isQuickCapture &&
-          shouldOverwriteQuickCaptureTitle(memory.title || '');
+          shouldOverwriteQuickCaptureTitle(
+            memory.title || '',
+            Boolean(memory.prompt_text?.trim()),
+          );
 
         const category = normalizeCategory(parsed?.category);
 

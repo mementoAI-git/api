@@ -92,6 +92,10 @@ export default {
       .withMessage("visibility must be 'private' for quick capture"),
   ],
   createMemory: [
+    body('capture_source')
+      .optional()
+      .isIn(['standard', 'quick'])
+      .withMessage('capture_source must be standard or quick'),
     body('title')
       .notEmpty()
       .withMessage('Title is required')
@@ -138,6 +142,10 @@ export default {
       .withMessage("Status must be 'draft' or 'save'"),
   ],
   updateMemory: [
+    body('capture_source')
+      .optional()
+      .isIn(['standard', 'quick'])
+      .withMessage('capture_source must be standard or quick'),
     param('id')
       .notEmpty()
       .withMessage('Memory ID is required')

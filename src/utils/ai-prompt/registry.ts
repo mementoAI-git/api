@@ -8,8 +8,8 @@ export type PromptTask =
   | 'transcription';
 
 const DEFAULT_PROMPT_VERSIONS: Record<PromptTask, string> = {
-  chat_primary: 'chat_primary_v1',
-  chat_bootstrap: 'chat_bootstrap_v1',
+  chat_primary: 'chat_primary_v2',
+  chat_bootstrap: 'chat_bootstrap_v2',
   onboarding_chat: 'host_onboarding_chat_v1',
   tags_generate: 'tags_generate_v1',
   transcription: 'transcription_v1',
