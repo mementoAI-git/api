@@ -1,3 +1,4 @@
+import {digitalMindNameFromHeader} from '../../../utils/ai-prompt/digital-mind';
 import {getTranscriptionInput} from './transcription-input';
 import {NextFunction, Response} from 'express';
 import {getPagination, responsHandler} from '../../../utils/helpers';
@@ -43,7 +44,15 @@ export async function autogenerateStoryTitle(
 
 export async function prompt(req: IRequest, res: Response, next: NextFunction) {
   try {
-    const response = await service.prompt(req.body, req.auth.id);
+    const response = await service.prompt(
+      {
+        ...req.body,
+        digitalMindName: digitalMindNameFromHeader(
+          req.get('x-memento-mind-name'),
+        ),
+      },
+      req.auth.id,
+    );
     if (response.modelLabel) {
       res.setHeader('x-ai-model', response.modelLabel);
     }
@@ -104,7 +113,12 @@ export async function startConversation(
 ) {
   try {
     const {message, data} = await service.startConversation(
-      req.body,
+      {
+        ...req.body,
+        digitalMindName: digitalMindNameFromHeader(
+          req.get('x-memento-mind-name'),
+        ),
+      },
       req.auth.id,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
@@ -163,6 +177,9 @@ export async function getEphemeralToken(
       resumeHandle,
       {
         deviceModel,
+        digitalMindName: digitalMindNameFromHeader(
+          req.get('x-memento-mind-name'),
+        ),
         memoryTool,
         callActions,
         serverTools,
