@@ -75,7 +75,11 @@ describe('POST /ai/voice/tools/:name', () => {
     const res = await request(createTestApp())
       .post('/ai/voice/tools/update_profile')
       .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`)
-      .send({args: {nickname: 'Yo'}, call_id: 'call-1', session_id: 'session-1'});
+      .send({
+        args: {nickname: 'Yo'},
+        call_id: 'call-1',
+        session_id: 'session-1',
+      });
 
     expect(res.status).toBe(200);
     expect((await User.findById(user.id).lean())?.nickname).toBe('Yo');
