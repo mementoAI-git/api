@@ -147,6 +147,8 @@ export const voiceToolSchema = z.object({
     args: z.record(z.string(), z.unknown()).default({}),
     /** Gemini's tool call id: a repeated id returns the first result. */
     call_id: z.string().trim().min(1).max(128).optional(),
+    /** The app's id for this voice call: undo only reverses this call's actions. */
+    session_id: z.string().trim().min(1).max(128).optional(),
   }),
 });
 
