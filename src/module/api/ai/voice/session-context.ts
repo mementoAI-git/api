@@ -54,6 +54,7 @@ export async function buildVoiceSessionContext(
   memoryId?: string,
   options: {
     longTermTimeoutMs?: number;
+    digitalMindName?: string;
     memoryTool?: boolean;
     callActions?: boolean;
     serverTools?: boolean;
@@ -122,7 +123,10 @@ export async function buildVoiceSessionContext(
         LONG_TERM_PLACEHOLDER,
         recent.filter(line => line.speaker === 'Host').length,
         // With memory search, details are looked up instead of carried.
-        {compact: Boolean(options.memoryTool)},
+        {
+          compact: Boolean(options.memoryTool),
+          digitalMindName: options.digitalMindName,
+        },
       ),
     ).catch(error => {
       console.error(
@@ -194,7 +198,7 @@ type ContextOptions = NonNullable<
   Parameters<typeof buildVoiceSessionContext>[2]
 >;
 
-/** One key per call setup: same host, conversation, abilities and time zone. */
+/** One key per call setup: same host, conversation, abilities, time zone and chosen AI name. */
 export function voiceContextKey(
   userId: string,
   memoryId: string | undefined,
@@ -209,7 +213,7 @@ export function voiceContextKey(
   ]
     .filter(Boolean)
     .join('');
-  return `voice-ctx:${userId}:${memoryId ?? '-'}:${flags}:${options.timeZone ?? '-'}`;
+  return `voice-ctx:${userId}:${memoryId ?? '-'}:${flags}:${options.timeZone ?? '-'}:${encodeURIComponent(JSON.stringify(options.digitalMindName ?? null))}`;
 }
 
 /**

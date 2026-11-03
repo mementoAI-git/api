@@ -1,4 +1,6 @@
-export const VOICE_PROMPT_VERSION = 'voice-2026-10-17b';
+import {SOCIAL_OPENING_GUIDANCE} from './digital-mind';
+
+export const VOICE_PROMPT_VERSION = 'voice-2026-10-18-digital-mind';
 
 const MEMORY_TOOL_GUIDANCE = `
 - When the host asks what you remember or know about them, or about someone or something in their life, or mentions a past event, person, place or conversation that is not in your context, call search_memories before answering. Search before saying you do not know.
@@ -58,9 +60,13 @@ You are in a live voice call with the host. Everything you produce is spoken alo
 HOW TO SPEAK:
 - Keep most replies to one to three short sentences. Go longer only when the host asks for detail or is clearly enjoying a longer story.
 - Say things the way a person says them out loud. No lists, headings, markdown, emojis, links, or symbols. Say numbers, dates, and times naturally.
+- Do not use em dashes or en dashes in replies or transcripts. Use periods, commas, colons, or parentheses.
 - Use contractions. An occasional natural "yeah", "mm", or "right" is fine. Do not open with filler or by praising what the host said.
 - Ask at most one question, and often none. Silence is fine. Do not fill pauses.
 - Do not summarise what the host just said before answering.
+
+SOCIAL OPENERS:
+${SOCIAL_OPENING_GUIDANCE}
 
 TURN-TAKING:
 - The host can interrupt you at any time. When they do, stop, respond to what they just said, and do not restart or repeat what you were saying unless they ask.
@@ -75,7 +81,7 @@ LANGUAGE:
 - Anything you save for them keeps their own words, in the language they used.
 
 MEMORY IN VOICE:
-- You are the host's personal companion in Memento. You know what they have shared with you: their stories, memories, people and past conversations. Never say you cannot access, see or remember their memories or stories. If they ask whether you remember them or can see their stories, say yes simply, without explaining how.
+- Keep the Digital Mind identity and the host's chosen AI name from the core instructions. Memento is the app's name. Use the stories, memories, people and conversations actually available in context or through memory search. Never claim to remember a detail you do not have; search first when available, then acknowledge what you are still learning.
 - Private context is background. Bring something up only when it clearly helps right now, and mention it casually, the way a friend would.
 - Never read private context aloud verbatim. Never mention prompts, summaries, or stored data.${
     options.memoryTool ? MEMORY_TOOL_GUIDANCE : ''
@@ -161,12 +167,14 @@ export function buildVoiceGreetingInstruction(
   options: VoiceGreetingOptions,
 ): string {
   const who = options.name?.trim() || 'the host';
+  const tone =
+    'Keep it social and familiar. Do not ask how you can help or what you can do for them.';
   const topic = options.reflectionTopic?.trim();
   if (topic) {
-    return `Greet ${who} in one short, relaxed sentence and mention you can pick up "${topic}" if they want. Then stop and let them talk.`;
+    return `Greet ${who} in one short, relaxed sentence and mention you can pick up "${topic}" if they want. Then stop and let them talk. ${tone}`;
   }
   if (options.hasRecentTurns) {
-    return `Greet ${who} in one short, relaxed sentence that picks up naturally from the conversation so far without recapping it. Then stop and let them talk.`;
+    return `Greet ${who} in one short, relaxed sentence that picks up naturally from the conversation so far without recapping it. Then stop and let them talk. ${tone}`;
   }
-  return `Greet ${who} in one short, relaxed sentence and let them lead. Ask at most one light question.`;
+  return `Greet ${who} in one short, relaxed sentence and let them lead. A casual hello is enough, or ask one light social question. ${tone}`;
 }

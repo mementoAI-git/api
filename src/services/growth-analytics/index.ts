@@ -1,0 +1,62 @@
+import {
+  createGrowthAnalytics,
+  GrowthEventInput,
+  readGrowthAnalyticsConfig,
+} from './core';
+import {createPostHogPublisher} from './http';
+import {createMongoGrowthOutboxStore} from './mongo';
+
+export * from './core';
+let analytics: ReturnType<typeof createGrowthAnalytics> | undefined;
+let timer: ReturnType<typeof setInterval> | undefined;
+
+export function isGrowthAnalyticsEnabled(): boolean {
+  return readGrowthAnalyticsConfig() !== null;
+}
+function getAnalytics() {
+  const config = readGrowthAnalyticsConfig();
+  if (!config) return undefined;
+  if (!analytics)
+    analytics = createGrowthAnalytics({
+      store: createMongoGrowthOutboxStore(),
+      publish: createPostHogPublisher(config),
+      onError: () => console.warn('Growth analytics operation deferred'),
+    });
+  return analytics;
+}
+
+export async function recordGrowthEvent(
+  input: GrowthEventInput,
+): Promise<void> {
+  try {
+    await getAnalytics()?.record(input);
+  } catch {
+    /* analytics never fails a user action */
+  }
+}
+export async function flushGrowthAnalytics(): Promise<void> {
+  try {
+    await getAnalytics()?.flush();
+  } catch {
+    /* best effort; durable leases recover */
+  }
+}
+/** Start after MongoDB connection; API and worker processes may both run this. */
+export function startGrowthAnalytics(): () => Promise<void> {
+  if (isGrowthAnalyticsEnabled() && !timer) {
+    timer = setInterval(() => {
+      void flushGrowthAnalytics();
+    }, 5000);
+    timer.unref();
+    void flushGrowthAnalytics();
+  }
+  return async () => {
+    if (timer) clearInterval(timer);
+    timer = undefined;
+    try {
+      await getAnalytics()?.stop();
+    } catch {
+      /* durable leases recover */
+    }
+  };
+}

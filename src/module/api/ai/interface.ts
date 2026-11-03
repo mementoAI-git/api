@@ -1,4 +1,5 @@
 export interface IPrompt {
+  digitalMindName?: string;
   text: string;
   attachments?: string[];
   /** Quoted message the user is replying to — passed through to be persisted on the user message */
@@ -28,6 +29,7 @@ export interface IConversationAnalysis {
 }
 
 export interface IStartMemory {
+  digitalMindName?: string;
   text: string;
   prompt_id?: string;
   attachments?: string[];

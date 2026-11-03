@@ -1,3 +1,5 @@
+import {memoryCaptured, memoryShared} from '../../../services/growth-events';
+import {QUICK_NOTE_TITLE} from '../../../utils/quick-note';
 import logger from '../../../utils/logger';
 import {
   moveMemoryToDeleted,
@@ -282,7 +284,8 @@ export async function createMemory(
   );
 
   const memory = await Memory.create({
-    title,
+    title: payload.capture_source === 'quick' ? QUICK_NOTE_TITLE : title,
+    capture_source: payload.capture_source === 'quick' ? 'quick' : 'standard',
     user: user_id,
     body,
     level,
@@ -297,6 +300,8 @@ export async function createMemory(
       body.trim().length > 0 &&
       tags.length === 0 && {enrichment_status: 'pending'}),
   });
+
+  await memoryCaptured(user_id, memory);
 
   // Track activity only if published
   if (status !== MEMORY_STATUS.DRAFT) {
@@ -340,7 +345,7 @@ export async function createMemory(
   };
 }
 
-const QUICK_CAPTURE_PLACEHOLDER_TITLE = 'Thought';
+const QUICK_CAPTURE_PLACEHOLDER_TITLE = QUICK_NOTE_TITLE;
 const PROMPT_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function quickCaptureMemory(
@@ -477,6 +482,8 @@ export async function quickCaptureMemory(
     ...(!isEmpty(validBeneficiaryIds) && {beneficiaries: validBeneficiaryIds}),
   });
 
+  await memoryCaptured(user_id, memory);
+
   if (promptFields.prompt) {
     const activePrompt = await ActivePrompt.findOne({
       user: user_id,
@@ -510,7 +517,7 @@ export async function quickCaptureMemory(
   void queueMemorySearch(user_id, memory.id);
   void forgetUserContext(user_id);
   return {
-    message: 'Thought saved',
+    message: 'Quick note saved',
     data: memory,
   };
 }
@@ -800,6 +807,11 @@ export async function updateMemory(
     tags: tags ?? memory?.tags,
     last_active: dayjs().toDate(),
   };
+  if (payload.capture_source !== undefined) {
+    setPayload.capture_source =
+      payload.capture_source === 'quick' ? 'quick' : 'standard';
+    if (payload.capture_source === 'quick') setPayload.title = QUICK_NOTE_TITLE;
+  }
   if (groupIds !== undefined) {
     setPayload.groups = resolvedGroupIds;
   }
@@ -845,6 +857,14 @@ export async function updateMemory(
   );
 
   if (!updatedMemory) throw new NotFoundException('Memory not found');
+  // A draft first counts when it is actually saved. Re-edits keep the original milestone.
+  if (memory.status === MEMORY_STATUS.DRAFT) {
+    await memoryCaptured(user_id, updatedMemory, new Date());
+  }
+
+  if (beneficiaryIds !== undefined || groupIds !== undefined) {
+    await memoryShared(user_id, updatedMemory);
+  }
 
   const hasChanges =
     (updatedMemory?.title && updatedMemory?.title !== memory?.title) ||

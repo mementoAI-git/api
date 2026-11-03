@@ -12,6 +12,7 @@ import startMemorySearchWorker from './memory-search';
 import {logger} from '../utils';
 import {startReadyWorkerHeartbeat} from '../services/worker-heartbeat';
 import {warmUpEmbeddings} from '../services/embeddings';
+import {startGrowthAnalytics} from '../services/growth-analytics';
 
 async function startWorkers() {
   await connectMongodb();
@@ -50,6 +51,7 @@ async function startWorkers() {
   );
 
   logger.info('Workers started');
+  const stopGrowthAnalytics = startGrowthAnalytics();
 
   let shuttingDown = false;
   const shutdown = async () => {
@@ -58,6 +60,7 @@ async function startWorkers() {
     logger.info('Shutting down workers...');
     await heartbeat.stop();
     await Promise.all(workers.map(worker => worker.close()));
+    await stopGrowthAnalytics();
     await mongoose.disconnect();
     process.exit(0); // eslint-disable-line n/no-process-exit
   };

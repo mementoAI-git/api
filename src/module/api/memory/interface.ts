@@ -1,4 +1,5 @@
 export interface ICreateMemoryPayload {
+  capture_source?: 'standard' | 'quick';
   title: string;
   body: string;
   tags: string[];
