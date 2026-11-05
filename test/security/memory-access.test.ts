@@ -1,4 +1,4 @@
-import {afterAll, afterEach, beforeAll, describe, expect, it} from 'vitest';
+import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {Types} from 'mongoose';
 import Beneficiary from '../../src/module/database/model/beneficiary';
 import Bookmark from '../../src/module/database/model/bookmarks';
@@ -224,4 +224,24 @@ describe('memory access policy', () => {
     );
     expect(await Activity.countDocuments({user: owner.id})).toBe(0);
   });
+});
+
+it('resolves owner access without loading recipient relationships', async () => {
+  await connectTestDatabase();
+  try {
+    const owner = await createUserFixture();
+    const memory = await Memory.create({
+      user: owner.id,
+      title: 'Owner draft',
+      status: 'draft',
+    });
+    const relationships = vi.spyOn(Beneficiary, 'find');
+    const result = await memoryService.getMemory(memory.id, owner.id);
+    expect(result.data.title).toBe('Owner draft');
+    expect(relationships).not.toHaveBeenCalled();
+  } finally {
+    vi.restoreAllMocks();
+    await clearTestDatabase();
+    await closeTestDatabase();
+  }
 });

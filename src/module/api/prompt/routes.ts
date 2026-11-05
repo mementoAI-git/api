@@ -9,6 +9,13 @@ import {requireFeature} from '../../../middleware/feature-gate';
 const router: IRouter = Router();
 
 router.get('/', gaurd, ctrl.getPrompts);
+router.post(
+  '/reflection/conversation',
+  gaurd,
+  requireFeature('prompts.reply'),
+  valid.reflectionConversation,
+  ctrl.openReflectionConversation,
+);
 router.get('/shuffle', gaurd, ctrl.getPromptShuffleUsage);
 router.post('/shuffle', gaurd, ctrl.shufflePrompts);
 router.post(

@@ -15,6 +15,7 @@ import dayjs from 'dayjs';
 import User, {IUser} from '../../database/model/user';
 import Persona from '../../database/model/persona';
 import Memory from '../../database/model/memory';
+import {storyScope} from '../memory/story-scope';
 import Message from '../../database/model/message';
 import {
   concatStrings,
@@ -736,7 +737,7 @@ export async function getUserStats(user_id: string) {
   // Stories visible on /stories (non-draft, non-deleted), aligned with GET /memories/stories
   const stories_count = await Memory.countDocuments({
     user: user_id,
-    type: 'story',
+    ...storyScope(),
     status: {$nin: ['draft', 'deleted']},
   });
 

@@ -198,3 +198,20 @@ export async function shufflePrompts(
     next(error);
   }
 }
+
+export async function openReflectionConversation(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    validateRequest(req);
+    const {message, data} = await service.openReflectionConversation(
+      req.auth.id,
+      req.body,
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}

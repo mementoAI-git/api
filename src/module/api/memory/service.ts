@@ -8,6 +8,7 @@ import {
   backfillMemoryRecovery,
 } from '../../../services/memory-lifecycle';
 import {checkVoiceMessageAccess} from './voice-message-access';
+import {storyScope} from './story-scope';
 import dayjs from 'dayjs';
 import {FilterQuery} from 'mongoose';
 import Memory, {IMemory} from '../../database/model/memory';
@@ -154,7 +155,7 @@ export async function memoryStats(user_id: string) {
   /** Same scope as GET /memories/stories (all tab, not bookmarked/deleted). */
   const stories_count = await Memory.countDocuments({
     user: user_id,
-    type: 'story',
+    ...storyScope(),
     status: {$nin: ['draft', 'deleted']},
   });
   const bookmarkedStoryIds = await Bookmark.find({user: user_id}).distinct(
@@ -165,13 +166,13 @@ export async function memoryStats(user_id: string) {
       ? 0
       : await Memory.countDocuments({
           user: user_id,
-          type: 'story',
+          ...storyScope(),
           status: {$nin: ['draft', 'deleted']},
           _id: {$in: bookmarkedStoryIds},
         });
   const stories_deleted_count = await Memory.countDocuments({
     user: user_id,
-    type: 'story',
+    ...storyScope(),
     status: 'deleted',
     purge_requested_at: null,
   });
@@ -198,7 +199,7 @@ export async function memoryStats(user_id: string) {
 
   const week_count = await Memory.countDocuments({
     user: user_id,
-    type: 'story',
+    ...storyScope(),
     status: {$nin: ['draft', 'deleted']},
     created_at: {$gte: startOfWeek},
   });
@@ -662,7 +663,7 @@ export async function getStoryMemories(
   const filters = filterGenerator({search}, ['title', 'body', 'tags']);
   filters.push({
     user: user_id,
-    type: 'story',
+    ...storyScope(),
     purge_requested_at: null,
     status: status || (deleted ? 'deleted' : {$nin: ['draft', 'deleted']}),
   });
@@ -677,7 +678,10 @@ export async function getStoryMemories(
 }
 
 export async function getMemory(_id: string, user_id: string = null) {
-  const memory = await assertReadableMemory(_id, {userId: user_id});
+  const [memory, bookmark_count] = await Promise.all([
+    assertReadableMemory(_id, {userId: user_id}),
+    Bookmark.countDocuments({memory: _id, user: user_id}),
+  ]);
   await memory.populate([
     {
       path: 'attachments',
@@ -687,11 +691,6 @@ export async function getMemory(_id: string, user_id: string = null) {
     {path: 'groups', select: 'name description'},
     {path: 'beneficiaries', select: 'name email relationship'},
   ]);
-
-  const bookmark_count = await Bookmark.countDocuments({
-    memory: memory.id,
-    user: user_id,
-  });
 
   const data = {...memory.toObject(), bookmarked: bookmark_count > 0};
 
@@ -727,7 +726,13 @@ export async function getMemoryByPrompt(
     prompt: prompt_id,
     user: user_id,
     status: {$nin: ['draft', 'deleted']},
-  });
+  })
+    .sort({created_at: -1})
+    .populate({
+      path: 'attachments',
+      select: '-base64',
+      match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
+    });
 
   if (!memory) {
     const prompt = await Prompt.findOne({

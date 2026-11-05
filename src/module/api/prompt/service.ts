@@ -1,7 +1,8 @@
+import {createHash} from 'node:crypto';
 import {getPromptReplyUserCount} from './reply-user-count';
-import Memory from '../../database/model/memory';
+import Memory, {IMemory} from '../../database/model/memory';
 import Prompt, {IPrompt} from '../../database/model/prompt';
-import mongoose from 'mongoose';
+import mongoose, {HydratedDocument} from 'mongoose';
 import {
   ActionNotAllowed,
   BadRequestException,
@@ -690,3 +691,107 @@ export const getPromptDetails = async (id: string, user_id: string) => {
     message: 'Prompt details retrieved successfully',
   };
 };
+
+export async function openReflectionConversation(
+  userId: string,
+  input: {
+    prompt_type: 'static' | 'ai-generated';
+    prompt_id?: string;
+    prompt_text?: string;
+    reflection_day_key: string;
+  },
+) {
+  const day = input.reflection_day_key;
+  const existingReady = Memory.findOne({
+    user: userId,
+    prompt_type: input.prompt_type,
+    reflection_day_key: day,
+    ...(input.prompt_type === 'static'
+      ? {prompt: input.prompt_id}
+      : {prompt_text: input.prompt_text?.trim()}),
+    status: {$ne: 'deleted'},
+    purge_requested_at: null,
+  })
+    .sort({created_at: 1})
+    .exec();
+  let existing: HydratedDocument<IMemory> | null;
+  let title: string;
+  let promptId: string | undefined;
+  let category: string | undefined;
+  if (input.prompt_type === 'static') {
+    const [prompt, assigned, found] = await Promise.all([
+      Prompt.findOne({
+        _id: input.prompt_id,
+        ...buildPromptOwnershipScope(userId),
+      }),
+      ActivePrompt.exists({
+        user: userId,
+        prompt: input.prompt_id,
+        day_key: day,
+      }),
+      existingReady,
+    ]);
+    existing = found;
+    if (!prompt || (!assigned && prompt.source !== 'starter'))
+      throw new BadRequestException('Daily question not found');
+    title = prompt.title;
+    promptId = prompt.id;
+    category = prompt.category;
+  } else {
+    const [cached, found] = await Promise.all([
+      getCachedAiPrompt(userId, day),
+      existingReady,
+    ]);
+    existing = found;
+    if (!cached || cached !== input.prompt_text?.trim())
+      throw new BadRequestException('Daily question not found');
+    title = cached;
+  }
+  const fields = {
+    user: userId,
+    prompt_type: input.prompt_type,
+    reflection_day_key: day,
+    ...(promptId ? {prompt: promptId} : {prompt_text: title}),
+  };
+  // Keep legacy answers and their original IDs, bodies, attachments and sharing.
+  if (existing) return {message: 'Reflection ready', data: existing};
+  // Deterministic ID makes simultaneous opens idempotent without a schema migration.
+  const id = createHash('sha256')
+    .update(JSON.stringify([userId, day, input.prompt_type, promptId || title]))
+    .digest('hex')
+    .slice(0, 24);
+  let data: HydratedDocument<IMemory> | null;
+  try {
+    data = await Memory.findOneAndUpdate(
+      {
+        _id: id,
+        user: userId,
+        status: {$ne: 'deleted'},
+        purge_requested_at: null,
+      },
+      {
+        $setOnInsert: {
+          ...fields,
+          title,
+          prompt_text: title,
+          category,
+          type: 'conversation',
+          status: 'draft',
+          visibility: 'private',
+        },
+      },
+      {upsert: true, new: true, setDefaultsOnInsert: true},
+    );
+  } catch (error) {
+    if ((error as {code?: number}).code !== 11000) throw error;
+    // Concurrent upserts with ownership/status predicates can race on the ID index.
+    data = await Memory.findOne({
+      _id: id,
+      user: userId,
+      status: {$ne: 'deleted'},
+      purge_requested_at: null,
+    });
+    if (!data) throw error;
+  }
+  return {message: 'Reflection ready', data};
+}
