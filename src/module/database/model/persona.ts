@@ -30,6 +30,8 @@ export interface IPersona {
   /** AI-written Memory Insights modal summary (cached). */
   memory_insights_summary?: string;
   memory_insights_summary_at?: Date;
+  /** Observations the member removed, so extraction does not add them back. */
+  forgotten_observations?: string[];
   /** Permanently true once enrichment score ever reaches 20. Never reset. */
   beneficiary_access_unlocked?: boolean;
   created_at: string;
@@ -97,6 +99,7 @@ const persona = new Schema<IPersona>(
     },
     memory_insights_summary: String,
     memory_insights_summary_at: Date,
+    forgotten_observations: {type: [String], default: undefined, select: false},
     beneficiary_access_unlocked: {
       type: Boolean,
       default: false,

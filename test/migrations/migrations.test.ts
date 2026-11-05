@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import {
   afterAll,
   afterEach,
@@ -7,6 +8,7 @@ import {
   expect,
   it,
 } from 'vitest';
+import InsightBatch from '../../src/module/database/model/insight-batch';
 import Bookmark from '../../src/module/database/model/bookmarks';
 import Migration from '../../src/module/database/model/migration';
 import AiMetric from '../../src/module/database/model/ai-metric';
@@ -187,6 +189,21 @@ describe('database migrations', () => {
             created_at: -1,
           },
         }),
+      ]),
+    );
+  });
+
+  it('creates the unique insight batch index production relies on', async () => {
+    await migrateUp();
+
+    const indexes = await mongoose.connection
+      .db!.collection(InsightBatch.collection.name)
+      .indexes();
+
+    expect(indexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({key: {user: 1}, unique: true}),
+        expect.objectContaining({key: {'insights.memories': 1}}),
       ]),
     );
   });

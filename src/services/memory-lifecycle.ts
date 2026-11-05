@@ -5,6 +5,7 @@ import Message from '../module/database/model/message';
 import Bookmark from '../module/database/model/bookmarks';
 import ActivePrompt from '../module/database/model/active-prompt';
 import PendingInsight from '../module/database/model/pending-insight';
+import {removeMemoryFromInsights} from './insights';
 import Capsule from '../module/database/model/capsule';
 import SharedItem from '../module/database/model/shared-item';
 import {BadRequestException, NotFoundException} from '../utils/service-error';
@@ -189,6 +190,7 @@ async function purgeClaimedMemory(memory: HydratedDocument<IMemory>) {
     Bookmark.deleteMany({memory: memory.id}),
     ActivePrompt.deleteMany({memory: memory.id}),
     PendingInsight.deleteMany({memory: memory.id}),
+    removeMemoryFromInsights(memory.id),
     SharedItem.deleteMany({source_id: memory.id}),
     Capsule.updateMany({memories: memory.id}, {$pull: {memories: memory.id}}),
   ]);

@@ -10,6 +10,8 @@ import {
 import {StatusCodes} from 'http-status-codes';
 import {IRequest} from '../../../utils/interface';
 import logger from '../../../utils/logger';
+import * as insights from '../../../services/insights';
+import type {EnrichmentCategory} from '../../../services/enrichment';
 import {resolveUploadReservationId} from '../file/upload-idempotency';
 import {recordCompatibilityUse} from '../../../services/compatibility-telemetry';
 
@@ -263,6 +265,40 @@ export async function getMemoryInsightsSummary(
       refresh,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getInsights(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await insights.getCurrentInsights(req.auth.id);
+    return responsHandler(res, StatusCodes.OK, 'Insights retrieved', data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getInsightSources(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await insights.getInsightSources(req.auth.id, {
+      insight: req.query.insight as string | undefined,
+      category: req.query.category as EnrichmentCategory | undefined,
+    });
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      'Insight sources retrieved',
+      data,
+    );
   } catch (error) {
     next(error);
   }

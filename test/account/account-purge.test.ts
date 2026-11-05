@@ -109,6 +109,7 @@ describe('account purge pipeline', () => {
         'Feedback',
         'File',
         'Group',
+        'InsightBatch',
         'IapChainAlias',
         'IapSubscriptionChain',
         'IapTransaction',

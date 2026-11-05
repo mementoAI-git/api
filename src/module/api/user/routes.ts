@@ -36,6 +36,12 @@ router.post(
   ctrl.uploadBanner,
 );
 router.get('/persona/memory-insights-summary', ctrl.getMemoryInsightsSummary);
+router.get('/insights', ctrl.getInsights);
+router.get(
+  '/insights/sources',
+  validate(dto.insightSourcesSchema),
+  ctrl.getInsightSources,
+);
 router.get('/persona', ctrl.getPersona);
 router.put('/persona', valid.updateContext, ctrl.updateContext);
 router.post(

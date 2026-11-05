@@ -292,4 +292,13 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
       await db.collection('staff_audits').createIndex({staff_id: 1});
     },
   },
+  {
+    id: '202611050001_insight_batch_indexes',
+    up: async db => {
+      const batches = db.collection('insight_batches');
+      // The unique user index is what limits generation to one reader at a time.
+      await batches.createIndex({user: 1}, {unique: true});
+      await batches.createIndex({'insights.memories': 1});
+    },
+  },
 ];

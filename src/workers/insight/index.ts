@@ -15,6 +15,7 @@ import Memory from '../../module/database/model/memory';
 import {saveConfirmedSocialAccounts} from './social-accounts';
 import {discoverExistingSocialAccounts} from './social-discovery';
 import {invalidateEnrichmentCache} from '../../services/enrichment';
+import {filterForgottenInsights} from './forgotten';
 import {isActiveAccount} from '../../services/account-purge/account-state';
 
 async function savePendingInsights(
@@ -101,7 +102,12 @@ export default function startInsightsExtractionWorker(
               insights.social_accounts,
               exchanges.map((ex: {user: string}) => ex.user).join('\n\n'),
             );
-          await savePendingInsights(insights, user_id, memory_id, source);
+          await savePendingInsights(
+            await filterForgottenInsights(user_id, insights),
+            user_id,
+            memory_id,
+            source,
+          );
         }
       }
 

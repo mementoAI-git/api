@@ -521,7 +521,7 @@ Goals: ${existingContext.goals_and_aspirations?.join(', ') || 'None'}
 
 WHAT BELONGS IN EACH FIELD:
 - important_notes: Explicit facts, relationships, values, important experiences, major events, durable circumstances, or stable self-descriptions.
-- key_preferences: Explicit likes, dislikes, habits, hobbies, interests, work preferences, lifestyle choices, and recurring tastes.
+- key_preferences: Explicit likes, dislikes, habits, hobbies, interests, work preferences, lifestyle choices, and recurring tastes. Only record what the person prefers. Facts about them, their history, or their circumstances belong in important_notes.
 - emotional_state_trends: Recurring emotional patterns only. A one-time mood, stressful day, argument, fear, or reaction is not a trend unless the user explicitly says it recurs or the supplied content clearly establishes repetition.
 - If the host explicitly gives their Digital Mind a name, capture that as an important note about the AI's name, separately from the host's own name.
 - goals_and_aspirations: Explicit plans, ambitions, intended milestones, or future goals. Preserve a timeline when the user actually gives one.

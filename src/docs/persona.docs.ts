@@ -1,4 +1,76 @@
+const observationIdParameter = {
+  name: 'observationId',
+  in: 'path',
+  required: true,
+  schema: {type: 'string'},
+};
+
 const personaDocs = {
+  '/persona/observations': {
+    get: {
+      tags: ['Persona'],
+      summary: 'List observations',
+      description:
+        'Saved and unreviewed observations as one list, merged by wording.',
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {description: 'Observations retrieved successfully'},
+        401: {description: 'Authentication required'},
+      },
+    },
+  },
+  '/persona/observations/{observationId}': {
+    patch: {
+      tags: ['Persona'],
+      summary: 'Edit an observation',
+      security: [{bearerAuth: []}],
+      parameters: [observationIdParameter],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['content'],
+              properties: {content: {type: 'string', maxLength: 500}},
+            },
+          },
+        },
+      },
+      responses: {
+        200: {description: 'Observation updated'},
+        401: {description: 'Authentication required'},
+        404: {description: 'Observation not found'},
+        422: {description: 'Invalid observation'},
+      },
+    },
+    delete: {
+      tags: ['Persona'],
+      summary: 'Forget an observation',
+      description:
+        'Removes the observation and stops it being extracted again. Source memories are kept.',
+      security: [{bearerAuth: []}],
+      parameters: [observationIdParameter],
+      responses: {
+        200: {description: 'Observation forgotten'},
+        401: {description: 'Authentication required'},
+        404: {description: 'Observation not found'},
+      },
+    },
+  },
+  '/persona/observations/{observationId}/sources': {
+    get: {
+      tags: ['Persona'],
+      summary: 'List the memories behind an observation',
+      security: [{bearerAuth: []}],
+      parameters: [observationIdParameter],
+      responses: {
+        200: {description: 'Observation sources retrieved'},
+        401: {description: 'Authentication required'},
+        404: {description: 'Observation not found'},
+      },
+    },
+  },
   '/persona/pending-insights': {
     get: {
       tags: ['Persona'],
