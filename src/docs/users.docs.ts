@@ -911,7 +911,7 @@ const usersDocs = {
       tags: ['Users'],
       summary: 'Get the current insights',
       description:
-        "Returns up to 4 insights that connect the member's memories. A new batch is generated in the background every 3 to 5 days when there is new material. Poll while generating is true.",
+        "Returns up to 4 insights that connect the member's memories. The evidence is re-evaluated in the background every 3 to 5 days when there is new material, and an insight only appears once several memories across different dates support it, so this list may be empty. Poll while generating is true.",
       security: [{bearerAuth: []}],
       responses: {
         200: {
@@ -936,6 +936,7 @@ const usersDocs = {
                             'body',
                             'categories',
                             'source_count',
+                            'status',
                           ],
                           properties: {
                             id: {type: 'string'},
@@ -946,6 +947,10 @@ const usersDocs = {
                               items: {type: 'string'},
                             },
                             source_count: {type: 'integer', minimum: 0},
+                            status: {
+                              type: 'string',
+                              enum: ['emerging', 'established'],
+                            },
                           },
                         },
                       },

@@ -10898,7 +10898,7 @@
     },
     "/users/insights": {
       "get": {
-        "description": "Returns up to 4 insights that connect the member's memories. A new batch is generated in the background every 3 to 5 days when there is new material. Poll while generating is true.",
+        "description": "Returns up to 4 insights that connect the member's memories. The evidence is re-evaluated in the background every 3 to 5 days when there is new material, and an insight only appears once several memories across different dates support it, so this list may be empty. Poll while generating is true.",
         "responses": {
           "200": {
             "content": {
@@ -10934,6 +10934,13 @@
                                 "minimum": 0,
                                 "type": "integer"
                               },
+                              "status": {
+                                "enum": [
+                                  "emerging",
+                                  "established"
+                                ],
+                                "type": "string"
+                              },
                               "title": {
                                 "type": "string"
                               }
@@ -10943,7 +10950,8 @@
                               "title",
                               "body",
                               "categories",
-                              "source_count"
+                              "source_count",
+                              "status"
                             ],
                             "type": "object"
                           },

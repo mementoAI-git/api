@@ -301,4 +301,25 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
       await batches.createIndex({'insights.memories': 1});
     },
   },
+  {
+    id: '202611060001_insight_evidence_reset',
+    up: async db => {
+      const batches = db.collection('insight_batches');
+      await batches.dropIndex('insights.memories_1').catch(() => undefined);
+      await batches.createIndex({'insights.evidence.memory': 1});
+      // Batches made under the old rules have no dated evidence to build on.
+      await batches.updateMany(
+        {},
+        {
+          $set: {
+            insights: [],
+            previous_titles: [],
+            generated_at: null,
+            generating_until: null,
+            next_refresh_at: new Date(0),
+          },
+        },
+      );
+    },
+  },
 ];

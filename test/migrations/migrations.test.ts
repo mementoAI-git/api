@@ -203,8 +203,28 @@ describe('database migrations', () => {
     expect(indexes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({key: {user: 1}, unique: true}),
-        expect.objectContaining({key: {'insights.memories': 1}}),
+        expect.objectContaining({key: {'insights.evidence.memory': 1}}),
       ]),
     );
+  });
+
+  it('clears insights made under the old rules so they are re-evaluated', async () => {
+    const batches = mongoose.connection.db!.collection(
+      InsightBatch.collection.name,
+    );
+    await batches.insertOne({
+      user: 'old-rules-user',
+      insights: [{title: 'Weak', memories: ['a', 'b']}],
+      generated_at: new Date(),
+      next_refresh_at: new Date(Date.now() + 86_400_000),
+    });
+
+    await migrateUp();
+
+    expect(await batches.findOne({user: 'old-rules-user'})).toMatchObject({
+      insights: [],
+      generated_at: null,
+      next_refresh_at: new Date(0),
+    });
   });
 });
