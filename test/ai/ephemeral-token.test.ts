@@ -236,3 +236,67 @@ describe('createEphemeralToken', () => {
     expect(data.serverTools).toEqual([]);
   });
 });
+
+it('locks connection voice to approved context with no host tools or personal transcript', async () => {
+  await connectTestDatabase();
+  try {
+    const create = vi
+      .spyOn(geminiAuthClient.authTokens, 'create')
+      .mockResolvedValue({name: 'authTokens/connection'} as any);
+    const owner = await createUserFixture({first_name: 'Sarah'});
+    const viewer = await createUserFixture();
+    const {default: Beneficiary} = await import(
+      '../../src/module/database/model/beneficiary'
+    );
+    const activation = await import('../../src/module/api/people/activation');
+    await Beneficiary.create({
+      benefactor: owner.id,
+      user: viewer.id,
+      email: viewer.email,
+      status: 'accepted',
+      access_scope: 'shared_only',
+    });
+    await activation.update(owner.id, {
+      approved_context: 'APPROVED_CONNECTION_INTRO',
+      active: true,
+    });
+    const personal = await Memory.create({
+      user: viewer.id,
+      type: 'conversation',
+      status: 'save',
+    });
+    await Message.create({
+      user: viewer.id,
+      memory: personal.id,
+      role: 'user',
+      text: 'PRIVATE_PERSONAL_CHAT',
+    });
+    const {data} = await createEphemeralToken(
+      viewer.id,
+      personal.id,
+      'personal-resume',
+      {
+        connectionPersonId: owner.id,
+        memoryTool: true,
+        serverTools: true,
+        callActions: true,
+        screenControl: true,
+      },
+    );
+    const locked = create.mock.calls[0][0].config.liveConnectConstraints.config;
+    expect(String(locked.systemInstruction)).toContain(
+      'APPROVED_CONNECTION_INTRO',
+    );
+    expect(String(locked.systemInstruction)).not.toContain(
+      'PRIVATE_PERSONAL_CHAT',
+    );
+    expect(locked.tools).toBeUndefined();
+    expect(data.tools).toEqual([]);
+    expect(data.memoryId).toBeNull();
+    expect(data.connectionSessionId).toBeTruthy();
+  } finally {
+    vi.restoreAllMocks();
+    await clearTestDatabase();
+    await closeTestDatabase();
+  }
+});

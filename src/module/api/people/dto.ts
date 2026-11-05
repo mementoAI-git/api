@@ -59,12 +59,42 @@ export const activationSchema = z.object({
     active: z.boolean(),
   }),
 });
+export const talkHistorySchema = z.object({
+  params: personParams,
+  query: z.object({shared_space: z.enum(['true', 'false']).optional()}),
+});
 export const talkSchema = z.object({
   params: personParams,
   body: z.strictObject({
-    text: z.string().trim().min(1).max(4000),
+    text: z.string().trim().max(4000),
+    attachments: z.array(sourceId).max(20).optional(),
     request_id: z.uuid(),
     is_voice: z.boolean().default(false),
     source_id: sourceId.optional(),
+    shared_input_id: sourceId.optional(),
+    shared_space: z.boolean().optional(),
+  }),
+});
+
+export const voiceStatusSchema = z.object({
+  params: personParams.extend({sessionId: z.uuid()}),
+});
+export const voiceRecordSchema = z.object({
+  params: personParams,
+  body: z.strictObject({
+    session_id: z.uuid(),
+    request_id: z.uuid(),
+    messages: z
+      .array(
+        z.strictObject({
+          role: z.enum(['user', 'ai']),
+          text: z.string().trim().min(1).max(12000),
+          is_voice: z.boolean().optional(),
+          duration: z.number().min(0).optional(),
+          attachments: z.array(sourceId).max(20).optional(),
+        }),
+      )
+      .min(1)
+      .max(20),
   }),
 });

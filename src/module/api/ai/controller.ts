@@ -12,7 +12,10 @@ import {validTimeZone} from './voice/local-time';
 import {UnknownVoiceToolError, runVoiceServerTool} from './voice/server-tools';
 import {parseVoiceClientCapabilities} from './live-session-config';
 import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
-import {NotFoundException} from '../../../utils/service-error';
+import {
+  NotFoundException,
+  BadRequestException,
+} from '../../../utils/service-error';
 import {StepTimer} from '../../../utils/step-timer';
 import logger from '../../../utils/logger';
 
@@ -154,6 +157,19 @@ export async function getEphemeralToken(
     const access = timer.time('access', () =>
       assertAccess(req.auth.id, 'voice_mode'),
     );
+    for (const flag of ['shared_space', 'share_inputs']) {
+      if (
+        req.query[flag] !== undefined &&
+        !['true', 'false'].includes(String(req.query[flag]))
+      )
+        throw new BadRequestException(`Invalid ${flag}`);
+    }
+    if (
+      req.query.person_id !== undefined &&
+      (typeof req.query.person_id !== 'string' ||
+        !/^[a-fA-F0-9]{24}$/.test(req.query.person_id))
+    )
+      throw new BadRequestException('Invalid connection');
     const memoryId =
       typeof req.query.memory_id === 'string' && req.query.memory_id.trim()
         ? req.query.memory_id.trim()
@@ -176,6 +192,12 @@ export async function getEphemeralToken(
       memoryId,
       resumeHandle,
       {
+        connectionSharedSpace: req.query.shared_space === 'true',
+        connectionShareInputs: req.query.share_inputs === 'true',
+        connectionPersonId:
+          typeof req.query.person_id === 'string'
+            ? req.query.person_id
+            : undefined,
         deviceModel,
         digitalMindName: digitalMindNameFromHeader(
           req.get('x-memento-mind-name'),

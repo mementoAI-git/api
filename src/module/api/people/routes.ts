@@ -3,6 +3,8 @@ import guard from '../../../middleware/gaurd';
 import validate from '../../../middleware/validator';
 import {requireFeature} from '../../../middleware/feature-gate';
 import {
+  voiceStatusSchema,
+  voiceRecordSchema,
   spaceSchema,
   contributionSchema,
   shareSchema,
@@ -13,15 +15,29 @@ import {
   disconnectSchema,
   activationSchema,
   talkSchema,
+  talkHistorySchema,
 } from './dto';
 import * as controller from './controller';
 
 const router: IRouter = Router();
 router.get('/', guard, controller.list);
 router.get(
+  '/:personId/voice/:sessionId',
+  guard,
+  validate(voiceStatusSchema),
+  controller.voiceStatus,
+);
+router.post(
+  '/:personId/voice',
+  guard,
+  requireFeature('ai.live_ephemeral_token'),
+  validate(voiceRecordSchema),
+  controller.voiceRecord,
+);
+router.get(
   '/:personId/talk',
   guard,
-  validate(personSchema),
+  validate(talkHistorySchema),
   controller.talkHistory,
 );
 router.post(

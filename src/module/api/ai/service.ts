@@ -1,3 +1,4 @@
+import * as connectionVoice from '../people/voice';
 import {assertOwnedMemory} from '../memory/access';
 import {conversationPersisted} from '../../../services/growth-events';
 import {synthesizeSpokenReply} from '../../../services/spoken-replies';
@@ -328,8 +329,8 @@ const CHAT_LONG_TERM_PLACEHOLDER = '\u0000CHAT_LONG_TERM\u0000';
 function saveUserMessage(
   payload: IPrompt & {memory: string},
   user_id: string,
-): Promise<boolean> {
   publishReflection = false,
+): Promise<boolean> {
   return Message.create({
     user: user_id,
     memory: payload.memory,
@@ -361,8 +362,8 @@ export async function prompt(
   user_id: string,
 ) {
   const requestStart = Date.now();
-  const timer = new StepTimer();
   const currentMemory = await assertOwnedMemory(payload.memory, user_id);
+  const timer = new StepTimer();
   const userText = (payload.text ?? '').trim();
   const hasAttachments = !isEmpty(payload?.attachments);
 
@@ -1162,6 +1163,9 @@ export async function createEphemeralToken(
   memoryId?: string,
   resumeHandle?: string,
   client: {
+    connectionPersonId?: string;
+    connectionSharedSpace?: boolean;
+    connectionShareInputs?: boolean;
     deviceModel?: string;
     digitalMindName?: string;
     memoryTool?: boolean;
@@ -1186,22 +1190,30 @@ export async function createEphemeralToken(
     user.chat_voice_provider ?? undefined,
   );
 
-  const memoryTool = client.memoryTool === true;
-  const callActions = client.callActions === true;
-  const serverTools = client.serverTools === true;
-  const screenControl = client.screenControl === true;
+  const memoryTool = !client.connectionPersonId && client.memoryTool === true;
+  const callActions = !client.connectionPersonId && client.callActions === true;
+  const serverTools = !client.connectionPersonId && client.serverTools === true;
+  const screenControl =
+    !client.connectionPersonId && client.screenControl === true;
   const screenFields = screenControl && client.screenFields === true;
-  const voiceContext = await voiceSessionContextFor(user, memoryId, {
-    memoryTool,
-    callActions,
-    serverTools,
-    screenControl,
-    screenFields,
-    timeZone: client.timeZone,
-    digitalMindName: client.digitalMindName,
-    timer,
-    resuming: Boolean(resumeHandle),
-  });
+  const voiceContext = client.connectionPersonId
+    ? await connectionVoice.prepare(
+        client.connectionPersonId,
+        userId,
+        client.connectionSharedSpace,
+        client.connectionShareInputs,
+      )
+    : await voiceSessionContextFor(user, memoryId, {
+        memoryTool,
+        callActions,
+        serverTools,
+        screenControl,
+        screenFields,
+        timeZone: client.timeZone,
+        digitalMindName: client.digitalMindName,
+        timer,
+        resuming: Boolean(resumeHandle),
+      });
 
   const expireTime = dayjs().add(30, 'minute').toDate();
   // 10 min gives mobile clients a realistic window to establish the WebSocket
@@ -1234,7 +1246,7 @@ export async function createEphemeralToken(
           config: buildLiveConnectConfig(
             live.voice.name,
             voiceContext.systemInstruction,
-            resumeHandle,
+            client.connectionPersonId ? undefined : resumeHandle,
             {memoryTool, callActions, serverTools, screenControl, screenFields},
             turnDetection,
           ),
@@ -1258,6 +1270,10 @@ export async function createEphemeralToken(
     message: 'Ephemeral token created successfully',
     data: {
       token: token.name,
+      connectionSessionId:
+        'connectionSessionId' in voiceContext
+          ? voiceContext.connectionSessionId
+          : undefined,
       expiresAt: expireTime.toISOString(),
       voice: live.voice,
       live,

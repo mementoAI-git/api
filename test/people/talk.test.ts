@@ -35,6 +35,56 @@ describe('private connection Talk', () => {
     });
     return {owner, viewer, invite};
   }
+  it('opts web into shared-only chat while preserving legacy activation and excluding private context', async () => {
+    const {owner, viewer, invite} = await pair();
+    await activation.update(owner.id, {
+      approved_context: 'UNACTIVATED_PROFILE',
+      active: false,
+    });
+    await Memory.create({
+      user: owner.id,
+      title: 'Hidden',
+      body: 'PRIVATE_DIARY',
+      status: 'save',
+    });
+    const shared = await Memory.create({
+      user: owner.id,
+      title: 'Our trip',
+      body: 'SHARED_TRIP',
+      status: 'save',
+      beneficiaries: [invite.id],
+    });
+    vi.mocked(generateConnectionReply).mockResolvedValue({
+      text: 'We can reflect on your trip.',
+      source_ids: [shared.id],
+    });
+    expect((await talk.history(owner.id, viewer.id)).available).toBe(false);
+    expect((await talk.history(owner.id, viewer.id, true)).available).toBe(
+      true,
+    );
+    await talk.send(owner.id, viewer.id, {
+      text: 'Tell me about our trip',
+      request_id: crypto.randomUUID(),
+      shared_space: true,
+    });
+    const prompt = JSON.stringify(
+      vi.mocked(generateConnectionReply).mock.calls[0],
+    );
+    expect(prompt).toContain('SHARED_TRIP');
+    expect(prompt).toContain(
+      'listen, communicate, and ask open-ended questions',
+    );
+    expect(prompt).toContain('Do not invent or offer personal facts');
+    expect(prompt).not.toContain('UNACTIVATED_PROFILE');
+    expect(prompt).not.toContain('PRIVATE_DIARY');
+    expect(prompt).not.toContain('SECRET_OWNER_CONTEXT');
+    expect((await talk.history(viewer.id, owner.id, true)).turns).toEqual([]);
+    invite.status = 'pending';
+    await invite.save();
+    await expect(talk.history(owner.id, viewer.id, true)).rejects.toMatchObject(
+      {statusCode: 404},
+    );
+  });
   it('does not activate implicitly or allow pending/unrelated access', async () => {
     const {owner, viewer, invite} = await pair();
     await expect(
@@ -209,5 +259,43 @@ describe('private connection Talk', () => {
       }),
     ).rejects.toMatchObject({statusCode: 403});
     expect((await talk.history(owner.id, viewer.id)).turns).toHaveLength(0);
+  });
+  it('retains source dependencies from prior turns outside the latest shared page', async () => {
+    const {owner, viewer, invite} = await pair();
+    await activation.update(owner.id, {
+      approved_context: 'Approved',
+      active: true,
+    });
+    const old = await Memory.create({
+      user: owner.id,
+      title: 'Old source',
+      body: 'Older fact',
+      status: 'save',
+      beneficiaries: [invite.id],
+      created_at: new Date('2020-01-01'),
+    });
+    vi.mocked(generateConnectionReply).mockResolvedValue({
+      text: 'Older fact answer',
+      source_ids: [old.id],
+    });
+    await talk.send(owner.id, viewer.id, {
+      text: 'First question',
+      request_id: crypto.randomUUID(),
+    });
+    await Memory.insertMany(
+      Array.from({length: 31}, (_, i) => ({
+        user: owner.id,
+        title: `New ${i}`,
+        status: 'save',
+        beneficiaries: [invite.id],
+      })),
+    );
+    await talk.send(owner.id, viewer.id, {
+      text: 'Follow up on that',
+      request_id: crypto.randomUUID(),
+    });
+    await old.updateOne({$set: {beneficiaries: []}});
+    const last = (await talk.history(owner.id, viewer.id)).turns.at(-1)!;
+    expect(last.available).toBe(false);
   });
 });
