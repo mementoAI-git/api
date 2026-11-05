@@ -1,3 +1,4 @@
+import {BENEFICIARY_ACCESS_SCOPES} from '../../database/model/beneficiary';
 import {z} from 'zod';
 
 export const spaceSchema = z.object({
@@ -39,7 +40,14 @@ export const sourcesSchema = z.object({
 export const personSchema = z.object({params: personParams});
 export const labelSchema = z.object({
   params: personParams,
-  body: z.strictObject({label: z.string().trim().min(1).max(80)}),
+  body: z.strictObject({
+    label: z.string().trim().min(1).max(80),
+    display_name: z.string().trim().max(100).optional(),
+    about: z.string().trim().max(5000).optional(),
+    group_ids: z.array(sourceId).max(100).optional(),
+    access_scope: z.enum(BENEFICIARY_ACCESS_SCOPES).optional(),
+    avatar_file_id: sourceId.nullable().optional(),
+  }),
 });
 export const disconnectSchema = z.object({
   params: personParams,

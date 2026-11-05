@@ -59,6 +59,17 @@ export async function list(viewerId: string) {
   })
     .select(displayFields)
     .exec();
+  const savedAvatars = await File.find({
+    _id: {
+      $in: relationships
+        .filter(row => row.benefactor === viewerId)
+        .map(row => row.avatar_file_id)
+        .filter(Boolean),
+    },
+    user: viewerId,
+    deleted: {$ne: true},
+  });
+  const avatarAttachments = await serializeAttachmentList(savedAvatars);
   const connections = users
     .map(user => {
       const row = relationships.find(
@@ -68,6 +79,17 @@ export async function list(viewerId: string) {
       );
       return {
         ...display(user),
+        avatar_url:
+          avatarAttachments.find(
+            file => String(file._id) === row?.avatar_file_id,
+          )?.url || display(user).avatar_url,
+        name:
+          spaces.find(
+            space =>
+              space._id === [viewerId, String(user._id)].sort().join(':'),
+          )?.display_names?.[viewerId] ||
+          row?.name ||
+          display(user).name,
         relationship:
           spaces.find(
             space =>

@@ -61,6 +61,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   if (beneficiary) {
     if (beneficiary.status !== 'removed' || access_scope !== 'shared_only')
       throw new BadRequestException('Beneficiary has already been invited');
+    await acquireUsageSlot(user_id, 'beneficiary_count', 2, 'beneficiaries');
     Object.assign(beneficiary, {
       name,
       relationship,
@@ -68,7 +69,26 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
       status: 'pending',
       due_at: dayjs().add(3, 'days').toDate(),
     });
-    await beneficiary.save();
+    try {
+      const restored = await Beneficiary.findOneAndUpdate(
+        {_id: beneficiary.id, status: 'removed'},
+        {
+          $set: {
+            name,
+            relationship,
+            access_scope,
+            status: 'pending',
+            due_at: beneficiary.due_at,
+          },
+        },
+        {new: true},
+      );
+      if (!restored)
+        throw new BadRequestException('Connection has already been invited');
+    } catch (error) {
+      await applyUsageDelta(user_id, 'beneficiary_count', -1);
+      throw error;
+    }
     if ((await mail.sendBeneficiaryInvite(beneficiary)) === true) {
       await invitationDelivered(beneficiary, Boolean(user));
     }
@@ -143,7 +163,7 @@ export async function list(
   user_id: string,
 ) {
   const filters = filterGenerator(query, ['name', 'email', 'relationship']);
-  filters.push({benefactor: user_id});
+  filters.push({benefactor: user_id, status: {$ne: 'removed'}});
 
   const data = await Beneficiary.paginate(
     {$and: filters},

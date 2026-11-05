@@ -149,6 +149,14 @@ export async function label(req: IRequest, res: Response, next: NextFunction) {
         req.auth.id,
         req.body.label,
       ),
+        req.body.display_name,
+        Object.fromEntries(
+          Object.entries(req.body).filter(([key]) =>
+            ['about', 'group_ids', 'access_scope', 'avatar_file_id'].includes(
+              key,
+            ),
+          ),
+        ),
     );
   } catch (error) {
     next(error);
