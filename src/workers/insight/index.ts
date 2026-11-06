@@ -16,6 +16,10 @@ import {saveConfirmedSocialAccounts} from './social-accounts';
 import {discoverExistingSocialAccounts} from './social-discovery';
 import {invalidateEnrichmentCache} from '../../services/enrichment';
 import {filterForgottenInsights} from './forgotten';
+import {
+  FLUSH_BUFFER_JOB,
+  flushQuietBuffer,
+} from '../../services/queues/insights';
 import {isActiveAccount} from '../../services/account-purge/account-state';
 
 async function savePendingInsights(
@@ -62,6 +66,10 @@ export default function startInsightsExtractionWorker(
     async job => {
       const {user_id, memory_id, exchanges, profile_text} = job.data;
       if (!(await isActiveAccount(user_id))) return;
+      if (job.name === FLUSH_BUFFER_JOB) {
+        await flushQuietBuffer(user_id, memory_id);
+        return;
+      }
       if (job.data.discover_social_accounts === true) {
         await discoverExistingSocialAccounts(user_id);
         return;

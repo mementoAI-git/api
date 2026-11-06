@@ -45,6 +45,7 @@ LEAVE OUT:
 - Passing activity or incidental detail, such as background music while working, an app tried once, or a task in progress.
 - Anything too thin to mean something on its own.
 Most lists have plenty to leave out. It is fine to keep few.
+A fact starting "User asked to remember:" is something they asked to keep. Always keep it, and write it like any other card.
 
 MERGE:
 - Facts that say the same thing become one card, listing all of them in "sources".

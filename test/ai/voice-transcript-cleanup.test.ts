@@ -5,10 +5,14 @@ vi.mock('../../src/module/api/ai/voice/text-generator', () => ({
 }));
 vi.mock('../../src/services/queues/insights', () => ({
   addToInsightsBuffer: vi.fn().mockResolvedValue(undefined),
+  flushBufferNow: vi.fn().mockResolvedValue(undefined),
 }));
 
 import {generateVoiceJson} from '../../src/module/api/ai/voice/text-generator';
-import {addToInsightsBuffer} from '../../src/services/queues/insights';
+import {
+  addToInsightsBuffer,
+  flushBufferNow,
+} from '../../src/services/queues/insights';
 import Message from '../../src/module/database/model/message';
 import VoiceCall from '../../src/module/database/model/voice-call';
 import {
@@ -240,6 +244,8 @@ describe('cleanVoiceCallTranscript', () => {
     expect(call?.cleaned_at).toBeInstanceOf(Date);
     expect(call?.queue_insights).toBe(false);
 
+    // The call is over, so it is read now, however short it was.
+    expect(flushBufferNow).toHaveBeenCalled();
     expect(vi.mocked(addToInsightsBuffer).mock.calls).toEqual([
       [
         userId,

@@ -5,6 +5,7 @@ import VoiceAction from '../../../database/model/voice-action';
 import * as beneficiaries from '../../beneficiary/service';
 import * as capsules from '../../capsule/service';
 import * as memories from '../../memory/service';
+import {forgetObservation} from '../../persona/observations';
 import * as users from '../../user/service';
 import type {
   VoiceToolEffect,
@@ -124,6 +125,9 @@ async function reverse(
       if (undo.on) await memories.bookmark(undo.id, userId);
       else await memories.unbookmark(undo.id, userId);
       return {effects: [{type: 'refresh', what: 'memories'}]};
+    case 'forget_observation':
+      await forgetObservation(userId, undo.id);
+      return {effects: []};
     case 'remove_story':
       await memories.deleteMemory({memory_id: undo.id} as never, userId);
       return {

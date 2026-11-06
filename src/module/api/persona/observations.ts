@@ -412,7 +412,7 @@ export async function getObservationSources(
  * What the member changed must not return, so the old wording is remembered
  * for extraction, and caches built from it are dropped.
  */
-async function saveFactChanges(
+export async function saveFactChanges(
   userId: string,
   update: Record<string, unknown>,
   removedHashes: string[],

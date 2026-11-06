@@ -8,6 +8,7 @@ import type {CreateBeneficiaryBody} from '../../beneficiary/dto';
 import * as capsules from '../../capsule/service';
 import * as feedback from '../../feedback/service';
 import * as memories from '../../memory/service';
+import {MAX_REMEMBERED_LENGTH, rememberFact} from '../../persona/remember';
 import {JWT_SECRET} from '../../../../utils/config';
 import {confirmationCode, isConfirmed} from './confirmation';
 import {escapeRegex} from './memory-search';
@@ -20,7 +21,7 @@ import {failed} from './tool-errors';
  * services the app's screens use, as the host.
  *
  * Two tiers:
- * - Done straight away, then offered back: save a story, a quick note,
+ * - Done straight away, then offered back: save a story, a quick note, a fact,
  *   bookmark, tag or rename a story, draft a capsule. All are easy to undo.
  * - Confirmed first: adding a beneficiary (emails an invite), scheduling a
  *   capsule, deleting a story, sending feedback. The first call only reads
@@ -121,6 +122,24 @@ const quickNote: Handler = async (userId, args) => {
       effects: [{type: 'refresh', what: 'memories'}],
       undo: {kind: 'remove_story', id: String((data as {_id: unknown})._id)},
       summary: 'saved the quick note',
+    };
+  } catch (error) {
+    return failed(error);
+  }
+};
+
+const rememberFactAction: Handler = async (userId, args) => {
+  const fact = str(args.fact, MAX_REMEMBERED_LENGTH);
+  if (!fact)
+    return say('There is nothing to remember yet. Ask what you should keep.');
+  try {
+    const {id} = await rememberFact(userId, fact);
+    return {
+      result:
+        'Saved to what you know about them, and it will show in their Observations. Tell them in a few words.',
+      effects: [],
+      ...(id && {undo: {kind: 'forget_observation' as const, id}}),
+      summary: 'remembered a fact',
     };
   } catch (error) {
     return failed(error);
@@ -425,6 +444,7 @@ const sendFeedback: Handler = async (userId, args) => {
 export const CONTENT_ACTION_HANDLERS: Record<string, Handler> = {
   save_story: saveStory,
   quick_note: quickNote,
+  remember_fact: rememberFactAction,
   bookmark_story: bookmarkStory,
   tag_story: tagStory,
   rename_story: renameStory,

@@ -38,6 +38,7 @@ import {buildPromptOwnershipScope} from '../prompt/explore-contract';
 import AiMetric from '../../database/model/ai-metric';
 import {updateStreak} from '../user/service';
 import {addToInsightsBuffer} from '../../../services/queues/insights';
+import {handleRememberRequest} from '../persona/remember';
 import {queueMemorySearch} from '../../../services/queues/memory-search';
 import {OpenRouterMessage} from '../../../services/ai/openrouter';
 import {
@@ -398,6 +399,14 @@ export async function prompt(
   }
   const messages = history.reverse();
   const sessionTurnCount = getSessionTurnCount(messages);
+  const memoryAction = userText
+    ? await handleRememberRequest(
+        user_id,
+        userText,
+        [...messages].reverse().find(message => message.role === 'user')?.text,
+        payload.memory,
+      )
+    : '';
 
   // The context is built while the recall finishes; its block is filled in
   // when it arrives.
@@ -419,7 +428,8 @@ export async function prompt(
       : '';
     return (
       base.replace(CHAT_LONG_TERM_PLACEHOLDER, () => longTermContext) +
-      reflectionContext
+      reflectionContext +
+      memoryAction
     );
   });
   const chatPrimaryPromptVersion = getPromptVersion('chat_primary');

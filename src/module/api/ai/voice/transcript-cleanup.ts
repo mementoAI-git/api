@@ -2,7 +2,10 @@ import Message from '../../../database/model/message';
 import VoiceCall, {
   VoiceCallCleanupStatus,
 } from '../../../database/model/voice-call';
-import {addToInsightsBuffer} from '../../../../services/queues/insights';
+import {
+  addToInsightsBuffer,
+  flushBufferNow,
+} from '../../../../services/queues/insights';
 import {extractJson} from '../../../../utils/helpers';
 import {isSignificantMessage} from '../utils';
 import {generateVoiceJson} from './text-generator';
@@ -315,6 +318,12 @@ async function queueInsights(userId: string, turns: CallTurn[]) {
       userTurn.text,
       reply.text,
     ).catch(error => console.error('Error queueing voice insights:', error));
+  }
+  // The call is over, so read it now instead of waiting for more to be said.
+  for (const memory of new Set(turns.map(turn => turn.memory))) {
+    await flushBufferNow(userId, memory).catch(error =>
+      console.error('Error flushing voice insights:', error),
+    );
   }
 }
 
