@@ -461,6 +461,8 @@ describe('applyInsightDecisions', () => {
     ['invented evidence', {evidence_refs: ['E1', 'E2', 'E99']}],
     ['unknown fields only', {categories: ['not_a_field']}],
     ['no title', {title: ''}],
+    ['third person wording', {title: 'The user protects Sundays'}],
+    ['third person detail', {body: "It shows in the user's stories."}],
   ])('rejects a new insight with %s', (_name, change) => {
     expect(apply([{...newInsight, ...change}])).toEqual([]);
   });

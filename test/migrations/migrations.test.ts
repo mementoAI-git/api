@@ -9,6 +9,7 @@ import {
   it,
 } from 'vitest';
 import InsightBatch from '../../src/module/database/model/insight-batch';
+import ObservationView from '../../src/module/database/model/observation-view';
 import Bookmark from '../../src/module/database/model/bookmarks';
 import Migration from '../../src/module/database/model/migration';
 import AiMetric from '../../src/module/database/model/ai-metric';
@@ -226,5 +227,18 @@ describe('database migrations', () => {
       generated_at: null,
       next_refresh_at: new Date(0),
     });
+  });
+
+  it('creates the unique observation view index', async () => {
+    await migrateUp();
+
+    expect(
+      await mongoose.connection.db!.collection('observation_views').indexes(),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({key: {user: 1}, unique: true}),
+      ]),
+    );
+    expect(ObservationView.collection.name).toBe('observation_views');
   });
 });

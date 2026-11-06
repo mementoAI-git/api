@@ -116,6 +116,7 @@ describe('account purge pipeline', () => {
         'Memory',
         'MemoryEmbedding',
         'Message',
+        'ObservationView',
         'PendingInsight',
         'Persona',
         'PushDevice',

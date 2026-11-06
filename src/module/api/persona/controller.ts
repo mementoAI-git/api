@@ -92,7 +92,7 @@ export async function updateObservation(
     const {message, data} = await observations.updateObservation(
       req.auth.id,
       observationParam(req),
-      req.body.content,
+      {heading: req.body.heading, note: req.body.note},
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

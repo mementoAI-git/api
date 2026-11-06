@@ -322,4 +322,31 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
       );
     },
   },
+  {
+    id: '202611060002_observation_views',
+    up: async db => {
+      // The unique user index is what limits curation to one reader at a time.
+      await db
+        .collection('observation_views')
+        .createIndex({user: 1}, {unique: true});
+    },
+  },
+  {
+    id: '202611060003_insight_tightened_reset',
+    up: async db => {
+      // Re-evaluate everyone under the rule against plain descriptions.
+      await db.collection('insight_batches').updateMany(
+        {},
+        {
+          $set: {
+            insights: [],
+            previous_titles: [],
+            generated_at: null,
+            generating_until: null,
+            next_refresh_at: new Date(0),
+          },
+        },
+      );
+    },
+  },
 ];

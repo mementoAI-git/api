@@ -2,6 +2,7 @@ import type {FilterQuery} from 'mongoose';
 import ai from '../ai';
 import logger from '../../utils/logger';
 import {extractJson} from '../../utils/helpers';
+import {speaksToMember} from '../../utils/member-voice';
 import {NotFoundException} from '../../utils/service-error';
 import {serializeAttachment} from '../../utils/attachment-response';
 import {buildInsightEvaluationRequest} from '../../utils/ai-prompt/insight-batch-prompt';
@@ -277,10 +278,12 @@ export function applyInsightDecisions(input: {
       if (!target || retired.has(target)) continue;
       const current = updated.get(target) ?? target;
       const categories = validCategories(decision.categories);
+      const title = cleanLine(decision.title);
+      const body = cleanLine(decision.body);
       updated.set(target, {
         ...current,
-        title: cleanLine(decision.title) || current.title,
-        body: cleanLine(decision.body) || current.body,
+        title: title && speaksToMember(title) ? title : current.title,
+        body: body && speaksToMember(body) ? body : current.body,
         categories: categories.length ? categories : current.categories,
         evidence: dedupe([
           ...current.evidence,
@@ -293,7 +296,14 @@ export function applyInsightDecisions(input: {
       const body = cleanLine(decision.body);
       const categories = validCategories(decision.categories);
       const evidence = dedupe(citedEvidence(decision.evidence_refs));
-      if (title && body && categories.length && meetsEvidenceRules(evidence)) {
+      if (
+        title &&
+        body &&
+        speaksToMember(title) &&
+        speaksToMember(body) &&
+        categories.length &&
+        meetsEvidenceRules(evidence)
+      ) {
         additions.push({
           title,
           body,

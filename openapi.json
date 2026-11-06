@@ -8322,7 +8322,7 @@
     },
     "/persona/observations": {
       "get": {
-        "description": "Saved and unreviewed observations as one list, merged by wording.",
+        "description": "The curated observations written for the member. Stored facts are considered in the background and only meaningful ones become cards, so poll while generating is true.",
         "responses": {
           "200": {
             "description": "Observations retrieved successfully"
@@ -8392,13 +8392,18 @@
             "application/json": {
               "schema": {
                 "properties": {
-                  "content": {
-                    "maxLength": 500,
+                  "heading": {
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  "note": {
+                    "maxLength": 378,
                     "type": "string"
                   }
                 },
                 "required": [
-                  "content"
+                  "heading",
+                  "note"
                 ],
                 "type": "object"
               }

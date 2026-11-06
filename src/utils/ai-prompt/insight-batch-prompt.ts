@@ -70,6 +70,7 @@ NEVER MAKE AN INSIGHT FROM:
 - A temporary emotion or a mood from a particular day.
 - Something hypothetical, or that they say they might do.
 - A fact, habit, or preference stated plainly, such as what they listen to or which tools they use. That is information, not an insight.
+- A description of what they do, their job, or what they are building, such as "You build memory-sharing software". They already know that. Say what the pattern reveals: what they value, how they decide, what keeps pulling them back, or how they have changed.
 - Statistics about their memories, such as which topic appears most often or how much has been recorded.
 - A topic that is missing or thin.
 - Your own assumptions, or contradictory evidence you cannot reconcile.
@@ -78,7 +79,7 @@ NEVER MAKE AN INSIGHT FROM:
 DECISIONS:
 - "new": a pattern that is not already covered. Room for ${room} more.
 - "update": new evidence supports an existing insight. Add its evidence, and revise the wording if the understanding has deepened or changed. Merge related ideas into one existing insight instead of adding a new one.
-- "retire": an existing insight is contradicted or no longer true. Do not retire one just because it was not mentioned recently.
+- "retire": an existing insight is contradicted, no longer true, or only describes what they do. Do not retire one just because it was not mentioned recently.
 - Leave out anything that should stay as it is.
 
 WRITING:

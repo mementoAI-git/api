@@ -1,5 +1,4 @@
 import {z} from 'zod';
-import {PERSONA_INSIGHT_FIELDS} from '../../../utils/constant';
 
 const mongoIdSchema = z
   .string()
@@ -15,12 +14,7 @@ export const pendingInsightActionSchema = z.object({
   }),
 });
 
-const observationIdSchema = z
-  .string()
-  .regex(
-    new RegExp(`^(${PERSONA_INSIGHT_FIELDS.join('|')})-[a-f0-9]{24}$`),
-    'Invalid observation ID',
-  );
+const observationIdSchema = mongoIdSchema;
 
 export const observationParamsSchema = z.object({
   params: z.strictObject({observationId: observationIdSchema}),
@@ -28,5 +22,8 @@ export const observationParamsSchema = z.object({
 
 export const updateObservationSchema = z.object({
   params: z.strictObject({observationId: observationIdSchema}),
-  body: z.strictObject({content: z.string().trim().min(1).max(500)}),
+  body: z.strictObject({
+    heading: z.string().trim().min(1).max(120),
+    note: z.string().trim().min(1).max(378),
+  }),
 });

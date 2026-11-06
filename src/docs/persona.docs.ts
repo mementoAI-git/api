@@ -11,7 +11,7 @@ const personaDocs = {
       tags: ['Persona'],
       summary: 'List observations',
       description:
-        'Saved and unreviewed observations as one list, merged by wording.',
+        'The curated observations written for the member. Stored facts are considered in the background and only meaningful ones become cards, so poll while generating is true.',
       security: [{bearerAuth: []}],
       responses: {
         200: {description: 'Observations retrieved successfully'},
@@ -31,8 +31,11 @@ const personaDocs = {
           'application/json': {
             schema: {
               type: 'object',
-              required: ['content'],
-              properties: {content: {type: 'string', maxLength: 500}},
+              required: ['heading', 'note'],
+              properties: {
+                heading: {type: 'string', maxLength: 120},
+                note: {type: 'string', maxLength: 378},
+              },
             },
           },
         },
