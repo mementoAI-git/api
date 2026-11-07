@@ -7,6 +7,7 @@ import {
   ASR_SHADOW_PROVIDER,
 } from '../../utils/config';
 import {GeminiAsrProvider} from './gemini-provider';
+import {GroqAsrProvider} from './groq-provider';
 import {ServiceUnavailableException} from '../../utils/service-error';
 import {
   AsrProvider,
@@ -15,12 +16,15 @@ import {
   AsrTranscriptionInput,
 } from './types';
 
+export const groq = new GroqAsrProvider();
+
 const providerRegistry: Record<string, AsrProvider> = {
   gemini: new GeminiAsrProvider('gemini', ASR_GEMINI_PRIMARY_MODEL),
   gemini_fallback: new GeminiAsrProvider(
     'gemini_fallback',
     ASR_GEMINI_FALLBACK_MODEL,
   ),
+  groq,
 };
 
 function resolveProvider() {
@@ -47,28 +51,30 @@ export async function transcribeWithConfiguredAsr(
   input: AsrTranscriptionInput,
 ) {
   const primary = resolveProvider();
-  const fallback = providerRegistry[ASR_FALLBACK_PROVIDER];
+  // Groq comes last so transcription survives Gemini running out of quota altogether.
+  const fallbacks = [
+    providerRegistry[ASR_FALLBACK_PROVIDER],
+    groq.isConfigured() ? groq : undefined,
+  ].filter(
+    (provider, index, all): provider is AsrProvider =>
+      Boolean(provider) &&
+      provider?.providerId !== primary.providerId &&
+      all.indexOf(provider) === index,
+  );
 
-  try {
-    const primaryResult = await primary.transcribe(input);
-    return {
-      ...primaryResult,
-      usedFallback: false,
-    } as AsrRouterResult;
-  } catch (primaryError) {
-    if (!fallback || fallback.providerId === primary.providerId) {
-      throw transcriptionUnavailable(primaryError);
-    }
+  let lastError: unknown;
+  for (const provider of [primary, ...fallbacks]) {
     try {
-      const fallbackResult = await fallback.transcribe(input);
+      const result = await provider.transcribe(input);
       return {
-        ...fallbackResult,
-        usedFallback: true,
+        ...result,
+        usedFallback: provider !== primary,
       } as AsrRouterResult;
-    } catch (fallbackError) {
-      throw transcriptionUnavailable(fallbackError);
+    } catch (error) {
+      lastError = error;
     }
   }
+  throw transcriptionUnavailable(lastError);
 }
 
 export function shouldRunAsrShadow() {

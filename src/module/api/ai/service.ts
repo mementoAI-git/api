@@ -18,6 +18,7 @@ import File, {ITranscriptionData} from '../../database/model/file';
 import {
   BadRequestException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '../../../utils/service-error';
 import User from '../../database/model/user';
 import dayjs from 'dayjs';
@@ -460,7 +461,9 @@ export async function prompt(
         'Could not process the attached file(s). Please try re-uploading.',
       );
     }
-    const response = await chat.sendMessageStream({message: content});
+    const response = await readAttachments(() =>
+      chat.sendMessageStream({message: content}),
+    );
     return {
       stream: response,
       modelLabel: `gemini:${GEMINI_MODEL}`,
@@ -696,6 +699,21 @@ export async function getUserMessagesByConversation(
   return {message: 'User messages retrieved successfully', data};
 }
 
+/**
+ * Only Gemini can read attachments, so when it fails the member should hear that plainly,
+ * not a generic server error, and know the message didn't go through.
+ */
+export async function readAttachments<T>(send: () => Promise<T>): Promise<T> {
+  try {
+    return await send();
+  } catch (error) {
+    logger.error(error, 'Gemini could not read a chat attachment');
+    throw new ServiceUnavailableException(
+      'Memento can’t read attachments right now, so your message wasn’t sent. Please try again shortly.',
+    );
+  }
+}
+
 function isTranscribableMime(type: string): boolean {
   const base = uploadMimeBaseType(type);
   if (base.startsWith('audio/')) return true;
@@ -905,7 +923,9 @@ export async function startConversation(
         'Could not process the attached file(s). Please try re-uploading.',
       );
     }
-    const response = await chat.sendMessage({message: content});
+    const response = await readAttachments(() =>
+      chat.sendMessage({message: content}),
+    );
     const responseText = sanitizeMementoText(response.text ?? '').trim();
     const now = dayjs();
     await Message.insertMany([

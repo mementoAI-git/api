@@ -48,6 +48,7 @@ import {updateMemoryTitle} from '../ai/utils';
 import ActivePrompt from '../../database/model/active-prompt';
 import {queueStoryInsights} from '../../../services/queues/insights';
 import {queueQuickCaptureEnrichment} from '../../../services/queues/quick-capture';
+import {memoryHasVoiceRecording} from '../../../services/memory-audio-transcripts';
 import {queueMemorySearch} from '../../../services/queues/memory-search';
 import {queueSummarization} from '../../../services/queues/summarization';
 import {
@@ -323,7 +324,11 @@ export async function createMemory(
   if (isStory && status === 'save' && body && body.trim().length > 0) {
     void queueStoryInsights(user_id, memory.id);
     void queueSummarization(memory.id, 'story');
-    if ((memory.tags?.length || 0) === 0) {
+    // A tagged story still needs this when it has a recording, so that gets transcribed.
+    if (
+      (memory.tags?.length || 0) === 0 ||
+      (await memoryHasVoiceRecording(user_id, memory.attachments))
+    ) {
       void queueQuickCaptureEnrichment({
         user_id,
         memory_id: memory.id,
