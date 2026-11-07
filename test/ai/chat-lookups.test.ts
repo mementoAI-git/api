@@ -33,7 +33,10 @@ import {
   CHAT_ACTION_DECLARATIONS,
   CHAT_ACTION_NAMES,
 } from '../../src/module/api/ai/chat-tools/actions';
-import {confirmChatAction} from '../../src/module/api/ai/chat-tools/confirm';
+import {
+  confirmChatAction,
+  undoChatAction,
+} from '../../src/module/api/ai/chat-tools/confirm';
 import Message from '../../src/module/database/model/message';
 import {CHAT_TOOL_DECLARATIONS} from '../../src/module/api/ai/chat-tools/declarations';
 import {
@@ -160,6 +163,20 @@ describe('chat lookups', () => {
     expect(result.text).not.toContain('"Other"');
   });
 
+  it('lists their earliest stories first when asked for the oldest', async () => {
+    const user = await createUserFixture();
+    await story(user.id, 'Latest', {created_at: new Date('2026-11-01')});
+    await story(user.id, 'First', {created_at: new Date('2026-10-17')});
+    const result = await CHAT_TOOL_HANDLERS.list_stories(
+      {order: 'oldest'},
+      {userId: user.id, origin: ORIGIN},
+    );
+    expect(result.text).toContain('oldest first');
+    expect(result.text.indexOf('"First"')).toBeLessThan(
+      result.text.indexOf('"Latest"'),
+    );
+  });
+
   it("lists the host's people and groups, never someone else's", async () => {
     const user = await createUserFixture();
     const other = await createUserFixture();
@@ -227,6 +244,7 @@ describe('chat lookups', () => {
       targets: new Map(),
       calls: [],
       confirmations: [],
+      dones: [],
     });
   });
 
@@ -262,12 +280,9 @@ describe('chat lookups', () => {
       expect(JSON.stringify(share.parameters)).not.toContain('confirmation');
       expect(JSON.stringify(share.parameters)).not.toMatch(/"OBJECT"|"STRING"/);
       expect(share.description).toContain('confirm with a button');
-      for (const never of [
-        'remember_fact',
-        'forget_observation',
-        'open_story',
-        'draft_capsule',
-      ]) {
+      expect(CHAT_ACTION_NAMES).toContain('remember_fact');
+      expect(CHAT_ACTION_NAMES).toContain('forget_observation');
+      for (const never of ['open_story', 'draft_capsule']) {
         expect(CHAT_ACTION_NAMES as readonly string[]).not.toContain(never);
       }
     });
@@ -310,6 +325,7 @@ describe('chat lookups', () => {
         userId: user.id,
         memoryId: String(chat._id),
         origin: ORIGIN,
+        features: {links: true, cards: true},
         text: 'delete my Lagos story',
         history: [],
       });
@@ -362,6 +378,104 @@ describe('chat lookups', () => {
       ).toBe(2);
     });
 
+    it('shows what it did with an Undo that reverses exactly that action', async () => {
+      const user = await createUserFixture();
+      const chat = await conversation(user.id);
+      const lagos = await story(user.id, 'Trip to Lagos');
+      const diary = await story(user.id, 'Diary');
+      const ask = async (query: string, title: string) => {
+        choose.mockResolvedValueOnce([
+          {name: 'rename_story', arguments: {query, title}},
+        ]);
+        return lookUpForChat({
+          userId: user.id,
+          memoryId: String(chat._id),
+          origin: ORIGIN,
+          features: {links: true, cards: true},
+          text: `rename my ${query} story to ${title}`,
+          history: [],
+        });
+      };
+      const first = await ask('Lagos', 'Lagos 2019');
+      await ask('Diary', 'Journal');
+      const [card] = first.dones;
+      expect(card).toMatchObject({
+        tool: 'rename_story',
+        memory: String(chat._id),
+        text: 'Done: renamed "Trip to Lagos" to "Lagos 2019".',
+      });
+      expect(card.action).toMatch(/^[0-9a-f]{24}$/);
+      const reply = await Message.create({
+        user: user.id,
+        memory: String(chat._id),
+        role: 'ai',
+        text: `Renamed.\n\n\`\`\`memento-done\n${JSON.stringify(card)}\n\`\`\``,
+      });
+
+      const undone = await undoChatAction(
+        user.id,
+        String(chat._id),
+        card.action!,
+      );
+
+      expect(undone.data).toMatchObject({
+        done: true,
+        text: 'Undone: renamed "Trip to Lagos" to "Lagos 2019".',
+      });
+      expect((await Memory.findById(lagos._id).lean())?.title).toBe(
+        'Trip to Lagos',
+      );
+      // The newer rename is left alone.
+      expect((await Memory.findById(diary._id).lean())?.title).toBe('Journal');
+      expect((await Message.findById(reply._id).lean())?.text).toContain(
+        '```memento-undone\n',
+      );
+      const again = await undoChatAction(
+        user.id,
+        String(chat._id),
+        card.action!,
+      );
+      expect(again.data.done).toBe(false);
+    });
+
+    it('tells old apps to confirm in the app, since they cannot show a button', async () => {
+      const user = await createUserFixture();
+      const chat = await conversation(user.id);
+      await story(user.id, 'Trip to Lagos');
+      choose.mockResolvedValueOnce([
+        {name: 'delete_story', arguments: {query: 'Lagos'}},
+      ]);
+      const result = await lookUpForChat({
+        userId: user.id,
+        memoryId: String(chat._id),
+        origin: ORIGIN,
+        features: {links: false, cards: false},
+        text: 'delete my Lagos story',
+        history: [],
+      });
+      expect(result.confirmations).toEqual([]);
+      expect(result.context).toContain('cannot show one');
+    });
+
+    it('strips in-app link notes for apps that cannot open them', async () => {
+      const user = await createUserFixture();
+      const lagos = await story(user.id, 'Trip to Lagos', {
+        visibility: 'everyone',
+      });
+      choose.mockResolvedValueOnce([
+        {name: 'read_story', arguments: {query: 'Lagos'}},
+      ]);
+      const result = await lookUpForChat({
+        userId: user.id,
+        origin: ORIGIN,
+        features: {links: false, cards: false},
+        text: 'what did I write about Lagos?',
+        history: [],
+      });
+      expect(result.context).not.toContain('[link:');
+      expect(result.context).toContain(`${ORIGIN}/post/${lagos._id}`);
+    });
+
     it("will not confirm with changed details, a made-up code, or in someone else's chat", async () => {
       const user = await createUserFixture();
       const other = await createUserFixture();
@@ -377,6 +491,7 @@ describe('chat lookups', () => {
         userId: user.id,
         memoryId: String(chat._id),
         origin: ORIGIN,
+        features: {links: true, cards: true},
         text: 'delete my Lagos story',
         history: [],
       });

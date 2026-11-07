@@ -11,6 +11,11 @@ import {
 import type {ChatLinkTarget} from '../../../../services/ai/chat-links';
 import {describeAccess, storyAccess} from '../voice/content-actions';
 import {findStory} from '../voice/find-story';
+import {describeReading, readLink} from '../../../../services/link-reader';
+import {
+  CATEGORY_NUDGES,
+  computeEnrichmentScore,
+} from '../../../../services/enrichment';
 import {searchMemoriesForChat, stripHtml} from '../voice/memory-search';
 import type {ChatToolName} from './declarations';
 
@@ -169,6 +174,7 @@ function dateRange(args: Record<string, unknown>) {
 
 const listStories: Handler = async (args, context) => {
   const filter = str(args.filter, 20) || 'recent';
+  const oldest = str(args.order, 10) === 'oldest';
   const query: Record<string, unknown> = {
     user: context.userId,
     type: 'story',
@@ -189,7 +195,7 @@ const listStories: Handler = async (args, context) => {
     ];
   }
   const rows = (await Memory.find(query)
-    .sort({created_at: -1, _id: -1})
+    .sort(oldest ? {created_at: 1, _id: 1} : {created_at: -1, _id: -1})
     .limit(MAX_LIST)
     .select('title created_at visibility')
     .lean()) as StoryRow[];
@@ -203,7 +209,7 @@ const listStories: Handler = async (args, context) => {
   if (!rows.length) return said(`${label}: none found.`);
   const targets = new Map<string, ChatLinkTarget>();
   return {
-    text: `${label}, newest first:\n${rows
+    text: `${label}, ${oldest ? 'oldest' : 'newest'} first:\n${rows
       .map(
         row =>
           `- "${row.title || 'Untitled'}" (${day(row.created_at)})${storyLinks(row, context, targets)}`,
@@ -213,17 +219,28 @@ const listStories: Handler = async (args, context) => {
   };
 };
 
+/** An observation's in-app link, noted in the text and allowed in the reply. */
+function insightLink(id: string, targets: Map<string, ChatLinkTarget>): string {
+  targets.set(id, {type: 'observation'});
+  return ` [link: /insights?observation=${id}]`;
+}
+
 const listObservationsTool: Handler = async (_args, {userId}) => {
   const {observations} = (await listObservations(userId)).data;
   if (!observations.length) {
     return said('Memento keeps no observations about them yet.');
   }
-  return said(
-    `What Memento keeps about them (their Observations):\n${observations
+  const targets = new Map<string, ChatLinkTarget>();
+  return {
+    text: `What Memento keeps about them (their Observations):\n${observations
       .slice(0, 30)
-      .map(item => `- ${item.heading}: ${item.note}`)
+      .map(
+        item =>
+          `- ${item.heading}: ${item.note}${insightLink(item.id, targets)}`,
+      )
       .join('\n')}`,
-  );
+    targets,
+  };
 };
 
 const explainObservation: Handler = async (args, {userId}) => {
@@ -242,13 +259,14 @@ const explainObservation: Handler = async (args, {userId}) => {
     data: {sources},
   } = await getObservationSources(userId, found.id);
   const targets = new Map<string, ChatLinkTarget>();
+  const opened = insightLink(found.id, targets);
   const lines = sources.slice(0, 8).map(source => {
     const type = source.type === 'conversation' ? 'conversation' : 'story';
     targets.set(source.id, {type});
     return `- ${type === 'story' ? 'Story' : 'Conversation'} "${source.title || 'Untitled'}"${source.created_at ? ` (${day(source.created_at)})` : ''} [link: ${type === 'story' ? '/stories/' : '/chat/'}${source.id}]`;
   });
   return {
-    text: `Observation "${found.heading}": ${found.note}\n${
+    text: `Observation "${found.heading}"${opened}: ${found.note}\n${
       lines.length
         ? `It comes from:\n${lines.join('\n')}`
         : 'It is not linked to a particular story or conversation: they told Memento directly, or the sources were deleted.'
@@ -327,7 +345,35 @@ const getShareLink: Handler = async (args, context) => {
   };
 };
 
+/** The parts of their life Memento knows least about, with a question for each. */
+const suggestTopics: Handler = async (_args, {userId}) => {
+  const {category_scores: scores} = await computeEnrichmentScore(userId);
+  const quiet = scores
+    .filter(category => category.unlocked)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 3);
+  if (!quiet.length) {
+    return said('There is no suggestion yet. Ask what is on their mind today.');
+  }
+  return said(
+    `The parts of their life Memento knows least about, with a question for each (offer one or two, in your own words):\n${quiet
+      .map(
+        category =>
+          `- ${category.label} (${Math.round(category.score)}% known): ${CATEGORY_NUDGES[category.key]}`,
+      )
+      .join('\n')}`,
+  );
+};
+
+const readLinkTool: Handler = async args => {
+  const url = str(args.url, 2_000);
+  if (!/^https?:\/\//i.test(url)) return said('Ask which link they mean.');
+  return said(describeReading(await readLink(url)));
+};
+
 export const CHAT_TOOL_HANDLERS: Record<ChatToolName, Handler> = {
+  read_link: readLinkTool,
+  suggest_topics: suggestTopics,
   search_memories: searchMemories,
   read_story: readStory,
   list_stories: listStories,

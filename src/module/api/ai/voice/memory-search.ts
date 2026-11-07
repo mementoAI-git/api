@@ -24,7 +24,11 @@ const MAX_CONVERSATIONS = 2_000;
 const CONVERSATION_SEARCH_MAX_MS = 1_500;
 
 export const NO_MEMORY_MATCH_RESULT =
-  'No matching memories found. Say you do not have that saved, and ask the host to tell you about it.';
+  'Searched all of the host\'s saved stories and conversations: none mention this. Tell them plainly and confidently that they have not saved anything about it yet; do not hedge ("I\'m not seeing…") or offer to double-check. If it fits, offer to talk about it now and help save it as a story.';
+
+/** The question had no words worth searching for, so nothing was searched. */
+export const NO_SEARCH_TERMS_RESULT =
+  'Nothing specific to search for in that question. Ask the host what they want to find; do not say they have nothing saved.';
 
 export const MEMORY_SEARCH_UNAVAILABLE_RESULT =
   'Memory search is unavailable right now. Continue the conversation without it, and do not tell the host they have nothing saved.';
@@ -454,6 +458,7 @@ async function searchMemories(
   }
   const result = sections.join('\n\n').slice(0, MAX_RESULT_CHARS);
   if (result) return result;
+  if (!words.length) return NO_SEARCH_TERMS_RESULT;
   // The saved-memory search itself failed: that is not the same as nothing
   // being saved, and Memento must not say so.
   return stored === null

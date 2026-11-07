@@ -11,6 +11,7 @@ import Beneficiary from '../../src/module/database/model/beneficiary';
 import {
   MEMORY_SEARCH_UNAVAILABLE_RESULT,
   NO_MEMORY_MATCH_RESULT,
+  NO_SEARCH_TERMS_RESULT,
   searchMemoriesForVoice,
 } from '../../src/module/api/ai/voice/memory-search';
 import {
@@ -101,7 +102,7 @@ describe('searchMemoriesForVoice', () => {
     const user = await createUserFixture();
 
     const started = Date.now();
-    const result = await searchMemoriesForVoice(user.id, 'anything', {
+    const result = await searchMemoriesForVoice(user.id, 'zebras', {
       longTermTimeoutMs: 25,
     });
 
@@ -169,7 +170,7 @@ describe('searchMemoriesForVoice', () => {
 
     await expect(
       searchMemoriesForVoice(user.id, 'what about the'),
-    ).resolves.toBe(NO_MEMORY_MATCH_RESULT);
+    ).resolves.toBe(NO_SEARCH_TERMS_RESULT);
   });
 
   it('labels dates as when a memory was saved, not when it happened', async () => {

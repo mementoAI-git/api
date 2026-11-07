@@ -40,7 +40,7 @@ export const CHAT_TOOL_DECLARATIONS = [
   {
     name: 'list_stories',
     description:
-      'List their saved stories: the most recent, bookmarked ones, ones shared with someone, or ones visible to everyone, optionally between two dates.',
+      'List their saved stories: the most recent, bookmarked ones, ones shared with someone, or ones visible to everyone, optionally between two dates. Use order "oldest" for their first or earliest stories.',
     parameters: {
       type: 'object',
       properties: {
@@ -48,6 +48,7 @@ export const CHAT_TOOL_DECLARATIONS = [
           type: 'string',
           enum: ['recent', 'bookmarked', 'shared', 'public'],
         },
+        order: {type: 'string', enum: ['newest', 'oldest']},
         from: {type: 'string', description: 'YYYY-MM-DD'},
         to: {type: 'string', description: 'YYYY-MM-DD'},
       },
@@ -89,6 +90,22 @@ export const CHAT_TOOL_DECLARATIONS = [
         query: {type: 'string'},
         latest: {type: 'boolean'},
       },
+    },
+  },
+  {
+    name: 'suggest_topics',
+    description:
+      'Suggest what the host could write or talk about next, from the parts of their life Memento knows least about. Use when they ask what to write about, want a prompt, or seem stuck.',
+    parameters: {type: 'object', properties: {}},
+  },
+  {
+    name: 'read_link',
+    description:
+      'Read a web page the host shared earlier in the conversation, when they ask about it. Links in their latest message are read already. Pages behind a login (LinkedIn, X, Instagram) cannot be read.',
+    parameters: {
+      type: 'object',
+      properties: {url: {type: 'string', description: 'The full link.'}},
+      required: ['url'],
     },
   },
   {

@@ -1,6 +1,6 @@
 import {SOCIAL_OPENING_GUIDANCE} from './digital-mind';
 
-export const VOICE_PROMPT_VERSION = 'voice-2026-11-07-story-access';
+export const VOICE_PROMPT_VERSION = 'voice-2026-11-07-shared-tools';
 
 const MEMORY_TOOL_GUIDANCE = `
 - When the host asks what you remember or know about them, or about someone or something in their life, or mentions a past event, person, place or conversation that is not in your context, call search_memories before answering. Search before saying you do not know.
@@ -22,6 +22,7 @@ APP ACTIONS:
 - You can also save a story or a quick note, bookmark, tag, rename or edit a story, and draft a time capsule. Use the host's own words for anything you save.
 - To add to a saved story, call edit_story with mode append. Use replace only when they ask to rewrite or correct the whole story, and then pass the whole new text, keeping every part they did not ask to change.
 - When they ask you to remember something ("remember that…", "add this as a fact", "save this to your memory"), call remember_fact. Never say you will remember something without calling it.
+- You can look things up for them, like chat does: read a whole story to quote or discuss it (read_story), list their stories, recent or bookmarked or shared or public or between two dates (list_stories), list what you keep about them (list_observations), list their beneficiaries and groups (list_people), say who can see a story (who_can_see_story), say whether a story has a public link (get_share_link; never read a link aloud), read a web page they shared in the chat (read_link), and suggest what to talk about next from the parts of their life you know least about (suggest_topics). To show them one thing you keep about them, call open_insight. For "my last story", pass the query "latest". For a time ("around March"), use list_stories with dates and search_memories.
 - When they ask why you think something about them or where it came from, call explain_observation and tell them which stories or conversations it came from. Never guess where something came from.
 - When they say something you keep about them is wrong or has changed, call correct_observation with what it should say now, in their words. Use forget_observation only when they want it gone.
 - To share a story with particular people or groups, call share_story; it never makes a story public. "Make it private" means only them: call set_story_visibility with only_me. Use everyone only when they explicitly ask for everyone to see it.

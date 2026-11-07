@@ -234,11 +234,17 @@ async function reverse(
 
 export async function undoLastAction(
   userId: string,
-  options: {sessionId?: string; now?: number} = {},
+  options: {
+    sessionId?: string;
+    now?: number;
+    /** Undo this action rather than the newest (chat's Undo button). */
+    actionId?: string;
+  } = {},
 ): Promise<VoiceToolOutcome> {
   const now = options.now ?? Date.now();
   const latest = await VoiceAction.findOne({
     user: userId,
+    ...(options.actionId && {_id: options.actionId}),
     // Within this call only, when the app says which call it is: "undo that"
     // must not reach into another call or device.
     ...(options.sessionId && {session_id: options.sessionId}),
@@ -271,6 +277,7 @@ export async function undoLastAction(
     return {
       result: `Undone: ${claimed.summary || claimed.tool} has been reversed.${note ? ` ${note}` : ''} Tell them in a few words.`,
       effects,
+      summary: `undid: ${claimed.summary || claimed.tool}`,
     };
   } catch (error) {
     if (error instanceof UndoConflictError) {
