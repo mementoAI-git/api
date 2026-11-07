@@ -89,6 +89,28 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
+    name: 'forget_observation',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Remove something you keep about the host, shown in their Observations or Preferences, when they ask you to forget it ("forget that…", "delete that observation", "take that off my preferences"). Needs confirmation: the first call only reads it back with a code.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: {
+          type: Type.STRING,
+          description:
+            'The heading of the observation, or words from what it says.',
+        },
+        confirmation: {
+          type: Type.STRING,
+          description:
+            'Leave out the first time. After the host confirms the read-back, the code from the first result.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'bookmark_story',
     behavior: Behavior.BLOCKING,
     description:

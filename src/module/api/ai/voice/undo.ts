@@ -127,7 +127,7 @@ async function reverse(
       return {effects: [{type: 'refresh', what: 'memories'}]};
     case 'forget_observation':
       await forgetObservation(userId, undo.id);
-      return {effects: []};
+      return {effects: [{type: 'refresh', what: 'observations'}]};
     case 'remove_story':
       await memories.deleteMemory({memory_id: undo.id} as never, userId);
       return {

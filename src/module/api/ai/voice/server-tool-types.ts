@@ -8,7 +8,12 @@ import type {VOICE_SCREEN_DESTINATIONS} from '../live-session-config';
 export type VoiceToolEffect =
   | {
       type: 'refresh';
-      what: 'profile' | 'memories' | 'capsules' | 'beneficiaries';
+      what:
+        | 'profile'
+        | 'memories'
+        | 'capsules'
+        | 'beneficiaries'
+        | 'observations';
     }
   | {type: 'open'; destination: (typeof VOICE_SCREEN_DESTINATIONS)[number]}
   | {type: 'open_story'; id: string};

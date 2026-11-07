@@ -8,6 +8,7 @@ import type {CreateBeneficiaryBody} from '../../beneficiary/dto';
 import * as capsules from '../../capsule/service';
 import * as feedback from '../../feedback/service';
 import * as memories from '../../memory/service';
+import {findObservation, forgetObservation} from '../../persona/observations';
 import {MAX_REMEMBERED_LENGTH, rememberFact} from '../../persona/remember';
 import {JWT_SECRET} from '../../../../utils/config';
 import {confirmationCode, isConfirmed} from './confirmation';
@@ -24,7 +25,7 @@ import {failed} from './tool-errors';
  * - Done straight away, then offered back: save a story, a quick note, a fact,
  *   bookmark, tag or rename a story, draft a capsule. All are easy to undo.
  * - Confirmed first: adding a beneficiary (emails an invite), scheduling a
- *   capsule, deleting a story, sending feedback. The first call only reads
+ *   capsule, deleting a story, forgetting an observation, sending feedback. The first call only reads
  *   the action back with a code; a second call with the code runs it.
  *
  * Never by voice (no tool exists): billing, subscriptions, account
@@ -137,9 +138,40 @@ const rememberFactAction: Handler = async (userId, args) => {
     return {
       result:
         'Saved to what you know about them, and it will show in their Observations. Tell them in a few words.',
-      effects: [],
+      effects: [{type: 'refresh', what: 'observations'}],
       ...(id && {undo: {kind: 'forget_observation' as const, id}}),
       summary: 'remembered a fact',
+    };
+  } catch (error) {
+    return failed(error);
+  }
+};
+
+const forgetObservationAction: Handler = async (userId, args) => {
+  const query = str(args.query, MAX_REMEMBERED_LENGTH);
+  if (!query) return say('Ask what they would like you to forget.');
+  try {
+    const found = await findObservation(userId, query);
+    if (found.kind !== 'one') {
+      const options = found.headings.map(h => `"${h}"`).join(', ');
+      return say(
+        found.kind === 'unsure'
+          ? `Nothing was removed. It could be any of these: ${options}. Ask which one, then call again with its exact heading.`
+          : `Nothing was removed, because nothing matched.${options ? ` What you keep includes: ${options}.` : ''} Tell them you could not find it. If one of these is what they meant, call again with its exact heading.`,
+      );
+    }
+    const pending = confirmFirst(
+      userId,
+      'forget_observation',
+      {...args, observation: found.id},
+      `Forget "${found.heading}": ${found.note} This cannot be undone.`,
+    );
+    if (pending) return pending;
+    await forgetObservation(userId, found.id);
+    return {
+      result: `Forgotten: "${found.heading}". It is gone from their Observations. Do not bring it up again in this call. Tell them in a few words.`,
+      effects: [{type: 'refresh', what: 'observations'}],
+      summary: `forgot "${found.heading}"`,
     };
   } catch (error) {
     return failed(error);
@@ -445,6 +477,7 @@ export const CONTENT_ACTION_HANDLERS: Record<string, Handler> = {
   save_story: saveStory,
   quick_note: quickNote,
   remember_fact: rememberFactAction,
+  forget_observation: forgetObservationAction,
   bookmark_story: bookmarkStory,
   tag_story: tagStory,
   rename_story: renameStory,
