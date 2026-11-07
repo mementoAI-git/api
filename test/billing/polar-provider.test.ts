@@ -24,6 +24,7 @@ vi.mock('../../src/utils/config', async importOriginal => ({
 
 import {
   cancelPolarSubscription,
+  createPolarCheckoutSession,
   listPolarInvoices,
   resumePolarSubscription,
   resolvePolarProductPlan,
@@ -157,5 +158,31 @@ describe('Polar billing provider', () => {
         interval: 'monthly',
       }),
     ).toThrow(/unknown polar product/i);
+  });
+});
+
+describe('checkout trials', () => {
+  const checkout = {
+    userId: 'user-1',
+    email: 'member@example.com',
+    tier: 'pro',
+    interval: 'monthly',
+    successUrl: 'https://web.test/success',
+  } as const;
+  const sentPayload = () => axiosMock.post.mock.calls.at(-1)?.[1];
+
+  beforeEach(() => {
+    axiosMock.post.mockReset();
+    axiosMock.post.mockResolvedValue({data: {url: 'https://polar.test/c'}});
+  });
+
+  it('leaves the trial to the product for a first-time subscriber', async () => {
+    await createPolarCheckoutSession({...checkout, allowTrial: true});
+    expect(sentPayload()).not.toHaveProperty('allow_trial');
+  });
+
+  it('turns the trial off for a returning subscriber', async () => {
+    await createPolarCheckoutSession({...checkout, allowTrial: false});
+    expect(sentPayload()).toMatchObject({allow_trial: false});
   });
 });

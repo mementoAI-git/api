@@ -41,6 +41,7 @@ import mongoose from 'mongoose';
 import {randomUUID} from 'crypto';
 import {applyStoreSubscriptionSnapshot} from './store-entitlement-service';
 import {STAGING_AUTO_PRO} from '../../../utils/config';
+import {hasUsedTrial} from './trial-eligibility';
 
 type CheckoutBody = {
   success_url: string;
@@ -123,6 +124,7 @@ export async function getSubscriptionSummary(userId: string) {
         ? null
         : subscription.current_period_end,
       trial_ends_at: STAGING_AUTO_PRO ? null : subscription.trial_ends_at,
+      has_used_trial: hasUsedTrial(subscription),
       cancel_at_period_end: STAGING_AUTO_PRO
         ? false
         : subscription.cancel_at_period_end,
@@ -197,6 +199,7 @@ export async function createCheckoutSession(
     tier,
     interval,
     successUrl: body.success_url,
+    allowTrial: !hasUsedTrial(existing),
   });
   const checkout_url = polar.checkoutUrl;
 
@@ -552,8 +555,9 @@ export async function processPolarWebhook(
       await Subscription.findOneAndUpdate(
         {user_id: userId},
         {
-          $setOnInsert: {user_id: userId, has_used_trial: false},
+          $setOnInsert: {user_id: userId},
           $set: {
+            has_used_trial: true,
             payment_provider: 'polar',
             ...(typeof data.currency === 'string'
               ? {currency: data.currency.toUpperCase()}

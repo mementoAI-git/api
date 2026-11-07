@@ -25,6 +25,8 @@ interface PolarCheckoutInput {
   tier: Tier;
   interval: Interval;
   successUrl: string;
+  /** False turns off a trial configured on the Polar product for this checkout. */
+  allowTrial?: boolean;
 }
 
 const POLAR_PRODUCTS: Record<
@@ -67,6 +69,7 @@ function buildCheckoutPayload(input: PolarCheckoutInput) {
     success_url: input.successUrl,
     external_customer_id: input.userId,
     customer_email: input.email,
+    ...(input.allowTrial === false ? {allow_trial: false} : {}),
     metadata: {
       user_id: input.userId,
       tier: input.tier,

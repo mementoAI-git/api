@@ -4221,6 +4221,10 @@
                           "format": "date-time",
                           "type": "string"
                         },
+                        "has_used_trial": {
+                          "description": "True once the member has had a subscription. Checkout offers no trial after that.",
+                          "type": "boolean"
+                        },
                         "provider": {
                           "example": "polar",
                           "type": "string"
