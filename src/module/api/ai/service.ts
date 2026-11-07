@@ -119,6 +119,10 @@ import {
 import {CHAT_REPLY_GUIDANCE} from '../../../utils/ai-prompt/chat-replies';
 import {getMemorySummaries} from './memory-context';
 import {lookUpForChat} from './chat-tools/lookups';
+import {
+  confirmationBlock,
+  type PendingConfirmation,
+} from './chat-tools/actions';
 import {withTimeout} from './voice/with-timeout';
 import {StepTimer} from '../../../utils/step-timer';
 import logger from '../../../utils/logger';
@@ -422,10 +426,16 @@ export async function prompt(
   const lookupsReady = timer.time('lookups', () =>
     lookUpForChat({
       userId: user_id,
+      memoryId: payload.memory,
       origin,
       text: userText,
       history: groqHistory,
-    }).catch(() => ({context: '', targets: new Map(), calls: []})),
+    }).catch(() => ({
+      context: '',
+      targets: new Map(),
+      calls: [],
+      confirmations: [],
+    })),
   );
   const memoryAction = userText
     ? (await handleRememberRequest(
@@ -473,6 +483,7 @@ export async function prompt(
     (await recallReady).memories,
     (await lookupsReady).targets,
   );
+  const {confirmations} = await lookupsReady;
   const chatPrimaryPromptVersion = getPromptVersion('chat_primary');
   void recordAiMetric({
     event: 'prompt_version_used',
@@ -508,6 +519,7 @@ export async function prompt(
       stream: response,
       modelLabel: `gemini:${GEMINI_MODEL}`,
       links,
+      confirmations,
       userText,
       userMessageSaved: saveUserMessage(
         payload,
@@ -566,6 +578,7 @@ export async function prompt(
     stream: routing.stream,
     modelLabel: routing.modelLabel,
     links,
+    confirmations,
     userText,
     userMessageSaved,
   };
@@ -615,9 +628,13 @@ export async function handleStreaming(
     userMessageSaved?: Promise<void | boolean>;
     /** Memento links the reply may keep; others lose their link. */
     links?: ChatLinks;
+    /** Actions waiting for the host's Confirm button, shown after the reply. */
+    confirmations?: PendingConfirmation[];
   } = {},
 ) {
   let text = '';
+  /** Confirmation cards, kept apart from the reply's text. */
+  let cards = '';
   const linkFilter = sent.links ? createChatLinkFilter(sent.links) : null;
   const send = (chunk: string) => {
     if (!chunk) return;
@@ -635,6 +652,12 @@ export async function handleStreaming(
       }
     }
     if (linkFilter) send(linkFilter.flush());
+    for (const pending of sent.confirmations ?? []) {
+      // Saved as written: the code inside must still match what was read back.
+      const block = confirmationBlock(pending);
+      cards += block;
+      res.write(block);
+    }
     streamCompleted = true;
   } catch (error) {
     // What was held back waiting for a link to finish still belongs to the reply.
@@ -654,7 +677,7 @@ export async function handleStreaming(
   }
 
   async function persistReply() {
-    const finalText = sanitizeMementoText(text).trim();
+    const finalText = sanitizeMementoText(text).trim() + cards;
     // The host's message first, so the two stay in order.
     const userSaved = await sent.userMessageSaved;
     const completed =

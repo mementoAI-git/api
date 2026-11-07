@@ -18,7 +18,14 @@ export type VoiceToolEffect =
   | {type: 'open'; destination: (typeof VOICE_SCREEN_DESTINATIONS)[number]}
   | {type: 'open_story'; id: string};
 
-export type VoiceToolOutcome = {result: string; effects: VoiceToolEffect[]};
+export type VoiceToolOutcome = {
+  result: string;
+  effects: VoiceToolEffect[];
+  /** Set when nothing happened yet: what to confirm, and the code that runs it. */
+  confirm?: {readBack: string; code: string};
+  /** What was done, in a few words, when something was. */
+  summary?: string;
+};
 
 /** How to reverse something Memento did by voice ("undo that"). */
 export type VoiceUndo =

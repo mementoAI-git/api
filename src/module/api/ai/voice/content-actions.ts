@@ -94,9 +94,12 @@ function confirmFirst(
   const now = Date.now();
   if (isConfirmed(userId, tool, args, now, secret())) return null;
   const code = confirmationCode(userId, tool, args, now, secret());
-  return say(
-    `Nothing has happened yet. ${readBack} Read this back to the host and ask them to confirm. Only if they clearly say yes, call ${tool} again with exactly the same details and confirmation "${code}".`,
-  );
+  return {
+    ...say(
+      `Nothing has happened yet. ${readBack} Read this back to the host and ask them to confirm. Only if they clearly say yes, call ${tool} again with exactly the same details and confirmation "${code}".`,
+    ),
+    confirm: {readBack, code},
+  };
 }
 
 const saveStory: Handler = async (userId, args) => {
@@ -847,7 +850,10 @@ const sendFeedback: Handler = async (userId, args) => {
   } catch (error) {
     return failed(error);
   }
-  return say('Sent their feedback to the Memento team. Thank them.');
+  return {
+    ...say('Sent their feedback to the Memento team. Thank them.'),
+    summary: 'sent your feedback to the Memento team',
+  };
 };
 
 export const CONTENT_ACTION_HANDLERS: Record<string, Handler> = {

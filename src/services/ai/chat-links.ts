@@ -72,23 +72,26 @@ function allowed(path: string, links: ChatLinks): string | null {
 /** Checks every complete link in `text`. */
 export function rewriteChatLinks(text: string, links: ChatLinks): string {
   const host = originHost(links.origin);
-  return text.replace(
-    TOKEN,
-    (match, label: string | undefined, href: string | undefined, bare) => {
-      if (href !== undefined) {
-        const path = mementoPath(href, host);
+  // Only Memento adds confirmation cards; one the model wrote is plain code.
+  return text
+    .replace(/```memento-confirm/gi, '```')
+    .replace(
+      TOKEN,
+      (match, label: string | undefined, href: string | undefined, bare) => {
+        if (href !== undefined) {
+          const path = mementoPath(href, host);
+          if (path === undefined) return match;
+          const kept = allowed(path, links);
+          return kept ? `[${label}](${kept})` : (label as string);
+        }
+        const url = String(bare).replace(/[.,!?;:'"]+$/, '');
+        const tail = String(bare).slice(url.length);
+        const path = mementoPath(url, host);
         if (path === undefined) return match;
         const kept = allowed(path, links);
-        return kept ? `[${label}](${kept})` : (label as string);
-      }
-      const url = String(bare).replace(/[.,!?;:'"]+$/, '');
-      const tail = String(bare).slice(url.length);
-      const path = mementoPath(url, host);
-      if (path === undefined) return match;
-      const kept = allowed(path, links);
-      return kept ? `${kept}${tail}` : tail;
-    },
-  );
+        return kept ? `${kept}${tail}` : tail;
+      },
+    );
 }
 
 /** Where an unfinished link starts at the end of `text`, if one does. */

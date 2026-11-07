@@ -1,3 +1,4 @@
+import {confirmChatAction as confirmChatActionService} from './chat-tools/confirm';
 import {digitalMindNameFromHeader} from '../../../utils/ai-prompt/digital-mind';
 import {getTranscriptionInput} from './transcription-input';
 import {NextFunction, Response} from 'express';
@@ -69,6 +70,7 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
         userText: response.userText,
         userMessageSaved: response.userMessageSaved,
         links: response.links,
+        confirmations: response.confirmations,
       },
     );
   } catch (error) {
@@ -297,6 +299,25 @@ function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim()
     ? value.trim().slice(0, 200)
     : undefined;
+}
+
+/** The Confirm button on a chat confirmation card. */
+export async function confirmChatAction(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await confirmChatActionService(
+      req.auth.id,
+      String(req.params.name),
+      (req.body.args ?? {}) as Record<string, unknown>,
+      String(req.body.memory),
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
 }
 
 /** Runs a server-side voice tool the app forwarded from Gemini Live. */
