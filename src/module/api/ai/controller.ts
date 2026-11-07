@@ -68,6 +68,7 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
       {
         userText: response.userText,
         userMessageSaved: response.userMessageSaved,
+        links: response.links,
       },
     );
   } catch (error) {
