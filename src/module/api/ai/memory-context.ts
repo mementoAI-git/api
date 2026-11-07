@@ -14,6 +14,8 @@ export interface MemoryContextEntry {
   type: string;
   created_at: string;
   updated_at: string;
+  /** Stories only: `everyone` stories have a public share link. */
+  visibility?: string;
 }
 
 function storyExcerpt(body: string): string {
@@ -88,7 +90,9 @@ async function loadMemorySummaries(
     Memory.find({...query, type: 'story'})
       .sort({created_at: -1, _id: -1})
       .limit(MEMORY_CONTEXT_LIMIT + 1)
-      .select('title body summary topics type created_at updated_at'),
+      .select(
+        'title body summary topics type created_at updated_at visibility',
+      ),
     Memory.find({
       ...query,
       type: 'conversation',
@@ -119,11 +123,41 @@ async function loadMemorySummaries(
       type: memory.type,
       created_at: timestamp(memory.created_at),
       updated_at: timestamp(memory.updated_at),
+      ...(memory.type === 'story' && {
+        visibility: memory.visibility === 'everyone' ? 'everyone' : 'private',
+      }),
     }));
 }
 
-export function buildMemoriesContext(memories: MemoryContextEntry[]): string {
+/** In-app link to a story or conversation, as chat writes it. */
+export function memoryLink(entry: {id?: string; type: string}): string {
+  return entry.type === 'story' ? `/stories/${entry.id}` : `/chat/${entry.id}`;
+}
+
+/** Public share link, for stories visible to everyone. */
+export function shareLink(origin: string, id: string): string {
+  return `${origin}/post/${id}`;
+}
+
+function linkNote(memory: MemoryContextEntry, origin: string): string {
+  if (!memory.id) return '';
+  const open = ` [link: ${memoryLink(memory)}]`;
+  if (memory.type !== 'story') return open;
+  return memory.visibility === 'everyone'
+    ? `${open} [share link: ${shareLink(origin, memory.id)}]`
+    : `${open} [private: no share link]`;
+}
+
+/**
+ * `links`: chat only. Each entry carries its in-app link, and stories their
+ * share link or that they are private, so replies can point to them.
+ */
+export function buildMemoriesContext(
+  memories: MemoryContextEntry[],
+  options: {links?: {origin: string}} = {},
+): string {
   if (!memories?.length) return '';
+  const links = options.links;
 
   const latestStory = memories
     .filter(memory => memory.type === 'story')
@@ -136,7 +170,8 @@ export function buildMemoriesContext(memories: MemoryContextEntry[]): string {
       (memory, i) =>
         `${i + 1}. ${memory.type === 'story' ? 'Story' : 'Conversation'} "${memory.title}" ` +
         `(created: ${memory.created_at || 'unknown'}; updated: ${memory.updated_at || 'unknown'}): ` +
-        `${memory.summary}${memory.topics.length ? ` (Topics: ${memory.topics.join(', ')})` : ''}`,
+        `${memory.summary}${memory.topics.length ? ` (Topics: ${memory.topics.join(', ')})` : ''}` +
+        (links ? linkNote(memory, links.origin) : ''),
     )
     .join('\n');
 

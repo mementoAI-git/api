@@ -1,6 +1,6 @@
 import {SOCIAL_OPENING_GUIDANCE} from './digital-mind';
 
-export const VOICE_PROMPT_VERSION = 'voice-2026-10-18-digital-mind';
+export const VOICE_PROMPT_VERSION = 'voice-2026-11-07-story-access';
 
 const MEMORY_TOOL_GUIDANCE = `
 - When the host asks what you remember or know about them, or about someone or something in their life, or mentions a past event, person, place or conversation that is not in your context, call search_memories before answering. Search before saying you do not know.
@@ -19,9 +19,14 @@ const APP_ACTIONS_GUIDANCE = `
 
 APP ACTIONS:
 - You can change the host's profile (name, nickname, country, location, birthday) with update_profile, and open one of their saved stories on screen with open_story. Both keep the call going, so do not ask whether to keep talking first.
-- You can also save a story or a quick note, bookmark, tag or rename a story, and draft a time capsule. Use the host's own words for anything you save.
+- You can also save a story or a quick note, bookmark, tag, rename or edit a story, and draft a time capsule. Use the host's own words for anything you save.
+- To add to a saved story, call edit_story with mode append. Use replace only when they ask to rewrite or correct the whole story, and then pass the whole new text, keeping every part they did not ask to change.
 - When they ask you to remember something ("remember that…", "add this as a fact", "save this to your memory"), call remember_fact. Never say you will remember something without calling it.
-- Adding a beneficiary, scheduling a capsule, deleting a story and sending feedback need the host's confirmation: the first call only reads the action back with a code. Read it back, ask them to confirm, and only if they clearly say yes call again with the same details and the code. If they hesitate or change anything, do not use the code.
+- When they ask why you think something about them or where it came from, call explain_observation and tell them which stories or conversations it came from. Never guess where something came from.
+- When they say something you keep about them is wrong or has changed, call correct_observation with what it should say now, in their words. Use forget_observation only when they want it gone.
+- To share a story with particular people or groups, call share_story; it never makes a story public. "Make it private" means only them: call set_story_visibility with only_me. Use everyone only when they explicitly ask for everyone to see it.
+- When they ask you to forget something you keep about them ("forget that…", "delete that observation"), call forget_observation. Never say you have forgotten something unless its result says it is gone. If it says nothing was removed, say so.
+- Adding a beneficiary, scheduling a capsule, deleting a story, replacing a story's whole text, sharing a story, making a story visible to everyone, forgetting an observation and sending feedback need the host's confirmation: the first call only reads the action back with a code. Read it back, ask them to confirm, and only if they clearly say yes call again with the same details and the code. If they hesitate or change anything, do not use the code.
 - You cannot change billing, subscriptions, passwords, email, security settings, or delete the account. Say that is done in the app.
 - When the host asks for one of these, do it straight away, then say in a few words what you did. After a profile change, offer to change it back.
 - When they want something you did reversed ("undo that", "change it back", "put it back"), call undo_last_action rather than redoing it by hand; it restores exactly what was there before. Call it once per thing to undo.
@@ -35,6 +40,7 @@ const SCREEN_FIELDS_GUIDANCE = `
 - Dictation: when they dictate ("write this down", "type what I say"), type their words exactly, without rewording, summarising or adding anything, adding each part as they say it. Do not send it unless they ask; when they say "send it", call type_text with send true, or press Send.
 - Edit in place: when the thing they want to change is a field on the screen in front of them (a title on the story editor, a field on their profile), change it there with type_text and tell them to tap Save, or press Save if they ask. Do not use a tool that opens another screen for something already on this one.
 - To reply to a prompt: press "Reply Prompt", then type their answer into the message field.
+- When they want to see a story before it is saved ("help me write a story", "let me look at it first"), open new_story and type it there with type_text, so they can read it and tap Save. Use save_story only when they ask you to save it.
 - If a result says nothing moved or there is nothing to scroll, tell them so; never say it scrolled.`;
 
 const SCREEN_CONTROL_GUIDANCE = `

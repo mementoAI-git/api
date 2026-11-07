@@ -198,6 +198,54 @@ export async function generateTextWithGroqFallback(params: {
   }
 }
 
+export type GroqToolCall = {name: string; arguments: Record<string, unknown>};
+
+/**
+ * Asks a model which tools to call, without streaming and without an answer:
+ * returns the tool calls it chose (none is a valid choice).
+ */
+export async function chooseToolCallsWithGroq(params: {
+  model: string;
+  messages: GroqMessage[];
+  tools: readonly {name: string; description: string; parameters: unknown}[];
+  timeoutMs: number;
+  maxCalls?: number;
+}): Promise<GroqToolCall[]> {
+  const response = await axios.post(
+    `${GROQ_BASE_URL}/chat/completions`,
+    {
+      model: params.model,
+      messages: params.messages,
+      tools: params.tools.map(tool => ({type: 'function', function: tool})),
+      tool_choice: 'auto',
+      temperature: 0,
+      max_tokens: 400,
+      ...reasoningFor(params.model),
+    },
+    {
+      headers: getHeaders(),
+      timeout: params.timeoutMs,
+      httpsAgent: groqAgent,
+    },
+  );
+  const calls: {function?: {name?: string; arguments?: string}}[] =
+    response.data?.choices?.[0]?.message?.tool_calls ?? [];
+  return calls
+    .flatMap(call => {
+      const name = call.function?.name;
+      if (!name) return [];
+      try {
+        const args = JSON.parse(call.function?.arguments || '{}');
+        return [
+          {name, arguments: args && typeof args === 'object' ? args : {}},
+        ];
+      } catch {
+        return [];
+      }
+    })
+    .slice(0, params.maxCalls ?? 3);
+}
+
 export const groqClient = {
   isConfigured,
 };
