@@ -1,6 +1,10 @@
 import {GEMINI_MODEL} from '../gemini';
 import type {GroqMessage} from './groq';
-import {groqClient, streamTextWithGroqFallback} from './groq';
+import {
+  generateTextWithGroqFallback,
+  groqClient,
+  streamTextWithGroqFallback,
+} from './groq';
 import {
   deepSeekClient,
   streamTextWithDeepSeekFallback,
@@ -82,6 +86,41 @@ async function* sanitizeMementoStream(
       text: sanitizeMementoText(chunk.text),
     };
   }
+}
+
+/** Said when no model produced a reply, so the host is never left with nothing. */
+export const EMPTY_REPLY_MESSAGE =
+  'Sorry, I lost my train of thought there. Could you send that again?';
+
+/**
+ * A stream that ends, or fails, before any text would leave the host with no
+ * reply at all. Then the reply is asked for once more without streaming, and
+ * failing that the host is told to resend.
+ */
+export async function* withEmptyReplyRecovery(
+  stream: AsyncGenerator<ChatStreamChunk, void, unknown>,
+  recover: () => Promise<string>,
+  onRecover?: (reason: string) => void,
+): AsyncGenerator<ChatStreamChunk, void, unknown> {
+  let replied = false;
+  try {
+    for await (const chunk of stream) {
+      if (chunk.text?.trim()) replied = true;
+      yield chunk;
+    }
+  } catch (error) {
+    if (replied) throw error;
+    onRecover?.(`stream_error: ${(error as Error)?.message}`);
+  }
+  if (replied) return;
+  onRecover?.('empty_stream');
+  let text = '';
+  try {
+    text = (await recover()).trim();
+  } catch {
+    text = '';
+  }
+  yield {text: text || EMPTY_REPLY_MESSAGE};
 }
 
 async function* createSafeFallbackStream(
@@ -188,7 +227,9 @@ export async function streamCriticalChatResponse(
     userText: latestUserText,
   });
 
-  const groqModels = getGroqModelsForPrompt(userTextForGroqRouting);
+  const groqModels = getGroqModelsForPrompt(userTextForGroqRouting, {
+    hasHistory: groqHistory.length > 0,
+  });
 
   if (groqClient.isConfigured()) {
     try {
@@ -223,8 +264,38 @@ export async function streamCriticalChatResponse(
         fast_mode: groqModels.fastMode,
       });
 
+      const recovered = withEmptyReplyRecovery(
+        stream,
+        async () =>
+          (
+            await generateTextWithGroqFallback({
+              messages: chatMessages,
+              temperature: 0.7,
+              timeoutMs: 15_000,
+              // The other model first: the one that just came back empty
+              // is likely to again.
+              primaryModel: usedFallback
+                ? groqModels.primaryModel
+                : groqModels.fallbackModel,
+              fallbackModel: effectiveModel,
+            })
+          ).text,
+        reason => {
+          void recordAiMetric({
+            event: 'chat_empty_reply_recovery',
+            task,
+            endpoint: metricsEndpoint,
+            provider: 'groq',
+            model: effectiveModel,
+            user: userId,
+            memory: memoryIdForMetrics,
+            error_message: reason,
+          });
+        },
+      );
+
       return {
-        stream: sanitizeMementoStream(stream),
+        stream: sanitizeMementoStream(recovered),
         modelLabel: `groq:${effectiveModel}`,
         recordUserMessageInDb: true,
       };
