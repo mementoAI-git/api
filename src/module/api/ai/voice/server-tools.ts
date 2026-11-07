@@ -3,10 +3,13 @@ import User from '../../../database/model/user';
 import VoiceAction from '../../../database/model/voice-action';
 import * as users from '../../user/service';
 import {CONTENT_ACTION_HANDLERS} from './content-actions';
+import {CHAT_TOOL_HANDLERS} from '../chat-tools/tools';
+import {FRONTEND_URL} from '../../../../utils/config';
 import {findStory} from './find-story';
 import type {VoiceToolOutcome, VoiceToolRun} from './server-tool-types';
 import {
   OPEN_STORY_TOOL_NAME,
+  SHARED_READ_TOOL_NAMES,
   UNDO_LAST_ACTION_TOOL_NAME,
   UPDATE_PROFILE_TOOL_NAME,
 } from './server-tool-declarations';
@@ -146,6 +149,45 @@ async function openStory(
   };
 }
 
+function appOrigin(): string {
+  try {
+    return FRONTEND_URL ? new URL(FRONTEND_URL).origin : 'https://mymemento.io';
+  } catch {
+    return 'https://mymemento.io';
+  }
+}
+
+/** A chat lookup's text, made for speaking: no links to read aloud. */
+export function forSpeech(text: string): string {
+  return text
+    .replace(/ \[link: [^\]]+\]/g, '')
+    .replace(/\[share link: [^\]]+\]/g, '[has a public share link]')
+    .replace(
+      /https?:\/\/\S+\/post\/[0-9a-fA-F]{24}\s*\.?/g,
+      "a public link they can copy from the story's Share option. ",
+    )
+    .replace(/ Give that link on its own line\./g, ' Never read a link aloud.')
+    .replace(/ Do not offer a link,/g, ' Do not read out a link,');
+}
+
+/** Read-only lookups shared with chat, so voice can look up the same things. */
+const SHARED_READ_HANDLERS = Object.fromEntries(
+  SHARED_READ_TOOL_NAMES.map(name => [
+    name,
+    async (userId: string, args: Record<string, unknown>) => {
+      try {
+        const {text} = await CHAT_TOOL_HANDLERS[name](args, {
+          userId,
+          origin: appOrigin(),
+        });
+        return {result: forSpeech(text), effects: []} as VoiceToolRun;
+      } catch (error) {
+        return failed(error);
+      }
+    },
+  ]),
+);
+
 /** The voice call a tool runs in, as the app identifies it. */
 export type VoiceToolContext = {sessionId?: string};
 
@@ -162,6 +204,7 @@ const HANDLERS: Record<
   [UNDO_LAST_ACTION_TOOL_NAME]: (userId, _args, context) =>
     undoLastAction(userId, {sessionId: context.sessionId}),
   ...CONTENT_ACTION_HANDLERS,
+  ...SHARED_READ_HANDLERS,
 };
 
 /** How long a repeated call waits for the first one to finish. */
@@ -253,19 +296,29 @@ export async function runVoiceServerTool(
     effects: run.effects,
     ...(run.confirm && {confirm: run.confirm}),
     ...(run.summary && {summary: run.summary}),
+    // A repeated call returns this stored outcome, so it carries the id too.
+    ...(claim && run.undo && {actionId: claim}),
   };
   const entry = {
     outcome,
     ...(run.undo && {undo: run.undo}),
     ...(run.summary && {summary: run.summary}),
   };
+  let actionId: string | undefined;
   if (claim) {
     await VoiceAction.updateOne(
       {_id: claim},
       {$set: {...entry, running: false}},
     );
+    actionId = run.undo ? claim : undefined;
   } else if (run.undo) {
-    await VoiceAction.create({user: userId, tool: name, ...session, ...entry});
+    const logged = await VoiceAction.create({
+      user: userId,
+      tool: name,
+      ...session,
+      ...entry,
+    });
+    actionId = String(logged._id);
   }
-  return outcome;
+  return actionId ? {...outcome, actionId} : outcome;
 }

@@ -7,13 +7,14 @@ import {SERVER_TOOL_DECLARATIONS} from '../voice/server-tool-declarations';
  * Confirm / Cancel card, and the Confirm button runs it with the code.
  *
  * Left out: open_story and explain_observation (chat has its own read
- * lookups), remember_fact and forget_observation (chat already handles
- * "remember that…" and "forget that…" in remember.ts), and the capsule
- * tools (capsules are hidden on web).
+ * lookups) and the capsule tools (capsules are hidden on web). The wording
+ * match in remember.ts stays as the fallback for remembering and forgetting.
  */
 export const CHAT_ACTION_NAMES = [
   'update_profile',
   'save_story',
+  'remember_fact',
+  'forget_observation',
   'quick_note',
   'correct_observation',
   'edit_story',
@@ -89,6 +90,23 @@ export type PendingConfirmation = {
 export const CONFIRM_FENCE = 'memento-confirm';
 /** A card the host has confirmed: shown as done, without buttons. */
 export const CONFIRMED_FENCE = 'memento-confirmed';
+
+/** Something chat did straight away, shown under the reply with Undo. */
+export type DoneAction = {
+  tool: ChatActionName;
+  memory: string;
+  text: string;
+  /** The logged action Undo reverses; absent when it cannot be undone. */
+  action?: string;
+};
+
+export const DONE_FENCE = 'memento-done';
+/** A done card the host has undone. */
+export const UNDONE_FENCE = 'memento-undone';
+
+export function doneBlock(done: DoneAction): string {
+  return `\n\n\`\`\`${DONE_FENCE}\n${JSON.stringify(done)}\n\`\`\``;
+}
 
 /** The card's block, appended to the reply for the apps to show as buttons. */
 export function confirmationBlock(pending: PendingConfirmation): string {

@@ -14,6 +14,8 @@
     "mongoose": "^8.13.0"
   },
   "scripts": {
+    "env:set": "bash scripts/set-env-key.sh",
+    "eval:chat-tools": "ts-node --transpile-only src/scripts/eval-chat-tools.ts",
     "start": "node --dns-result-order=ipv4first build/src/index.js",
     "dev": "NODE_OPTIONS=--dns-result-order=ipv4first nodemon src/index.ts",
     "build": "npm run clean && npm run compile && cp -R views build/ && cp -R public build/ && cp -R src/module/api/billing/providers/certs build/src/module/api/billing/providers/",

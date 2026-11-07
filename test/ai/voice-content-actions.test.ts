@@ -125,6 +125,19 @@ describe('voice content actions', () => {
       });
     });
 
+    it('saves photos sent with the message, even without words', async () => {
+      const user = await createUserFixture();
+      const photo = '64b7f0c2a1b2c3d4e5f60aaa';
+      const outcome = await runVoiceServerTool(user.id, 'save_story', {
+        attachments: [photo, 'not-an-id'],
+      });
+      expect(memoryService.createMemory).toHaveBeenCalledWith(
+        expect.objectContaining({attachments: [photo], body: ''}),
+        user.id,
+      );
+      expect(outcome.result).toContain('the photo or file they sent');
+    });
+
     it('does not save an empty story', async () => {
       const user = await createUserFixture();
       await runVoiceServerTool(user.id, 'save_story', {title: 'Empty'});
@@ -346,6 +359,18 @@ describe('voice content actions', () => {
       expect(outcome.result).toContain('Nothing was changed.');
       expect(outcome.result).toContain('"Early riser"');
       expect(observations.updateObservation).not.toHaveBeenCalled();
+    });
+
+    it('opens one observation, falling back to Insights for older apps', async () => {
+      const user = await createUserFixture();
+      vi.mocked(observations.findObservation).mockResolvedValueOnce(card);
+      const outcome = await runVoiceServerTool(user.id, 'open_insight', {
+        query: 'early mornings',
+      });
+      expect(outcome.effects).toEqual([
+        {type: 'open', destination: 'insights'},
+        {type: 'open_insight', id: card.id},
+      ]);
     });
 
     it('corrects an observation in the host words, keeping its heading, and undoes it', async () => {

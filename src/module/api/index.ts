@@ -22,6 +22,7 @@ import pushDeviceRoutes from './push-device/routes';
 import sentryTunnelRoutes from './sentry_tunnel/routes';
 import userRoutes from './user/routes';
 import publicProfileRoutes from './public-profile/routes';
+import publicStoryRoutes from './public-story/routes';
 import webhookRoutes from './webhook/routes';
 import {SENTRY_TUNNEL_ENABLED} from '../../utils/config';
 import {getReadiness} from '../../services/readiness';
@@ -51,6 +52,7 @@ const API_ROUTES: ReadonlyArray<{path: string; router: IRouter}> = [
     : []),
   {path: 'users', router: userRoutes},
   {path: 'public/profiles', router: publicProfileRoutes},
+  {path: 'public/stories', router: publicStoryRoutes},
   {path: 'webhooks', router: webhookRoutes},
 ];
 

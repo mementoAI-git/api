@@ -6,7 +6,7 @@
  */
 
 export type ChatLinkTarget = {
-  type: 'story' | 'conversation';
+  type: 'story' | 'conversation' | 'observation';
   /** Stories visible to everyone have a public /post link. */
   shareable?: boolean;
 };
@@ -14,6 +14,8 @@ export type ChatLinkTarget = {
 export type ChatLinks = {
   /** The app's origin, for share links and absolute Memento URLs. */
   origin?: string;
+  /** False for apps that cannot open in-app links: those lose their link. */
+  inApp?: boolean;
   targets: Map<string, ChatLinkTarget>;
 };
 
@@ -21,6 +23,7 @@ const OBJECT_ID = '[0-9a-fA-F]{24}';
 const STORY_PATH = new RegExp(`^/stories/(${OBJECT_ID})/?$`);
 const CHAT_PATH = new RegExp(`^/chat/(${OBJECT_ID})/?$`);
 const POST_PATH = new RegExp(`^/post/(${OBJECT_ID})/?$`);
+const INSIGHT_LINK = new RegExp(`^/insights\\?observation=(${OBJECT_ID})$`);
 const TOKEN =
   /\[([^\]\n]{1,300})\]\(([^)\s]{1,500})\)|(https?:\/\/[^\s<>()[\]]+)/g;
 /** Longest stretch held back waiting for a link to finish. */
@@ -36,6 +39,8 @@ function originHost(origin?: string): string | undefined {
 
 /** The path of a Memento URL (relative, or on the app's origin), else undefined. */
 function mementoPath(url: string, host?: string): string | undefined {
+  // An insight link keeps its query: it names the observation.
+  if (INSIGHT_LINK.test(url)) return url;
   if (url.startsWith('/') && !url.startsWith('//')) return url.split(/[?#]/)[0];
   if (!host) return undefined;
   try {
@@ -50,7 +55,16 @@ function mementoPath(url: string, host?: string): string | undefined {
 
 /** The link to keep for a Memento path, or null to drop it. */
 function allowed(path: string, links: ChatLinks): string | null {
+  const insight = path.match(INSIGHT_LINK);
+  if (insight) {
+    return links.inApp !== false &&
+      links.targets.get(insight[1])?.type === 'observation'
+      ? `/insights?observation=${insight[1]}`
+      : null;
+  }
   const story = path.match(STORY_PATH);
+  if (story && links.inApp === false) return null;
+  if (path.match(CHAT_PATH) && links.inApp === false) return null;
   if (story) {
     return links.targets.get(story[1])?.type === 'story'
       ? `/stories/${story[1]}`

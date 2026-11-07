@@ -1,4 +1,9 @@
-import {confirmChatAction as confirmChatActionService} from './chat-tools/confirm';
+import {
+  confirmChatAction as confirmChatActionService,
+  undoChatAction as undoChatActionService,
+} from './chat-tools/confirm';
+import {chatFeaturesFrom} from './chat-features';
+import {previewLink} from '../../../services/link-preview';
 import {digitalMindNameFromHeader} from '../../../utils/ai-prompt/digital-mind';
 import {getTranscriptionInput} from './transcription-input';
 import {NextFunction, Response} from 'express';
@@ -46,7 +51,24 @@ export async function autogenerateStoryTitle(
   }
 }
 
+/**
+ * A frame sent before the reply's words, to apps that asked for status
+ * lines: a record separator, JSON, a newline. Once one is sent the headers
+ * are out, so the model label travels as a frame too.
+ */
+function writeFrame(res: Response, data: Record<string, string>) {
+  if (!res.headersSent) {
+    // No Content-Type, like the reply itself: a compressible type would make
+    // the compression middleware buffer the stream.
+    res.setHeader('Cache-Control', 'no-cache');
+    res.flushHeaders();
+  }
+  res.write(`\u001e${JSON.stringify(data)}\n`);
+  (res as Response & {flush?: () => void}).flush?.();
+}
+
 export async function prompt(req: IRequest, res: Response, next: NextFunction) {
+  const features = chatFeaturesFrom(name => req.get(name));
   try {
     const response = await service.prompt(
       {
@@ -56,9 +78,16 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
         ),
       },
       req.auth.id,
+      features,
+      features.status
+        ? text => {
+            if (!res.writableEnded) writeFrame(res, {status: text});
+          }
+        : undefined,
     );
     if (response.modelLabel) {
-      res.setHeader('x-ai-model', response.modelLabel);
+      if (!res.headersSent) res.setHeader('x-ai-model', response.modelLabel);
+      else writeFrame(res, {model: response.modelLabel});
     }
     return await service.handleStreaming(
       req.auth.id,
@@ -71,9 +100,18 @@ export async function prompt(req: IRequest, res: Response, next: NextFunction) {
         userMessageSaved: response.userMessageSaved,
         links: response.links,
         confirmations: response.confirmations,
+        dones: response.dones,
       },
     );
   } catch (error) {
+    // A status line already went out, so the reply has begun: end it plainly.
+    if (res.headersSent) {
+      res.write(
+        `ERROR: ${(error as Error)?.message || 'Something went wrong'}`,
+      );
+      res.end();
+      return;
+    }
     next(error);
   }
 }
@@ -301,6 +339,24 @@ function stringOrUndefined(value: unknown): string | undefined {
     : undefined;
 }
 
+/** The Undo button under something chat did. */
+export async function undoChatAction(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await undoChatActionService(
+      req.auth.id,
+      String(req.body.memory),
+      String(req.body.action),
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
 /** The Confirm button on a chat confirmation card. */
 export async function confirmChatAction(
   req: IRequest,
@@ -401,6 +457,20 @@ export async function getAvailableVoices(
       typeof req.query.provider === 'string' ? req.query.provider : undefined;
     const {message, data} = await service.getAvailableVoices(provider);
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Title, site, preview image and icon for a link shown in chat. */
+export async function getLinkPreview(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await previewLink(String(req.query.url));
+    return responsHandler(res, StatusCodes.OK, 'Link preview', data);
   } catch (error) {
     next(error);
   }

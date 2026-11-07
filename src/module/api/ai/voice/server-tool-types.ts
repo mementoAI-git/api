@@ -16,7 +16,9 @@ export type VoiceToolEffect =
         | 'observations';
     }
   | {type: 'open'; destination: (typeof VOICE_SCREEN_DESTINATIONS)[number]}
-  | {type: 'open_story'; id: string};
+  | {type: 'open_story'; id: string}
+  /** Opens one observation; apps that do not know it open Insights from the effect before. */
+  | {type: 'open_insight'; id: string};
 
 export type VoiceToolOutcome = {
   result: string;
@@ -25,6 +27,8 @@ export type VoiceToolOutcome = {
   confirm?: {readBack: string; code: string};
   /** What was done, in a few words, when something was. */
   summary?: string;
+  /** The logged action, when it can be undone (see undo.ts). */
+  actionId?: string;
 };
 
 /** How to reverse something Memento did by voice ("undo that"). */
