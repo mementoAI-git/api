@@ -4221,6 +4221,10 @@
                           "format": "date-time",
                           "type": "string"
                         },
+                        "has_used_trial": {
+                          "description": "True once the member has had a subscription. Checkout offers no trial after that.",
+                          "type": "boolean"
+                        },
                         "provider": {
                           "example": "polar",
                           "type": "string"
@@ -8320,6 +8324,156 @@
         ]
       }
     },
+    "/persona/observations": {
+      "get": {
+        "description": "The curated observations written for the member. Stored facts are considered in the background and only meaningful ones become cards, so poll while generating is true.",
+        "responses": {
+          "200": {
+            "description": "Observations retrieved successfully"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List observations",
+        "tags": [
+          "Persona"
+        ]
+      }
+    },
+    "/persona/observations/{observationId}": {
+      "delete": {
+        "description": "Removes the observation and stops it being extracted again. Source memories are kept.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "observationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observation forgotten"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Observation not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Forget an observation",
+        "tags": [
+          "Persona"
+        ]
+      },
+      "patch": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "observationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "heading": {
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  "note": {
+                    "maxLength": 378,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "heading",
+                  "note"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Observation updated"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Observation not found"
+          },
+          "422": {
+            "description": "Invalid observation"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Edit an observation",
+        "tags": [
+          "Persona"
+        ]
+      }
+    },
+    "/persona/observations/{observationId}/sources": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "observationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Observation sources retrieved"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Observation not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List the memories behind an observation",
+        "tags": [
+          "Persona"
+        ]
+      }
+    },
     "/persona/pending-insights": {
       "get": {
         "description": "Retrieve a list of pending insights extracted from user memories that need approval or rejection",
@@ -10746,6 +10900,201 @@
           }
         ],
         "summary": "Complete Onboarding",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/insights": {
+      "get": {
+        "description": "Returns up to 4 insights that connect the member's memories. The evidence is re-evaluated in the background every 3 to 5 days when there is new material, and an insight only appears once several memories across different dates support it, so this list may be empty. Poll while generating is true.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "generated_at": {
+                          "format": "date-time",
+                          "nullable": true,
+                          "type": "string"
+                        },
+                        "generating": {
+                          "type": "boolean"
+                        },
+                        "insights": {
+                          "items": {
+                            "properties": {
+                              "body": {
+                                "type": "string"
+                              },
+                              "categories": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "source_count": {
+                                "minimum": 0,
+                                "type": "integer"
+                              },
+                              "status": {
+                                "enum": [
+                                  "emerging",
+                                  "established"
+                                ],
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "body",
+                              "categories",
+                              "source_count",
+                              "status"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        },
+                        "next_refresh_at": {
+                          "format": "date-time",
+                          "nullable": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "insights",
+                        "generating"
+                      ],
+                      "type": "object"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Insights retrieved"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get the current insights",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/insights/sources": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Insight id. Provide this or category.",
+            "in": "query",
+            "name": "insight",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Enrichment field key. Provide this or insight.",
+            "in": "query",
+            "name": "category",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "sources": {
+                          "items": {
+                            "properties": {
+                              "created_at": {
+                                "format": "date-time",
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "id": {
+                                "type": "string"
+                              },
+                              "thumbnail": {
+                                "nullable": true,
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "enum": [
+                                  "story",
+                                  "conversation"
+                                ],
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "title",
+                              "type"
+                            ],
+                            "type": "object"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "required": [
+                        "sources"
+                      ],
+                      "type": "object"
+                    },
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Insight sources retrieved"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Insight not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List the memories behind an insight or enrichment field",
         "tags": [
           "Users"
         ]

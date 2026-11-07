@@ -12,6 +12,14 @@ export async function findReadableMemory(
   memoryId: string,
   principal: MemoryPrincipal,
 ): Promise<MemoryDocument | null> {
+  if (principal.userId) {
+    const owned = await Memory.findOne({
+      _id: memoryId,
+      user: principal.userId,
+      status: {$ne: 'deleted'},
+    });
+    if (owned) return owned;
+  }
   const branches: FilterQuery<IMemory>[] = [
     {
       visibility: 'everyone',

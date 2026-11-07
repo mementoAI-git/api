@@ -1,3 +1,4 @@
+import * as connectionVoice from './voice';
 import {NextFunction, Response} from 'express';
 import {IRequest} from '../../../utils/interface';
 import {responsHandler} from '../../../utils/helpers';
@@ -148,6 +149,14 @@ export async function label(req: IRequest, res: Response, next: NextFunction) {
         String(req.params.personId),
         req.auth.id,
         req.body.label,
+        req.body.display_name,
+        Object.fromEntries(
+          Object.entries(req.body).filter(([key]) =>
+            ['about', 'group_ids', 'access_scope', 'avatar_file_id'].includes(
+              key,
+            ),
+          ),
+        ),
       ),
     );
   } catch (error) {
@@ -248,7 +257,11 @@ export async function talkHistory(
       res,
       200,
       'Private Talk',
-      await talk.history(String(req.params.personId), req.auth.id),
+      await talk.history(
+        String(req.params.personId),
+        req.auth.id,
+        req.query.shared_space === 'true',
+      ),
     );
   } catch (error) {
     next(error);
@@ -266,6 +279,46 @@ export async function talkSend(
       'Memento response',
       await talk.send(String(req.params.personId), req.auth.id, req.body),
     );
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function voiceRecord(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    return responsHandler(
+      res,
+      200,
+      'Private voice conversation',
+      await connectionVoice.record(
+        String(req.params.personId),
+        req.auth.id,
+        req.body,
+      ),
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function voiceStatus(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await connectionVoice.assertCurrent(
+      String(req.params.personId),
+      req.auth.id,
+      String(req.params.sessionId),
+    );
+    return responsHandler(res, 200, 'Voice context available', {
+      available: true,
+    });
   } catch (error) {
     next(error);
   }

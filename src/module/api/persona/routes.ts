@@ -24,5 +24,22 @@ router.post(
   ctrl.rejectPendingInsight,
 );
 
+router.get('/observations', ctrl.listObservations);
+router.get(
+  '/observations/:observationId/sources',
+  validate(dto.observationParamsSchema),
+  ctrl.getObservationSources,
+);
+router.patch(
+  '/observations/:observationId',
+  validate(dto.updateObservationSchema),
+  ctrl.updateObservation,
+);
+router.delete(
+  '/observations/:observationId',
+  validate(dto.observationParamsSchema),
+  ctrl.forgetObservation,
+);
+
 export const name = 'persona';
 export default router;

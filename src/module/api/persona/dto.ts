@@ -13,3 +13,17 @@ export const pendingInsightActionSchema = z.object({
     pendingId: mongoIdSchema,
   }),
 });
+
+const observationIdSchema = mongoIdSchema;
+
+export const observationParamsSchema = z.object({
+  params: z.strictObject({observationId: observationIdSchema}),
+});
+
+export const updateObservationSchema = z.object({
+  params: z.strictObject({observationId: observationIdSchema}),
+  body: z.strictObject({
+    heading: z.string().trim().min(1).max(120),
+    note: z.string().trim().min(1).max(378),
+  }),
+});

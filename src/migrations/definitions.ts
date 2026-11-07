@@ -292,4 +292,61 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
       await db.collection('staff_audits').createIndex({staff_id: 1});
     },
   },
+  {
+    id: '202611050001_insight_batch_indexes',
+    up: async db => {
+      const batches = db.collection('insight_batches');
+      // The unique user index is what limits generation to one reader at a time.
+      await batches.createIndex({user: 1}, {unique: true});
+      await batches.createIndex({'insights.memories': 1});
+    },
+  },
+  {
+    id: '202611060001_insight_evidence_reset',
+    up: async db => {
+      const batches = db.collection('insight_batches');
+      await batches.dropIndex('insights.memories_1').catch(() => undefined);
+      await batches.createIndex({'insights.evidence.memory': 1});
+      // Batches made under the old rules have no dated evidence to build on.
+      await batches.updateMany(
+        {},
+        {
+          $set: {
+            insights: [],
+            previous_titles: [],
+            generated_at: null,
+            generating_until: null,
+            next_refresh_at: new Date(0),
+          },
+        },
+      );
+    },
+  },
+  {
+    id: '202611060002_observation_views',
+    up: async db => {
+      // The unique user index is what limits curation to one reader at a time.
+      await db
+        .collection('observation_views')
+        .createIndex({user: 1}, {unique: true});
+    },
+  },
+  {
+    id: '202611060003_insight_tightened_reset',
+    up: async db => {
+      // Re-evaluate everyone under the rule against plain descriptions.
+      await db.collection('insight_batches').updateMany(
+        {},
+        {
+          $set: {
+            insights: [],
+            previous_titles: [],
+            generated_at: null,
+            generating_until: null,
+            next_refresh_at: new Date(0),
+          },
+        },
+      );
+    },
+  },
 ];

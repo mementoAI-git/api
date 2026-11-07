@@ -73,6 +73,22 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
+    name: 'remember_fact',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Save a fact about the host when they ask you to remember it ("remember that…", "add this as a fact", "save this to your memory"). It goes straight into what you know about them and appears in their Observations. For a story or a note they asked to save, use save_story or quick_note instead.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        fact: {
+          type: Type.STRING,
+          description: 'What to remember, in their own words.',
+        },
+      },
+      required: ['fact'],
+    },
+  },
+  {
     name: 'bookmark_story',
     behavior: Behavior.BLOCKING,
     description:

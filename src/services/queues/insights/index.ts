@@ -29,6 +29,9 @@ export const insightQueue = connection
 // Redis keys
 const BUFFER_PREFIX = 'insights:buffer:';
 const BATCH_SIZE = 5;
+/** A conversation this quiet is over for now, so whatever it said gets read. */
+export const INSIGHTS_QUIET_MS = 10 * 60 * 1000;
+export const FLUSH_BUFFER_JOB = 'flush-insights-buffer';
 
 /**
  * Get buffer key for Redis
@@ -75,6 +78,56 @@ async function flushInsightsBuffer(buffer: ExchangeBuffer): Promise<void> {
   }
 }
 
+/**
+ * The buffer expires after an hour, so short conversations must be read before
+ * that or they teach Memento nothing. Job ids are per time slot, because a job
+ * cannot replace itself while it is running.
+ */
+async function scheduleBufferFlush(
+  userId: string,
+  memoryId: string,
+  delay: number,
+): Promise<void> {
+  if (!insightQueue) return;
+  const slot = Math.floor((Date.now() + delay) / INSIGHTS_QUIET_MS);
+  await insightQueue.add(
+    FLUSH_BUFFER_JOB,
+    {user_id: userId, memory_id: memoryId},
+    {
+      delay,
+      jobId: `insights-flush-${userId}-${memoryId}-${slot}`,
+      removeOnComplete: true,
+      removeOnFail: true,
+    },
+  );
+}
+
+/** Reads a conversation's buffer now, or checks again if it is still active. */
+export async function flushQuietBuffer(
+  userId: string,
+  memoryId: string,
+): Promise<void> {
+  if (!redisClient.isOpen) await redisClient.connect();
+  const existing = await redisClient.get(getBufferKey(userId, memoryId));
+  if (!existing) return;
+  const buffer: ExchangeBuffer = parseJson(existing as string);
+  const quietFor = Date.now() - buffer.lastUpdated;
+  if (quietFor >= INSIGHTS_QUIET_MS) await flushInsightsBuffer(buffer);
+  else {
+    await scheduleBufferFlush(userId, memoryId, INSIGHTS_QUIET_MS - quietFor);
+  }
+}
+
+/** For when a conversation has definitely ended, such as a voice call. */
+export async function flushBufferNow(
+  userId: string,
+  memoryId: string,
+): Promise<void> {
+  if (!redisClient.isOpen) await redisClient.connect();
+  const existing = await redisClient.get(getBufferKey(userId, memoryId));
+  if (existing) await flushInsightsBuffer(parseJson(existing as string));
+}
+
 export async function addToInsightsBuffer(
   userId: string,
   memoryId: string,
@@ -114,6 +167,8 @@ export async function addToInsightsBuffer(
     // Check if we should flush
     if (buffer.exchanges.length >= BATCH_SIZE) {
       await flushInsightsBuffer(buffer);
+    } else {
+      await scheduleBufferFlush(userId, memoryId, INSIGHTS_QUIET_MS);
     }
   } catch (error) {
     console.error('Error adding to insights buffer:', error);

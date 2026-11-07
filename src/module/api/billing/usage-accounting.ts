@@ -75,7 +75,10 @@ export async function applyUsageDelta(
 export async function reconcileUsageCounts(userId: string): Promise<boolean> {
   const [beneficiaryCount, timedMessageCount, timeCapsuleCount, current] =
     await Promise.all([
-      Beneficiary.countDocuments({benefactor: userId}),
+      Beneficiary.countDocuments({
+        benefactor: userId,
+        status: {$ne: 'removed'},
+      }),
       Capsule.countDocuments({user: userId, status: 'scheduled'}),
       Capsule.countDocuments({user: userId, status: {$ne: 'received'}}),
       Usage.findOne({user_id: userId})

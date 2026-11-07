@@ -33,6 +33,7 @@ export type VoiceUndo =
     }
   | {kind: 'bookmark'; id: string; on: boolean}
   | {kind: 'remove_story'; id: string}
+  | {kind: 'forget_observation'; id: string}
   | {kind: 'restore_story'; id: string}
   | {kind: 'remove_capsule'; id: string}
   | {

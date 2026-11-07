@@ -13,6 +13,7 @@ import {queueStoryInsights} from '../../services/queues/insights';
 import {queueSummarization} from '../../services/queues/summarization';
 import type {QuickCaptureEnrichmentJobData} from '../../services/queues/quick-capture';
 import {isActiveAccount} from '../../services/account-purge/account-state';
+import {transcribeMemoryAudio} from '../../services/memory-audio-transcripts';
 import {
   buildTagsJsonInstructions,
   ensureStoryAutogenTagCount,
@@ -255,7 +256,26 @@ export default function startQuickCaptureWorker(connection: RedisConnection) {
         return;
       }
 
-      const plain = stripHtml(memory.body || '');
+      const voice = await transcribeMemoryAudio(user_id, memory.attachments);
+
+      // Spoken words inform the title and tags; the story's own body stays as written.
+      const plain = [stripHtml(memory.body || ''), voice.text]
+        .filter(Boolean)
+        .join('\n\n');
+
+      if (!plain && voice.recordings > 0) {
+        // Nothing to read yet, so don't ask the AI to invent a title from an empty note.
+        await Memory.findByIdAndUpdate(memory_id, {
+          ...(isQuickCapture &&
+            shouldOverwriteQuickCaptureTitle(
+              memory.title || '',
+              Boolean(memory.prompt_text?.trim()),
+            ) && {title: 'Voice note'}),
+          enrichment_status: 'complete',
+        });
+        if (memory.status === 'save') queueSavedStoryJobs(user_id, memory_id);
+        return;
+      }
 
       const promptLine = memory.prompt_text?.trim()
         ? `<reflection_prompt>
@@ -321,8 +341,11 @@ ${plain || '(empty)'}
 
         const category = normalizeCategory(parsed?.category);
 
+        // Members hear a recording, not its transcript, so there's nothing to warn about.
         const unclear =
-          Boolean(transcript_uncertain) || Boolean(parsed?.transcript_unclear);
+          voice.recordings === 0 &&
+          (Boolean(transcript_uncertain) ||
+            Boolean(parsed?.transcript_unclear));
 
         if (!(await isActiveAccount(user_id))) {
           return;

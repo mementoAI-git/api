@@ -36,6 +36,17 @@ describe('staging Pro entitlement', () => {
     });
   });
 
+  it('still has a trial available for when auto Pro ends', async () => {
+    const user = await createUserFixture();
+    const summary = await getSubscriptionSummary(user.id);
+    expect(summary.data).toMatchObject({tier: 'pro', has_used_trial: false});
+    expect(await Subscription.findOne({user_id: user.id}).lean()).toMatchObject(
+      {
+        has_used_trial: false,
+      },
+    );
+  });
+
   it.each(['free', 'expired', 'legacy'])(
     'gives an existing %s account Pro without rewriting billing history',
     async kind => {

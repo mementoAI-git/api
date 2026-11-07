@@ -1,4 +1,5 @@
 import z from 'zod';
+import {ENRICHMENT_CATEGORIES} from '../../../services/enrichment';
 
 export const onboardingSchema = z.object({
   body: z.strictObject({
@@ -53,3 +54,17 @@ export const onboardingChatPromptSchema = z.object({
 export type OnboardingChatPromptBody = z.infer<
   typeof onboardingChatPromptSchema
 >['body'];
+
+export const insightSourcesSchema = z.object({
+  query: z
+    .strictObject({
+      insight: z
+        .string()
+        .regex(/^[a-fA-F0-9]{24}$/, 'Invalid insight ID')
+        .optional(),
+      category: z.enum(ENRICHMENT_CATEGORIES).optional(),
+    })
+    .refine(query => Boolean(query.insight) !== Boolean(query.category), {
+      message: 'Provide either an insight or a category',
+    }),
+});

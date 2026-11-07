@@ -906,6 +906,141 @@ const usersDocs = {
       },
     },
   },
+  '/users/insights': {
+    get: {
+      tags: ['Users'],
+      summary: 'Get the current insights',
+      description:
+        "Returns up to 4 insights that connect the member's memories. The evidence is re-evaluated in the background every 3 to 5 days when there is new material, and an insight only appears once several memories across different dates support it, so this list may be empty. Poll while generating is true.",
+      security: [{bearerAuth: []}],
+      responses: {
+        200: {
+          description: 'Insights retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: {type: 'boolean'},
+                  data: {
+                    type: 'object',
+                    required: ['insights', 'generating'],
+                    properties: {
+                      insights: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          required: [
+                            'id',
+                            'title',
+                            'body',
+                            'categories',
+                            'source_count',
+                            'status',
+                          ],
+                          properties: {
+                            id: {type: 'string'},
+                            title: {type: 'string'},
+                            body: {type: 'string'},
+                            categories: {
+                              type: 'array',
+                              items: {type: 'string'},
+                            },
+                            source_count: {type: 'integer', minimum: 0},
+                            status: {
+                              type: 'string',
+                              enum: ['emerging', 'established'],
+                            },
+                          },
+                        },
+                      },
+                      generated_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        nullable: true,
+                      },
+                      next_refresh_at: {
+                        type: 'string',
+                        format: 'date-time',
+                        nullable: true,
+                      },
+                      generating: {type: 'boolean'},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {description: 'Authentication required'},
+      },
+    },
+  },
+  '/users/insights/sources': {
+    get: {
+      tags: ['Users'],
+      summary: 'List the memories behind an insight or enrichment field',
+      security: [{bearerAuth: []}],
+      parameters: [
+        {
+          name: 'insight',
+          in: 'query',
+          schema: {type: 'string'},
+          description: 'Insight id. Provide this or category.',
+        },
+        {
+          name: 'category',
+          in: 'query',
+          schema: {type: 'string'},
+          description: 'Enrichment field key. Provide this or insight.',
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Insight sources retrieved',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  success: {type: 'boolean'},
+                  data: {
+                    type: 'object',
+                    required: ['sources'],
+                    properties: {
+                      sources: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          required: ['id', 'title', 'type'],
+                          properties: {
+                            id: {type: 'string'},
+                            title: {type: 'string'},
+                            type: {
+                              type: 'string',
+                              enum: ['story', 'conversation'],
+                            },
+                            created_at: {
+                              type: 'string',
+                              format: 'date-time',
+                              nullable: true,
+                            },
+                            thumbnail: {type: 'string', nullable: true},
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: {description: 'Authentication required'},
+        404: {description: 'Insight not found'},
+      },
+    },
+  },
   '/users/passkeys': {
     get: {
       tags: ['Users'],

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import {
   afterAll,
   afterEach,
@@ -7,6 +8,8 @@ import {
   expect,
   it,
 } from 'vitest';
+import InsightBatch from '../../src/module/database/model/insight-batch';
+import ObservationView from '../../src/module/database/model/observation-view';
 import Bookmark from '../../src/module/database/model/bookmarks';
 import Migration from '../../src/module/database/model/migration';
 import AiMetric from '../../src/module/database/model/ai-metric';
@@ -189,5 +192,53 @@ describe('database migrations', () => {
         }),
       ]),
     );
+  });
+
+  it('creates the unique insight batch index production relies on', async () => {
+    await migrateUp();
+
+    const indexes = await mongoose.connection
+      .db!.collection(InsightBatch.collection.name)
+      .indexes();
+
+    expect(indexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({key: {user: 1}, unique: true}),
+        expect.objectContaining({key: {'insights.evidence.memory': 1}}),
+      ]),
+    );
+  });
+
+  it('clears insights made under the old rules so they are re-evaluated', async () => {
+    const batches = mongoose.connection.db!.collection(
+      InsightBatch.collection.name,
+    );
+    await batches.insertOne({
+      user: 'old-rules-user',
+      insights: [{title: 'Weak', memories: ['a', 'b']}],
+      generated_at: new Date(),
+      next_refresh_at: new Date(Date.now() + 86_400_000),
+    });
+
+    await migrateUp();
+
+    expect(await batches.findOne({user: 'old-rules-user'})).toMatchObject({
+      insights: [],
+      generated_at: null,
+      next_refresh_at: new Date(0),
+    });
+  });
+
+  it('creates the unique observation view index', async () => {
+    await migrateUp();
+
+    expect(
+      await mongoose.connection.db!.collection('observation_views').indexes(),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({key: {user: 1}, unique: true}),
+      ]),
+    );
+    expect(ObservationView.collection.name).toBe('observation_views');
   });
 });

@@ -20,6 +20,8 @@ import {FeatureFlagAudit} from '../../module/database/model/feature-flag-audit';
 import Group from '../../module/database/model/group';
 import Memory from '../../module/database/model/memory';
 import Message from '../../module/database/model/message';
+import InsightBatch from '../../module/database/model/insight-batch';
+import ObservationView from '../../module/database/model/observation-view';
 import PendingInsight from '../../module/database/model/pending-insight';
 import Persona from '../../module/database/model/persona';
 import PurgeCommand, {
@@ -65,9 +67,11 @@ export const PURGE_MANIFEST = [
   {model: 'Feedback', disposition: 'delete'},
   {model: 'File', disposition: 'provider-delete'},
   {model: 'Group', disposition: 'delete'},
+  {model: 'InsightBatch', disposition: 'delete'},
   {model: 'Memory', disposition: 'delete'},
   {model: 'MemoryEmbedding', disposition: 'delete'},
   {model: 'Message', disposition: 'delete'},
+  {model: 'ObservationView', disposition: 'delete'},
   {model: 'PendingInsight', disposition: 'delete'},
   {model: 'Persona', disposition: 'delete'},
   {model: 'PushDevice', disposition: 'delete'},
@@ -343,6 +347,8 @@ async function deleteDomainRecords(command: IPurgeCommand): Promise<void> {
     {model: IapSubscriptionChain, filter: {user_id: userId}},
     {model: IapTransaction, filter: {user_id: userId}},
     {model: Message, filter: {user: userId}},
+    {model: InsightBatch, filter: {user: userId}},
+    {model: ObservationView, filter: {user: userId}},
     {model: PendingInsight, filter: {user: userId}},
     {model: Persona, filter: {user: userId}},
     {model: PushDevice, filter: {user_id: userId}},

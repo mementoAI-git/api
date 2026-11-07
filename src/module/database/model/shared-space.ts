@@ -8,6 +8,7 @@ interface ISharedSpace {
   status: 'active' | 'removed';
   blocked_by: string[];
   labels: Record<string, string>;
+  display_names: Record<string, string>;
 }
 
 // The sorted pair is the primary key, so concurrent resolution cannot create
@@ -18,6 +19,7 @@ const schema = new Schema<ISharedSpace>(
     status: {type: String, enum: ['active', 'removed'], default: 'active'},
     blocked_by: {type: [String], default: []},
     labels: {type: Map, of: String, default: {}},
+    display_names: {type: Map, of: String, default: {}},
     user_a: {type: String, required: true, immutable: true},
     user_b: {type: String, required: true, immutable: true},
   },

@@ -18,6 +18,7 @@ import {IBeneficiary} from '../database/model/beneficiary';
 import {INotifyTeamFeedback} from './interface';
 import otp, {OtpType} from '../../services/otp';
 import logger from '../../utils/logger';
+import {ServiceUnavailableException} from '../../utils/service-error';
 
 // const transport = nodemailer.createTransport({
 //   //@ts-ignore
@@ -30,12 +31,12 @@ import logger from '../../utils/logger';
 //   },
 // });
 
+const smtpPort = Number(MAIL_PORT);
 export const transport = nodemailer.createTransport({
-  //@ts-ignore
   host: MAIL_HOST,
-  port: MAIL_PORT,
-  secure: false,
-  requireTLS: true,
+  port: smtpPort,
+  secure: smtpPort === 465,
+  requireTLS: smtpPort !== 465,
   auth: {user: MAIL_USER, pass: MAIL_PASSWORD},
   connectionTimeout: 10_000,
   greetingTimeout: 10_000,
@@ -164,7 +165,11 @@ class MailService {
           : 'Your Memento Verification Code';
 
       const html = await this.renderTemplate(template, {name, code, email});
-      await this.send({to: email, subject, html});
+      if (!(await this.send({to: email, subject, html}))) {
+        throw new ServiceUnavailableException(
+          'Unable to send email. Please try again shortly.',
+        );
+      }
 
       return {
         code,
@@ -180,7 +185,11 @@ class MailService {
 
     const html = await this.renderTemplate(template, {name, url, email});
 
-    await this.send({to: email, subject, html});
+    if (!(await this.send({to: email, subject, html}))) {
+      throw new ServiceUnavailableException(
+        'Unable to send email. Please try again shortly.',
+      );
+    }
 
     return {
       code,

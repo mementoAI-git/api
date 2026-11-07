@@ -12,6 +12,8 @@ export interface IPeopleTurn {
   created_at: Date;
   order: number;
   is_voice: boolean;
+  attachments?: string[];
+  shared_input_id?: string;
 }
 const schema = new Schema<IPeopleTurn>({
   _id: {type: String, required: true},
@@ -20,6 +22,8 @@ const schema = new Schema<IPeopleTurn>({
   role: {type: String, enum: ['user', 'ai'], required: true},
   text: {type: String, required: true},
   source_ids: [String],
+  attachments: [String],
+  shared_input_id: String,
   context_source_ids: [String],
   context_versions: {type: Map, of: String},
   base_revision: String,

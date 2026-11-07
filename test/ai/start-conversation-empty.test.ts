@@ -11,7 +11,10 @@ vi.mock('../../src/services/redis', () => ({
 import Memory from '../../src/module/database/model/memory';
 import Message from '../../src/module/database/model/message';
 import User from '../../src/module/database/model/user';
-import {startConversation} from '../../src/module/api/ai/service';
+import {
+  readAttachments,
+  startConversation,
+} from '../../src/module/api/ai/service';
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -42,5 +45,19 @@ describe('starting a chat with nothing to say yet', () => {
     const first = await startConversation({} as never, user.id);
     const second = await startConversation({} as never, user.id);
     expect(second.data.memory_id).toBe(first.data.memory_id);
+  });
+});
+
+describe('sending an attachment when Gemini is failing', () => {
+  it('says what happened instead of a generic server error', async () => {
+    await expect(
+      readAttachments(() => Promise.reject(new Error('API key not valid'))),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining('can’t read attachments right now'),
+    });
+  });
+
+  it('passes a successful reply straight through', async () => {
+    await expect(readAttachments(async () => 'reply')).resolves.toBe('reply');
   });
 });

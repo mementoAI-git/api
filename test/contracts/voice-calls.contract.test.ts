@@ -5,6 +5,7 @@ vi.mock('../../src/module/api/ai/voice/text-generator', () => ({
   generateVoiceJson: vi.fn(),
 }));
 vi.mock('../../src/services/queues/insights', () => ({
+  flushBufferNow: vi.fn().mockResolvedValue(undefined),
   addToInsightsBuffer: vi.fn().mockResolvedValue(undefined),
 }));
 
