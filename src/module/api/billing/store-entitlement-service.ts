@@ -198,8 +198,9 @@ export async function applyStoreSubscriptionSnapshot({
           result = await Subscription.findOneAndUpdate(
             {user_id: userId},
             {
-              $setOnInsert: {user_id: userId, has_used_trial: false},
+              $setOnInsert: {user_id: userId},
               $set: {
+                has_used_trial: true,
                 tier: snapshot.entitlementActive ? 'pro' : 'free',
                 status: subscriptionStatus(snapshot),
                 payment_provider: snapshot.provider,

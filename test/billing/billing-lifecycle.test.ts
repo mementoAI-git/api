@@ -37,6 +37,8 @@ vi.mock('../../src/module/api/billing/providers/polar', () => polar);
 
 import {
   cancelSubscription,
+  createCheckoutSession,
+  getSubscriptionSummary,
   listInvoices,
   processPolarWebhook,
   resumeSubscription,
@@ -273,5 +275,96 @@ describe('Polar billing lifecycle', () => {
     });
     expect(resolveEffectiveTier(subscription)).toBe('free');
     expect(await BillingWebhookEvent.countDocuments()).toBe(2);
+  });
+});
+
+describe('one trial per member', () => {
+  beforeAll(connectTestReplicaSet);
+  afterEach(clearTestDatabase);
+  afterAll(closeTestDatabase);
+
+  const startCheckout = async (userId: string) => {
+    polar.createPolarCheckoutSession.mockResolvedValue({
+      checkoutUrl: 'https://polar.test/checkout',
+    });
+    await createCheckoutSession(userId, {
+      success_url: 'https://web.test/success',
+      cancel_url: 'https://web.test/cancel',
+    });
+    return polar.createPolarCheckoutSession.mock.calls.at(-1)?.[0];
+  };
+
+  it('offers the trial to a new member, even after an abandoned checkout', async () => {
+    const user = await createUserFixture();
+    expect(await startCheckout(user.id)).toMatchObject({allowTrial: true});
+    expect(await startCheckout(user.id)).toMatchObject({allowTrial: true});
+    expect((await getSubscriptionSummary(user.id)).data).toMatchObject({
+      has_used_trial: false,
+    });
+  });
+
+  it('keeps the trial for a member who has only redeemed a promo', async () => {
+    const user = await createUserFixture();
+    await Subscription.create({
+      user_id: user.id,
+      tier: 'pro',
+      status: 'active',
+      promo_code_used: 'BETA',
+    });
+    expect(await startCheckout(user.id)).toMatchObject({allowTrial: true});
+  });
+
+  it.each([
+    ['the recorded flag', {has_used_trial: true, status: 'active'}],
+    ['a past trial', {trial_ends_at: new Date('2020-01-01'), status: 'active'}],
+    [
+      'a past billing period',
+      {current_period_end: new Date('2020-01-01'), status: 'active'},
+    ],
+    ['a past interval', {billing_interval: 'annual', status: 'active'}],
+    ['a cancelled status', {status: 'cancelled'}],
+  ])(
+    'withholds the trial from a returning member with %s',
+    async (_, history) => {
+      const user = await createUserFixture();
+      await Subscription.create({user_id: user.id, tier: 'free', ...history});
+      expect(await startCheckout(user.id)).toMatchObject({allowTrial: false});
+      expect((await getSubscriptionSummary(user.id)).data).toMatchObject({
+        has_used_trial: true,
+      });
+    },
+  );
+
+  it('records the trial from a subscription webhook and keeps it after cancellation', async () => {
+    const user = await createUserFixture();
+    polar.resolvePolarProductPlan.mockReturnValue({
+      tier: 'pro',
+      interval: 'monthly',
+    });
+    const event = (status: string, trial_end: string | null) => ({
+      type: 'subscription.updated',
+      data: {
+        id: 'polar-sub',
+        external_customer_id: user.id,
+        status,
+        trial_end,
+      },
+    });
+    await processPolarWebhook(
+      event('trialing', '2026-02-01T00:00:00Z'),
+      'trial-start',
+    );
+    expect(await Subscription.findOne({user_id: user.id}).lean()).toMatchObject(
+      {
+        has_used_trial: true,
+      },
+    );
+    await processPolarWebhook(event('canceled', null), 'trial-cancel');
+    expect(await Subscription.findOne({user_id: user.id}).lean()).toMatchObject(
+      {
+        has_used_trial: true,
+      },
+    );
+    expect(await startCheckout(user.id)).toMatchObject({allowTrial: false});
   });
 });

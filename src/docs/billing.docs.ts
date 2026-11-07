@@ -86,6 +86,11 @@ const billingDocs = {
                         format: 'date-time',
                         nullable: true,
                       },
+                      has_used_trial: {
+                        type: 'boolean',
+                        description:
+                          'True once the member has had a subscription. Checkout offers no trial after that.',
+                      },
                       provider: {type: 'string', example: 'polar'},
                       currency: {type: 'string', example: 'USD'},
                       usage: {
