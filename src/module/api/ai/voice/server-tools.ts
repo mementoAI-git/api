@@ -248,7 +248,12 @@ export async function runVoiceServerTool(
     if (claim) await VoiceAction.deleteOne({_id: claim});
     throw error;
   }
-  const outcome: VoiceToolOutcome = {result: run.result, effects: run.effects};
+  const outcome: VoiceToolOutcome = {
+    result: run.result,
+    effects: run.effects,
+    ...(run.confirm && {confirm: run.confirm}),
+    ...(run.summary && {summary: run.summary}),
+  };
   const entry = {
     outcome,
     ...(run.undo && {undo: run.undo}),

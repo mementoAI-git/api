@@ -158,6 +158,12 @@ export const GROQ_MODEL_CHAT_PRIMARY =
   process.env.GROQ_MODEL_CHAT_PRIMARY || 'openai/gpt-oss-120b';
 export const GROQ_MODEL_CHAT_FALLBACK =
   process.env.GROQ_MODEL_CHAT_FALLBACK || 'openai/gpt-oss-20b';
+/** Picks chat's lookups before it replies; needs reliable tool calling. */
+export const GROQ_MODEL_CHAT_TOOLS =
+  process.env.GROQ_MODEL_CHAT_TOOLS || 'openai/gpt-oss-120b';
+/** Set to false to turn chat's lookups off. */
+export const CHAT_LOOKUPS_ENABLED =
+  process.env.CHAT_LOOKUPS_ENABLED !== 'false';
 export const GROQ_FAST_MODE_ENABLED =
   process.env.GROQ_FAST_MODE_ENABLED !== 'false';
 export const GROQ_FAST_MODE_MAX_INPUT_CHARS = Number(

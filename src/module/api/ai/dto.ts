@@ -152,6 +152,18 @@ export const voiceToolSchema = z.object({
   }),
 });
 
+export const chatActionSchema = z.object({
+  params: z.strictObject({
+    name: z.string().regex(/^[a-z_]{1,64}$/, 'Unknown action'),
+  }),
+  body: z.strictObject({
+    /** The conversation the card is in. */
+    memory: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid conversation'),
+    /** Exactly the details on the card, with its confirmation code. */
+    args: z.record(z.string(), z.unknown()),
+  }),
+});
+
 export const voiceMemorySearchSchema = z.object({
   body: z.strictObject({
     query: z.string().trim().min(1, 'Query is required').max(200),

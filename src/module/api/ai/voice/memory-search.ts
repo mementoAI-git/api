@@ -2,7 +2,10 @@ import dayjs from 'dayjs';
 import Memory from '../../../database/model/memory';
 import Message from '../../../database/model/message';
 import Beneficiary from '../../../database/model/beneficiary';
-import {getLongTermContext} from '../../../../services/embeddings/long-term';
+import {
+  getLongTermContext,
+  getLongTermRecall,
+} from '../../../../services/embeddings/long-term';
 import {MEMORY_RETRIEVAL} from '../../../../utils/config';
 import {withTimeout} from './with-timeout';
 
@@ -220,6 +223,9 @@ function excerptAround(text: string, words: string[]): string {
 }
 
 type Candidate = {
+  _id?: unknown;
+  type?: string;
+  visibility?: string;
   title?: string;
   summary?: string;
   body?: string;
@@ -244,9 +250,31 @@ function relevance(row: Candidate, words: string[]): number {
   return score;
 }
 
+/** A story or conversation a search found, for chat's links. */
+export type FoundMemory = {
+  id: string;
+  type: 'story' | 'conversation';
+  shareable?: boolean;
+};
+
+/** Chat only: results carry links, and what they found is collected. */
+type LinkOptions = {found?: Map<string, FoundMemory>};
+
+function linkFor(
+  id: string,
+  type: 'story' | 'conversation',
+  options: LinkOptions,
+  shareable?: boolean,
+): string {
+  if (!options.found) return '';
+  options.found.set(id, {id, type, ...(type === 'story' && {shareable})});
+  return ` [link: ${type === 'story' ? '/stories/' : '/chat/'}${id}]`;
+}
+
 async function searchStoredMemories(
   userId: string,
   queryWordsList: string[],
+  options: LinkOptions = {},
 ): Promise<string[]> {
   const words = queryWordsList.map(stem);
   if (!words.length) return [];
@@ -263,7 +291,7 @@ async function searchStoredMemories(
   })
     .sort({updated_at: -1})
     .limit(MAX_CANDIDATES)
-    .select('title summary body topics created_at updated_at')
+    .select('title summary body topics created_at updated_at type visibility')
     .lean();
 
   return rows
@@ -277,8 +305,12 @@ async function searchStoredMemories(
         : '';
       const quote = excerptAround(stripHtml(String(row.body || '')), words);
       const summary = String(row.summary || '').slice(0, MAX_SUMMARY_CHARS);
+      const type = row.type === 'story' ? 'story' : 'conversation';
+      const link = row._id
+        ? linkFor(String(row._id), type, options, row.visibility === 'everyone')
+        : '';
       return [
-        `- ${row.title || 'Untitled'}${saved}`,
+        `- ${row.title || 'Untitled'}${saved}${link}`,
         quote ? `  In their words: "${quote}"` : '',
         summary ? `  Summary: ${summary}` : '',
       ]
@@ -300,6 +332,7 @@ async function searchStoredMemories(
 async function searchConversations(
   userId: string,
   queryWordsList: string[],
+  options: LinkOptions = {},
 ): Promise<string[]> {
   const words = queryWordsList.map(stem);
   if (!words.length) return [];
@@ -322,7 +355,7 @@ async function searchConversations(
   })
     .sort({created_at: -1})
     .limit(MAX_MESSAGE_CANDIDATES)
-    .select('text is_voice created_at')
+    .select('text is_voice created_at memory')
     .maxTimeMS(CONVERSATION_SEARCH_MAX_MS)
     .lean();
 
@@ -339,7 +372,10 @@ async function searchConversations(
         ? ` (${dayjs(row.created_at).format('MMMM YYYY')})`
         : '';
       const quote = excerptAround(String(row.text || ''), words);
-      return `- ${where}${when}: "${quote}"`;
+      const link = row.memory
+        ? linkFor(String(row.memory), 'conversation', options)
+        : '';
+      return `- ${where}${when}: "${quote}"${link}`;
     });
 }
 
@@ -348,13 +384,50 @@ export async function searchMemoriesForVoice(
   query: string,
   options: {longTermTimeoutMs?: number; also?: string[]} = {},
 ): Promise<string> {
+  return searchMemories(userId, query, options);
+}
+
+/**
+ * The same search for chat: each result carries its in-app link, and the
+ * stories and conversations found are returned so the reply may link them.
+ */
+export async function searchMemoriesForChat(
+  userId: string,
+  query: string,
+  options: {longTermTimeoutMs?: number; also?: string[]} = {},
+): Promise<{text: string; found: FoundMemory[]}> {
+  const found = new Map<string, FoundMemory>();
+  const text = await searchMemories(userId, query, {...options, found});
+  return {text, found: [...found.values()]};
+}
+
+async function searchMemories(
+  userId: string,
+  query: string,
+  options: {
+    longTermTimeoutMs?: number;
+    also?: string[];
+    found?: Map<string, FoundMemory>;
+  },
+): Promise<string> {
   const trimmed = query.trim().slice(0, MAX_QUERY_CHARS);
   const words = await queryWords(userId, trimmed, options.also ?? []);
+  const links = {found: options.found};
   const [stored, said, longTerm] = await Promise.all([
-    searchStoredMemories(userId, words).catch(() => null),
-    searchConversations(userId, words).catch(() => []),
+    searchStoredMemories(userId, words, links).catch(() => null),
+    searchConversations(userId, words, links).catch(() => []),
     withTimeout(
-      getLongTermContext(userId, trimmed).catch(() => ''),
+      (options.found
+        ? getLongTermRecall(userId, trimmed, {links: true}).then(recall => {
+            for (const memory of recall.memories) {
+              if (!options.found?.has(memory.id)) {
+                options.found?.set(memory.id, memory);
+              }
+            }
+            return recall.text;
+          })
+        : getLongTermContext(userId, trimmed)
+      ).catch(() => ''),
       options.longTermTimeoutMs ?? DEFAULT_LONG_TERM_TIMEOUT_MS,
       '',
     ),

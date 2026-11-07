@@ -8,12 +8,24 @@ import type {VOICE_SCREEN_DESTINATIONS} from '../live-session-config';
 export type VoiceToolEffect =
   | {
       type: 'refresh';
-      what: 'profile' | 'memories' | 'capsules' | 'beneficiaries';
+      what:
+        | 'profile'
+        | 'memories'
+        | 'capsules'
+        | 'beneficiaries'
+        | 'observations';
     }
   | {type: 'open'; destination: (typeof VOICE_SCREEN_DESTINATIONS)[number]}
   | {type: 'open_story'; id: string};
 
-export type VoiceToolOutcome = {result: string; effects: VoiceToolEffect[]};
+export type VoiceToolOutcome = {
+  result: string;
+  effects: VoiceToolEffect[];
+  /** Set when nothing happened yet: what to confirm, and the code that runs it. */
+  confirm?: {readBack: string; code: string};
+  /** What was done, in a few words, when something was. */
+  summary?: string;
+};
 
 /** How to reverse something Memento did by voice ("undo that"). */
 export type VoiceUndo =
@@ -28,8 +40,31 @@ export type VoiceUndo =
       id: string;
       title?: string;
       tags?: string[];
+      body?: string;
       expectTitle?: string;
       expectTags?: string[];
+      expectBody?: string;
+    }
+  | {
+      kind: 'story_access';
+      id: string;
+      groups: string[];
+      beneficiaries: string[];
+      visibility: 'private' | 'everyone';
+      /** What the action set, so undo can tell the host changed it since. */
+      expect: {
+        groups: string[];
+        beneficiaries: string[];
+        visibility: 'private' | 'everyone';
+      };
+    }
+  | {
+      kind: 'observation_text';
+      id: string;
+      heading: string;
+      note: string;
+      expectHeading: string;
+      expectNote: string;
     }
   | {kind: 'bookmark'; id: string; on: boolean}
   | {kind: 'remove_story'; id: string}

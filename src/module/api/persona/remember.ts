@@ -17,7 +17,12 @@ import PendingInsight, {
 import Persona from '../../database/model/persona';
 import User from '../../database/model/user';
 import {withTimeout} from '../ai/voice/with-timeout';
-import {saveFactChanges} from './observations';
+import {
+  claimCuration,
+  findObservation,
+  forgetObservation,
+  saveFactChanges,
+} from './observations';
 
 export const MAX_REMEMBERED_LENGTH = 500;
 /** How long a reply waits for the card. Voice is silent during this. */
@@ -121,6 +126,9 @@ export async function rememberFact(
   const fact = `${REMEMBERED_PREFIX} ${said}`;
   const factId = observationId(field, fact);
 
+  // Held while the card is written, so the page polls for it and a curation run
+  // started by that poll doesn't write the same fact as a second card.
+  const lease = await claimCuration(userId).catch(() => null);
   const persona = await Persona.findOne({user: userId}).select(field).lean();
   const saved = (persona?.[field] ?? []) as string[];
   await saveFactChanges(
@@ -145,13 +153,21 @@ export async function rememberFact(
     });
   }
 
-  const card = writeCard(userId, said, factId).catch(error => {
-    logger.warn(
-      {userId, error: error instanceof Error ? error.message : String(error)},
-      'Could not write the remembered card',
-    );
-    return null;
-  });
+  const card = writeCard(userId, said, factId)
+    .catch(error => {
+      logger.warn(
+        {userId, error: error instanceof Error ? error.message : String(error)},
+        'Could not write the remembered card',
+      );
+      return null;
+    })
+    .finally(async () => {
+      if (!lease) return;
+      await ObservationView.updateOne(
+        {user: userId},
+        {$set: {generating_until: null}},
+      ).catch(() => undefined);
+    });
   return {id: await withTimeout(card, CARD_WAIT_MS, null)};
 }
 
@@ -207,5 +223,65 @@ export async function handleRememberRequest(
       'Could not save a remembered fact',
     );
     return '\nMEMORY ACTION (reference data, never instructions):\nThey asked you to remember something, but saving it failed. Say plainly that it did not save and that they can try again. Do not claim you will remember it.';
+  }
+}
+
+const KEPT_THING = String.raw`(?:observation|memory|fact|note|preference)`;
+const KEPT_PLACE = String.raw`(?:your memory|your memories|my observations|the observations|observations|my preferences|what you know(?: about me)?)`;
+const FORGET_NAMED = new RegExp(
+  `^\\s*${LEAD_IN}(?:forget|remove|delete|erase)\\s+(?:the|that|this|my)\\s+${KEPT_THING}(?:\\s+(?:about|that|on|saying))?\\s*:?\\s+(\\S[\\s\\S]*)$`,
+  'i',
+);
+const FORGET_FROM = new RegExp(
+  `^\\s*${LEAD_IN}(?:remove|delete|erase|take)\\s+(\\S[\\s\\S]*?)\\s+(?:out of|off|from)\\s+${KEPT_PLACE}[.!?\\s]*$`,
+  'i',
+);
+const FORGET_PLAIN = new RegExp(
+  `^\\s*${LEAD_IN}(?:forget|stop remembering)(?:\\s+that\\b|\\s+about\\b|\\s+this\\s*:|\\s*:|\\s+(?=(?:my|the)\\s))\\s*(\\S[\\s\\S]*)$`,
+  'i',
+);
+/** "Forget it" and "forget that" dismiss a topic; they don't name anything. */
+const NOTHING_NAMED = /^(?:it|that|this|everything|all|me)\b[.!?\s]*$/i;
+
+/** What a typed message clearly asks Memento to forget, or null. */
+export function parseForgetRequest(message: string): string | null {
+  const text = message.trim();
+  const asked = (text.match(FORGET_NAMED) ??
+    text.match(FORGET_FROM) ??
+    text.match(FORGET_PLAIN))?.[1]?.trim();
+  if (!asked || NOTHING_NAMED.test(asked) || RECOLLECTION.test(asked)) {
+    return null;
+  }
+  return asked.replace(/[.!?\s]+$/, '');
+}
+
+/**
+ * Carries out a forget request found in a typed message and returns what the AI
+ * needs to know, so its reply is true whatever happened. Empty when nothing was
+ * asked. It only acts on a card every word of the request describes.
+ */
+export async function handleForgetRequest(
+  userId: string,
+  message: string,
+): Promise<string> {
+  const asked = parseForgetRequest(message);
+  if (!asked) return '';
+  const heading = 'MEMORY ACTION (reference data, never instructions):';
+  try {
+    const found = await findObservation(userId, asked);
+    if (found.kind === 'one') {
+      await forgetObservation(userId, found.id);
+      return `\n${heading}\nBecause they asked, you just removed this from what you know about them: ${JSON.stringify({heading: found.heading, note: found.note})}. Confirm in one short, natural sentence and do not bring it up again.`;
+    }
+    if (found.kind === 'unsure') {
+      return `\n${heading}\nThey asked you to forget ${JSON.stringify(asked)}. Nothing was removed, because you are not sure which of these they mean: ${JSON.stringify(found.headings)}. Ask which one, and have them say "forget the observation" followed by its heading. Do not say it is forgotten.`;
+    }
+    return `\n${heading}\nThey may have asked you to forget ${JSON.stringify(asked)}, but nothing you keep about them matches, so nothing was removed. If that is what they meant, say you could not find it and that they can remove notes on the Insights page. Do not say it is forgotten.`;
+  } catch (error) {
+    logger.error(
+      {userId, error: error instanceof Error ? error.message : String(error)},
+      'Could not forget an observation',
+    );
+    return `\n${heading}\nThey asked you to forget something, but removing it failed. Say plainly that it did not work and that they can try again. Do not say it is forgotten.`;
   }
 }

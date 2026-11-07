@@ -77,6 +77,12 @@ router.post(
   ctrl.searchVoiceMemories,
 );
 router.post(
+  '/chat/actions/:name',
+  gaurd,
+  validate(dto.chatActionSchema),
+  ctrl.confirmChatAction,
+);
+router.post(
   '/voice/tools/:name',
   gaurd,
   validate(dto.voiceToolSchema),

@@ -19,15 +19,32 @@ vi.mock('../../src/module/api/beneficiary/service', () => ({
 vi.mock('../../src/module/api/feedback/service', () => ({
   createFeedback: vi.fn(async () => ({data: {}})),
 }));
+vi.mock('../../src/module/api/persona/observations', () => ({
+  findObservation: vi.fn(async () => ({kind: 'none', headings: []})),
+  forgetObservation: vi.fn(async () => ({data: null})),
+  getObservationSources: vi.fn(async () => ({data: {sources: []}})),
+  updateObservation: vi.fn(
+    async (
+      _user: string,
+      id: string,
+      edit: {heading: string; note: string},
+    ) => ({
+      data: {id, field: 'values', ...edit},
+    }),
+  ),
+}));
 
 import * as beneficiaryService from '../../src/module/api/beneficiary/service';
 import * as capsuleService from '../../src/module/api/capsule/service';
 import * as feedbackService from '../../src/module/api/feedback/service';
 import * as memoryService from '../../src/module/api/memory/service';
+import * as observations from '../../src/module/api/persona/observations';
 import Beneficiary from '../../src/module/database/model/beneficiary';
 import Bookmark from '../../src/module/database/model/bookmarks';
 import Capsule from '../../src/module/database/model/capsule';
+import Group from '../../src/module/database/model/group';
 import Memory from '../../src/module/database/model/memory';
+import ObservationView from '../../src/module/database/model/observation-view';
 import {SERVER_TOOL_DECLARATIONS} from '../../src/module/api/ai/voice/server-tool-declarations';
 import {runVoiceServerTool} from '../../src/module/api/ai/voice/server-tools';
 import {
@@ -259,6 +276,317 @@ describe('voice content actions', () => {
       expect(outcome.result).toContain(
         'That did not work: their Memento storage is full',
       );
+    });
+  });
+
+  describe('observations', () => {
+    const card = {
+      kind: 'one' as const,
+      id: '64b7f0c2a1b2c3d4e5f60799',
+      heading: 'Loves early mornings',
+      note: 'They do their best thinking before sunrise.',
+    };
+
+    it('explains where an observation came from, changing nothing', async () => {
+      const user = await createUserFixture();
+      vi.mocked(observations.findObservation).mockResolvedValueOnce(card);
+      vi.mocked(observations.getObservationSources).mockResolvedValueOnce({
+        message: '',
+        data: {
+          sources: [
+            {
+              id: 's1',
+              title: 'Sunrise runs',
+              type: 'story',
+              created_at: '2026-03-02T10:00:00.000Z',
+              thumbnail: null,
+            },
+            {
+              id: 's2',
+              title: 'Morning chat',
+              type: 'conversation',
+              created_at: null,
+              thumbnail: null,
+            },
+          ],
+        },
+      });
+
+      const outcome = await runVoiceServerTool(user.id, 'explain_observation', {
+        query: 'early mornings',
+      });
+
+      expect(outcome.result).toContain(
+        'the story "Sunrise runs" from March 2026',
+      );
+      expect(outcome.result).toContain('a conversation "Morning chat"');
+      expect(outcome.effects).toEqual([]);
+      expect(observations.updateObservation).not.toHaveBeenCalled();
+    });
+
+    it('says when an observation has no linked stories', async () => {
+      const user = await createUserFixture();
+      vi.mocked(observations.findObservation).mockResolvedValueOnce(card);
+      const outcome = await runVoiceServerTool(user.id, 'explain_observation', {
+        query: 'early mornings',
+      });
+      expect(outcome.result).toMatch(/not linked to a particular story/);
+    });
+
+    it('asks which one when the description is unsure', async () => {
+      const user = await createUserFixture();
+      vi.mocked(observations.findObservation).mockResolvedValueOnce({
+        kind: 'unsure',
+        headings: ['Loves early mornings', 'Early riser'],
+      });
+      const outcome = await runVoiceServerTool(user.id, 'correct_observation', {
+        query: 'early',
+        note: 'Not any more.',
+      });
+      expect(outcome.result).toContain('Nothing was changed.');
+      expect(outcome.result).toContain('"Early riser"');
+      expect(observations.updateObservation).not.toHaveBeenCalled();
+    });
+
+    it('corrects an observation in the host words, keeping its heading, and undoes it', async () => {
+      const user = await createUserFixture();
+      await ObservationView.create({
+        user: user.id,
+        items: [
+          {
+            _id: card.id,
+            field: 'values',
+            heading: card.heading,
+            note: card.note,
+            category: 'personal_growth',
+          },
+        ],
+      });
+      vi.mocked(observations.findObservation).mockResolvedValueOnce(card);
+
+      const outcome = await runVoiceServerTool(user.id, 'correct_observation', {
+        query: 'early mornings',
+        note: 'I prefer late nights now.',
+      });
+
+      expect(observations.updateObservation).toHaveBeenCalledWith(
+        user.id,
+        card.id,
+        {heading: card.heading, note: 'I prefer late nights now.'},
+      );
+      expect(outcome.effects).toEqual([
+        {type: 'refresh', what: 'observations'},
+      ]);
+
+      // The mocked service did not change the card, so record what it would have.
+      await ObservationView.updateOne(
+        {user: user.id, 'items._id': card.id},
+        {$set: {'items.$.note': 'I prefer late nights now.'}},
+      );
+      const undone = await runVoiceServerTool(user.id, 'undo_last_action', {});
+      expect(undone.result).toMatch(/^Undone/);
+      expect(observations.updateObservation).toHaveBeenLastCalledWith(
+        user.id,
+        card.id,
+        {heading: card.heading, note: card.note},
+      );
+    });
+  });
+
+  describe('editing and sharing stories', () => {
+    it('adds the host words to the end of an editor story as a paragraph', async () => {
+      const user = await createUserFixture();
+      const lagos = await story(user.id, 'Trip to Lagos', {
+        body: '<p>We landed at night.</p>',
+      });
+
+      const outcome = await runVoiceServerTool(user.id, 'edit_story', {
+        query: 'Lagos',
+        text: 'The air smelled of rain & suya.',
+      });
+
+      expect(memoryService.updateMemory).toHaveBeenCalledWith(
+        String(lagos._id),
+        {
+          body: '<p>We landed at night.</p><p>The air smelled of rain &amp; suya.</p>',
+        },
+        user.id,
+      );
+      expect(outcome.result).not.toContain('Nothing has happened yet');
+      expect(outcome.effects).toContainEqual({
+        type: 'open_story',
+        id: String(lagos._id),
+      });
+    });
+
+    it('adds to a plain-text story as plain text', async () => {
+      const user = await createUserFixture();
+      const lagos = await story(user.id, 'Trip to Lagos', {body: 'We landed.'});
+      await runVoiceServerTool(user.id, 'edit_story', {
+        query: 'Lagos',
+        text: 'Then we slept.',
+        mode: 'append',
+      });
+      expect(memoryService.updateMemory).toHaveBeenCalledWith(
+        String(lagos._id),
+        {body: 'We landed.\n\nThen we slept.'},
+        user.id,
+      );
+    });
+
+    it('replaces the whole text only after confirmation', async () => {
+      const user = await createUserFixture();
+      const lagos = await story(user.id, 'Trip to Lagos', {
+        body: '<p>We landd at nite.</p>',
+      });
+      const args = {
+        query: 'Lagos',
+        text: 'We landed at night.',
+        mode: 'replace',
+      };
+
+      const first = await runVoiceServerTool(user.id, 'edit_story', args);
+      expect(first.result).toContain(
+        'Replace all the words of "Trip to Lagos"',
+      );
+      expect(memoryService.updateMemory).not.toHaveBeenCalled();
+
+      await runVoiceServerTool(user.id, 'edit_story', {
+        ...args,
+        confirmation: codeIn(first.result),
+      });
+      expect(memoryService.updateMemory).toHaveBeenCalledWith(
+        String(lagos._id),
+        {body: '<p>We landed at night.</p>'},
+        user.id,
+      );
+    });
+
+    it('shares with a beneficiary and a group by name after confirmation, never publicly', async () => {
+      const user = await createUserFixture();
+      const lagos = await story(user.id, 'Trip to Lagos');
+      const ada = await Beneficiary.create({
+        benefactor: user.id,
+        name: 'Ada',
+        email: 'ada@example.com',
+      });
+      const family = await Group.create({user: user.id, name: 'Family'});
+      const args = {query: 'Lagos', with: ['ada', 'family']};
+
+      const first = await runVoiceServerTool(user.id, 'share_story', args);
+      expect(first.result).toContain(
+        'Share "Trip to Lagos" with Ada, the group Family',
+      );
+      expect(first.result).toContain('stays off public');
+      expect(memoryService.updateMemory).not.toHaveBeenCalled();
+
+      await runVoiceServerTool(user.id, 'share_story', {
+        ...args,
+        confirmation: codeIn(first.result),
+      });
+      expect(memoryService.updateMemory).toHaveBeenCalledWith(
+        String(lagos._id),
+        {
+          groups: [String(family._id)],
+          beneficiaries: [String(ada._id)],
+          visibility: 'private',
+        },
+        user.id,
+      );
+    });
+
+    it('warns that sharing a story visible to everyone narrows who sees it', async () => {
+      const user = await createUserFixture();
+      await story(user.id, 'Trip to Lagos', {visibility: 'everyone'});
+      await Beneficiary.create({
+        benefactor: user.id,
+        name: 'Ada',
+        email: 'ada@example.com',
+      });
+      const first = await runVoiceServerTool(user.id, 'share_story', {
+        query: 'Lagos',
+        with: ['Ada'],
+      });
+      expect(first.result).toContain('only the people it is shared with');
+    });
+
+    it('will not share with someone who is not a beneficiary or group', async () => {
+      const user = await createUserFixture();
+      await story(user.id, 'Trip to Lagos');
+      const outcome = await runVoiceServerTool(user.id, 'share_story', {
+        query: 'Lagos',
+        with: ['Zed'],
+      });
+      expect(outcome.result).toContain('"Zed" is not one of their');
+      expect(outcome.result).not.toContain('confirmation');
+      expect(memoryService.updateMemory).not.toHaveBeenCalled();
+    });
+
+    it('makes a shared story private straight away', async () => {
+      const user = await createUserFixture();
+      const ada = await Beneficiary.create({
+        benefactor: user.id,
+        name: 'Ada',
+        email: 'ada@example.com',
+      });
+      const lagos = await story(user.id, 'Trip to Lagos', {
+        beneficiaries: [String(ada._id)],
+      });
+
+      const outcome = await runVoiceServerTool(
+        user.id,
+        'set_story_visibility',
+        {
+          query: 'Lagos',
+          visibility: 'only_me',
+        },
+      );
+
+      expect(memoryService.updateMemory).toHaveBeenCalledWith(
+        String(lagos._id),
+        {groups: [], beneficiaries: [], visibility: 'private'},
+        user.id,
+      );
+      expect(outcome.result).toContain('It was shared only with Ada');
+    });
+
+    it('makes a story visible to everyone only after confirmation', async () => {
+      const user = await createUserFixture();
+      const lagos = await story(user.id, 'Trip to Lagos');
+      const args = {query: 'Lagos', visibility: 'everyone'};
+
+      const first = await runVoiceServerTool(
+        user.id,
+        'set_story_visibility',
+        args,
+      );
+      expect(first.result).toContain('Nothing has happened yet');
+      expect(memoryService.updateMemory).not.toHaveBeenCalled();
+
+      await runVoiceServerTool(user.id, 'set_story_visibility', {
+        ...args,
+        confirmation: codeIn(first.result),
+      });
+      expect(memoryService.updateMemory).toHaveBeenCalledWith(
+        String(lagos._id),
+        {groups: [], beneficiaries: [], visibility: 'everyone'},
+        user.id,
+      );
+    });
+
+    it('says when a story is already private', async () => {
+      const user = await createUserFixture();
+      await story(user.id, 'Trip to Lagos');
+      const outcome = await runVoiceServerTool(
+        user.id,
+        'set_story_visibility',
+        {
+          query: 'Lagos',
+          visibility: 'only_me',
+        },
+      );
+      expect(outcome.result).toContain('already private');
+      expect(memoryService.updateMemory).not.toHaveBeenCalled();
     });
   });
 

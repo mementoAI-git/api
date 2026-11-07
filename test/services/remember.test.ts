@@ -37,7 +37,9 @@ import {
   listObservations,
 } from '../../src/module/api/persona/observations';
 import {
+  handleForgetRequest,
   handleRememberRequest,
+  parseForgetRequest,
   parseRememberedCard,
   parseRememberRequest,
   rememberFact,
@@ -192,6 +194,138 @@ describe('remembering a fact', () => {
       (await filterForgottenInsights(userId, {important_notes: [fact]}))
         .important_notes,
     ).toEqual([fact]);
+  });
+
+  describe('forgetting', () => {
+    const forget = CONTENT_ACTION_HANDLERS.forget_observation;
+    const remembered = async (heading: string, note: string, fact: string) => {
+      generateText.mockResolvedValueOnce(card({heading, note}));
+      await rememberFact(userId, fact);
+    };
+    const headings = async () =>
+      (await listObservations(userId)).data.observations.map(
+        item => item.heading,
+      );
+
+    it('reads back first, and only forgets with the code', async () => {
+      await remembered(
+        'You love jollof',
+        'You love jollof rice.',
+        'I love jollof rice',
+      );
+      await remembered(
+        'Your sister Ada',
+        'Ada lives in Lagos.',
+        'My sister Ada lives in Lagos',
+      );
+
+      const first = await forget(userId, {query: 'jollof rice'});
+      expect(first.result).toContain('Nothing has happened yet');
+      expect(await headings()).toHaveLength(2);
+
+      const code = first.result.match(/confirmation "([^"]+)"/)?.[1];
+      const done = await forget(userId, {
+        query: 'jollof rice',
+        confirmation: code,
+      });
+      expect(done.result).toContain('Forgotten');
+      expect(done.effects).toEqual([{type: 'refresh', what: 'observations'}]);
+      expect(await headings()).toEqual(['Your sister Ada']);
+    });
+
+    it('removes nothing when it cannot tell which one they mean', async () => {
+      await remembered(
+        'You love jollof',
+        'You love jollof rice.',
+        'I love jollof rice',
+      );
+      await remembered(
+        'You love fried rice',
+        'You love fried rice too.',
+        'I love fried rice',
+      );
+
+      const run = await forget(userId, {query: 'rice'});
+      expect(run.result).toContain('Nothing was removed');
+      expect(await headings()).toHaveLength(2);
+    });
+
+    it('says so when nothing matches', async () => {
+      await remembered(
+        'You love jollof',
+        'You love jollof rice.',
+        'I love jollof rice',
+      );
+      const run = await forget(userId, {query: 'my blue bicycle'});
+      expect(run.result).toContain('nothing matched');
+    });
+
+    it('recognises a typed request, not everyday use of the word', () => {
+      expect(parseForgetRequest('Please forget that I love jollof.')).toBe(
+        'I love jollof',
+      );
+      expect(parseForgetRequest('delete the observation about my sister')).toBe(
+        'my sister',
+      );
+      expect(parseForgetRequest('remove jollof from my preferences')).toBe(
+        'jollof',
+      );
+      expect(parseForgetRequest('forget it')).toBeNull();
+      expect(parseForgetRequest('forget that')).toBeNull();
+      expect(parseForgetRequest("don't forget that I love jollof")).toBeNull();
+      expect(
+        parseForgetRequest('forget that time we went to Lagos'),
+      ).toBeNull();
+      expect(parseForgetRequest('I always forget my keys')).toBeNull();
+    });
+
+    it('forgets from typed chat only when every word matches one card', async () => {
+      await remembered(
+        'You love jollof',
+        'You love jollof rice.',
+        'I love jollof rice',
+      );
+
+      const missed = await handleForgetRequest(
+        userId,
+        'forget that I love jollof and eggs',
+      );
+      expect(missed).toContain('Do not say it is forgotten');
+      expect(await headings()).toHaveLength(1);
+
+      const done = await handleForgetRequest(
+        userId,
+        'forget that I love jollof',
+      );
+      expect(done).toContain('you just removed');
+      expect(await headings()).toEqual([]);
+    });
+  });
+
+  it('holds the curation lease while the card is written, so the page polls for it', async () => {
+    let finish: (value: string) => void = () => undefined;
+    generateText.mockReturnValueOnce(
+      new Promise<string>(resolve => {
+        finish = resolve;
+      }),
+    );
+    vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout']});
+    const saving = rememberFact(userId, 'I love jollof rice');
+    await vi.advanceTimersByTimeAsync(3_000);
+    vi.useRealTimers();
+    await saving;
+
+    const during = await listObservations(userId);
+    expect(during.data.generating).toBe(true);
+    expect(during.data.observations).toEqual([]);
+
+    finish(card({heading: 'You love jollof', note: 'You love jollof rice.'}));
+    await vi.waitFor(async () => {
+      const after = await listObservations(userId);
+      expect(after.data.observations).toHaveLength(1);
+      expect(after.data.generating).toBe(false);
+    });
+    expect(generateText).toHaveBeenCalledTimes(1);
   });
 
   describe('voice tool', () => {

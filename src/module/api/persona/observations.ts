@@ -9,6 +9,7 @@ import {
   listMemorySources,
   type InsightSourceDto,
 } from '../../../services/insights';
+import {forgetUserContext} from '../../../services/user-context-cache';
 import {buildObservationCurationRequest} from '../../../utils/ai-prompt/observation-view-prompt';
 import {PERSONA_INSIGHT_FIELDS} from '../../../utils/constant';
 import {extractJson} from '../../../utils/helpers';
@@ -273,7 +274,7 @@ async function curate(
 }
 
 /** Takes the curation lease. Exactly one concurrent caller gets the view. */
-async function claimCuration(userId: string) {
+export async function claimCuration(userId: string) {
   const now = new Date();
   try {
     return await ObservationView.findOneAndUpdate(
@@ -432,6 +433,7 @@ export async function saveFactChanges(
   await invalidateEnrichmentCache(userId).catch(error =>
     logger.warn({error}, 'Could not refresh the enrichment score cache'),
   );
+  void forgetUserContext(userId);
 }
 
 function hashOf(factId: string): string {
@@ -504,6 +506,74 @@ export async function updateObservation(
     message: 'Observation updated',
     data: {id, field: item.field, heading, note},
   };
+}
+
+const QUERY_FILLER = new Set(
+  'a an and about at for from i im in is it me my of on that the this to was with you your'.split(
+    ' ',
+  ),
+);
+
+function queryWords(text: string): string[] {
+  return normalizedHeading(text)
+    .split(' ')
+    .filter(word => word && !QUERY_FILLER.has(word))
+    .map(word => word.replace(/s$/, ''));
+}
+
+export type ObservationMatch =
+  | {kind: 'one'; id: string; heading: string; note: string}
+  /** Worth asking about, but too unsure to act on. */
+  | {kind: 'unsure'; headings: string[]}
+  | {kind: 'none'; headings: string[]};
+
+const MAX_MATCH_HEADINGS = 8;
+
+/**
+ * Finds the card someone described, among the ones they can see. It only names
+ * a single card when its heading was given or every word described it, because
+ * forgetting cannot be undone.
+ */
+export async function findObservation(
+  userId: string,
+  query: string,
+): Promise<ObservationMatch> {
+  const {observations} = (await listObservations(userId)).data;
+  const headings = observations
+    .map(item => item.heading)
+    .slice(0, MAX_MATCH_HEADINGS);
+  const wanted = queryWords(query);
+  if (!wanted.length) return {kind: 'none', headings};
+
+  const scored = observations.map(item => {
+    const words = new Set(queryWords(`${item.heading} ${item.note}`));
+    return {
+      item,
+      share: wanted.filter(word => words.has(word)).length / wanted.length,
+    };
+  });
+  const asked = normalizedHeading(query);
+  const named = observations.filter(
+    item => normalizedHeading(item.heading) === asked,
+  );
+  const whole = scored.filter(row => row.share === 1).map(row => row.item);
+  const certain = named.length ? named : whole;
+  if (certain.length === 1) {
+    const [{id, heading, note}] = certain;
+    return {kind: 'one', id, heading, note};
+  }
+  const close = certain.length
+    ? certain
+    : scored
+        .filter(row => row.share >= 0.5)
+        .sort((a, b) => b.share - a.share)
+        .map(row => row.item);
+  return close.length
+    ? {
+        kind: 'unsure',
+        headings: close.map(item => item.heading).slice(0, MAX_MATCH_HEADINGS),
+      }
+    : {kind: 'none', headings};
 }
 
 export async function forgetObservation(userId: string, id: string) {
