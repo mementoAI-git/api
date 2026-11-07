@@ -1,5 +1,11 @@
 import request from 'supertest';
-import {afterAll, afterEach, beforeAll, describe, expect, it} from 'vitest';
+import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+
+// CI has no FRONTEND_URL; the page needs the app's origin for its links.
+vi.mock('../../src/utils/config', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../src/utils/config')>()),
+  FRONTEND_URL: 'https://app.mymemento.io',
+}));
 import Memory from '../../src/module/database/model/memory';
 import {
   clearTestDatabase,

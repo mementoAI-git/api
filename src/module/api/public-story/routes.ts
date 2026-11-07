@@ -14,10 +14,11 @@ async function view(req: Request, res: Response, next: NextFunction) {
     const id = String(req.params.id ?? '');
     if (!/^[0-9a-fA-F]{24}$/.test(id))
       throw new NotFoundException('Story not found');
+    // Private or missing stories are a 404 before anything else.
+    const {data} = await getPublicMemory(id);
     if (!FRONTEND_URL) {
       throw new InternalServerErrorException('Story sharing is not configured');
     }
-    const {data} = await getPublicMemory(id);
     res.setHeader('Content-Security-Policy', STORY_CSP);
     res.setHeader('Cache-Control', 'public, max-age=300');
     res.setHeader('X-Robots-Tag', 'noindex, nofollow');
