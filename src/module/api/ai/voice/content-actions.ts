@@ -425,13 +425,13 @@ const editStory: Handler = async (userId, args) => {
   };
 };
 
-type Access = {
+export type Access = {
   groups: string[];
   beneficiaries: string[];
   visibility: 'private' | 'everyone';
 };
 
-async function storyAccess(userId: string, id: string): Promise<Access> {
+export async function storyAccess(userId: string, id: string): Promise<Access> {
   const row = (await Memory.findOne({_id: id, user: userId})
     .select('groups beneficiaries visibility')
     .lean()) as {
@@ -447,7 +447,7 @@ async function storyAccess(userId: string, id: string): Promise<Access> {
 }
 
 /** Who can see a story now, in words. */
-async function describeAccess(userId: string, access: Access) {
+export async function describeAccess(userId: string, access: Access) {
   if (access.groups.length || access.beneficiaries.length) {
     const [groups, people] = await Promise.all([
       Group.find({_id: {$in: access.groups}, user: userId})

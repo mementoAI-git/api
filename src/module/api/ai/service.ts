@@ -118,6 +118,7 @@ import {
 } from '../../../services/ai/chat-links';
 import {CHAT_REPLY_GUIDANCE} from '../../../utils/ai-prompt/chat-replies';
 import {getMemorySummaries} from './memory-context';
+import {lookUpForChat} from './chat-tools/lookups';
 import {withTimeout} from './voice/with-timeout';
 import {StepTimer} from '../../../utils/step-timer';
 import logger from '../../../utils/logger';
@@ -413,6 +414,19 @@ export async function prompt(
   }
   const messages = history.reverse();
   const sessionTurnCount = getSessionTurnCount(messages);
+  const groqHistory = createChatHistory(messages).map(message => ({
+    role: message.role === 'model' ? 'assistant' : 'user',
+    content: message.parts?.[0]?.text || '',
+  })) as GroqMessage[];
+  // Runs alongside the context; a slow or failed lookup is skipped.
+  const lookupsReady = timer.time('lookups', () =>
+    lookUpForChat({
+      userId: user_id,
+      origin,
+      text: userText,
+      history: groqHistory,
+    }).catch(() => ({context: '', targets: new Map(), calls: []})),
+  );
   const memoryAction = userText
     ? (await handleRememberRequest(
         user_id,
@@ -425,7 +439,7 @@ export async function prompt(
   // The context is built while the recall finishes; its block is filled in
   // when it arrives.
   const systemInstruction = await timer.time('context', async () => {
-    const [base, recall] = await Promise.all([
+    const [base, recall, lookups] = await Promise.all([
       prompts.createSystemContext(
         user,
         payload.memory,
@@ -438,6 +452,7 @@ export async function prompt(
         },
       ),
       recallReady,
+      lookupsReady,
     ]);
     const longTermContext = recall.text;
     const reflection = currentMemory.prompt_type ? currentMemory : null;
@@ -448,6 +463,7 @@ export async function prompt(
       base.replace(CHAT_LONG_TERM_PLACEHOLDER, () => longTermContext) +
       reflectionContext +
       memoryAction +
+      lookups.context +
       (origin ? CHAT_REPLY_GUIDANCE : '')
     );
   });
@@ -455,6 +471,7 @@ export async function prompt(
     origin,
     await summariesReady,
     (await recallReady).memories,
+    (await lookupsReady).targets,
   );
   const chatPrimaryPromptVersion = getPromptVersion('chat_primary');
   void recordAiMetric({
@@ -499,11 +516,6 @@ export async function prompt(
       ),
     };
   }
-
-  const groqHistory = createChatHistory(messages).map(message => ({
-    role: message.role === 'model' ? 'assistant' : 'user',
-    content: message.parts?.[0]?.text || '',
-  })) as GroqMessage[];
 
   const routing = await timer.time('model', () =>
     streamCriticalChatResponse({
@@ -573,10 +585,12 @@ function chatLinksFor(
   origin: string | undefined,
   summaries: {id?: string; type: string; visibility?: string}[],
   recalled: {id: string; type: 'story' | 'conversation'}[],
+  looked: ChatLinks['targets'] = new Map(),
 ): ChatLinks {
   const targets: ChatLinks['targets'] = new Map();
   if (!origin) return {targets};
   for (const memory of recalled) targets.set(memory.id, {type: memory.type});
+  for (const [id, target] of looked) targets.set(id, target);
   for (const memory of summaries) {
     if (!memory.id) continue;
     targets.set(
