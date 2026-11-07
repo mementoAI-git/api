@@ -1,4 +1,5 @@
 import {Behavior, FunctionDeclaration, Type} from '@google/genai';
+import {CHAT_TOOL_DECLARATIONS} from '../chat-tools/declarations';
 
 /**
  * Declarations of the tools Memento runs on the server during a voice call
@@ -48,7 +49,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     name: 'save_story',
     behavior: Behavior.BLOCKING,
     description:
-      'Save something the host told you as a new story in Memento, when they ask ("save that as a story"). Use their own words for the body; keep them, do not summarise. The app opens the saved story.',
+      'Save something the host told you as a new story in Memento, when they ask ("save that as a story"). Use their own words for the body; keep them, do not summarise. In chat, photos or files sent with the message are saved with it, so the body may be left out for "save this photo". The app opens the saved story.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -58,7 +59,6 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
         },
         body: {type: Type.STRING, description: 'The story in their words.'},
       },
-      required: ['body'],
     },
   },
   {
@@ -115,6 +115,23 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     behavior: Behavior.BLOCKING,
     description:
       'Tell the host where something you keep about them came from, when they ask why you think it or how you know ("why do you think I…", "where did you get that?"). Returns the observation and the stories and conversations it was drawn from. Changes nothing.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: {
+          type: Type.STRING,
+          description:
+            'The heading of the observation, or words from what it says.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'open_insight',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Show one of the things you keep about the host (an observation in their Insights) on screen, when they ask to see it ("show me what you noticed about my work").',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -404,6 +421,62 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
       'Reverse the last thing you did for the host (a profile change, a save, a rename, an edit to a story, tags, a bookmark, a share or visibility change, a corrected observation, a capsule, a deleted story, a beneficiary) when they say "undo that", "change it back" or "put it back". Each call undoes one action, newest first, from the last half hour. Feedback that was sent cannot be unsent.',
   },
 ];
+
+/**
+ * Read-only lookups shared with chat (handlers in ../chat-tools/tools), so
+ * voice and chat can look up the same things. Voice keeps its own
+ * search_memories (forwarded by the app) and explain_observation.
+ */
+export const SHARED_READ_TOOL_NAMES = [
+  'read_story',
+  'list_stories',
+  'list_observations',
+  'list_people',
+  'who_can_see_story',
+  'get_share_link',
+  'read_link',
+  'suggest_topics',
+] as const;
+
+/** JSON Schema as Gemini's schema (Type.OBJECT and so on). */
+function geminiSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(geminiSchema);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, inner]) => [
+      key,
+      key === 'type' && typeof inner === 'string'
+        ? (inner.toUpperCase() as Type)
+        : geminiSchema(inner),
+    ]),
+  );
+}
+
+const VOICE_NOTES: Partial<Record<string, string>> = {
+  get_share_link:
+    " By voice, never read a link aloud: say whether it has a public link and that they can copy it from the story's Share option.",
+  read_link: ' Use it when they ask about a page they shared in the chat.',
+};
+
+export const SHARED_READ_DECLARATIONS: FunctionDeclaration[] =
+  CHAT_TOOL_DECLARATIONS.filter(tool =>
+    (SHARED_READ_TOOL_NAMES as readonly string[]).includes(tool.name),
+  ).map(tool => {
+    const parameters = geminiSchema(tool.parameters) as {
+      properties?: Record<string, unknown>;
+    };
+    return {
+      name: tool.name,
+      behavior: Behavior.BLOCKING,
+      description: tool.description + (VOICE_NOTES[tool.name] ?? ''),
+      // An empty object schema is not accepted for a tool with no arguments.
+      ...(parameters.properties && Object.keys(parameters.properties).length
+        ? {parameters: parameters as FunctionDeclaration['parameters']}
+        : {}),
+    };
+  });
+
+SERVER_TOOL_DECLARATIONS.push(...SHARED_READ_DECLARATIONS);
 
 export const SERVER_TOOL_NAMES = SERVER_TOOL_DECLARATIONS.map(
   declaration => declaration.name as string,

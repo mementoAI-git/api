@@ -13,14 +13,17 @@ import gemini, {GEMINI_MODEL} from '../../../../services/gemini';
 import Memory from '../../../database/model/memory';
 import type {ChatLinkTarget} from '../../../../services/ai/chat-links';
 import logger from '../../../../utils/logger';
+import {recordAiMetric} from '../../../../services/ai/metrics';
 import {withTimeout} from '../voice/with-timeout';
 import {runVoiceServerTool} from '../voice/server-tools';
 import {
   CHAT_ACTION_DECLARATIONS,
   isChatAction,
+  type DoneAction,
   type PendingConfirmation,
 } from './actions';
 import {CHAT_TOOL_DECLARATIONS, type ChatToolName} from './declarations';
+import {chooserPrompt, MAX_CALLS} from './chooser-prompt';
 import {CHAT_TOOL_HANDLERS} from './tools';
 
 /**
@@ -40,7 +43,6 @@ import {CHAT_TOOL_HANDLERS} from './tools';
 const CHOOSE_TIMEOUT_MS = 2_500;
 /** Longest each lookup may take. */
 const TOOL_TIMEOUT_MS = 2_500;
-const MAX_CALLS = 3;
 const RECENT_TURNS = 4;
 /** Long enough to carry what the host asks to save ("save that as a story"). */
 const MAX_TURN_CHARS = 4_000;
@@ -55,13 +57,23 @@ export function mightNeedLookup(text: string): boolean {
   return trimmed.length >= 8 && !SMALL_TALK.test(trimmed);
 }
 
-const CHOOSER_PROMPT = `You pick lookups for Memento, a private journaling companion, before it replies to the host. You never reply to the host yourself.
-
-Call a tool only when answering the host's latest message needs something from their Memento that is not already in the recent conversation: what they wrote or said before, a story's full text, their list of stories, what Memento keeps about them and why, their beneficiaries or groups, who can see a story, or a story's share link. When they ask to share a story or for its link without naming particular people, call get_share_link; share_story is only for sharing with beneficiaries or groups they name. For their most recent story ("my last story", "what I just posted"), use latest, or pass the query "latest".
-
-Action tools change their Memento (save, edit, share, bookmark, tag, rename, delete, profile, feedback, undo). Call one only when the host's latest message explicitly asks you to do that now; never because it might help, and never for something they only mention, plan or wish ("I should…", "maybe someday", "I might…" are not requests). Use their own words for anything you save or add. If a detail you need is missing, call nothing. Some actions need the host to confirm with a button: call them once and the app asks.
-
-Call nothing for small talk, feelings, advice, opinions or anything about the world in general. Call at most ${MAX_CALLS} tools. Today is {today}.`;
+/** What the app shows while the chosen tools run. */
+export function statusFor(names: string[]): string {
+  if (names.some(name => isChatAction(name))) return 'Working on it…';
+  if (names.includes('read_link')) return 'Reading the link…';
+  if (names.includes('get_share_link')) return 'Getting the link…';
+  if (names.some(name => ['list_people', 'who_can_see_story'].includes(name))) {
+    return 'Checking your people…';
+  }
+  if (
+    names.some(name =>
+      ['list_observations', 'explain_observation'].includes(name),
+    )
+  ) {
+    return 'Checking what I know about you…';
+  }
+  return 'Looking through your stories…';
+}
 
 /** Story actions take the story by name; "latest" means their newest. */
 const LATEST_QUERY =
@@ -138,6 +150,8 @@ export type ChatLookups = {
   calls: string[];
   /** Actions waiting for the host's Confirm button. */
   confirmations: PendingConfirmation[];
+  /** Actions done straight away, shown with Undo. */
+  dones: DoneAction[];
 };
 
 const NONE: ChatLookups = {
@@ -145,6 +159,7 @@ const NONE: ChatLookups = {
   targets: new Map(),
   calls: [],
   confirmations: [],
+  dones: [],
 };
 
 function isToolName(name: string): name is ChatToolName {
@@ -163,6 +178,12 @@ export async function lookUpForChat(params: {
   /** The conversation, so "undo that" stays within it. */
   memoryId?: string;
   origin?: string;
+  /** What the app can show; plain apps get no in-app links or cards. */
+  features?: {links: boolean; cards: boolean};
+  /** Told what Memento is doing, for the app's status line. */
+  onStatus?: (text: string) => void;
+  /** Files sent with this message, saved with a story the host asks to save. */
+  attachments?: string[];
   text: string;
   history: GroqMessage[];
   now?: Date;
@@ -176,10 +197,7 @@ export async function lookUpForChat(params: {
   const messages: GroqMessage[] = [
     {
       role: 'system',
-      content: CHOOSER_PROMPT.replace(
-        '{today}',
-        (params.now ?? new Date()).toISOString().slice(0, 10),
-      ),
+      content: chooserPrompt(params.now ?? new Date()),
     },
     ...params.history.slice(-RECENT_TURNS).map(turn => ({
       role: turn.role,
@@ -188,6 +206,7 @@ export async function lookUpForChat(params: {
     {role: 'user', content: text.slice(0, 2_000)},
   ];
   let calls: GroqToolCall[] | undefined;
+  let chooser: 'groq' | 'gemini' = 'groq';
   if (groqClient.isConfigured()) {
     try {
       calls = await chooseToolCallsWithGroq({
@@ -205,6 +224,7 @@ export async function lookUpForChat(params: {
     }
   }
   if (!calls) {
+    chooser = 'gemini';
     try {
       calls = await chooseWithGemini(messages, tools);
     } catch (error) {
@@ -212,6 +232,13 @@ export async function lookUpForChat(params: {
         {err: (error as Error)?.message, userId},
         'Chat lookups skipped: choosing failed',
       );
+      void recordAiMetric({
+        event: 'chat_lookups_error',
+        task: 'chat_lookups',
+        user: userId,
+        duration_ms: Date.now() - started,
+        error_message: (error as Error)?.message,
+      });
       return NONE;
     }
   }
@@ -219,16 +246,22 @@ export async function lookUpForChat(params: {
     call => isToolName(call.name) || isChatAction(call.name),
   );
   if (!known.length) return NONE;
+  params.onStatus?.(statusFor(known.map(call => call.name)));
 
   const context = {userId, origin};
   const sessionId = params.memoryId ? `chat:${params.memoryId}` : undefined;
   const confirmations: PendingConfirmation[] = [];
+  const dones: DoneAction[] = [];
   const actionSections: string[] = [];
   const targets = new Map<string, ChatLinkTarget>();
   // Actions one at a time, in the order chosen, before the lookups read.
   for (const call of known.filter(call => isChatAction(call.name))) {
     const args = await withLatestStory(userId, {...call.arguments});
     delete args.confirmation;
+    delete args.attachments;
+    if (call.name === 'save_story' && params.attachments?.length) {
+      args.attachments = params.attachments;
+    }
     try {
       const outcome = await runVoiceServerTool(userId, call.name, args, {
         sessionId,
@@ -238,7 +271,15 @@ export async function lookUpForChat(params: {
           targets.set(effect.id, {type: 'story'});
         }
       }
-      if (outcome.confirm && isChatAction(call.name) && params.memoryId) {
+      if (outcome.confirm && !params.features?.cards) {
+        actionSections.push(
+          `[${call.name}: not done]\nNothing has happened. This needs the host to confirm with a button, and this version of the app cannot show one. Tell them to do it in the app, or to update the app to confirm here. Never say it is done.`,
+        );
+      } else if (
+        outcome.confirm &&
+        isChatAction(call.name) &&
+        params.memoryId
+      ) {
         confirmations.push({
           tool: call.name,
           memory: params.memoryId,
@@ -249,6 +290,14 @@ export async function lookUpForChat(params: {
           `[${call.name}: waiting for the host to confirm]\nNothing has happened yet. ${outcome.confirm.readBack} The app shows Confirm and Cancel buttons under your reply. Briefly say what it will do and ask them to confirm with the button. Never say it is done.`,
         );
       } else {
+        if (outcome.summary && isChatAction(call.name) && params.memoryId) {
+          dones.push({
+            tool: call.name,
+            memory: params.memoryId,
+            text: `Done: ${outcome.summary}.`,
+            ...(outcome.actionId && {action: outcome.actionId}),
+          });
+        }
         actionSections.push(
           `[${call.name}: done]\n${outcome.result}${
             outcome.effects.some(effect => effect.type === 'open_story')
@@ -292,8 +341,13 @@ export async function lookUpForChat(params: {
   for (const entry of results) {
     if (!entry) continue;
     for (const [id, target] of entry.result.targets) targets.set(id, target);
+    // Apps that cannot open in-app links never see them offered.
+    const text =
+      params.features?.links === false
+        ? entry.result.text.replace(/ \[link: [^\]]+\]/g, '')
+        : entry.result.text;
     sections.push(
-      `[${describeCall(entry.call.name, entry.call.arguments)}]\n${entry.result.text}`,
+      `[${describeCall(entry.call.name, entry.call.arguments)}]\n${text}`,
     );
   }
   const names = known.map(call => describeCall(call.name, call.arguments));
@@ -301,6 +355,20 @@ export async function lookUpForChat(params: {
     {userId, calls: names, ms: Date.now() - started},
     'Chat lookups ran',
   );
+  void recordAiMetric({
+    event: 'chat_lookups',
+    task: 'chat_lookups',
+    user: userId,
+    provider: chooser,
+    model: chooser === 'groq' ? GROQ_MODEL_CHAT_TOOLS : GEMINI_MODEL,
+    used_fallback: chooser === 'gemini',
+    duration_ms: Date.now() - started,
+    metadata: {
+      tools: known.map(call => call.name),
+      failed: results.filter(entry => !entry).length,
+      actions: known.filter(call => isChatAction(call.name)).length,
+    },
+  });
   if (!sections.length && !actionSections.length) {
     return {...NONE, calls: names};
   }
@@ -325,5 +393,6 @@ Answer from these lookups when they are relevant. If one found nothing, say so p
     targets,
     calls: names,
     confirmations,
+    dones,
   };
 }

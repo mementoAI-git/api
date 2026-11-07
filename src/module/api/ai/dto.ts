@@ -113,6 +113,15 @@ export const aiVoicesSchema = z.object({
     .optional(),
 });
 
+export const linkPreviewSchema = z.object({
+  query: z.strictObject({
+    url: z
+      .string()
+      .max(2_000)
+      .regex(/^https?:\/\//i, 'Must be a web link'),
+  }),
+});
+
 export const aiVoicePreviewSchema = z.object({
   body: z.strictObject({
     provider: z.enum(['gemini', 'elevenlabs']).optional(),
@@ -149,6 +158,13 @@ export const voiceToolSchema = z.object({
     call_id: z.string().trim().min(1).max(128).optional(),
     /** The app's id for this voice call: undo only reverses this call's actions. */
     session_id: z.string().trim().min(1).max(128).optional(),
+  }),
+});
+
+export const chatUndoSchema = z.object({
+  body: z.strictObject({
+    memory: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid conversation'),
+    action: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid action'),
   }),
 });
 

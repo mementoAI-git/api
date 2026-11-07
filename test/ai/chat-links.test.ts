@@ -125,3 +125,67 @@ describe('chat memory context links', () => {
     expect(buildMemoriesContext(memories)).not.toContain('[link:');
   });
 });
+
+describe('what the app can show', () => {
+  it('keeps old mobile builds on plain replies and lets web and new apps opt in', async () => {
+    const {chatFeaturesFrom} = await import(
+      '../../src/module/api/ai/chat-features'
+    );
+    const headers = (values: Record<string, string>) => (name: string) =>
+      values[name.toLowerCase()];
+    expect(chatFeaturesFrom(headers({'x-memento-client': 'ios'}))).toEqual({
+      links: false,
+      cards: false,
+      status: false,
+    });
+    expect(chatFeaturesFrom(headers({'x-memento-client': 'web'}))).toEqual({
+      links: true,
+      cards: true,
+      status: false,
+    });
+    expect(
+      chatFeaturesFrom(
+        headers({
+          'x-memento-client': 'ios',
+          'x-memento-chat-features': 'links, cards,status',
+        }),
+      ),
+    ).toEqual({links: true, cards: true, status: true});
+  });
+
+  it('drops in-app links for apps that cannot open them, but keeps share links', () => {
+    const plain = {...links, inApp: false};
+    expect(
+      rewriteChatLinks(
+        `See [Trip to Lagos](/stories/${LAGOS}): https://mymemento.io/post/${LAGOS}`,
+        plain,
+      ),
+    ).toBe(`See Trip to Lagos: https://mymemento.io/post/${LAGOS}`);
+  });
+});
+
+describe('insight links', () => {
+  const OBS = '64b7f0c2a1b2c3d4e5f60aaa';
+  const withObservation: ChatLinks = {
+    ...links,
+    targets: new Map([...links.targets, [OBS, {type: 'observation'}]]),
+  };
+
+  it('keeps links to observations the reply was given, and only those', () => {
+    expect(
+      rewriteChatLinks(
+        `See [Early riser](/insights?observation=${OBS}).`,
+        withObservation,
+      ),
+    ).toBe(`See [Early riser](/insights?observation=${OBS}).`);
+    expect(rewriteChatLinks(`[x](/insights?observation=${OBS})`, links)).toBe(
+      'x',
+    );
+    expect(
+      rewriteChatLinks(`[x](/insights?observation=${OBS})`, {
+        ...withObservation,
+        inApp: false,
+      }),
+    ).toBe('x');
+  });
+});

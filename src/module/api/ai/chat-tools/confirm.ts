@@ -8,7 +8,14 @@ import {
 } from '../../../../utils/service-error';
 import {assertOwnedMemory} from '../../memory/access';
 import {runVoiceServerTool} from '../voice/server-tools';
-import {CONFIRM_FENCE, CONFIRMED_FENCE, isChatAction} from './actions';
+import {
+  CONFIRM_FENCE,
+  CONFIRMED_FENCE,
+  DONE_FENCE,
+  UNDONE_FENCE,
+  isChatAction,
+} from './actions';
+import {undoLastAction} from '../voice/undo';
 
 /**
  * The Confirm button on a chat confirmation card. Runs the action with the
@@ -60,8 +67,59 @@ export async function confirmChatAction(
       text,
       effects: outcome.effects,
       message,
+      ...(outcome.actionId && {action: outcome.actionId}),
     },
   };
+}
+
+/**
+ * The Undo button under something chat did: reverses exactly that action,
+ * within this conversation, if nothing changed it since (see undo.ts).
+ */
+export async function undoChatAction(
+  userId: string,
+  memoryId: string,
+  actionId: string,
+) {
+  await assertOwnedMemory(memoryId, userId);
+  const outcome = await undoLastAction(userId, {
+    sessionId: `chat:${memoryId}`,
+    actionId,
+  });
+  const done = Boolean(outcome.summary);
+  const text = done
+    ? `Undone: ${String(outcome.summary).replace(/^undid: /, '')}.`
+    : outcome.result.startsWith('I did not undo it')
+      ? 'Not undone: it was changed again since, so it was left as it is.'
+      : 'There is nothing to undo here any more. Changes can be undone for half an hour.';
+  if (done) {
+    await Message.create({user: userId, memory: memoryId, role: 'ai', text});
+    await markUndone(userId, memoryId, actionId);
+  }
+  return {
+    message: done ? 'Undone' : 'Not undone',
+    data: {done, text, effects: outcome.effects},
+  };
+}
+
+/** Shows the done card as undone from now on. */
+async function markUndone(userId: string, memoryId: string, actionId: string) {
+  const reply = await Message.findOne({
+    user: userId,
+    memory: memoryId,
+    role: 'ai',
+    text: new RegExp(`"action":"${actionId}"`),
+  })
+    .sort({created_at: -1})
+    .select('text');
+  if (!reply?.text) return;
+  const text = reply.text.replace(
+    new RegExp(`\`\`\`${DONE_FENCE}\n(?=[^\n]*"action":"${actionId}")`),
+    `\`\`\`${UNDONE_FENCE}\n`,
+  );
+  if (text !== reply.text) {
+    await Message.updateOne({_id: reply._id}, {$set: {text}});
+  }
 }
 
 /** Shows the card as done from now on, so it offers no buttons after a reload. */

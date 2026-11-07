@@ -1,0 +1,22 @@
+[
+  {"say": "share the last story I just posted", "expect": ["get_share_link"]},
+  {"say": "share my last story with my sister Ada", "expect": ["share_story"]},
+  {"say": "what did I write about my father last year?", "expect": ["search_memories"]},
+  {"say": "who are my beneficiaries?", "expect": ["list_people"]},
+  {"say": "why do you think I am a morning person?", "expect": ["explain_observation"]},
+  {"say": "list my bookmarked stories", "expect": ["list_stories"]},
+  {"say": "who can see my Lagos story?", "expect": ["who_can_see_story"]},
+  {"say": "bookmark my Lagos story", "expect": ["bookmark_story"]},
+  {"say": "delete my Lagos story", "expect": ["delete_story"]},
+  {"say": "make my Lagos story private", "expect": ["set_story_visibility"]},
+  {"say": "add to my Lagos story that we also visited the beach", "expect": ["edit_story"]},
+  {"say": "remember that my sister's birthday is in June", "expect": ["remember_fact"]},
+  {"say": "what should I write about today?", "expect": ["suggest_topics"]},
+  {"say": "save that as a story", "before": ["When I was nine my grandmother taught me to make pepper soup on Sundays."], "expect": ["save_story"]},
+  {"say": "undo that", "before": ["rename my Lagos story to Lagos 2019"], "expect": ["undo_last_action"]},
+  {"say": "hey how are you doing today", "expect": []},
+  {"say": "I'm feeling anxious about work today", "expect": []},
+  {"say": "I should probably delete that old Lagos story someday", "expect": []},
+  {"say": "I love my sister so much", "expect": [], "allow": ["search_memories"]},
+  {"say": "what is the capital of France?", "expect": []}
+]

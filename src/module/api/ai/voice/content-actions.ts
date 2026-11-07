@@ -102,19 +102,32 @@ function confirmFirst(
   };
 }
 
+/** File ids sent with the message (chat adds them); ownership is checked on save. */
+function fileIds(value: unknown): string[] {
+  return (Array.isArray(value) ? value : [])
+    .map(String)
+    .filter(id => /^[0-9a-fA-F]{24}$/.test(id))
+    .slice(0, 10);
+}
+
 const saveStory: Handler = async (userId, args) => {
   const body = str(args.body, MAX_BODY);
-  if (!body)
+  const attachments = fileIds(args.attachments);
+  if (!body && !attachments.length)
     return say('There is nothing to save yet. Ask what the story should say.');
   const title =
-    str(args.title, MAX_TITLE) || body.split(/\s+/).slice(0, 6).join(' ');
+    str(args.title, MAX_TITLE) ||
+    (body ? body.split(/\s+/).slice(0, 6).join(' ') : 'A new memory');
   try {
     const {data} = await memories.createMemory(
-      {title, body, status: 'save', tags: [], level: 1, attachments: []},
+      {title, body, status: 'save', tags: [], level: 1, attachments},
       userId,
     );
+    const media = attachments.length
+      ? ` with ${attachments.length === 1 ? 'the photo or file' : `the ${attachments.length} photos or files`} they sent`
+      : '';
     return {
-      result: `Saved as a story called "${title}". It is on screen. Tell them, and offer to change the title or the words.`,
+      result: `Saved as a story called "${title}"${media}. It is on screen. Tell them, and offer to change the title or the words.`,
       effects: [
         {type: 'refresh', what: 'memories'},
         {type: 'open_story', id: String((data as {_id: unknown})._id)},
@@ -315,6 +328,25 @@ const explainObservationAction: Handler = async (userId, args) => {
         ? `"${found.heading}": ${found.note} It comes from ${listed}${sources.length > 5 ? `, and ${sources.length - 5} more` : ''}. Tell them in your own words where it came from, and offer to correct it if it is wrong.`
         : `"${found.heading}": ${found.note} It is not linked to a particular story or conversation: they told you directly, or the stories it came from were deleted. Say so, and offer to correct it if it is wrong.`,
     );
+  } catch (error) {
+    return failed(error);
+  }
+};
+
+const openInsight: Handler = async (userId, args) => {
+  const query = str(args.query, MAX_REMEMBERED_LENGTH);
+  if (!query) return say('Ask which observation they want to see.');
+  try {
+    const found = await findObservation(userId, query);
+    if (found.kind !== 'one')
+      return notOneObservation(found, 'Nothing was opened.');
+    return {
+      result: `Opened "${found.heading}" in their Insights. Say so in a few words.`,
+      effects: [
+        {type: 'open', destination: 'insights'},
+        {type: 'open_insight', id: found.id},
+      ],
+    };
   } catch (error) {
     return failed(error);
   }
@@ -862,6 +894,7 @@ export const CONTENT_ACTION_HANDLERS: Record<string, Handler> = {
   remember_fact: rememberFactAction,
   forget_observation: forgetObservationAction,
   explain_observation: explainObservationAction,
+  open_insight: openInsight,
   correct_observation: correctObservationAction,
   bookmark_story: bookmarkStory,
   tag_story: tagStory,

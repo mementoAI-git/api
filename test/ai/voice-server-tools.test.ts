@@ -153,3 +153,31 @@ describe('voice server tools', () => {
     expect(SERVER_TOOL_NAMES).not.toContain('delete_account');
   });
 });
+
+describe('read tools shared with chat', () => {
+  it('offers voice the same read lookups as chat, in Gemini form', async () => {
+    const {SERVER_TOOL_DECLARATIONS, SHARED_READ_TOOL_NAMES} = await import(
+      '../../src/module/api/ai/voice/server-tool-declarations'
+    );
+    const names = SERVER_TOOL_DECLARATIONS.map(d => d.name);
+    for (const name of SHARED_READ_TOOL_NAMES) expect(names).toContain(name);
+    const list = SERVER_TOOL_DECLARATIONS.find(d => d.name === 'list_stories');
+    expect(JSON.stringify(list?.parameters)).toContain('"OBJECT"');
+    expect(
+      SERVER_TOOL_DECLARATIONS.find(d => d.name === 'suggest_topics')
+        ?.parameters,
+    ).toBeUndefined();
+  });
+
+  it('never reads links aloud', async () => {
+    const {forSpeech} = await import(
+      '../../src/module/api/ai/voice/server-tools'
+    );
+    const text = forSpeech(
+      'Story "Lagos" [link: /stories/64b7f0c2a1b2c3d4e5f60711] [share link: https://mymemento.io/post/64b7f0c2a1b2c3d4e5f60711]. Its share link works for anyone: https://mymemento.io/post/64b7f0c2a1b2c3d4e5f60711 . Give that link on its own line.',
+    );
+    expect(text).not.toMatch(/https?:|\/stories\//);
+    expect(text).toContain("copy from the story's Share option");
+    expect(text).toContain('Never read a link aloud.');
+  });
+});

@@ -77,6 +77,12 @@ router.post(
   ctrl.searchVoiceMemories,
 );
 router.post(
+  '/chat/undo',
+  gaurd,
+  validate(dto.chatUndoSchema),
+  ctrl.undoChatAction,
+);
+router.post(
   '/chat/actions/:name',
   gaurd,
   validate(dto.chatActionSchema),
@@ -114,6 +120,13 @@ router.get(
   requireFeature('ai.voices'),
   validate(dto.aiVoicesSchema),
   ctrl.getAvailableVoices,
+);
+router.get(
+  '/link-preview',
+  gaurd,
+  rateLimiter(1, 60, 'rl:link-preview:'),
+  validate(dto.linkPreviewSchema),
+  ctrl.getLinkPreview,
 );
 router.post(
   '/voice-preview',
