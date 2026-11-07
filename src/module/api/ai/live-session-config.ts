@@ -90,12 +90,16 @@ export const CALL_ACTION_TOOL_NAMES = [
 ];
 
 // Keep in sync with VOICE_DESTINATIONS in
-// mobile/src/features/chat/voice-call-actions.ts. The app answers unknown
-// destinations with "That screen isn't available".
+// mobile/src/features/chat/voice-call-actions.ts and WEB_VOICE_DESTINATIONS in
+// memento-web/src/features/voice/tools/call-actions.ts. An app answers
+// destinations it does not have (mobile has no people screen) with "That
+// screen isn't available".
 export const VOICE_SCREEN_DESTINATIONS = [
   'home',
   'chat',
   'stories',
+  'bookmarks',
+  'people',
   'new_story',
   'quick_note',
   'time_capsules',

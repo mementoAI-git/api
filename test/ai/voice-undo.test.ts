@@ -200,6 +200,74 @@ describe('voice undo and repeated calls', () => {
     expect(await Beneficiary.countDocuments({benefactor: user.id})).toBe(0);
   });
 
+  it('puts back the text of a story it added to', async () => {
+    const user = await createUserFixture();
+    const lagos = await story(user.id, 'Lagos trip');
+
+    await runVoiceServerTool(user.id, 'edit_story', {
+      query: 'Lagos',
+      text: 'We ate suya.',
+    });
+    expect((await Memory.findById(lagos._id).lean())?.body).toBe(
+      '<p>Lagos trip</p><p>We ate suya.</p>',
+    );
+
+    expect((await undo(user.id)).result).toMatch(/^Undone/);
+    expect((await Memory.findById(lagos._id).lean())?.body).toBe(
+      '<p>Lagos trip</p>',
+    );
+  });
+
+  it('does not overwrite story text the host changed after Memento', async () => {
+    const user = await createUserFixture();
+    const lagos = await story(user.id, 'Lagos trip');
+    await runVoiceServerTool(user.id, 'edit_story', {
+      query: 'Lagos',
+      text: 'We ate suya.',
+    });
+    await Memory.updateOne({_id: lagos._id}, {body: '<p>My own words</p>'});
+
+    expect((await undo(user.id)).result).toMatch(/^I did not undo it/);
+    expect((await Memory.findById(lagos._id).lean())?.body).toBe(
+      '<p>My own words</p>',
+    );
+  });
+
+  it('unshares a story it shared, and makes a private story shared again', async () => {
+    const user = await createUserFixture();
+    const lagos = await story(user.id, 'Lagos trip');
+    const ada = await Beneficiary.create({
+      benefactor: user.id,
+      name: 'Ada',
+      email: 'ada@example.com',
+    });
+
+    await confirmed(user.id, 'share_story', {query: 'Lagos', with: ['Ada']});
+    let row = await Memory.findById(lagos._id).lean();
+    expect(row?.beneficiaries?.map(String)).toEqual([String(ada._id)]);
+    expect(row?.visibility).toBe('private');
+
+    expect((await undo(user.id)).result).toMatch(/^Undone/);
+    row = await Memory.findById(lagos._id).lean();
+    expect(row?.beneficiaries ?? []).toEqual([]);
+
+    await Memory.updateOne(
+      {_id: lagos._id},
+      {beneficiaries: [String(ada._id)]},
+    );
+    await runVoiceServerTool(user.id, 'set_story_visibility', {
+      query: 'Lagos',
+      visibility: 'only_me',
+    });
+    expect((await Memory.findById(lagos._id).lean())?.beneficiaries).toEqual(
+      [],
+    );
+    expect((await undo(user.id)).result).toMatch(/^Undone/);
+    expect(
+      (await Memory.findById(lagos._id).lean())?.beneficiaries?.map(String),
+    ).toEqual([String(ada._id)]);
+  });
+
   it('leaves actions older than half an hour alone', async () => {
     const user = await createUserFixture();
     const lagos = await story(user.id, 'Lagos');

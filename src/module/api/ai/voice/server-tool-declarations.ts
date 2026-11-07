@@ -111,6 +111,124 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
+    name: 'explain_observation',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Tell the host where something you keep about them came from, when they ask why you think it or how you know ("why do you think I…", "where did you get that?"). Returns the observation and the stories and conversations it was drawn from. Changes nothing.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: {
+          type: Type.STRING,
+          description:
+            'The heading of the observation, or words from what it says.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'correct_observation',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Correct something you keep about the host, shown in their Observations or Preferences, when they say it is wrong or has changed ("that\'s not right, I…", "I changed my mind about that"). Write what it should say now, in their words. To remove it entirely, use forget_observation instead.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: {
+          type: Type.STRING,
+          description:
+            'The heading of the observation, or words from what it says now.',
+        },
+        note: {
+          type: Type.STRING,
+          description: 'What it should say instead, in their words.',
+        },
+        heading: {
+          type: Type.STRING,
+          description:
+            'A new short heading, only if the old one no longer fits.',
+        },
+      },
+      required: ['query', 'note'],
+    },
+  },
+  {
+    name: 'edit_story',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Change the words of one of the host\'s saved stories when they ask. append (the normal case) adds their words to the end ("add to my Lagos story that…"). replace swaps the whole text, only when they ask to rewrite or correct the whole story; pass the complete new text, keeping every part they did not ask to change. replace needs confirmation: the first call only reads it back with a code. The app opens the story.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: {
+          type: Type.STRING,
+          description: 'Words from the story title or what it is about.',
+        },
+        text: {
+          type: Type.STRING,
+          description:
+            'For append, the words to add. For replace, the whole new text.',
+        },
+        mode: {type: Type.STRING, enum: ['append', 'replace']},
+        confirmation: {
+          type: Type.STRING,
+          description:
+            'Only for replace. Leave out the first time. After the host confirms the read-back, the code from the first result.',
+        },
+      },
+      required: ['query', 'text'],
+    },
+  },
+  {
+    name: 'share_story',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Share one of the host\'s stories with particular beneficiaries or groups, by name, when they ask ("share my Lagos story with my sister"). Only the people and groups it is shared with can see it; it never makes a story public. Needs confirmation: the first call only reads it back with a code.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: {
+          type: Type.STRING,
+          description: 'Words from the story title or what it is about.',
+        },
+        with: {
+          type: Type.ARRAY,
+          items: {type: Type.STRING},
+          description: 'Names of their beneficiaries or groups.',
+        },
+        confirmation: {
+          type: Type.STRING,
+          description:
+            'Leave out the first time. After the host confirms the read-back, the code from the first result.',
+        },
+      },
+      required: ['query', 'with'],
+    },
+  },
+  {
+    name: 'set_story_visibility',
+    behavior: Behavior.BLOCKING,
+    description:
+      'Change who can see one of the host\'s stories, when they ask. only_me makes it private to them and stops sharing it with anyone ("make it private"). everyone lets all their beneficiaries and the people they are connected with see it; use it only when they explicitly ask for everyone. everyone needs confirmation: the first call only reads it back with a code.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: {
+          type: Type.STRING,
+          description: 'Words from the story title or what it is about.',
+        },
+        visibility: {type: Type.STRING, enum: ['only_me', 'everyone']},
+        confirmation: {
+          type: Type.STRING,
+          description:
+            'Only for everyone. Leave out the first time. After the host confirms the read-back, the code from the first result.',
+        },
+      },
+      required: ['query', 'visibility'],
+    },
+  },
+  {
     name: 'bookmark_story',
     behavior: Behavior.BLOCKING,
     description:
@@ -283,7 +401,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     name: UNDO_LAST_ACTION_TOOL_NAME,
     behavior: Behavior.BLOCKING,
     description:
-      'Reverse the last thing you did for the host (a profile change, a save, a rename, tags, a bookmark, a capsule, a deleted story, a beneficiary) when they say "undo that", "change it back" or "put it back". Each call undoes one action, newest first, from the last half hour. Feedback that was sent cannot be unsent.',
+      'Reverse the last thing you did for the host (a profile change, a save, a rename, an edit to a story, tags, a bookmark, a share or visibility change, a corrected observation, a capsule, a deleted story, a beneficiary) when they say "undo that", "change it back" or "put it back". Each call undoes one action, newest first, from the last half hour. Feedback that was sent cannot be unsent.',
   },
 ];
 

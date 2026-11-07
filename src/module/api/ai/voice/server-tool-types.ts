@@ -33,8 +33,31 @@ export type VoiceUndo =
       id: string;
       title?: string;
       tags?: string[];
+      body?: string;
       expectTitle?: string;
       expectTags?: string[];
+      expectBody?: string;
+    }
+  | {
+      kind: 'story_access';
+      id: string;
+      groups: string[];
+      beneficiaries: string[];
+      visibility: 'private' | 'everyone';
+      /** What the action set, so undo can tell the host changed it since. */
+      expect: {
+        groups: string[];
+        beneficiaries: string[];
+        visibility: 'private' | 'everyone';
+      };
+    }
+  | {
+      kind: 'observation_text';
+      id: string;
+      heading: string;
+      note: string;
+      expectHeading: string;
+      expectNote: string;
     }
   | {kind: 'bookmark'; id: string; on: boolean}
   | {kind: 'remove_story'; id: string}

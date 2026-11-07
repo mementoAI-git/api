@@ -1,11 +1,12 @@
 import dayjs from 'dayjs';
 import Memory from '../../../database/model/memory';
+import ObservationView from '../../../database/model/observation-view';
 import User from '../../../database/model/user';
 import VoiceAction from '../../../database/model/voice-action';
 import * as beneficiaries from '../../beneficiary/service';
 import * as capsules from '../../capsule/service';
 import * as memories from '../../memory/service';
-import {forgetObservation} from '../../persona/observations';
+import {forgetObservation, updateObservation} from '../../persona/observations';
 import * as users from '../../user/service';
 import type {
   VoiceToolEffect,
@@ -74,11 +75,13 @@ async function assertUnchanged(userId: string, undo: VoiceUndo): Promise<void> {
   }
   if (
     undo.kind === 'story_fields' &&
-    (undo.expectTitle !== undefined || undo.expectTags !== undefined)
+    (undo.expectTitle !== undefined ||
+      undo.expectTags !== undefined ||
+      undo.expectBody !== undefined)
   ) {
     const story = (await Memory.findOne({_id: undo.id, user: userId})
-      .select('title tags')
-      .lean()) as {title?: unknown; tags?: unknown} | null;
+      .select('title tags body')
+      .lean()) as {title?: unknown; tags?: unknown; body?: unknown} | null;
     if (!story) throw new UndoConflictError();
     if (
       undo.expectTitle !== undefined &&
@@ -89,6 +92,45 @@ async function assertUnchanged(userId: string, undo: VoiceUndo): Promise<void> {
     if (
       undo.expectTags !== undefined &&
       !sameTags(story.tags, undo.expectTags)
+    ) {
+      throw new UndoConflictError();
+    }
+    if (
+      undo.expectBody !== undefined &&
+      !sameValue('body', story.body, undo.expectBody)
+    ) {
+      throw new UndoConflictError();
+    }
+  }
+  if (undo.kind === 'story_access') {
+    const story = (await Memory.findOne({_id: undo.id, user: userId})
+      .select('groups beneficiaries visibility')
+      .lean()) as {
+      groups?: unknown[];
+      beneficiaries?: unknown[];
+      visibility?: string;
+    } | null;
+    const ids = (value?: unknown[]) => (value ?? []).map(String).sort().join();
+    if (
+      !story ||
+      (story.visibility === 'everyone' ? 'everyone' : 'private') !==
+        undo.expect.visibility ||
+      ids(story.groups) !== ids(undo.expect.groups) ||
+      ids(story.beneficiaries) !== ids(undo.expect.beneficiaries)
+    ) {
+      throw new UndoConflictError();
+    }
+  }
+  if (undo.kind === 'observation_text') {
+    const view = await ObservationView.findOne({
+      user: userId,
+      'items._id': undo.id,
+    }).lean();
+    const item = view?.items.find(entry => String(entry._id) === undo.id);
+    if (
+      !item ||
+      item.heading !== undo.expectHeading ||
+      item.note !== undo.expectNote
     ) {
       throw new UndoConflictError();
     }
@@ -113,6 +155,7 @@ async function reverse(
       const fields: Record<string, unknown> = {};
       if (undo.title !== undefined) fields.title = undo.title;
       if (undo.tags !== undefined) fields.tags = undo.tags;
+      if (undo.body !== undefined) fields.body = undo.body;
       await memories.updateMemory(undo.id, fields as never, userId);
       return {
         effects: [
@@ -121,6 +164,28 @@ async function reverse(
         ],
       };
     }
+    case 'story_access':
+      await memories.updateMemory(
+        undo.id,
+        {
+          groups: undo.groups,
+          beneficiaries: undo.beneficiaries,
+          visibility: undo.visibility,
+        },
+        userId,
+      );
+      return {
+        effects: [
+          {type: 'refresh', what: 'memories'},
+          {type: 'open_story', id: undo.id},
+        ],
+      };
+    case 'observation_text':
+      await updateObservation(userId, undo.id, {
+        heading: undo.heading,
+        note: undo.note,
+      });
+      return {effects: [{type: 'refresh', what: 'observations'}]};
     case 'bookmark':
       if (undo.on) await memories.bookmark(undo.id, userId);
       else await memories.unbookmark(undo.id, userId);
