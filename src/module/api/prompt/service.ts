@@ -1,5 +1,11 @@
 import {createHash} from 'node:crypto';
 import {getPromptReplyUserCount} from './reply-user-count';
+import {
+  findAnsweredPromptMemoryId,
+  getAnsweredPromptIds,
+  keepAnsweredMemories,
+  liveAnswerFilter,
+} from './answered-memories';
 import Memory, {IMemory} from '../../database/model/memory';
 import Prompt, {IPrompt} from '../../database/model/prompt';
 import mongoose, {HydratedDocument} from 'mongoose';
@@ -61,18 +67,6 @@ export function resolvePromptDateKey(raw?: string): string {
   return dayjs.utc().format('YYYY-MM-DD');
 }
 
-const getAnsweredPromptIds = async (user_id: string): Promise<string[]> => {
-  const answeredMemories = await Memory.find({
-    user: user_id,
-    prompt: {$exists: true, $ne: null},
-    status: {$ne: 'draft'},
-  });
-
-  return answeredMemories
-    .map(m => m.prompt?.toString())
-    .filter(Boolean) as string[];
-};
-
 async function isAiPromptAnswered(
   user_id: string,
   date_key: string,
@@ -81,16 +75,16 @@ async function isAiPromptAnswered(
   const target = normalizeForDedupe(prompt_text);
   if (!target) return false;
   const matches = await Memory.find({
-    user: user_id,
+    ...liveAnswerFilter(user_id),
     prompt_type: 'ai-generated',
     reflection_day_key: date_key,
-    status: {$ne: 'draft'},
   })
-    .select('prompt_text')
+    .select('prompt_text body attachments')
     .lean();
-  return matches.some(
+  const sameQuestion = matches.filter(
     m => m.prompt_text && normalizeForDedupe(String(m.prompt_text)) === target,
   );
+  return (await keepAnsweredMemories(sameQuestion)).length > 0;
 }
 
 /**
@@ -289,11 +283,26 @@ export const getPrompts = async (user_id: string, date_key?: string) => {
 };
 
 export const getUserPromptResponse = async (id: string, user_id: string) => {
-  let memory = await Memory.findOne({user: user_id, prompt: id}).populate({
+  const populateAttachments = {
     path: 'attachments',
     select: '-base64',
     match: {provider: {$ne: EXCLUDED_STORAGE_PROVIDER}},
-  });
+  };
+  // Prefer the memory that holds the answer; an older empty draft (made by
+  // opening the topic earlier) must not hide it.
+  const answeredId = await findAnsweredPromptMemoryId(user_id, id);
+  let memory = answeredId
+    ? await Memory.findOne({_id: answeredId, user: user_id}).populate(
+        populateAttachments,
+      )
+    : await Memory.findOne({
+        user: user_id,
+        prompt: id,
+        status: {$ne: 'deleted'},
+        purge_requested_at: null,
+      })
+        .sort({created_at: 1})
+        .populate(populateAttachments);
 
   if (!memory) {
     const prompt = await Prompt.findOne({

@@ -5,6 +5,7 @@ import PendingInsight from '../../database/model/pending-insight';
 import Persona from '../../database/model/persona';
 import Prompt from '../../database/model/prompt';
 import ExploreQuestionState from '../../database/model/explore-question-state';
+import {getAnsweredPromptIds} from './answered-memories';
 import gemini, {GEMINI_MODEL} from '../../../services/gemini';
 import {
   generateTextWithFallback,
@@ -215,14 +216,7 @@ export async function generateAndStoreExploreQuestion(
   category: ExploreCategorySlug,
 ) {
   const categoryValues = getCompatibleExploreCategoryValues(category);
-  const answeredMemories = await Memory.find({
-    user: userId,
-    prompt: {$exists: true, $ne: null},
-    status: {$nin: ['draft', 'deleted']},
-  })
-    .select('prompt')
-    .lean();
-  const answeredIds = answeredMemories.map(memory => String(memory.prompt));
+  const answeredIds = await getAnsweredPromptIds(userId);
   const starterAnswered = await Prompt.countDocuments({
     _id: {$in: answeredIds},
     category: {$in: categoryValues},
