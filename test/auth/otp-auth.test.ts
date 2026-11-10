@@ -45,6 +45,9 @@ describe('6-digit OTP authentication', () => {
 
   it('generates and verifies 6-digit numeric OTP', async () => {
     vi.spyOn(redis, 'set').mockResolvedValue('OK' as any);
+    // A wrong address counts as a failed attempt for that address.
+    vi.spyOn(redis, 'incr').mockResolvedValue(1 as any);
+    vi.spyOn(redis, 'expire').mockResolvedValue(1 as any);
     vi.spyOn(redis, 'get').mockResolvedValue(
       JSON.stringify({
         email: 'otp-user@example.com',

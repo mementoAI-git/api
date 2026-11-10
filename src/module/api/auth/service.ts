@@ -691,6 +691,8 @@ export async function verifyEmail(
     if (!result.valid) {
       throw new BadRequestException('Invalid or expired code');
     }
+    // Lets older apps send this code to set-password without the address.
+    await otp.markChecked(token, 'reset');
     const user = await User.findOne({email: result.email});
     if (!user) {
       throw new NotFoundException('User not found');
@@ -739,9 +741,10 @@ export async function verifyEmail(
 
 export async function setPassword(payload: ISetPassword) {
   const {token} = payload;
+  const email = (payload as {email?: string}).email;
 
   // Verify the OTP using the centralized service
-  const result = await otp.consume(token, 'reset');
+  const result = await otp.consume(token, 'reset', email);
   if (!result.valid) {
     throw new BadRequestException('Invalid or expired link');
   }
