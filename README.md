@@ -184,7 +184,7 @@ the original subscription behavior resumes without a data migration.
 
 Polar is the only active payment integration. Paystack values remain readable only where older persisted records may contain them; there is no Paystack checkout, portal, invoice, or webhook flow.
 
-The API is authoritative for subscription access and storage usage. Default storage quotas are configurable through `STORAGE_LIMIT_FREE_BYTES`, `STORAGE_LIMIT_PRO_BYTES`, and `STORAGE_LIMIT_LEGACY_BYTES`; the shipped defaults are 200 MiB for Free and 10 GiB for Pro and Legacy. A per-user administrative override takes precedence. See [the billing implementation checklist](BILLING_IMPLEMENTATION_CHECKLIST.md) for contract, reconciliation, deployment, and staging sign-off requirements.
+The API is authoritative for subscription access and storage usage. Default storage quotas are configurable through `STORAGE_LIMIT_FREE_BYTES`, `STORAGE_LIMIT_PRO_BYTES`, and `STORAGE_LIMIT_LEGACY_BYTES`; the shipped defaults are 200 MiB for Free and 10 GiB for Pro and Legacy. A per-user administrative override takes precedence. Limits are enforced unless `STORAGE_QUOTA_ENFORCEMENT_ENABLED=false`; uploads over the limit return 403 `storage_quota_exceeded`, and `/staff/operations` counts accounts already over theirs (`storage_over_limit`). See [the billing implementation checklist](BILLING_IMPLEMENTATION_CHECKLIST.md) for contract, reconciliation, deployment, and staging sign-off requirements.
 
 ## Docker Setup
 

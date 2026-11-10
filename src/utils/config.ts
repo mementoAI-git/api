@@ -35,10 +35,18 @@ export const STORAGE_LIMIT_LEGACY_BYTES = Number(
 export const STORAGE_RESERVATION_TTL_SECONDS = Number(
   process.env.STORAGE_RESERVATION_TTL_SECONDS || 15 * 60,
 );
-export const STORAGE_QUOTA_ENFORCEMENT_ENABLED =
-  process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED !== undefined
-    ? process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED === 'true'
-    : !IS_PRODUCTION;
+/**
+ * Storage limits are enforced unless explicitly switched off with "false".
+ * The old default ("on unless NODE_ENV=production") left them off on staging
+ * and production alike, since both deployments run with NODE_ENV=production.
+ * Startup validation rejects any value other than "true" or "false".
+ */
+export function storageQuotaEnforced(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.STORAGE_QUOTA_ENFORCEMENT_ENABLED !== 'false';
+}
+export const STORAGE_QUOTA_ENFORCEMENT_ENABLED = storageQuotaEnforced();
 export const CORS_ALLOWED_ORIGINS = (
   process.env.CORS_ALLOWED_ORIGINS ||
   'http://localhost:5173,https://app.mymemento.io,https://dev.mymemento.io,https://www.mymemento.io,https://mymemento.io'
