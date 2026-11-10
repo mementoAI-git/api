@@ -140,6 +140,34 @@ function withLegacySession(
 const WA_PREFIX = 'webauthn:challenge:';
 const WA_TTL = 5 * 60;
 
+/**
+ * The apps' own Google OAuth clients (project 680261459129, also built into
+ * the mobile app). Always accepted, so a server setting can only add clients.
+ * Replacing them is what broke native sign-in: a phone's token has the web
+ * client as its audience and the iOS or Android client as its authorized
+ * party, and both must be ours.
+ */
+const MEMENTO_GOOGLE_CLIENT_IDS = [
+  '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com', // web
+  '680261459129-nupaa1nhgpkolmiicmcho7ffipl939lf.apps.googleusercontent.com', // iOS
+];
+
+/** Google clients whose ID tokens may sign in: ours plus any the server names. */
+export function googleClientIds(
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const configured = [
+    env.GOOGLE_ID,
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_WEB_CLIENT_ID,
+    env.GOOGLE_IOS_CLIENT_ID,
+    env.GOOGLE_ANDROID_CLIENT_ID,
+  ]
+    .map(id => id?.trim())
+    .filter((id): id is string => Boolean(id));
+  return [...new Set([...MEMENTO_GOOGLE_CLIENT_IDS, ...configured])];
+}
+
 export function generateOauthUrl(provider: string) {
   const {authoriation_url, redirect_uri} =
     OAUTH_PROVIDERS[provider || 'google'];
@@ -206,21 +234,7 @@ export async function oauthAuthorization(
         }
 
         // 4. Strict Audience (aud) and Authorized Party (azp) validation
-        const envClientIds = [
-          process.env.GOOGLE_ID,
-          process.env.GOOGLE_CLIENT_ID,
-          process.env.GOOGLE_WEB_CLIENT_ID,
-          process.env.GOOGLE_IOS_CLIENT_ID,
-          process.env.GOOGLE_ANDROID_CLIENT_ID,
-        ].filter(Boolean) as string[];
-
-        const allowedClientIds =
-          envClientIds.length > 0
-            ? envClientIds
-            : [
-                '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com',
-                '680261459129-nupaa1nhgpkolmiicmcho7ffipl939lf.apps.googleusercontent.com',
-              ];
+        const allowedClientIds = googleClientIds();
 
         // aud MUST match an authorized client ID
         if (!data.aud || !allowedClientIds.includes(data.aud)) {
