@@ -24,6 +24,7 @@ import {
   type AccessContext,
   checkFeatureAccess,
   providerIsPaying,
+  resolveEffectiveTier,
   throwSubscriptionRequired,
   type FeatureAccessResult,
 } from './access';
@@ -108,11 +109,9 @@ export async function getSubscriptionSummary(userId: string) {
   return {
     message: 'Subscription summary fetched',
     data: {
-      tier: STAGING_AUTO_PRO
-        ? 'pro'
-        : cancellationEnded
-          ? 'free'
-          : subscription.tier,
+      // The tier the feature gates use (staging Pro included), so the apps
+      // never show a plan the member can no longer use.
+      tier: resolveEffectiveTier(subscription),
       billing_interval: subscription.billing_interval,
       can_manage_subscription:
         subscription.payment_provider === 'polar' &&
