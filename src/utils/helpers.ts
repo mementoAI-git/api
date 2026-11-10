@@ -343,8 +343,9 @@ export const reconstructFileName = (name: string) => {
 };
 
 export const verifyAccessToken = (token: string): SessionClaims => {
+  let decoded: SessionClaims;
   try {
-    return jwt.verify(token, String(JWT_SECRET), {
+    decoded = jwt.verify(token, String(JWT_SECRET), {
       audience: 'API',
       issuer: 'Memento',
     }) as SessionClaims;
@@ -352,6 +353,12 @@ export const verifyAccessToken = (token: string): SessionClaims => {
     if (error instanceof jwt.TokenExpiredError) throw new SessionTimeout();
     throw new UnauthorizedException();
   }
+  // Refresh tokens share the secret, audience and session; only their type
+  // stops a 30-day refresh token being used as an access token.
+  if (decoded.type === 'refresh') {
+    throw new UnauthorizedException('Invalid token type');
+  }
+  return decoded;
 };
 
 export const verifyRefreshToken = (token: string): SessionClaims => {
