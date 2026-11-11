@@ -426,9 +426,15 @@ function mapPolarStatus(
   if (providerStatus === 'trialing') return 'trialing';
   if (providerStatus === 'past_due') return 'past_due';
   if (providerStatus === 'paused') return 'paused';
-  if (providerStatus === 'canceled' || providerStatus === 'unpaid') {
+  if (
+    providerStatus === 'canceled' ||
+    providerStatus === 'unpaid' ||
+    providerStatus === 'incomplete_expired'
+  ) {
     return 'cancelled';
   }
+  // The first payment has not gone through yet (and may never).
+  if (providerStatus === 'incomplete') return 'past_due';
   if (eventType.includes('trial')) return 'trialing';
   if (eventType.includes('paused')) return 'paused';
   if (eventType.includes('past_due') || eventType.includes('payment_failed')) {
@@ -501,8 +507,14 @@ export async function processPolarWebhook(
     : null;
   const hasValidProviderModifiedAt =
     providerModifiedAt !== null && !Number.isNaN(providerModifiedAt.getTime());
+  // Ends access now. An incomplete subscription has no paid period yet, so
+  // nothing else would stop it unlocking Pro; a later "active" event for the
+  // same subscription clears ended_at again.
   const terminal =
-    normalizedEventType === 'subscription.revoked' || data.status === 'unpaid';
+    normalizedEventType === 'subscription.revoked' ||
+    data.status === 'unpaid' ||
+    data.status === 'incomplete' ||
+    data.status === 'incomplete_expired';
   const endedAtValue = data.ended_at;
   const parsedEndedAt = endedAtValue ? new Date(String(endedAtValue)) : null;
   const endedAt =

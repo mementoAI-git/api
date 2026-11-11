@@ -202,6 +202,57 @@ describe('Polar billing lifecycle', () => {
     );
   });
 
+  it('does not unlock Pro while the first payment has not gone through', async () => {
+    const user = await createUserFixture();
+    const event = (status: string, id: string, at: string) => ({
+      type: 'subscription.updated',
+      timestamp: at,
+      data: {
+        id: 'polar-incomplete',
+        status,
+        modified_at: at,
+        customer_id: 'polar-customer',
+        product_id: 'polar-product',
+        metadata: {user_id: user.id, tier: 'pro', interval: 'monthly'},
+      },
+    });
+
+    await processPolarWebhook(
+      event('incomplete', 'evt-incomplete', '2026-11-01T10:00:00.000Z'),
+      'evt-incomplete',
+    );
+    const unpaid = await Subscription.findOne({user_id: user.id}).lean();
+    expect(resolveEffectiveTier(unpaid)).toBe('free');
+
+    // Paying later makes the same subscription active.
+    await processPolarWebhook(
+      event('active', 'evt-active', '2026-11-01T10:05:00.000Z'),
+      'evt-active',
+    );
+    const paid = await Subscription.findOne({user_id: user.id}).lean();
+    expect(resolveEffectiveTier(paid)).toBe('pro');
+  });
+
+  it('ends the plan when Polar gives up on the first payment', async () => {
+    const user = await createUserFixture();
+    await processPolarWebhook(
+      {
+        type: 'subscription.updated',
+        data: {
+          id: 'polar-expired',
+          status: 'incomplete_expired',
+          customer_id: 'polar-customer',
+          product_id: 'polar-product',
+          metadata: {user_id: user.id, tier: 'pro', interval: 'monthly'},
+        },
+      },
+      'evt-incomplete-expired',
+    );
+    const saved = await Subscription.findOne({user_id: user.id}).lean();
+    expect(saved?.status).toBe('cancelled');
+    expect(resolveEffectiveTier(saved)).toBe('free');
+  });
+
   it('records non-subscription events without mutating subscription state', async () => {
     const user = await createUserFixture();
     await Subscription.create({

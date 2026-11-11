@@ -245,9 +245,13 @@ export const TALLY_WEBHOOK_RATE_LIMIT_PER_MINUTE = Number(
 export const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 export const POLAR_WEBHOOK_SECRET_DEV = process.env.POLAR_WEBHOOK_SECRET_DEV;
 export const POLAR_WEBHOOK_SECRET_PROD = process.env.POLAR_WEBHOOK_SECRET_PROD;
+// Chosen by deployment: staging and production both run NODE_ENV=production,
+// so IS_PRODUCTION would hand staging production's secret.
 export const POLAR_WEBHOOK_SECRET =
   process.env.POLAR_WEBHOOK_SECRET ||
-  (IS_PRODUCTION ? POLAR_WEBHOOK_SECRET_PROD : POLAR_WEBHOOK_SECRET_DEV);
+  (MEMENTO_ENV === 'prod' || (MEMENTO_ENV === undefined && IS_PRODUCTION)
+    ? POLAR_WEBHOOK_SECRET_PROD
+    : POLAR_WEBHOOK_SECRET_DEV);
 export const POLAR_BASE_URL =
   process.env.POLAR_BASE_URL || 'https://api.polar.sh/v1';
 export const POLAR_PRODUCT_PRO_MONTHLY = process.env.POLAR_PRODUCT_PRO_MONTHLY;
