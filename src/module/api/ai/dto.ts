@@ -203,6 +203,36 @@ export const voiceCallSummarySchema = z.object({
   params: voiceCallParamsSchema,
 });
 
+const voiceCallRecordingSegmentSchema = z
+  .strictObject({
+    start: z.number().min(0),
+    end: z.number().min(0),
+    text: z.string().trim().min(1, 'Segment text is required').max(5_000),
+    speaker: z.enum(['user', 'ai']),
+  })
+  .refine(data => data.end >= data.start, {
+    message: 'end must be >= start',
+  });
+
+export const voiceCallRecordingSchema = z.object({
+  params: voiceCallParamsSchema,
+  body: z.strictObject({
+    file_id: z.string().regex(/^[a-fA-F0-9]{24}$/, 'Invalid file_id format'),
+    duration_seconds: z.number().min(0),
+    segments: z.array(voiceCallRecordingSegmentSchema).max(2_000),
+    speech: z
+      .array(
+        z
+          .strictObject({start: z.number().min(0), end: z.number().min(0)})
+          .refine(span => span.end >= span.start, {
+            message: 'end must be >= start',
+          }),
+      )
+      .max(20_000)
+      .optional(),
+  }),
+});
+
 // Type exports
 export type PromptBody = z.infer<typeof promptSchema>['body'];
 export type StartConversationBody = z.infer<
@@ -230,3 +260,7 @@ export type AiVoicePreviewBody = z.infer<typeof aiVoicePreviewSchema>['body'];
 export const spokenReplySchema = z.object({
   body: z.strictObject({text: z.string().trim().min(1).max(2000)}),
 });
+
+export type VoiceCallRecordingBody = z.infer<
+  typeof voiceCallRecordingSchema
+>['body'];

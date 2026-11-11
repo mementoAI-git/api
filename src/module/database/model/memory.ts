@@ -45,7 +45,7 @@ export interface IMemory {
   last_active?: Date; // Track last activity for inactivity-based summarization
   dimensions?: string[]; // Dimensions discussed in this conversation
   /** Deliberate vs Quick Capture flow */
-  capture_source?: 'standard' | 'quick';
+  capture_source?: 'standard' | 'quick' | 'voice_call';
   /** AI enrichment for Quick Capture (title/tags/category) */
   enrichment_status?: 'pending' | 'complete' | 'failed';
   /** Display / enrichment category (e.g. life dimension label) */
@@ -127,7 +127,7 @@ const memory = new Schema<IMemory>(
     dimensions: [String],
     capture_source: {
       type: String,
-      enum: ['standard', 'quick'],
+      enum: ['standard', 'quick', 'voice_call'],
       default: 'standard',
     },
     enrichment_status: {

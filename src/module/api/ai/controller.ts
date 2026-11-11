@@ -17,7 +17,11 @@ import {searchMemoriesForVoice} from './voice/memory-search';
 import {validTimeZone} from './voice/local-time';
 import {UnknownVoiceToolError, runVoiceServerTool} from './voice/server-tools';
 import {parseVoiceClientCapabilities} from './live-session-config';
-import {endVoiceCall as endCall, getVoiceCallSummary} from './voice/calls';
+import {
+  endVoiceCall as endCall,
+  getVoiceCallSummary,
+  saveVoiceCallRecording as saveRecording,
+} from './voice/calls';
 import {
   NotFoundException,
   BadRequestException,
@@ -308,6 +312,23 @@ export async function summarizeVoiceCall(
     const {message, data} = await getVoiceCallSummary(
       req.auth.id,
       String(req.params.sessionId),
+    );
+    return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function saveVoiceCallRecording(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const {message, data} = await saveRecording(
+      req.auth.id,
+      String(req.params.sessionId),
+      req.body,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {

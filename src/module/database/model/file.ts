@@ -15,11 +15,19 @@ export interface ITranscriptionSegment {
   start: number; // start time in seconds
   end: number; // end time in seconds
   text: string; // transcript text for this segment
+  speaker?: 'user' | 'ai'; // who spoke this segment (voice call recordings)
+}
+
+export interface ISpeechSpan {
+  start: number; // seconds
+  end: number;
 }
 
 export interface ITranscriptionData {
   full_text: string;
   segments: ITranscriptionSegment[];
+  // When someone was audible in a recorded voice call; the rest is silence.
+  speech?: ISpeechSpan[];
 }
 
 export type FileStorageProvider = 's3' | 'gcs' | 'cloudinary';
@@ -56,6 +64,10 @@ const transcriptionSegmentSchema = new Schema(
     start: {type: Number, required: true},
     end: {type: Number, required: true},
     text: {type: String, required: true},
+    speaker: {
+      type: String,
+      enum: ['user', 'ai'],
+    },
   },
   {_id: false},
 );
@@ -64,6 +76,18 @@ const transcriptionDataSchema = new Schema(
   {
     full_text: {type: String, required: true},
     segments: [transcriptionSegmentSchema],
+    speech: {
+      type: [
+        new Schema(
+          {
+            start: {type: Number, required: true},
+            end: {type: Number, required: true},
+          },
+          {_id: false},
+        ),
+      ],
+      default: undefined,
+    },
   },
   {_id: false},
 );

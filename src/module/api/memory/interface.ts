@@ -1,5 +1,5 @@
 export interface ICreateMemoryPayload {
-  capture_source?: 'standard' | 'quick';
+  capture_source?: 'standard' | 'quick' | 'voice_call';
   title: string;
   body: string;
   tags: string[];
