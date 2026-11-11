@@ -1,7 +1,9 @@
 import {
   GENERIC_QUICK_CAPTURE_TITLE_RE as GENERIC_TITLE_RE,
+  attachmentOnlyTitle,
   shouldOverwriteQuickCaptureTitle,
 } from '../../utils/quick-note';
+import File from '../../module/database/model/file';
 import {Worker} from 'bullmq';
 import dayjs from 'dayjs';
 import type {RedisConnection} from '../../services/redis';
@@ -263,14 +265,22 @@ export default function startQuickCaptureWorker(connection: RedisConnection) {
         .filter(Boolean)
         .join('\n\n');
 
-      if (!plain && voice.recordings > 0) {
-        // Nothing to read yet, so don't ask the AI to invent a title from an empty note.
+      if (!plain && (memory.attachments?.length || 0) > 0) {
+        // Nothing to read, so name what was attached instead of asking the AI to invent a title.
+        const files = await File.find({
+          _id: {$in: memory.attachments as unknown[]},
+          user: user_id,
+        })
+          .select('type')
+          .lean();
         await Memory.findByIdAndUpdate(memory_id, {
           ...(isQuickCapture &&
-            shouldOverwriteQuickCaptureTitle(
-              memory.title || '',
-              Boolean(memory.prompt_text?.trim()),
-            ) && {title: 'Voice note'}),
+            shouldOverwriteQuickCaptureTitle(memory.title || '') && {
+              title: attachmentOnlyTitle(
+                files.map(file => file.type || ''),
+                new Date(memory.created_at || Date.now()),
+              ),
+            }),
           enrichment_status: 'complete',
         });
         if (memory.status === 'save') queueSavedStoryJobs(user_id, memory_id);
@@ -321,10 +331,9 @@ ${plain || '(empty)'}
           tagContext,
         );
 
+        // Tags the member chose are kept; generated ones only fill an empty list.
         const tags =
-          isQuickCapture || (memory.tags?.length || 0) === 0
-            ? generatedTags
-            : memory.tags;
+          (memory.tags?.length || 0) === 0 ? generatedTags : memory.tags;
 
         const nextQuickCaptureTitle = resolveEnrichmentTitle(
           parsed?.title,
@@ -334,10 +343,7 @@ ${plain || '(empty)'}
 
         const shouldSetQuickCaptureTitle =
           isQuickCapture &&
-          shouldOverwriteQuickCaptureTitle(
-            memory.title || '',
-            Boolean(memory.prompt_text?.trim()),
-          );
+          shouldOverwriteQuickCaptureTitle(memory.title || '');
 
         const category = normalizeCategory(parsed?.category);
 
