@@ -88,8 +88,34 @@ export function providerIsPaying(subscription: ISubscription): boolean {
       subscription.cancel_at_period_end === true) &&
       periodEnded);
   if (providerEnded) return false;
+  if (storePeriodLapsed(subscription)) return false;
   if (subscription.payment_provider) return true;
   return !subscription.promo_expires_at;
+}
+
+/** How long after a store period ends a renewal may still be on its way to us. */
+const STORE_RENEWAL_GRACE_DAYS = 3;
+
+/**
+ * App Store and Play subscriptions only move forward when a store notice
+ * arrives or the app re-verifies the purchase. A member who cancels in the
+ * store's settings may send neither, so without this the record stayed
+ * "active" and kept Pro forever. A renewal pushes current_period_end forward;
+ * once it is a few days in the past with no renewal, the plan has ended.
+ */
+function storePeriodLapsed(subscription: ISubscription): boolean {
+  if (
+    subscription.payment_provider !== 'apple' &&
+    subscription.payment_provider !== 'google'
+  ) {
+    return false;
+  }
+  return Boolean(
+    subscription.current_period_end &&
+      dayjs(subscription.current_period_end)
+        .add(STORE_RENEWAL_GRACE_DAYS, 'day')
+        .isBefore(dayjs()),
+  );
 }
 
 export function resolveEffectiveTier(
