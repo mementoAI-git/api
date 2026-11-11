@@ -258,6 +258,14 @@ export const POLAR_PRODUCT_LEGACY_ANNUAL =
   process.env.POLAR_PRODUCT_LEGACY_ANNUAL;
 export const POLAR_PRODUCT_LEGACY_LIFETIME =
   process.env.POLAR_PRODUCT_LEGACY_LIFETIME;
+/**
+ * The app's numeric App Store id (App Store Connect > App Information > Apple
+ * ID; also eas.json ascAppId). Apple's library needs it to verify Production
+ * purchases and notifications. Public, so the shipped app's id is the default.
+ */
+export const APPLE_APP_APPLE_ID = Number(
+  process.env.APPLE_APP_APPLE_ID || 6804683183,
+);
 export const APPLE_IAP_NOTIFICATIONS_ENABLED =
   process.env.APPLE_IAP_NOTIFICATIONS_ENABLED === 'true';
 export const GOOGLE_PLAY_RTDN_ENABLED =
