@@ -319,6 +319,16 @@ export async function oauthAuthorization(
     await user.save();
   }
 
+  // Google or Apple proves the email, not the second factor: an account with
+  // two-factor authentication needs its code here too, as with a password.
+  if (user.two_factor?.enabled) {
+    const two_fa_token = await create2FAPendingToken(user.id, false);
+    return {
+      data: {requires_2fa: true, two_fa_token},
+      message: '2FA verification required',
+    };
+  }
+
   const session = await createSession(user, context);
   const data = withLegacySession(session, context);
 
