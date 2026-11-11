@@ -10648,7 +10648,40 @@
     },
     "/users/account": {
       "delete": {
-        "description": "Soft delete user account",
+        "description": "Deactivates the account immediately (all sessions revoked) and schedules the permanent purge after a 14-day grace period. Signing in during the grace period restores the account. Optionally records why the person is leaving and emails them an archive export.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "details": {
+                    "description": "Stored only when reason is \"other\".",
+                    "maxLength": 1000,
+                    "type": "string"
+                  },
+                  "export_data": {
+                    "description": "Email a download link for an archive export to the account email.",
+                    "type": "boolean"
+                  },
+                  "reason": {
+                    "enum": [
+                      "unsatisfied",
+                      "not-using",
+                      "issues-unresolved",
+                      "safety-privacy",
+                      "taking-break",
+                      "other",
+                      "cant-say"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "200": {
             "content": {
@@ -10657,15 +10690,23 @@
                   "properties": {
                     "data": {
                       "properties": {
-                        "deleted": {
+                        "deactivated": {
                           "example": true,
                           "type": "boolean"
+                        },
+                        "grace_days": {
+                          "example": 14,
+                          "type": "integer"
+                        },
+                        "scheduled_for": {
+                          "format": "date-time",
+                          "type": "string"
                         }
                       },
                       "type": "object"
                     },
                     "message": {
-                      "example": "Account deleted successfully",
+                      "example": "Account deactivated. It will be deleted after the grace period.",
                       "type": "string"
                     },
                     "status": {
@@ -10677,7 +10718,7 @@
                 }
               }
             },
-            "description": "Account deleted successfully"
+            "description": "Account deactivated; purge scheduled"
           },
           "401": {
             "content": {
