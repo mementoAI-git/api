@@ -228,11 +228,17 @@ export async function memoryStats(user_id: string) {
   };
 }
 
+export interface ICreateMemoryOptions {
+  /** When true, skip queueing story insights and summarisation for this memory. */
+  skipInsights?: boolean;
+}
+
 export async function createMemory(
   payload: ICreateMemoryPayload,
   user_id: string,
   files: Express.Multer.File[] | null = null,
   reservationId?: string,
+  options: ICreateMemoryOptions = {},
 ) {
   const {
     title,
@@ -285,9 +291,16 @@ export async function createMemory(
     hasSpecificShares,
   );
 
+  const captureSource: 'standard' | 'quick' | 'voice_call' =
+    payload.capture_source === 'quick'
+      ? 'quick'
+      : payload.capture_source === 'voice_call'
+        ? 'voice_call'
+        : 'standard';
+
   const memory = await Memory.create({
-    title: payload.capture_source === 'quick' ? QUICK_NOTE_TITLE : title,
-    capture_source: payload.capture_source === 'quick' ? 'quick' : 'standard',
+    title: captureSource === 'quick' ? QUICK_NOTE_TITLE : title,
+    capture_source: captureSource,
     user: user_id,
     body,
     level,
@@ -321,7 +334,13 @@ export async function createMemory(
 
   // Queue story insights extraction if it's a story with body content and status is "save"
   const isStory = !memory.type || memory.type === 'story';
-  if (isStory && status === 'save' && body && body.trim().length > 0) {
+  if (
+    !options.skipInsights &&
+    isStory &&
+    status === 'save' &&
+    body &&
+    body.trim().length > 0
+  ) {
     void queueStoryInsights(user_id, memory.id);
     void queueSummarization(memory.id, 'story');
     // A tagged story still needs this when it has a recording, so that gets transcribed.
