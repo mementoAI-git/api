@@ -66,6 +66,38 @@ describe('promo access', () => {
   });
 });
 
+describe('store subscriptions', () => {
+  const daysAgo = (days: number) => dayjs().subtract(days, 'day').toDate();
+  const store = (provider: 'apple' | 'google', periodEnd: Date) =>
+    sub({
+      payment_provider: provider,
+      provider_subscription_id: 'chain-1',
+      status: 'active',
+      current_period_end: periodEnd,
+    });
+
+  it('end Pro a few days after the paid period, even if no store notice arrived', () => {
+    // A member who cancels in the store settings may never trigger a notice.
+    expect(resolveEffectiveTier(store('apple', daysAgo(4)))).toBe('free');
+    expect(resolveEffectiveTier(store('google', daysAgo(4)))).toBe('free');
+  });
+
+  it('keep Pro briefly after the period while a renewal is still being reported', () => {
+    expect(resolveEffectiveTier(store('apple', daysAgo(1)))).toBe('pro');
+    expect(resolveEffectiveTier(store('google', future()))).toBe('pro');
+  });
+
+  it('leave Polar plans to Polar, which reports endings itself', () => {
+    const polar = sub({
+      payment_provider: 'polar',
+      provider_subscription_id: 'sub_1',
+      status: 'active',
+      current_period_end: daysAgo(4),
+    });
+    expect(resolveEffectiveTier(polar)).toBe('pro');
+  });
+});
+
 describe('redeeming a promo code', () => {
   beforeAll(connectTestDatabase);
   afterEach(clearTestDatabase);
