@@ -26,6 +26,10 @@ export interface IVoiceCall {
   /** True when the call ended normally, so clean-up should feed insights. */
   queue_insights: boolean;
   summary?: IVoiceCallSummary;
+  /** The uploaded audio file for this call (set by saveVoiceCallRecording). */
+  recording_file?: string;
+  /** The Story memory created from this call's recording. */
+  story_memory?: string;
   created_at: Date;
   updated_at: Date;
 }
@@ -53,6 +57,8 @@ const voiceCallSchema = new Schema<IVoiceCall>(
       },
       default: undefined,
     },
+    recording_file: {type: String, ref: 'file', default: undefined},
+    story_memory: {type: String, ref: 'memory', default: undefined},
   },
   {timestamps: {createdAt: 'created_at', updatedAt: 'updated_at'}},
 );

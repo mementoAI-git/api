@@ -107,6 +107,12 @@ router.post(
   ctrl.summarizeVoiceCall,
 );
 router.post(
+  '/voice/calls/:sessionId/recording',
+  gaurd,
+  validate(dto.voiceCallRecordingSchema),
+  ctrl.saveVoiceCallRecording,
+);
+router.post(
   '/spoken-reply',
   gaurd,
   requireFeature('ai.voices'),

@@ -1,10 +1,13 @@
 import {z} from 'zod';
 import Memory from '../../../database/model/memory';
 import Message from '../../../database/model/message';
+import File from '../../../database/model/file';
 import VoiceCall, {IVoiceCallSummary} from '../../../database/model/voice-call';
 import {assertOwnedMemory} from '../../memory/access';
+import {createMemory} from '../../memory/service';
 import {extractJson} from '../../../../utils/helpers';
 import {
+  BadRequestException,
   NotFoundException,
   ServiceUnavailableException,
 } from '../../../../utils/service-error';
@@ -16,6 +19,7 @@ import {
   loadCallTurns,
   UNCLEAR_MARKER,
 } from './transcript-cleanup';
+import type {VoiceCallRecordingBody} from '../dto';
 
 export const VOICE_SUMMARY_PROMPT_VERSION = 'voice-summary-v1';
 
@@ -214,5 +218,151 @@ export async function getVoiceCallSummary(userId: string, sessionId: string) {
   return {
     message: 'Voice call summary',
     data: {summary: presentSummary(summary)},
+  };
+}
+
+/** Escape the five special HTML characters. */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Formats a date as "Nov 11, 2026" using the UTC wall-clock value so the
+ * title is stable regardless of where the server runs.
+ */
+function formatCallDate(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/**
+ * Saves the uploaded recording for a voice call and creates a Story from the
+ * transcript. Idempotent: a second call for the same session returns the
+ * previously created story without making any changes.
+ */
+export async function saveVoiceCallRecording(
+  userId: string,
+  sessionId: string,
+  payload: VoiceCallRecordingBody,
+) {
+  // Idempotency check: if a story was already created for this session, return
+  // the existing ids without touching anything.
+  const existingCall = await VoiceCall.findOne({
+    user: userId,
+    session_id: sessionId,
+  })
+    .select('story_memory recording_file')
+    .lean();
+
+  if (existingCall?.story_memory) {
+    return {
+      message: 'Voice call recording saved',
+      data: {
+        memory_id: String(existingCall.story_memory),
+        file_id: String(existingCall.recording_file),
+      },
+    };
+  }
+
+  // Verify the file exists, belongs to the user, and is an audio file.
+  const file = await File.findOne({
+    _id: payload.file_id,
+    user: userId,
+    deleted: {$ne: true},
+  })
+    .select('_id type')
+    .lean();
+
+  if (!file) {
+    throw new NotFoundException('File not found');
+  }
+  if (!String(file.type).startsWith('audio/')) {
+    throw new BadRequestException('File must be an audio file');
+  }
+
+  // Build transcript: full_text as labelled lines, HTML body as paragraphs.
+  const lines: string[] = [];
+  const htmlParagraphs: string[] = [];
+
+  for (const seg of payload.segments) {
+    const label = seg.speaker === 'ai' ? 'Memento' : 'You';
+    const safeText = escapeHtml(seg.text);
+    lines.push(`${label}: ${seg.text}`);
+    htmlParagraphs.push(`<p><strong>${label}</strong> ${safeText}</p>`);
+  }
+
+  const fullText = lines.join('\n');
+  const htmlBody = htmlParagraphs.join('\n');
+
+  // Write transcription + duration onto the File document.
+  await File.updateOne(
+    {_id: payload.file_id},
+    {
+      $set: {
+        duration: payload.duration_seconds,
+        transcription: {
+          full_text: fullText,
+          segments: payload.segments,
+          ...(payload.speech?.length ? {speech: payload.speech} : {}),
+        },
+      },
+    },
+  );
+
+  const dateLabel = formatCallDate(new Date());
+  const title = `Conversation with Memento · ${dateLabel}`;
+
+  // Create the Story memory using the existing service so all side effects
+  // (streak, search indexing, enrichment cache bust) run as normal.
+  // We skip insights because the call's turns already feed that pipeline.
+  const {data: memory} = await createMemory(
+    {
+      title,
+      body: htmlBody,
+      status: 'save',
+      capture_source: 'voice_call',
+      tags: [],
+      level: 1,
+      attachments: [payload.file_id],
+    },
+    userId,
+    null,
+    undefined,
+    {skipInsights: true},
+  );
+
+  // Upsert the VoiceCall record so a recording that arrives before /end still
+  // creates a coherent record.
+  await VoiceCall.findOneAndUpdate(
+    {user: userId, session_id: sessionId},
+    {
+      $set: {
+        recording_file: payload.file_id,
+        story_memory: String(memory._id),
+      },
+      $setOnInsert: {
+        cleanup_status: 'skipped',
+        queue_insights: false,
+        duration_seconds: payload.duration_seconds,
+      },
+    },
+    {upsert: true},
+  );
+
+  return {
+    message: 'Voice call recording saved',
+    data: {
+      memory_id: String(memory._id),
+      file_id: payload.file_id,
+    },
   };
 }
