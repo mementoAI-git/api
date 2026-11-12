@@ -28,7 +28,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '../../../../utils/service-error';
-import {IS_DEV_DEPLOYMENT} from '../../../../utils/config';
+import {APPLE_APP_APPLE_ID, IS_DEV_DEPLOYMENT} from '../../../../utils/config';
 
 export interface VerifiedStorePurchase {
   /**
@@ -91,11 +91,13 @@ export function getAppleVerifier(env: Environment): SignedDataVerifier {
   const enableOnlineChecks = env === Environment.PRODUCTION;
   if (env === Environment.PRODUCTION) {
     if (!_verifierProd) {
+      // Apple requires the app's numeric App Store id in Production.
       _verifierProd = new SignedDataVerifier(
         getAppleRootCAs(),
         enableOnlineChecks,
         Environment.PRODUCTION,
         'io.mymemento.app',
+        APPLE_APP_APPLE_ID,
       );
     }
     return _verifierProd;
@@ -143,8 +145,10 @@ export async function verifyAppleNotificationPayload(
 ): Promise<VerifiedAppleNotification> {
   let lastError: unknown;
   for (const environment of [Environment.PRODUCTION, Environment.SANDBOX]) {
-    const verifier = getAppleVerifier(environment);
     try {
+      // Inside the try: a verifier that can't be built must not stop the
+      // other environment from being tried.
+      const verifier = getAppleVerifier(environment);
       const payload = await verifier.verifyAndDecodeNotification(signedPayload);
       const transaction = payload.data?.signedTransactionInfo
         ? await verifier.verifyAndDecodeTransaction(
