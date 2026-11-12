@@ -214,23 +214,40 @@ const voiceCallRecordingSegmentSchema = z
     message: 'end must be >= start',
   });
 
+/** Why a call's audio could not be kept, when only its transcript is saved. */
+export const VOICE_AUDIO_OMITTED_REASONS = [
+  'too_large',
+  'storage_full',
+  'upload_failed',
+] as const;
+
 export const voiceCallRecordingSchema = z.object({
   params: voiceCallParamsSchema,
-  body: z.strictObject({
-    file_id: z.string().regex(/^[a-fA-F0-9]{24}$/, 'Invalid file_id format'),
-    duration_seconds: z.number().min(0),
-    segments: z.array(voiceCallRecordingSegmentSchema).max(2_000),
-    speech: z
-      .array(
-        z
-          .strictObject({start: z.number().min(0), end: z.number().min(0)})
-          .refine(span => span.end >= span.start, {
-            message: 'end must be >= start',
-          }),
-      )
-      .max(20_000)
-      .optional(),
-  }),
+  body: z
+    .strictObject({
+      file_id: z
+        .string()
+        .regex(/^[a-fA-F0-9]{24}$/, 'Invalid file_id format')
+        .optional(),
+      audio_omitted: z.enum(VOICE_AUDIO_OMITTED_REASONS).optional(),
+      duration_seconds: z.number().min(0),
+      segments: z.array(voiceCallRecordingSegmentSchema).max(2_000),
+      speech: z
+        .array(
+          z
+            .strictObject({start: z.number().min(0), end: z.number().min(0)})
+            .refine(span => span.end >= span.start, {
+              message: 'end must be >= start',
+            }),
+        )
+        .max(20_000)
+        .optional(),
+    })
+    .refine(body => Boolean(body.file_id) !== Boolean(body.audio_omitted), {
+      message:
+        'Send the recording file_id, or audio_omitted when there is none',
+      path: ['file_id'],
+    }),
 });
 
 // Type exports
