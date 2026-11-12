@@ -183,6 +183,7 @@ export async function transcribeAudio(
   try {
     const {message, data} = await service.transcribeAudio(
       getTranscriptionInput(req.body, req.file),
+      req.auth.id,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
