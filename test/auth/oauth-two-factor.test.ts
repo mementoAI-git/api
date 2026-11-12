@@ -19,6 +19,9 @@ import {
 import {createTestApp} from '../helpers/app';
 import {createUserFixture} from '../helpers/factories';
 import redis from '../../src/services/redis';
+import mail from '../../src/module/mail';
+import User from '../../src/module/database/model/user';
+import {deleteUser} from '../../src/module/api/user/service';
 
 const WEB =
   '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com';
@@ -100,6 +103,33 @@ describe('Google and Apple sign-in respect two-factor authentication', () => {
     });
     expect(verified.status).toBe(200);
     expect(verified.body.data.access_token).toEqual(expect.any(String));
+  });
+
+  it('restores a deactivated account only after the 2FA code', async () => {
+    // Signing in during the deletion grace period restores the account; with
+    // 2FA on, that must wait for the code, not happen at the Google step.
+    vi.spyOn(mail, 'sendAccountDeactivated').mockResolvedValue(undefined);
+    const secret = speakeasy.generateSecret().base32;
+    const user = await createUserFixture({
+      email: 'leaving@example.com',
+      two_factor: {secret, enabled: true},
+    } as never);
+    await deleteUser(user.id);
+    googleSaysItIs(user.email);
+
+    const signIn = await post('/auth/oauth/google', {
+      id_token: 'google-id-token',
+    });
+
+    expect(signIn.body.data).toMatchObject({requires_2fa: true});
+    expect((await User.findById(user.id).lean())?.deleted).toBe(true);
+
+    const verified = await post('/auth/2fa/verify', {
+      two_fa_token: signIn.body.data.two_fa_token,
+      code: speakeasy.totp({secret, encoding: 'base32'}),
+    });
+    expect(verified.status).toBe(200);
+    expect((await User.findById(user.id).lean())?.deleted).toBe(false);
   });
 
   it('signs in straight away when two-factor authentication is off', async () => {
