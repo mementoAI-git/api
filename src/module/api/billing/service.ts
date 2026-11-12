@@ -23,6 +23,7 @@ import BillingWebhookEvent from '../../database/model/billing-webhook-event';
 import {
   type AccessContext,
   checkFeatureAccess,
+  providerIsPaying,
   throwSubscriptionRequired,
   type FeatureAccessResult,
 } from './access';
@@ -244,10 +245,21 @@ export async function redeemPromoCode(userId: string, code: string) {
   if (dayjs(promo.expires_at).isBefore(dayjs())) {
     throw new BadRequestException('Promo code has expired');
   }
+  // A promo would overwrite the plan a store or Polar subscription pays for.
+  const current = await Subscription.findOne({user_id: userId}).lean();
+  if (current?.payment_provider && providerIsPaying(current)) {
+    throw new BadRequestException(
+      'You already have a paid plan, so this promo code can’t be applied.',
+    );
+  }
 
-  promo.redeemed_by = userId;
-  promo.redeemed_at = new Date();
-  await promo.save();
+  // Claim the code in one step so two requests can't both redeem it.
+  const claimed = await PromoCode.findOneAndUpdate(
+    {_id: promo._id, redeemed_by: null},
+    {$set: {redeemed_by: userId, redeemed_at: new Date()}},
+    {new: true},
+  );
+  if (!claimed) throw new BadRequestException('Promo code already redeemed');
 
   const promoExpiresAt = dayjs().add(promo.duration_days, 'day').toDate();
   await Subscription.findOneAndUpdate(
