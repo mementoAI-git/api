@@ -32,6 +32,19 @@ async function processSection(
   }
 }
 
+/**
+ * A per-field date from last_update or last_summarized. On a full document
+ * these are Mongoose Maps, which `[field]` never reads, so the job used to
+ * skip every persona; lean documents give plain objects.
+ */
+function fieldDate(
+  dates: Map<string, Date> | Record<string, Date> | undefined,
+  field: SummarizableField,
+): Date | undefined {
+  if (!dates) return undefined;
+  return dates instanceof Map ? dates.get(field) : dates[field];
+}
+
 function shouldSummarizeField(
   field: SummarizableField,
   persona: IPersona,
@@ -41,8 +54,8 @@ function shouldSummarizeField(
     return false;
   }
 
-  const lastUpdate = persona.last_update?.[field];
-  const lastSummarized = persona.last_summarized?.[field];
+  const lastUpdate = fieldDate(persona.last_update, field);
+  const lastSummarized = fieldDate(persona.last_summarized, field);
 
   // If never updated, don't summarize
   if (!lastUpdate) {
@@ -55,7 +68,8 @@ function shouldSummarizeField(
 
 export async function summarizePersona(persona: IPersona): Promise<void> {
   try {
-    const updateData: Partial<IPersona> = {};
+    // Dotted paths: write each field's date without replacing the others'.
+    const updateData: Record<string, unknown> = {};
     const now = new Date();
     const fieldsToProcess: SummarizableField[] = [
       'important_notes',
@@ -74,9 +88,11 @@ export async function summarizePersona(persona: IPersona): Promise<void> {
             fieldArray.slice(-100), // Take last 100 items
           );
 
-          if (summarizedItems && Array.isArray(summarizedItems)) {
+          // An empty result means the model failed or returned nothing usable;
+          // saving it would erase the field.
+          if (Array.isArray(summarizedItems) && summarizedItems.length > 0) {
             updateData[field] = summarizedItems;
-            updateData.last_summarized[field] = now;
+            updateData[`last_summarized.${field}`] = now;
             hasUpdates = true;
           }
         }
@@ -87,7 +103,7 @@ export async function summarizePersona(persona: IPersona): Promise<void> {
     if (hasUpdates) {
       updateData.last_summarized_at = now; // Keep for backward compatibility
 
-      await Persona.findByIdAndUpdate(persona._id, updateData);
+      await Persona.findByIdAndUpdate(persona._id, {$set: updateData});
 
       logger.info(`Successfully summarized persona ${persona._id}`);
     }
