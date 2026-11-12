@@ -6,6 +6,7 @@ import {
   loadAndValidateRuntimeConfig,
   validateRuntimeConfig,
 } from '../../src/utils/runtime-config';
+import {storageQuotaEnforced} from '../../src/utils/config';
 
 const temporaryDirectories: string[] = [];
 
@@ -93,6 +94,11 @@ describe('runtime security configuration', () => {
       {APPLE_IAP_NOTIFICATIONS_ENABLED: 'true'},
       'IAP_TOKEN_ENCRYPTION_KEY',
     ],
+    [
+      'a mistyped storage quota switch',
+      {STORAGE_QUOTA_ENFORCEMENT_ENABLED: 'yes'},
+      'STORAGE_QUOTA_ENFORCEMENT_ENABLED',
+    ],
   ])('rejects %s in production', (_label, overrides, expected) => {
     expect(() =>
       validateRuntimeConfig({...productionEnv, ...overrides}),
@@ -136,5 +142,17 @@ describe('runtime security configuration', () => {
         validateRuntimeConfig({...productionEnv, VOICE_TURN_AB_PERCENT: value}),
       ).toThrow('VOICE_TURN_AB_PERCENT');
     }
+  });
+
+  it('enforces storage limits unless explicitly switched off', () => {
+    // Both deployments run NODE_ENV=production, so the default must not hinge on it.
+    expect(storageQuotaEnforced({NODE_ENV: 'production'})).toBe(true);
+    expect(storageQuotaEnforced({})).toBe(true);
+    expect(
+      storageQuotaEnforced({STORAGE_QUOTA_ENFORCEMENT_ENABLED: 'true'}),
+    ).toBe(true);
+    expect(
+      storageQuotaEnforced({STORAGE_QUOTA_ENFORCEMENT_ENABLED: 'false'}),
+    ).toBe(false);
   });
 });
