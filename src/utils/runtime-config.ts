@@ -76,6 +76,8 @@ export function validateRuntimeConfig(env: Environment): RuntimeConfig {
     'APPLE_IAP_NOTIFICATIONS_ENABLED',
   );
   const googlePlayRtdnEnabled = enabled(env, 'GOOGLE_PLAY_RTDN_ENABLED');
+  // Unset means enforced (see storageQuotaEnforced); a typo must not switch it off.
+  enabled(env, 'STORAGE_QUOTA_ENFORCEMENT_ENABLED');
 
   // Attachment responses are signed in every environment. Validate the key at
   // bootstrap instead of allowing the first attachment-bearing request to fail.

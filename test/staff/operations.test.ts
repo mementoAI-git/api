@@ -64,11 +64,22 @@ describe('staff diagnostic projections', () => {
       accounts: 1,
       files_failed: 0,
       people_active_spaces: 0,
+      storage_over_limit: 0,
     });
     await expect(accountDetail('000000000000000000000000')).rejects.toThrow(
       'Account not found',
     );
   });
+  it('counts accounts storing more than their plan allows', async () => {
+    // Who enforcement would stop uploading, from the last usage reconciliation.
+    await Usage.create([
+      {user_id: 'a', storage_used_bytes: 300, storage_limit_bytes: 200},
+      {user_id: 'b', storage_used_bytes: 200, storage_limit_bytes: 200},
+      {user_id: 'c', storage_used_bytes: 10, storage_limit_bytes: 200},
+    ]);
+    expect((await operationsSummary()).counts.storage_over_limit).toBe(1);
+  });
+
   it('keeps healthy counts when one diagnostic query fails', async () => {
     const query = File.countDocuments({});
     vi.spyOn(query, 'exec').mockRejectedValue(new Error('database timeout'));

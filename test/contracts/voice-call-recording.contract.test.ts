@@ -219,6 +219,63 @@ describe('POST /ai/voice/calls/:sessionId/recording', () => {
     expect(await Memory.countDocuments({capture_source: 'voice_call'})).toBe(0);
   });
 
+  it('saves the transcript as a story when the audio could not be kept', async () => {
+    // A long call can be too big to upload, or the member out of storage;
+    // the conversation itself must not be lost.
+    const {user, token} = await setup();
+
+    const res = await request(createTestApp())
+      .post('/ai/voice/calls/session-no-audio/recording')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        duration_seconds: 900,
+        segments: SEGMENTS,
+        audio_omitted: 'too_large',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.file_id).toBeNull();
+    const story = await Memory.findById(res.body.data.memory_id).lean();
+    expect(story?.user.toString()).toBe(user.id);
+    expect(story?.attachments ?? []).toHaveLength(0);
+    expect(story?.body).toContain('It was great, I went for a walk.');
+    expect(story?.body).toContain('too large to keep');
+
+    // Retries for the same call never create a second story.
+    const again = await request(createTestApp())
+      .post('/ai/voice/calls/session-no-audio/recording')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        duration_seconds: 900,
+        segments: SEGMENTS,
+        audio_omitted: 'too_large',
+      });
+    expect(again.body.data.memory_id).toBe(res.body.data.memory_id);
+    expect(await Memory.countDocuments({user: user.id})).toBe(1);
+  });
+
+  it('needs either the audio or a reason it is missing', async () => {
+    const {token} = await setup();
+    const res = await request(createTestApp())
+      .post('/ai/voice/calls/session-neither/recording')
+      .set('Authorization', `Bearer ${token}`)
+      .send({duration_seconds: 10, segments: SEGMENTS});
+    expect(res.status).toBe(422);
+  });
+
+  it('has nothing to save without audio or words', async () => {
+    const {token} = await setup();
+    const res = await request(createTestApp())
+      .post('/ai/voice/calls/session-empty/recording')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        duration_seconds: 10,
+        segments: [],
+        audio_omitted: 'storage_full',
+      });
+    expect(res.status).toBe(400);
+  });
+
   it('requires authentication', async () => {
     const {audioFile} = await setup();
     const res = await request(createTestApp())

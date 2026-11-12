@@ -23,6 +23,7 @@ import BillingWebhookEvent from '../../database/model/billing-webhook-event';
 import {
   type AccessContext,
   checkFeatureAccess,
+  providerIsPaying,
   throwSubscriptionRequired,
   type FeatureAccessResult,
 } from './access';
@@ -244,10 +245,21 @@ export async function redeemPromoCode(userId: string, code: string) {
   if (dayjs(promo.expires_at).isBefore(dayjs())) {
     throw new BadRequestException('Promo code has expired');
   }
+  // A promo would overwrite the plan a store or Polar subscription pays for.
+  const current = await Subscription.findOne({user_id: userId}).lean();
+  if (current?.payment_provider && providerIsPaying(current)) {
+    throw new BadRequestException(
+      'You already have a paid plan, so this promo code can’t be applied.',
+    );
+  }
 
-  promo.redeemed_by = userId;
-  promo.redeemed_at = new Date();
-  await promo.save();
+  // Claim the code in one step so two requests can't both redeem it.
+  const claimed = await PromoCode.findOneAndUpdate(
+    {_id: promo._id, redeemed_by: null},
+    {$set: {redeemed_by: userId, redeemed_at: new Date()}},
+    {new: true},
+  );
+  if (!claimed) throw new BadRequestException('Promo code already redeemed');
 
   const promoExpiresAt = dayjs().add(promo.duration_days, 'day').toDate();
   await Subscription.findOneAndUpdate(
@@ -426,9 +438,15 @@ function mapPolarStatus(
   if (providerStatus === 'trialing') return 'trialing';
   if (providerStatus === 'past_due') return 'past_due';
   if (providerStatus === 'paused') return 'paused';
-  if (providerStatus === 'canceled' || providerStatus === 'unpaid') {
+  if (
+    providerStatus === 'canceled' ||
+    providerStatus === 'unpaid' ||
+    providerStatus === 'incomplete_expired'
+  ) {
     return 'cancelled';
   }
+  // The first payment has not gone through yet (and may never).
+  if (providerStatus === 'incomplete') return 'past_due';
   if (eventType.includes('trial')) return 'trialing';
   if (eventType.includes('paused')) return 'paused';
   if (eventType.includes('past_due') || eventType.includes('payment_failed')) {
@@ -501,8 +519,14 @@ export async function processPolarWebhook(
     : null;
   const hasValidProviderModifiedAt =
     providerModifiedAt !== null && !Number.isNaN(providerModifiedAt.getTime());
+  // Ends access now. An incomplete subscription has no paid period yet, so
+  // nothing else would stop it unlocking Pro; a later "active" event for the
+  // same subscription clears ended_at again.
   const terminal =
-    normalizedEventType === 'subscription.revoked' || data.status === 'unpaid';
+    normalizedEventType === 'subscription.revoked' ||
+    data.status === 'unpaid' ||
+    data.status === 'incomplete' ||
+    data.status === 'incomplete_expired';
   const endedAtValue = data.ended_at;
   const parsedEndedAt = endedAtValue ? new Date(String(endedAtValue)) : null;
   const endedAt =

@@ -68,3 +68,26 @@ export const insightSourcesSchema = z.object({
       message: 'Provide either an insight or a category',
     }),
 });
+
+/** Why someone is leaving; matches the reasons offered in the apps. */
+export const ACCOUNT_DELETION_REASONS = [
+  'unsatisfied',
+  'not-using',
+  'issues-unresolved',
+  'safety-privacy',
+  'taking-break',
+  'other',
+  'cant-say',
+] as const;
+
+export const deleteAccountSchema = z.object({
+  // Older clients send no body; everything is optional.
+  body: z
+    .object({
+      reason: z.enum(ACCOUNT_DELETION_REASONS).optional(),
+      details: z.string().trim().max(1000).optional(),
+      export_data: z.boolean().optional(),
+    })
+    .optional()
+    .default({}),
+});

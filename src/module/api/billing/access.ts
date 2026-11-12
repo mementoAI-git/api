@@ -68,6 +68,30 @@ function isPaidTier(tier: SubscriptionTier) {
   return tier === 'pro' || tier === 'legacy';
 }
 
+/**
+ * Whether a paid tier is still paid for. With no provider behind it, the tier
+ * came from a promo (or an older grant): an expired promo ends it, and with no
+ * promo date it stands, as before. With a provider, its own end dates decide;
+ * an expired promo no longer takes away a plan the member later paid for.
+ */
+export function providerIsPaying(subscription: ISubscription): boolean {
+  const now = dayjs();
+  const terminallyEnded =
+    subscription.ended_at && dayjs(subscription.ended_at).isBefore(now);
+  const periodEnded =
+    subscription.current_period_end &&
+    dayjs(subscription.current_period_end).isBefore(now);
+  const providerEnded =
+    terminallyEnded ||
+    ((subscription.status === 'past_due' ||
+      subscription.status === 'cancelled' ||
+      subscription.cancel_at_period_end === true) &&
+      periodEnded);
+  if (providerEnded) return false;
+  if (subscription.payment_provider) return true;
+  return !subscription.promo_expires_at;
+}
+
 export function resolveEffectiveTier(
   subscription: ISubscription | null,
 ): SubscriptionTier {
@@ -77,26 +101,14 @@ export function resolveEffectiveTier(
   if (STAGING_AUTO_PRO) return 'pro';
   if (!subscription) return 'free';
   if (isPaidTier(subscription.tier)) {
-    const terminallyEnded =
-      subscription.ended_at && dayjs(subscription.ended_at).isBefore(dayjs());
-    const periodEnded =
-      subscription.current_period_end &&
-      dayjs(subscription.current_period_end).isBefore(dayjs());
-    const expiredPromo =
-      subscription.promo_expires_at &&
-      dayjs(subscription.promo_expires_at).isBefore(dayjs());
+    // A promo still running grants its plan, whatever a past subscription did.
     if (
-      terminallyEnded ||
-      ((subscription.status === 'past_due' ||
-        subscription.status === 'cancelled' ||
-        subscription.cancel_at_period_end === true) &&
-        periodEnded)
+      subscription.promo_expires_at &&
+      !dayjs(subscription.promo_expires_at).isBefore(dayjs())
     ) {
-      return 'free';
+      return subscription.tier;
     }
-    if (expiredPromo) {
-      return 'free';
-    }
+    if (!providerIsPaying(subscription)) return 'free';
   }
   return subscription.tier ?? 'free';
 }

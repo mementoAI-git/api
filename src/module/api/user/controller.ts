@@ -323,7 +323,12 @@ export async function deleteUser(
   next: NextFunction,
 ) {
   try {
-    const {message, data} = await service.deleteUser(req.auth.id);
+    const {reason, details, export_data} = req.body ?? {};
+    const {message, data} = await service.deleteUser(req.auth.id, {
+      reason,
+      details: reason === 'other' ? details : undefined,
+      export_data: export_data === true,
+    });
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

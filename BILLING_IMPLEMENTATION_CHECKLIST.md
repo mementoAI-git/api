@@ -18,12 +18,19 @@ part of this rollout.
 
 ## Production rollout order
 
+Storage limits are enforced unless `STORAGE_QUOTA_ENFORCEMENT_ENABLED=false` is
+set; an unset value means enforced, and any value other than `true` or `false`
+stops the API at startup. (The old default switched enforcement off whenever
+`NODE_ENV=production`, which both deployments use, so it was never on.) To stage
+the rollout, set it to `false` on a server before deploying this version there.
+
 1. Deploy with `STORAGE_QUOTA_ENFORCEMENT_ENABLED=false`.
 2. Configure Polar product IDs, API token, and webhook secret. Do not configure
    Paystack as a target provider.
 3. Let the billing usage reconciliation worker complete at least one full pass;
    compare `usage.storage_used_bytes` with active stored file totals and inspect
-   accounts where `over_limit` would be true.
+   accounts where `over_limit` would be true. `GET /staff/operations` reports
+   their number as `storage_over_limit`.
 4. Confirm web and mobile display `storage_reserved_bytes`, `remaining_bytes`,
    `percent_used`, and `over_limit` while continuing to accept older responses.
 5. Enable `STORAGE_QUOTA_ENFORCEMENT_ENABLED=true` in one API deployment,

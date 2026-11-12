@@ -221,6 +221,19 @@ export async function getVoiceCallSummary(userId: string, sessionId: string) {
   };
 }
 
+/** Shown in a call's story when only the transcript could be kept. */
+const AUDIO_OMITTED_NOTES: Record<
+  NonNullable<VoiceCallRecordingBody['audio_omitted']>,
+  string
+> = {
+  too_large:
+    'The audio of this call was too large to keep, so only the transcript was saved.',
+  storage_full:
+    'Your storage was full, so only the transcript of this call was saved.',
+  upload_failed:
+    'The audio of this call could not be uploaded, so only the transcript was saved.',
+};
+
 /** Escape the five special HTML characters. */
 function escapeHtml(text: string): string {
   return text
@@ -268,25 +281,35 @@ export async function saveVoiceCallRecording(
       message: 'Voice call recording saved',
       data: {
         memory_id: String(existingCall.story_memory),
-        file_id: String(existingCall.recording_file),
+        file_id: existingCall.recording_file
+          ? String(existingCall.recording_file)
+          : null,
       },
     };
   }
 
-  // Verify the file exists, belongs to the user, and is an audio file.
-  const file = await File.findOne({
-    _id: payload.file_id,
-    user: userId,
-    deleted: {$ne: true},
-  })
-    .select('_id type')
-    .lean();
-
-  if (!file) {
-    throw new NotFoundException('File not found');
+  // Without audio the transcript is all there is, so it must have words.
+  const fileId = payload.file_id ?? null;
+  if (!fileId && !payload.segments.some(seg => seg.text.trim())) {
+    throw new BadRequestException('Nothing to save: no audio or transcript');
   }
-  if (!String(file.type).startsWith('audio/')) {
-    throw new BadRequestException('File must be an audio file');
+
+  if (fileId) {
+    // Verify the file exists, belongs to the user, and is an audio file.
+    const file = await File.findOne({
+      _id: fileId,
+      user: userId,
+      deleted: {$ne: true},
+    })
+      .select('_id type')
+      .lean();
+
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+    if (!String(file.type).startsWith('audio/')) {
+      throw new BadRequestException('File must be an audio file');
+    }
   }
 
   // Build transcript: full_text as labelled lines, HTML body as paragraphs.
@@ -301,22 +324,28 @@ export async function saveVoiceCallRecording(
   }
 
   const fullText = lines.join('\n');
+  if (payload.audio_omitted) {
+    htmlParagraphs.push(
+      `<p><em>${AUDIO_OMITTED_NOTES[payload.audio_omitted]}</em></p>`,
+    );
+  }
   const htmlBody = htmlParagraphs.join('\n');
 
   // Write transcription + duration onto the File document.
-  await File.updateOne(
-    {_id: payload.file_id},
-    {
-      $set: {
-        duration: payload.duration_seconds,
-        transcription: {
-          full_text: fullText,
-          segments: payload.segments,
-          ...(payload.speech?.length ? {speech: payload.speech} : {}),
+  if (fileId)
+    await File.updateOne(
+      {_id: fileId},
+      {
+        $set: {
+          duration: payload.duration_seconds,
+          transcription: {
+            full_text: fullText,
+            segments: payload.segments,
+            ...(payload.speech?.length ? {speech: payload.speech} : {}),
+          },
         },
       },
-    },
-  );
+    );
 
   const dateLabel = formatCallDate(new Date());
   const title = `Conversation with Memento · ${dateLabel}`;
@@ -332,7 +361,7 @@ export async function saveVoiceCallRecording(
       capture_source: 'voice_call',
       tags: [],
       level: 1,
-      attachments: [payload.file_id],
+      attachments: fileId ? [fileId] : [],
     },
     userId,
     null,
@@ -346,7 +375,7 @@ export async function saveVoiceCallRecording(
     {user: userId, session_id: sessionId},
     {
       $set: {
-        recording_file: payload.file_id,
+        ...(fileId ? {recording_file: fileId} : {}),
         story_memory: String(memory._id),
       },
       $setOnInsert: {
@@ -362,7 +391,7 @@ export async function saveVoiceCallRecording(
     message: 'Voice call recording saved',
     data: {
       memory_id: String(memory._id),
-      file_id: payload.file_id,
+      file_id: fileId,
     },
   };
 }

@@ -20,11 +20,23 @@ const OTP_CONFIG: Record<OtpType, OtpTypeConfig> = {
 
 const OTP_PREFIX = 'otp:';
 
+/** Wrong codes allowed per address before its codes stop working for a while. */
+const MAX_CODE_FAILURES = 5;
+
+/**
+ * Six-digit codes share one small keyspace, so a code alone could match
+ * anyone's. They only count together with the address they were sent to.
+ * Emailed links use UUIDs, which cannot be guessed, and need no address.
+ */
+const isNumericCode = (code: string) => /^\d+$/.test(code);
+
 interface OtpData {
   email: string;
   type: OtpType;
   used: boolean;
   createdAt: string;
+  /** Set once the code was checked together with its address (reset only). */
+  checked?: boolean;
 }
 
 export interface OtpVerifyResult {
@@ -109,20 +121,20 @@ class OtpService {
     type: OtpType,
     email?: string,
   ): Promise<OtpVerifyResult> {
+    if (isNumericCode(code)) {
+      if (!email || (await this.isLocked(type, email))) return {valid: false};
+    }
     const key = this.buildKey(type, code);
     const dataStr = await redis.get(key);
-
-    if (!dataStr) {
-      return {valid: false};
-    }
-
-    const data: OtpData = JSON.parse(dataStr.toString());
+    const data: OtpData | null = dataStr
+      ? JSON.parse(dataStr.toString())
+      : null;
 
     if (
-      email &&
-      data.email &&
-      data.email.toLowerCase() !== email.toLowerCase()
+      !data ||
+      (email && data.email && data.email.toLowerCase() !== email.toLowerCase())
     ) {
+      if (isNumericCode(code) && email) await this.recordFailure(type, email);
       return {valid: false};
     }
 
@@ -134,12 +146,65 @@ class OtpService {
     return {valid: true, email: data.email, alreadyUsed: false};
   }
 
-  /** Atomically consume a reset token, including previously emailed links. */
-  async consume(code: string, type: OtpType): Promise<OtpVerifyResult> {
-    const raw = await redis.getDel(this.buildKey(type, code));
+  /**
+   * Atomically consume a reset token, including previously emailed links.
+   * A six-digit code needs its address; without one it is accepted only if
+   * it was already checked with its address (older apps send it alone).
+   */
+  async consume(
+    code: string,
+    type: OtpType,
+    email?: string,
+  ): Promise<OtpVerifyResult> {
+    const key = this.buildKey(type, code);
+    if (isNumericCode(code)) {
+      const stored = await redis.get(key);
+      const data: OtpData | null = stored
+        ? JSON.parse(stored.toString())
+        : null;
+      if (email) {
+        if (await this.isLocked(type, email)) return {valid: false};
+        if (!data || data.email.toLowerCase() !== email.toLowerCase()) {
+          await this.recordFailure(type, email);
+          return {valid: false};
+        }
+      } else if (!data?.checked) {
+        return {valid: false};
+      }
+    }
+    const raw = await redis.getDel(key);
     if (!raw) return {valid: false};
     const data: OtpData = JSON.parse(raw.toString());
+    if (email && data.email.toLowerCase() !== email.toLowerCase()) {
+      return {valid: false};
+    }
     return data.used ? {valid: false} : {valid: true, email: data.email};
+  }
+
+  /** Records that a code was checked together with its address. */
+  async markChecked(code: string, type: OtpType): Promise<void> {
+    const key = this.buildKey(type, code);
+    const stored = await redis.get(key);
+    if (!stored) return;
+    const data: OtpData = JSON.parse(stored.toString());
+    data.checked = true;
+    await redis.set(key, JSON.stringify(data), {KEEPTTL: true});
+  }
+
+  private failureKey(type: OtpType, email: string): string {
+    return `${OTP_PREFIX}fail:${type}:${email.toLowerCase()}`;
+  }
+
+  private async isLocked(type: OtpType, email: string): Promise<boolean> {
+    const count = Number(await redis.get(this.failureKey(type, email)));
+    return count >= MAX_CODE_FAILURES;
+  }
+
+  /** Counts a wrong code for an address; the count lasts as long as a code. */
+  private async recordFailure(type: OtpType, email: string): Promise<void> {
+    const key = this.failureKey(type, email);
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, OTP_CONFIG[type].ttl);
   }
 
   /**

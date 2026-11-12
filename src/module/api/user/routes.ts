@@ -57,7 +57,7 @@ router.post(
   valid.completeOnboarding,
   ctrl.completeOnboarding,
 );
-router.delete('/account', ctrl.deleteUser);
+router.delete('/account', validate(dto.deleteAccountSchema), ctrl.deleteUser);
 router.get('/stats', ctrl.getUserStats);
 router.get('/passkeys', ctrl.listPasskeys);
 router.delete('/passkeys/:credential_id', ctrl.deletePasskey);

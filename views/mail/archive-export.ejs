@@ -1,0 +1,11 @@
+<%- include('components/header') %>
+  <h1 class="subject">Your Memento archive is ready</h1>
+  <%- include('components/greetings', { name }) %>
+    <p>
+      As you asked when deleting your account, here is a copy of your stories, capsules and attachments.
+      The download link works until <%= expiresAt %>.
+    </p>
+    <%- include('components/btn-link', { title: 'Download your archive' , url }) %>
+
+    <%- include('components/closing-text') %>
+      <%- include('components/footer') %>

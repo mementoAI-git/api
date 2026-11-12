@@ -141,6 +141,14 @@ export async function operationsSummary() {
         status: {$in: ['pending', 'processing']},
       }),
     ],
+    [
+      'storage_over_limit',
+      // Accounts storing more than their plan allows, as of the last usage
+      // reconciliation: with enforcement on, these can no longer upload.
+      Usage.countDocuments({
+        $expr: {$gt: ['$storage_used_bytes', '$storage_limit_bytes']},
+      }),
+    ],
     ['exports_failed', ArchiveExport.countDocuments({status: 'failed'})],
     [
       'exports_pending',

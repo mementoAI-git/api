@@ -15,6 +15,8 @@ export interface IArchiveExport {
   warnings: string[];
   error?: string | null;
   expires_at: Date;
+  /** Email the download link to the owner when the archive is ready (account deletion). */
+  email_on_complete?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -46,6 +48,7 @@ const schema = new Schema<IArchiveExport>(
     warnings: {type: [String], default: []},
     error: {type: String, default: null},
     expires_at: {type: Date, required: true, index: true},
+    email_on_complete: {type: Boolean, default: false},
   },
   {timestamps: {createdAt: 'created_at', updatedAt: 'updated_at'}},
 );

@@ -289,7 +289,39 @@ class MailService {
     });
   }
 
-  // async sendDeleteAccount(payload: { email: string, name: string }) { }
+  async sendAccountDeactivated(payload: {
+    email: string;
+    name: string;
+    scheduled_for: Date;
+  }) {
+    const html = await this.renderTemplate('account-deactivated', {
+      name: payload.name,
+      scheduledFor: dayjs(payload.scheduled_for).format('MMMM D, YYYY'),
+    });
+    await this.send({
+      to: payload.email,
+      subject: 'Your Memento account is deactivated',
+      html,
+    });
+  }
+
+  async sendArchiveExport(payload: {
+    email: string;
+    name: string;
+    url: string;
+    expires_at: Date;
+  }) {
+    const html = await this.renderTemplate('archive-export', {
+      name: payload.name,
+      url: payload.url,
+      expiresAt: dayjs(payload.expires_at).format('MMMM D, YYYY [at] h:mm A'),
+    });
+    await this.send({
+      to: payload.email,
+      subject: 'Your Memento archive is ready',
+      html,
+    });
+  }
 
   /**
    * Send feedback confirmation to the user
