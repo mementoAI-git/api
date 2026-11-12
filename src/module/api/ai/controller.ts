@@ -1,3 +1,4 @@
+import {voiceCallTime} from './voice/call-limit';
 import {
   confirmChatAction as confirmChatActionService,
   undoChatAction as undoChatActionService,
@@ -230,6 +231,8 @@ export async function getEphemeralToken(
         ? req.query.device_model.trim().slice(0, 100)
         : undefined;
     const timeZone = validTimeZone(req.query.timezone);
+    // Refuses a call past its time limit before any session work starts.
+    const callTime = voiceCallTime(req.auth.id, req.query.call_ticket);
     const {memoryTool, callActions, serverTools, screenControl, screenFields} =
       parseVoiceClientCapabilities(req.query.capabilities);
     const prepared = service.createEphemeralToken(
@@ -264,7 +267,12 @@ export async function getEphemeralToken(
       {userId: req.auth.id, ms: timer.total(), steps: timer.steps},
       'Voice session prepared',
     );
-    return responsHandler(res, StatusCodes.OK, message, data);
+    return responsHandler(
+      res,
+      StatusCodes.OK,
+      message,
+      callTime ? {...data, ...callTime} : data,
+    );
   } catch (error) {
     next(error);
   }
