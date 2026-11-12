@@ -1,0 +1,13 @@
+<%- include('components/header') %>
+  <h1 class="subject">Your Memento account is deactivated</h1>
+  <%- include('components/greetings', { name }) %>
+    <p>
+      We’ve signed you out and deactivated your account. It will be permanently deleted on
+      <strong><%= scheduledFor %></strong>.
+    </p>
+    <p>
+      Changed your mind? Sign in to Memento before then and your account will be restored as it was.
+    </p>
+
+    <%- include('components/closing-text') %>
+      <%- include('components/footer') %>

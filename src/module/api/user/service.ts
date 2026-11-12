@@ -72,6 +72,11 @@ import {registerLegacyProfileToken} from '../push-device/service';
 import PurgeCommand from '../../database/model/purge-command';
 import PushDevice from '../../database/model/push-device';
 import {PURGE_SCHEMA_VERSION} from '../../../services/account-purge';
+import {
+  ACCOUNT_DELETION_GRACE_DAYS,
+  ACCOUNT_DELETION_GRACE_MS,
+} from '../../../services/account-purge/account-state';
+import {requestArchiveExportByEmail} from '../archive/service';
 import {publishAccountPurge} from '../../../services/queues/system';
 import logger from '../../../utils/logger';
 import {persistUploadedFiles} from '../file/service';
@@ -655,13 +660,38 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
   return {message: 'User context updated successfully', data: null};
 }
 
-export async function deleteUser(user_id: string) {
+export type DeleteAccountOptions = {
+  reason?: string;
+  details?: string;
+  export_data?: boolean;
+};
+
+/**
+ * Deactivates the account now and schedules the permanent purge after the
+ * grace period. Signing in before then restores it (see reactivateAccount).
+ */
+export async function deleteUser(
+  user_id: string,
+  options: DeleteAccountOptions = {},
+) {
+  const requestedAt = new Date();
+  const scheduledFor = new Date(
+    requestedAt.getTime() + ACCOUNT_DELETION_GRACE_MS,
+  );
+  let scheduled = scheduledFor;
+  let notify: {email: string; name: string} | null = null;
   const commandId = await withTransaction(async session => {
     const user = await User.findById(user_id).session(session);
     if (!user) throw new NotFoundException('User not found');
 
     const firstRequest =
       user.purge_status !== 'purge_pending' && user.purge_status !== 'purged';
+    if (firstRequest && user.email) {
+      notify = {
+        email: user.email,
+        name: user.first_name || user.nickname || '',
+      };
+    }
     await User.findByIdAndUpdate(
       user_id,
       {
@@ -671,6 +701,14 @@ export async function deleteUser(user_id: string) {
             user.purge_status === 'purged' ? 'purged' : 'purge_pending',
           refresh_token: null,
           refresh_tokens: [],
+          ...(firstRequest
+            ? {
+                deletion_requested_at: requestedAt,
+                deletion_scheduled_for: scheduledFor,
+                deletion_reason: options.reason ?? null,
+                deletion_details: options.details ?? null,
+              }
+            : {}),
         },
         ...(firstRequest ? {$inc: {session_version: 1}} : {}),
       },
@@ -694,28 +732,54 @@ export async function deleteUser(user_id: string) {
           email: user.email,
           schema_version: PURGE_SCHEMA_VERSION,
           status: 'pending',
-          available_at: new Date(),
+          available_at: scheduledFor,
         },
       },
       {upsert: true, new: true, session},
     );
+    scheduled = command.available_at;
     return command.id;
   });
   await invalidateSecurityState(user_id);
 
-  // Best effort only: the committed PurgeCommand is the durable outbox.
-  try {
-    await publishAccountPurge(commandId);
-  } catch (error) {
-    logger.warn(
-      {commandId, errorCode: error instanceof Error ? error.name : 'unknown'},
-      'Account purge publication deferred to dispatcher',
-    );
+  // The dispatcher starts the purge once available_at passes. Publish now only
+  // if the grace period is already over (e.g. a repeated request after it).
+  if (scheduled.getTime() <= Date.now()) {
+    try {
+      await publishAccountPurge(commandId);
+    } catch (error) {
+      logger.warn(
+        {commandId, errorCode: error instanceof Error ? error.name : 'unknown'},
+        'Account purge publication deferred to dispatcher',
+      );
+    }
+  }
+
+  if (notify) {
+    const {email, name} = notify;
+    void mail
+      .sendAccountDeactivated({email, name, scheduled_for: scheduled})
+      .catch(() => logger.warn('Account deactivation email failed'));
+  }
+
+  if (options.export_data) {
+    try {
+      await requestArchiveExportByEmail(user_id);
+    } catch (error) {
+      logger.warn(
+        {errorCode: error instanceof Error ? error.name : 'unknown'},
+        'Deletion archive export could not be queued',
+      );
+    }
   }
 
   return {
-    data: null,
-    message: 'User account deleted successfully',
+    data: {
+      deactivated: true,
+      scheduled_for: scheduled.toISOString(),
+      grace_days: ACCOUNT_DELETION_GRACE_DAYS,
+    },
+    message: 'Account deactivated. It will be deleted after the grace period.',
   };
 }
 

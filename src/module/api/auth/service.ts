@@ -62,6 +62,10 @@ import {
 } from './session-service';
 import {verifyAppleIdentity} from './providers/apple';
 import {invalidateSecurityState} from './security-state';
+import {
+  isWithinDeletionGrace,
+  reactivateAccount,
+} from '../../../services/account-purge/account-state';
 import {recordCompatibilityUse} from '../../../services/compatibility-telemetry';
 
 // ---------------------------------------------------------------------------
@@ -108,11 +112,24 @@ const LEGACY_CLIENT: AuthClientContext = {
   client: 'legacy-unknown',
 };
 
-function assertCanAuthenticate(user: {
+type AuthenticatingUser = {
+  _id?: unknown;
   deleted?: boolean;
   disabled?: boolean;
   purge_status?: string;
-}): void {
+  deletion_scheduled_for?: Date | null;
+};
+
+/**
+ * Blocks inactive accounts. Sign-in paths pass `allowDeactivated` so an account
+ * inside its deletion grace period can continue to credential checks; it is
+ * only restored by restoreIfDeactivated once those checks pass.
+ */
+function assertCanAuthenticate(
+  user: AuthenticatingUser,
+  {allowDeactivated = false}: {allowDeactivated?: boolean} = {},
+): void {
+  if (allowDeactivated && isWithinDeletionGrace(user)) return;
   if (
     user.deleted ||
     user.disabled ||
@@ -120,6 +137,19 @@ function assertCanAuthenticate(user: {
   ) {
     throw new BadRequestException('Account is not active');
   }
+}
+
+/** Call after the credential is verified, just before creating a session. */
+async function restoreIfDeactivated(user: AuthenticatingUser): Promise<void> {
+  if (!user.deleted && (user.purge_status ?? 'active') === 'active') return;
+  const userId = String(user._id);
+  if (!(await reactivateAccount(userId))) {
+    throw new BadRequestException('Account is not active');
+  }
+  user.deleted = false;
+  user.purge_status = 'active';
+  user.deletion_scheduled_for = null;
+  await invalidateSecurityState(userId);
 }
 
 function withLegacySession(
@@ -312,13 +342,14 @@ export async function oauthAuthorization(
     await accountCreated(user, 'oauth');
   }
 
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
 
   if (!user.providers.includes(userinfo.provider)) {
     user.providers.push(userinfo.provider);
     await user.save();
   }
 
+  await restoreIfDeactivated(user);
   const session = await createSession(user, context);
   const data = withLegacySession(session, context);
 
@@ -334,7 +365,7 @@ export async function login(
   if (!user) {
     throw new NotFoundException('User not found');
   }
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
   if (isEmpty(user.password)) {
     throw new NotFoundException('Please set your password');
   }
@@ -363,6 +394,7 @@ export async function login(
     };
   }
 
+  await restoreIfDeactivated(user);
   const expires_in = remember_for_30_days ? 30 : 7;
   const access_token_expires_in = expires_in * 24 * 60 * 60 * 1000;
   const refresh_token_expires_in = 30 * 24 * 60 * 60 * 1000;
@@ -390,7 +422,7 @@ export async function verify2FALogin(
 
   const user = await User.findById(pending.userId);
   if (!user) throw new NotFoundException('User not found');
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
   if (!user.two_factor?.enabled || !user.two_factor.secret) {
     throw new BadRequestException('2FA is not enabled on this account');
   }
@@ -402,6 +434,7 @@ export async function verify2FALogin(
     window: 1,
   });
   if (!isValid) throw new BadRequestException('Invalid 2FA code');
+  await restoreIfDeactivated(user);
 
   const expires_in = pending.remember_for_30_days ? 30 : 7;
   const session = await createSession(user, context, {
@@ -547,7 +580,7 @@ export async function completePasskeyLogin(
 
   const user = await User.findOne({'passkeys.credential_id': credentialId});
   if (!user) throw new NotFoundException('Passkey not recognised');
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
 
   const passkey = user.passkeys?.find(pk => pk.credential_id === credentialId);
   if (!passkey) throw new NotFoundException('Passkey not found');
@@ -588,6 +621,7 @@ export async function completePasskeyLogin(
     {$set: {'passkeys.$.counter': verification.authenticationInfo.newCounter}},
   );
 
+  await restoreIfDeactivated(user);
   const session = await createSession(user, context);
 
   return {
@@ -723,7 +757,8 @@ export async function verifyEmail(
 
   await otp.markUsed(token, 'verify');
 
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
+  await restoreIfDeactivated(user);
   user.verified = true;
   await user.save();
   const session = await createSession(user, context, {

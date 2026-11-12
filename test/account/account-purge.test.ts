@@ -48,6 +48,14 @@ const context: RequestContext = {
   build: '312',
 };
 
+/** Fast-forward past the deletion grace period so the purge may run. */
+async function endGracePeriod(userId: string) {
+  await PurgeCommand.updateOne(
+    {user_id: userId},
+    {$set: {available_at: new Date(Date.now() - 1000)}},
+  );
+}
+
 describe('account purge pipeline', () => {
   beforeAll(connectTestReplicaSet);
   afterEach(() => {
@@ -277,6 +285,7 @@ describe('account purge pipeline', () => {
     vi.spyOn(storage, 'deleteFileEverywhere').mockResolvedValue(undefined);
 
     await deleteUser(user.id);
+    await endGracePeriod(user.id);
     const command = await PurgeCommand.findOne({user_id: user.id}).orFail();
     await processPurgeCommand(command.id);
 
@@ -375,6 +384,7 @@ describe('account purge pipeline', () => {
       .mockRejectedValueOnce(new Error('provider unavailable'))
       .mockResolvedValue(undefined);
     await deleteUser(user.id);
+    await endGracePeriod(user.id);
     const command = await PurgeCommand.findOne({user_id: user.id}).orFail();
 
     await expect(processPurgeCommand(command.id)).rejects.toThrow(
@@ -408,6 +418,7 @@ describe('account purge pipeline', () => {
       .spyOn(storage, 'deleteFileEverywhere')
       .mockResolvedValue(undefined);
     await deleteUser(user.id);
+    await endGracePeriod(user.id);
     const command = await PurgeCommand.findOne({user_id: user.id}).orFail();
 
     await Promise.all([
@@ -418,6 +429,7 @@ describe('account purge pipeline', () => {
 
     const staleUser = await createUserFixture();
     await deleteUser(staleUser.id);
+    await endGracePeriod(staleUser.id);
     const stale = await PurgeCommand.findOne({user_id: staleUser.id}).orFail();
     await stale.updateOne({
       status: 'running',

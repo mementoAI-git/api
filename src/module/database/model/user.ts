@@ -76,6 +76,11 @@ export interface IUser {
   refresh_tokens?: string[];
   session_version?: number;
   purge_status?: 'active' | 'purge_pending' | 'purged';
+  /** Set when the owner asks to delete; the purge waits until this date (grace period). */
+  deletion_requested_at?: Date | null;
+  deletion_scheduled_for?: Date | null;
+  deletion_reason?: string | null;
+  deletion_details?: string | null;
   two_factor: {
     secret: string;
     enabled: boolean;
@@ -157,6 +162,10 @@ const user = new Schema<IUser>(
       enum: ['active', 'purge_pending', 'purged'],
       default: 'active',
     },
+    deletion_requested_at: {type: Date, default: null},
+    deletion_scheduled_for: {type: Date, default: null},
+    deletion_reason: {type: String, default: null},
+    deletion_details: {type: String, default: null},
     bg_music: {
       type: String,
       default: null,
