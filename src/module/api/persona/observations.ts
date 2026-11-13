@@ -351,11 +351,23 @@ export async function listObservations(userId: string) {
     generating = true;
     const claimed = await claimCuration(userId);
     if (claimed) {
-      startCuration(
-        userId,
-        claimed as unknown as IObservationView,
-        waiting.slice(0, CURATION_BATCH_SIZE),
-      );
+      // `waiting` came from a read taken before the lease. Another reader may
+      // have curated those facts since, so check against the claimed view.
+      const done = new Set(claimed.processed ?? []);
+      const fresh = waiting.filter(fact => !done.has(fact.id));
+      if (fresh.length) {
+        startCuration(
+          userId,
+          claimed as unknown as IObservationView,
+          fresh.slice(0, CURATION_BATCH_SIZE),
+        );
+      } else {
+        generating = false;
+        await ObservationView.updateOne(
+          {user: userId, generating_until: claimed.generating_until},
+          {$set: {generating_until: null}},
+        );
+      }
     }
   }
 

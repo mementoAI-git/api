@@ -233,6 +233,28 @@ describe('curated observations', () => {
     expect(generateText).toHaveBeenCalledTimes(2);
   });
 
+  it('does not curate facts again for a reader holding a stale view', async () => {
+    const {userId, auth} = await member();
+    await Persona.create({user: userId, important_notes: ['A fact']});
+    await curated(auth);
+    expect(generateText).toHaveBeenCalledTimes(1);
+
+    // This reader read the view before the first curation finished.
+    const stale = await ObservationView.findOne({user: userId}).lean();
+    const findOne = vi.spyOn(ObservationView, 'findOne').mockReturnValueOnce({
+      lean: async () => ({...stale, processed: [], generating_until: null}),
+    } as never);
+    try {
+      expect((await get(auth)).generating).toBe(false);
+    } finally {
+      findOne.mockRestore();
+    }
+
+    expect(generateText).toHaveBeenCalledTimes(1);
+    const view = await ObservationView.findOne({user: userId}).lean();
+    expect(view!.generating_until).toBeNull();
+  });
+
   it('only starts one curation for concurrent readers', async () => {
     const {userId, auth} = await member();
     await Persona.create({user: userId, important_notes: ['A fact']});
