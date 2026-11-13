@@ -61,6 +61,22 @@ describe('session revocation enforcement', () => {
     );
   });
 
+  it('rejects a refresh token sent as the access token', async () => {
+    // Both are signed alike and carry the same session, so only the token
+    // type tells them apart: a 30-day refresh token must not open the API.
+    const user = await createUserFixture();
+    const session = await createSession(user, context);
+
+    const response = await protectedRequest(session.refresh_token);
+
+    expect(response.status).toBe(401);
+    expect(response.body).toMatchObject({
+      success: false,
+      code: 'unauthorized',
+    });
+    expect((await protectedRequest(session.access_token)).status).toBe(200);
+  });
+
   it.each([
     {deleted: true},
     {disabled: true},

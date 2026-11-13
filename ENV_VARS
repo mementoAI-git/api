@@ -13,6 +13,7 @@
   3. Security & Authentication
    - JWT_SECRET: Secret key for signing JWTs.
    - GOOGLE_ID / GOOGLE_SECRET: Google OAuth credentials.
+   - GOOGLE_IOS_CLIENT_ID / GOOGLE_ANDROID_CLIENT_ID: optional extra Google clients for native app sign-in. The app's own web and iOS clients are always accepted; Android sign-in needs GOOGLE_ANDROID_CLIENT_ID.
    - META_ID / META_SECRET: Meta (Facebook) OAuth credentials.
    - APPLE_ID / APPLE_SECRET: Apple OAuth credentials.
    - WEBAUTHN_RP_ID: WebAuthn Relying Party ID (e.g., localhost).

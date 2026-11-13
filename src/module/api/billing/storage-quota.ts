@@ -105,6 +105,51 @@ async function ensureUsage(
   );
 }
 
+/** Holds `requested` bytes against the limit, or refuses when they don't fit. */
+async function holdStorage(
+  userId: string,
+  requested: number,
+  limit: number,
+  session: ClientSession,
+): Promise<void> {
+  await ensureUsage(userId, limit, session);
+  const usage = await Usage.findOneAndUpdate(
+    {
+      user_id: userId,
+      $expr: {
+        $lte: [
+          {
+            $add: [
+              {$ifNull: ['$storage_used_bytes', 0]},
+              {$ifNull: ['$storage_reserved_bytes', 0]},
+              requested,
+            ],
+          },
+          STORAGE_QUOTA_ENFORCEMENT_ENABLED ? limit : Number.MAX_SAFE_INTEGER,
+        ],
+      },
+    },
+    {
+      $inc: {storage_reserved_bytes: requested},
+      $set: {storage_limit_bytes: limit, last_updated: new Date()},
+    },
+    {new: true, session},
+  );
+  if (!usage) {
+    const current = await Usage.findOne({user_id: userId})
+      .session(session)
+      .lean();
+    throw new StorageQuotaExceeded(
+      quotaData(
+        current?.storage_used_bytes || 0,
+        current?.storage_reserved_bytes || 0,
+        limit,
+        requested,
+      ),
+    );
+  }
+}
+
 export async function reserveStorage(
   userId: string,
   requestedBytes: number,
@@ -139,48 +184,37 @@ export async function reserveStorage(
             StatusCodes.CONFLICT,
           );
         }
+        if (existing.status === 'released' || existing.status === 'expired') {
+          // The earlier attempt failed or was abandoned and gave its bytes
+          // back, so a retry with the same key starts over under that key.
+          // The status filter lets only one concurrent retry take it over.
+          const retried = await StorageReservation.findOneAndUpdate(
+            {_id: existing._id, status: existing.status},
+            {
+              $set: {
+                status: 'reserved',
+                limit_bytes: limit,
+                expires_at: new Date(
+                  Date.now() + STORAGE_RESERVATION_TTL_SECONDS * 1000,
+                ),
+                file_ids: [],
+              },
+              $unset: {committed_bytes: 1},
+            },
+            {new: true, session},
+          );
+          if (retried) {
+            await holdStorage(userId, requested, limit, session);
+            reservation = retried;
+            acquired = true;
+            return;
+          }
+        }
         reservation = existing;
         return;
       }
 
-      await ensureUsage(userId, limit, session);
-      const usage = await Usage.findOneAndUpdate(
-        {
-          user_id: userId,
-          $expr: {
-            $lte: [
-              {
-                $add: [
-                  {$ifNull: ['$storage_used_bytes', 0]},
-                  {$ifNull: ['$storage_reserved_bytes', 0]},
-                  requested,
-                ],
-              },
-              STORAGE_QUOTA_ENFORCEMENT_ENABLED
-                ? limit
-                : Number.MAX_SAFE_INTEGER,
-            ],
-          },
-        },
-        {
-          $inc: {storage_reserved_bytes: requested},
-          $set: {storage_limit_bytes: limit, last_updated: new Date()},
-        },
-        {new: true, session},
-      );
-      if (!usage) {
-        const current = await Usage.findOne({user_id: userId})
-          .session(session)
-          .lean();
-        throw new StorageQuotaExceeded(
-          quotaData(
-            current?.storage_used_bytes || 0,
-            current?.storage_reserved_bytes || 0,
-            limit,
-            requested,
-          ),
-        );
-      }
+      await holdStorage(userId, requested, limit, session);
       [reservation] = await StorageReservation.create(
         [
           {

@@ -35,10 +35,18 @@ export const STORAGE_LIMIT_LEGACY_BYTES = Number(
 export const STORAGE_RESERVATION_TTL_SECONDS = Number(
   process.env.STORAGE_RESERVATION_TTL_SECONDS || 15 * 60,
 );
-export const STORAGE_QUOTA_ENFORCEMENT_ENABLED =
-  process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED !== undefined
-    ? process.env.STORAGE_QUOTA_ENFORCEMENT_ENABLED === 'true'
-    : !IS_PRODUCTION;
+/**
+ * Storage limits are enforced unless explicitly switched off with "false".
+ * The old default ("on unless NODE_ENV=production") left them off on staging
+ * and production alike, since both deployments run with NODE_ENV=production.
+ * Startup validation rejects any value other than "true" or "false".
+ */
+export function storageQuotaEnforced(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.STORAGE_QUOTA_ENFORCEMENT_ENABLED !== 'false';
+}
+export const STORAGE_QUOTA_ENFORCEMENT_ENABLED = storageQuotaEnforced();
 export const CORS_ALLOWED_ORIGINS = (
   process.env.CORS_ALLOWED_ORIGINS ||
   'http://localhost:5173,https://app.mymemento.io,https://dev.mymemento.io,https://www.mymemento.io,https://mymemento.io'
@@ -245,9 +253,13 @@ export const TALLY_WEBHOOK_RATE_LIMIT_PER_MINUTE = Number(
 export const POLAR_ACCESS_TOKEN = process.env.POLAR_ACCESS_TOKEN;
 export const POLAR_WEBHOOK_SECRET_DEV = process.env.POLAR_WEBHOOK_SECRET_DEV;
 export const POLAR_WEBHOOK_SECRET_PROD = process.env.POLAR_WEBHOOK_SECRET_PROD;
+// Chosen by deployment: staging and production both run NODE_ENV=production,
+// so IS_PRODUCTION would hand staging production's secret.
 export const POLAR_WEBHOOK_SECRET =
   process.env.POLAR_WEBHOOK_SECRET ||
-  (IS_PRODUCTION ? POLAR_WEBHOOK_SECRET_PROD : POLAR_WEBHOOK_SECRET_DEV);
+  (MEMENTO_ENV === 'prod' || (MEMENTO_ENV === undefined && IS_PRODUCTION)
+    ? POLAR_WEBHOOK_SECRET_PROD
+    : POLAR_WEBHOOK_SECRET_DEV);
 export const POLAR_BASE_URL =
   process.env.POLAR_BASE_URL || 'https://api.polar.sh/v1';
 export const POLAR_PRODUCT_PRO_MONTHLY = process.env.POLAR_PRODUCT_PRO_MONTHLY;
@@ -258,6 +270,14 @@ export const POLAR_PRODUCT_LEGACY_ANNUAL =
   process.env.POLAR_PRODUCT_LEGACY_ANNUAL;
 export const POLAR_PRODUCT_LEGACY_LIFETIME =
   process.env.POLAR_PRODUCT_LEGACY_LIFETIME;
+/**
+ * The app's numeric App Store id (App Store Connect > App Information > Apple
+ * ID; also eas.json ascAppId). Apple's library needs it to verify Production
+ * purchases and notifications. Public, so the shipped app's id is the default.
+ */
+export const APPLE_APP_APPLE_ID = Number(
+  process.env.APPLE_APP_APPLE_ID || 6804683183,
+);
 export const APPLE_IAP_NOTIFICATIONS_ENABLED =
   process.env.APPLE_IAP_NOTIFICATIONS_ENABLED === 'true';
 export const GOOGLE_PLAY_RTDN_ENABLED =

@@ -313,7 +313,9 @@ export async function createMemory(
     ...(status === MEMORY_STATUS.SAVE &&
       body &&
       body.trim().length > 0 &&
-      tags.length === 0 && {enrichment_status: 'pending'}),
+      (tags.length === 0 || payload.capture_source === 'quick') && {
+        enrichment_status: 'pending',
+      }),
   });
 
   await memoryCaptured(user_id, memory);
@@ -343,9 +345,11 @@ export async function createMemory(
   ) {
     void queueStoryInsights(user_id, memory.id);
     void queueSummarization(memory.id, 'story');
-    // A tagged story still needs this when it has a recording, so that gets transcribed.
+    // A tagged story still needs this when it has a recording, so that gets transcribed,
+    // and an untitled one so it gets a readable title.
     if (
       (memory.tags?.length || 0) === 0 ||
+      memory.capture_source === 'quick' ||
       (await memoryHasVoiceRecording(user_id, memory.attachments))
     ) {
       void queueQuickCaptureEnrichment({
@@ -904,7 +908,8 @@ export async function updateMemory(
     void queueStoryInsights(user_id, updatedMemory.id);
     void queueSummarization(updatedMemory.id, 'story');
     if (
-      (updatedMemory.tags?.length || 0) === 0 &&
+      ((updatedMemory.tags?.length || 0) === 0 ||
+        updatedMemory.capture_source === 'quick') &&
       updatedMemory.body &&
       updatedMemory.body.trim().length > 0
     ) {

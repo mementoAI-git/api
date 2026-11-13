@@ -1,3 +1,4 @@
+import {createHash} from 'crypto';
 import {
   afterAll,
   afterEach,
@@ -26,7 +27,11 @@ import {
 } from '../../src/module/api/file/service';
 import {uploadPicture} from '../../src/module/api/user/service';
 import {replyPrompt} from '../../src/module/api/prompt/service';
-import {getStorageUsageSummary} from '../../src/module/api/billing/storage-quota';
+import {
+  getStorageUsageSummary,
+  releaseStorageReservation,
+  reserveStorage,
+} from '../../src/module/api/billing/storage-quota';
 import File from '../../src/module/database/model/file';
 import StorageReservation from '../../src/module/database/model/storage-reservation';
 import Prompt from '../../src/module/database/model/prompt';
@@ -51,6 +56,15 @@ function textUpload(name: string, contents: string): Express.Multer.File {
     filename: '',
     path: '',
   };
+}
+
+/** The request fingerprint persistUploadedFiles computes for one text upload. */
+function fingerprintOf(contents: string, name = 'journal.txt'): string {
+  const file = textUpload(name, contents);
+  const content = createHash('sha256').update(file.buffer).digest('hex');
+  return createHash('sha256')
+    .update([file.originalname, file.mimetype, file.size, content].join(':'))
+    .digest('hex');
 }
 
 function imageUpload(): Express.Multer.File {
@@ -98,6 +112,76 @@ describe('uploaded file storage reservations', () => {
     expect(replay.map(file => file.id)).toEqual(first.map(file => file.id));
     expect(await File.countDocuments({user: user.id})).toBe(1);
     expect(uploadToS3).toHaveBeenCalledTimes(1);
+  });
+
+  it('uploads on a retry with the same idempotency key after the first attempt failed', async () => {
+    // Apps resend the same key when an upload fails; the dead reservation
+    // must not answer "already in progress" forever.
+    const user = await createUserFixture();
+    uploadToS3.mockRejectedValueOnce(new Error('provider unavailable'));
+    await expect(
+      persistUploadedFiles(
+        [textUpload('journal.txt', 'a small memory')],
+        user.id,
+        undefined,
+        'upload-retry',
+      ),
+    ).rejects.toThrow('provider unavailable');
+
+    uploadToS3.mockImplementation(async (key: string, buffer: Buffer) => ({
+      key,
+      location: `https://provider.invalid/${key}`,
+      size: buffer.length,
+    }));
+    const retried = await persistUploadedFiles(
+      [textUpload('journal.txt', 'a small memory')],
+      user.id,
+      undefined,
+      'upload-retry',
+    );
+
+    expect(retried).toHaveLength(1);
+    expect(await File.countDocuments({user: user.id})).toBe(1);
+    expect(
+      await StorageReservation.findOne({reservation_id: 'upload-retry'}).lean(),
+    ).toMatchObject({status: 'committed'});
+    expect(await getStorageUsageSummary(user.id)).toMatchObject({
+      used_bytes: retried[0].size,
+      reserved_bytes: 0,
+    });
+  });
+
+  it('retries after a reservation expired, but not while one is still running', async () => {
+    const user = await createUserFixture();
+    uploadToS3.mockImplementation(async (key: string, buffer: Buffer) => ({
+      key,
+      location: `https://provider.invalid/${key}`,
+      size: buffer.length,
+    }));
+    const upload = () =>
+      persistUploadedFiles(
+        [textUpload('journal.txt', 'a small memory')],
+        user.id,
+        undefined,
+        'upload-running',
+      );
+    const size = textUpload('journal.txt', 'a small memory').size;
+    await reserveStorage(
+      user.id,
+      size,
+      'upload-running',
+      fingerprintOf('a small memory'),
+    );
+
+    // The first attempt still holds a live reservation: a duplicate must wait.
+    await expect(upload()).rejects.toMatchObject({statusCode: 409});
+
+    await releaseStorageReservation('upload-running', 'expired');
+    expect(await upload()).toHaveLength(1);
+    expect(await getStorageUsageSummary(user.id)).toMatchObject({
+      used_bytes: size,
+      reserved_bytes: 0,
+    });
   });
 
   it('rejects idempotency-key reuse for different equal-sized content', async () => {

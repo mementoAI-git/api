@@ -724,11 +724,46 @@ const usersDocs = {
     delete: {
       tags: ['Users'],
       summary: 'Delete User Account',
-      description: 'Soft delete user account',
+      description:
+        'Deactivates the account immediately (all sessions revoked) and schedules the permanent purge after a 14-day grace period. Signing in during the grace period restores the account. Optionally records why the person is leaving and emails them an archive export.',
       security: [{bearerAuth: []}],
+      requestBody: {
+        required: false,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                reason: {
+                  type: 'string',
+                  enum: [
+                    'unsatisfied',
+                    'not-using',
+                    'issues-unresolved',
+                    'safety-privacy',
+                    'taking-break',
+                    'other',
+                    'cant-say',
+                  ],
+                },
+                details: {
+                  type: 'string',
+                  maxLength: 1000,
+                  description: 'Stored only when reason is "other".',
+                },
+                export_data: {
+                  type: 'boolean',
+                  description:
+                    'Email a download link for an archive export to the account email.',
+                },
+              },
+            },
+          },
+        },
+      },
       responses: {
         200: {
-          description: 'Account deleted successfully',
+          description: 'Account deactivated; purge scheduled',
           content: {
             'application/json': {
               schema: {
@@ -737,12 +772,15 @@ const usersDocs = {
                   status: {type: 'string', example: 'success'},
                   message: {
                     type: 'string',
-                    example: 'Account deleted successfully',
+                    example:
+                      'Account deactivated. It will be deleted after the grace period.',
                   },
                   data: {
                     type: 'object',
                     properties: {
-                      deleted: {type: 'boolean', example: true},
+                      deactivated: {type: 'boolean', example: true},
+                      scheduled_for: {type: 'string', format: 'date-time'},
+                      grace_days: {type: 'integer', example: 14},
                     },
                   },
                 },

@@ -494,6 +494,8 @@ export async function processPurgeCommand(commandId: string): Promise<void> {
   const command = await PurgeCommand.findOneAndUpdate(
     {
       _id: commandId,
+      // Deletion requests wait out their grace period; a stale queued job must not start early.
+      available_at: {$lte: new Date()},
       $or: [
         {status: {$in: ['pending', 'failed']}},
         {

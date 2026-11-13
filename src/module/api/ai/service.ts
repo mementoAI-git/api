@@ -890,9 +890,25 @@ function isTranscribableMime(type: string): boolean {
   return false;
 }
 
-export async function transcribeAudio(input: TranscriptionInput) {
+/**
+ * `ownerId` limits a stored file to that member's own recordings; the HTTP
+ * route always passes the signed-in member. Internal callers that have
+ * already chosen a memory's own files may omit it.
+ */
+export async function transcribeAudio(
+  input: TranscriptionInput,
+  ownerId?: string,
+) {
   const file =
-    input.kind === 'stored' ? await File.findById(input.fileId) : null;
+    input.kind !== 'stored'
+      ? null
+      : ownerId
+        ? await File.findOne({
+            _id: input.fileId,
+            user: ownerId,
+            deleted: {$ne: true},
+          })
+        : await File.findById(input.fileId);
   if (input.kind === 'stored' && !file) {
     throw new NotFoundException('File not found');
   }

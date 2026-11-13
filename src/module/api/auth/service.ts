@@ -62,6 +62,10 @@ import {
 } from './session-service';
 import {verifyAppleIdentity} from './providers/apple';
 import {invalidateSecurityState} from './security-state';
+import {
+  isWithinDeletionGrace,
+  reactivateAccount,
+} from '../../../services/account-purge/account-state';
 import {recordCompatibilityUse} from '../../../services/compatibility-telemetry';
 
 // ---------------------------------------------------------------------------
@@ -108,11 +112,24 @@ const LEGACY_CLIENT: AuthClientContext = {
   client: 'legacy-unknown',
 };
 
-function assertCanAuthenticate(user: {
+type AuthenticatingUser = {
+  _id?: unknown;
   deleted?: boolean;
   disabled?: boolean;
   purge_status?: string;
-}): void {
+  deletion_scheduled_for?: Date | null;
+};
+
+/**
+ * Blocks inactive accounts. Sign-in paths pass `allowDeactivated` so an account
+ * inside its deletion grace period can continue to credential checks; it is
+ * only restored by restoreIfDeactivated once those checks pass.
+ */
+function assertCanAuthenticate(
+  user: AuthenticatingUser,
+  {allowDeactivated = false}: {allowDeactivated?: boolean} = {},
+): void {
+  if (allowDeactivated && isWithinDeletionGrace(user)) return;
   if (
     user.deleted ||
     user.disabled ||
@@ -120,6 +137,19 @@ function assertCanAuthenticate(user: {
   ) {
     throw new BadRequestException('Account is not active');
   }
+}
+
+/** Call after the credential is verified, just before creating a session. */
+async function restoreIfDeactivated(user: AuthenticatingUser): Promise<void> {
+  if (!user.deleted && (user.purge_status ?? 'active') === 'active') return;
+  const userId = String(user._id);
+  if (!(await reactivateAccount(userId))) {
+    throw new BadRequestException('Account is not active');
+  }
+  user.deleted = false;
+  user.purge_status = 'active';
+  user.deletion_scheduled_for = null;
+  await invalidateSecurityState(userId);
 }
 
 function withLegacySession(
@@ -139,6 +169,34 @@ function withLegacySession(
 // ---------------------------------------------------------------------------
 const WA_PREFIX = 'webauthn:challenge:';
 const WA_TTL = 5 * 60;
+
+/**
+ * The apps' own Google OAuth clients (project 680261459129, also built into
+ * the mobile app). Always accepted, so a server setting can only add clients.
+ * Replacing them is what broke native sign-in: a phone's token has the web
+ * client as its audience and the iOS or Android client as its authorized
+ * party, and both must be ours.
+ */
+const MEMENTO_GOOGLE_CLIENT_IDS = [
+  '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com', // web
+  '680261459129-nupaa1nhgpkolmiicmcho7ffipl939lf.apps.googleusercontent.com', // iOS
+];
+
+/** Google clients whose ID tokens may sign in: ours plus any the server names. */
+export function googleClientIds(
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const configured = [
+    env.GOOGLE_ID,
+    env.GOOGLE_CLIENT_ID,
+    env.GOOGLE_WEB_CLIENT_ID,
+    env.GOOGLE_IOS_CLIENT_ID,
+    env.GOOGLE_ANDROID_CLIENT_ID,
+  ]
+    .map(id => id?.trim())
+    .filter((id): id is string => Boolean(id));
+  return [...new Set([...MEMENTO_GOOGLE_CLIENT_IDS, ...configured])];
+}
 
 export function generateOauthUrl(provider: string) {
   const {authoriation_url, redirect_uri} =
@@ -206,21 +264,7 @@ export async function oauthAuthorization(
         }
 
         // 4. Strict Audience (aud) and Authorized Party (azp) validation
-        const envClientIds = [
-          process.env.GOOGLE_ID,
-          process.env.GOOGLE_CLIENT_ID,
-          process.env.GOOGLE_WEB_CLIENT_ID,
-          process.env.GOOGLE_IOS_CLIENT_ID,
-          process.env.GOOGLE_ANDROID_CLIENT_ID,
-        ].filter(Boolean) as string[];
-
-        const allowedClientIds =
-          envClientIds.length > 0
-            ? envClientIds
-            : [
-                '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com',
-                '680261459129-nupaa1nhgpkolmiicmcho7ffipl939lf.apps.googleusercontent.com',
-              ];
+        const allowedClientIds = googleClientIds();
 
         // aud MUST match an authorized client ID
         if (!data.aud || !allowedClientIds.includes(data.aud)) {
@@ -312,13 +356,25 @@ export async function oauthAuthorization(
     await accountCreated(user, 'oauth');
   }
 
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
 
   if (!user.providers.includes(userinfo.provider)) {
     user.providers.push(userinfo.provider);
     await user.save();
   }
 
+  // Google or Apple proves the email, not the second factor: an account with
+  // two-factor authentication needs its code here too, as with a password.
+  // A deactivated account is then restored in verify2FALogin, after the code.
+  if (user.two_factor?.enabled) {
+    const two_fa_token = await create2FAPendingToken(user.id, false);
+    return {
+      data: {requires_2fa: true, two_fa_token},
+      message: '2FA verification required',
+    };
+  }
+
+  await restoreIfDeactivated(user);
   const session = await createSession(user, context);
   const data = withLegacySession(session, context);
 
@@ -334,7 +390,7 @@ export async function login(
   if (!user) {
     throw new NotFoundException('User not found');
   }
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
   if (isEmpty(user.password)) {
     throw new NotFoundException('Please set your password');
   }
@@ -363,6 +419,7 @@ export async function login(
     };
   }
 
+  await restoreIfDeactivated(user);
   const expires_in = remember_for_30_days ? 30 : 7;
   const access_token_expires_in = expires_in * 24 * 60 * 60 * 1000;
   const refresh_token_expires_in = 30 * 24 * 60 * 60 * 1000;
@@ -390,7 +447,7 @@ export async function verify2FALogin(
 
   const user = await User.findById(pending.userId);
   if (!user) throw new NotFoundException('User not found');
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
   if (!user.two_factor?.enabled || !user.two_factor.secret) {
     throw new BadRequestException('2FA is not enabled on this account');
   }
@@ -402,6 +459,7 @@ export async function verify2FALogin(
     window: 1,
   });
   if (!isValid) throw new BadRequestException('Invalid 2FA code');
+  await restoreIfDeactivated(user);
 
   const expires_in = pending.remember_for_30_days ? 30 : 7;
   const session = await createSession(user, context, {
@@ -547,7 +605,7 @@ export async function completePasskeyLogin(
 
   const user = await User.findOne({'passkeys.credential_id': credentialId});
   if (!user) throw new NotFoundException('Passkey not recognised');
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
 
   const passkey = user.passkeys?.find(pk => pk.credential_id === credentialId);
   if (!passkey) throw new NotFoundException('Passkey not found');
@@ -588,6 +646,7 @@ export async function completePasskeyLogin(
     {$set: {'passkeys.$.counter': verification.authenticationInfo.newCounter}},
   );
 
+  await restoreIfDeactivated(user);
   const session = await createSession(user, context);
 
   return {
@@ -691,6 +750,8 @@ export async function verifyEmail(
     if (!result.valid) {
       throw new BadRequestException('Invalid or expired code');
     }
+    // Lets older apps send this code to set-password without the address.
+    await otp.markChecked(token, 'reset');
     const user = await User.findOne({email: result.email});
     if (!user) {
       throw new NotFoundException('User not found');
@@ -723,7 +784,8 @@ export async function verifyEmail(
 
   await otp.markUsed(token, 'verify');
 
-  assertCanAuthenticate(user);
+  assertCanAuthenticate(user, {allowDeactivated: true});
+  await restoreIfDeactivated(user);
   user.verified = true;
   await user.save();
   const session = await createSession(user, context, {
@@ -739,9 +801,10 @@ export async function verifyEmail(
 
 export async function setPassword(payload: ISetPassword) {
   const {token} = payload;
+  const email = (payload as {email?: string}).email;
 
   // Verify the OTP using the centralized service
-  const result = await otp.consume(token, 'reset');
+  const result = await otp.consume(token, 'reset', email);
   if (!result.valid) {
     throw new BadRequestException('Invalid or expired link');
   }

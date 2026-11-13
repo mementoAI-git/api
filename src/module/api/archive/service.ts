@@ -13,6 +13,7 @@ import {NotFoundException} from '../../../utils/service-error';
 import * as storage from '../../../services/storage';
 import {generatePresignedUrl, uploadToS3} from '../../../services/storage/s3';
 import {queueArchiveExport} from '../../../services/queues/system';
+import mail from '../../mail';
 
 const EXPORT_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -30,6 +31,18 @@ export async function createArchiveExport(userId: string) {
     }));
   await queueArchiveExport(job.id);
   return {message: 'Archive export queued', data: publicExport(job)};
+}
+
+/** Queue an archive whose download link is emailed to the owner when ready. */
+export async function requestArchiveExportByEmail(userId: string) {
+  const job = await ArchiveExport.create({
+    user_id: userId,
+    status: 'pending',
+    email_on_complete: true,
+    expires_at: new Date(Date.now() + EXPORT_TTL_MS),
+  });
+  await queueArchiveExport(job.id);
+  return job.id as string;
 }
 
 export async function getArchiveExport(userId: string, exportId: string) {
@@ -200,14 +213,25 @@ export async function buildArchiveExport(exportId: string): Promise<void> {
       'primary',
       archiveSize,
     );
+    const expiresAt = new Date(Date.now() + EXPORT_TTL_MS);
     await job.updateOne({
       $set: {
         status: 'complete',
         object_key: objectKey,
         warnings,
-        expires_at: new Date(Date.now() + EXPORT_TTL_MS),
+        expires_at: expiresAt,
       },
     });
+    if (job.email_on_complete && user.email) {
+      // The owner is signed out (account deletion), so the link is pre-signed
+      // for the archive's lifetime instead of going through the app.
+      await mail.sendArchiveExport({
+        email: user.email,
+        name: user.first_name || user.nickname || '',
+        url: await generatePresignedUrl(objectKey, EXPORT_TTL_MS / 1000),
+        expires_at: expiresAt,
+      });
+    }
   } catch (error) {
     await job.updateOne({
       $set: {
