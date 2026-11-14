@@ -977,7 +977,18 @@ export async function onboarding(payload: OnboardingBody, user_id: string) {
   return {message: 'Onboarding saved successfully', data: null};
 }
 
-export async function skipOnboarding(user_id: string) {
+/** Answers given before skipping, kept so a return to onboarding starts filled in. */
+export interface ISkipOnboardingPayload {
+  self_description?: string;
+  join_reasons?: string[];
+  current_priority?: string[];
+  motivationType?: string;
+}
+
+export async function skipOnboarding(
+  user_id: string,
+  payload: ISkipOnboardingPayload = {},
+) {
   const user = await User.findById(user_id);
   if (!user) {
     throw new NotFoundException('User not found');
@@ -990,7 +1001,41 @@ export async function skipOnboarding(user_id: string) {
     };
   }
 
-  await User.findByIdAndUpdate(user_id, {onboarding_status: 'skipped'});
+  // Only answers actually given are written, so skipping early never clears
+  // what an earlier attempt saved. Bad values are dropped rather than
+  // rejected: skipping must always succeed.
+  const answers: Record<string, unknown> = {};
+  const text = (value: unknown, max: number) =>
+    typeof value === 'string' ? value.trim().slice(0, max) : '';
+  const list = (value: unknown) =>
+    Array.isArray(value)
+      ? [...new Set(value.map(item => text(item, 200)).filter(Boolean))].slice(
+          0,
+          20,
+        )
+      : [];
+  const about = text(payload.self_description, 2000);
+  if (about) answers.self_description = about;
+  const reasons = list(payload.join_reasons);
+  if (reasons.length) answers.join_reasons = reasons;
+  const areas = list(payload.current_priority);
+  if (areas.length) answers.current_priority = areas;
+  const motivation = text(payload.motivationType, 200);
+  if (motivation) answers.motivation = motivation;
+
+  await withTransaction(async session => {
+    if (Object.keys(answers).length) {
+      await Persona.findOneAndUpdate({user: user_id}, answers, {
+        upsert: true,
+        session,
+      });
+    }
+    await User.findByIdAndUpdate(
+      user_id,
+      {onboarding_status: 'skipped'},
+      {session},
+    );
+  });
 
   return {
     message: 'Onboarding skipped',
@@ -1049,6 +1094,7 @@ export async function getOnboardingDetails(user_id: string) {
       },
       persona: {
         join_reasons: persona?.join_reasons ?? [],
+        self_description: persona?.self_description ?? '',
         audience: persona?.audience ?? [],
         current_priority,
         communication_style: persona?.communication_style ?? [],
