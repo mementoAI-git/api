@@ -11283,7 +11283,38 @@
     },
     "/users/onboarding/skip": {
       "post": {
-        "description": "Mark onboarding as skipped for the user",
+        "description": "Mark onboarding as skipped for the user, keeping any answers already given so a later return to onboarding starts filled in.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "current_priority": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "join_reasons": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "motivationType": {
+                    "type": "string"
+                  },
+                  "self_description": {
+                    "maxLength": 2000,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "200": {
             "content": {

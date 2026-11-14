@@ -367,7 +367,10 @@ export async function skipOnboarding(
   next: NextFunction,
 ) {
   try {
-    const {message, data} = await service.skipOnboarding(req.auth!.id);
+    const {message, data} = await service.skipOnboarding(
+      req.auth!.id,
+      req.body ?? {},
+    );
     return responsHandler(res, StatusCodes.OK, message, data);
   } catch (error) {
     next(error);

@@ -357,8 +357,25 @@ const usersDocs = {
     post: {
       tags: ['Users'],
       summary: 'Skip Onboarding',
-      description: 'Mark onboarding as skipped for the user',
+      description:
+        'Mark onboarding as skipped for the user, keeping any answers already given so a later return to onboarding starts filled in.',
       security: [{bearerAuth: []}],
+      requestBody: {
+        required: false,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                self_description: {type: 'string', maxLength: 2000},
+                join_reasons: {type: 'array', items: {type: 'string'}},
+                current_priority: {type: 'array', items: {type: 'string'}},
+                motivationType: {type: 'string'},
+              },
+            },
+          },
+        },
+      },
       responses: {
         200: {
           description: 'Onboarding skipped',
