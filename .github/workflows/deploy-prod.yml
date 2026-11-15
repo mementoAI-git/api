@@ -956,6 +956,16 @@ jobs:
           echo "Active release:"
           echo "  $NEW_RELEASE"
 
+          # Growth analytics settings: warn (never fail) when PostHog
+          # tracking is off or mis-tagged, so signups can't go missing silently.
+          (
+            cd "$NEW_RELEASE" &&
+              DOTENV_CONFIG_PATH="$DEPLOY_ROOT/.env" \
+              NODE_ENV=production \
+              MEMENTO_ENV=prod \
+              node build/src/scripts/growth-analytics/check-config.js --github
+          ) || echo "::warning::Could not check growth analytics settings"
+
           # ────────────────────────────────────────────────────
           # Cleanup
           #

@@ -74,3 +74,20 @@ Without ingestion configuration the adapters are no-ops; normal app behavior is 
 | Connected-user retention association | `bTaCLDkZ` |
 
 A synthetic `analytics_setup_verified` event received HTTP 200 from ingestion using the new publisher. It used `is_test=true` and `environment=development` and is excluded from the production metrics. This verifies ingestion connectivity, not production deployment or historical completeness.
+
+## Checking the settings and recovering missed signups
+
+Analytics switches itself off when any of the three settings above is missing or invalid, and records nothing while off. The API and worker now log one line at startup saying whether it is on, or which setting is wrong (names only, never values), and both deploy workflows print a GitHub warning after a release when it is off or when production events would be tagged with an environment other than `production`. Check a server by hand with:
+
+```sh
+DOTENV_CONFIG_PATH=/path/to/.env MEMENTO_ENV=prod NODE_ENV=production npm run growth:check-config:prod
+```
+
+Signups made while analytics was off can be recorded afterwards. The backfill sends `growth_account_created` dated with each account's real `created_at` (not a synthetic date), using the same event key and ID as the live event, so recorded accounts are skipped and reruns are safe. It refuses to run until the settings are valid. Start with a dry run, which also prints signups per UTC day:
+
+```sh
+DOTENV_CONFIG_PATH=/path/to/.env MEMENTO_ENV=prod NODE_ENV=production \
+  npm run growth:backfill-signups:prod -- --dry-run --since=2026-10-30
+```
+
+Then run it without `--dry-run`. Invitation and referral attribution is worked out from records as they stand at backfill time, so it can differ slightly from what the live event would have recorded.

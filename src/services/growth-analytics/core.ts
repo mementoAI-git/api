@@ -89,35 +89,67 @@ export interface GrowthAnalyticsConfig {
   token: string;
   host: string;
 }
+/**
+ * Why growth analytics is off, by setting name only (never values). Empty
+ * means it is on. Kept beside readGrowthAnalyticsConfig so the startup log,
+ * the deploy check and the real switch can never disagree.
+ */
+export function growthAnalyticsProblems(
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  if (env.NODE_ENV === 'test') return ['disabled while testing'];
+  const problems: string[] = [];
+  if (!env.POSTHOG_PROJECT_TOKEN?.trim())
+    problems.push('POSTHOG_PROJECT_TOKEN is not set');
+  const secret = env.POSTHOG_IDENTITY_SECRET?.trim().length || 0;
+  if (!secret) problems.push('POSTHOG_IDENTITY_SECRET is not set');
+  else if (secret < 32)
+    problems.push(
+      'POSTHOG_IDENTITY_SECRET is shorter than 32 characters (generate one with `openssl rand -hex 32`)',
+    );
+  if (!env.POSTHOG_HOST?.trim()) problems.push('POSTHOG_HOST is not set');
+  else {
+    try {
+      const host = new URL(env.POSTHOG_HOST);
+      if (
+        host.protocol !== 'https:' ||
+        host.username ||
+        host.password ||
+        host.search ||
+        host.hash ||
+        host.pathname !== '/'
+      )
+        problems.push(
+          'POSTHOG_HOST must be a bare https origin such as https://us.i.posthog.com',
+        );
+    } catch {
+      problems.push('POSTHOG_HOST is not a valid URL');
+    }
+  }
+  return problems;
+}
+
+/** Problems that leave analytics on but make production reports miss events. */
+export function growthAnalyticsWarnings(
+  env: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const environment = resolveAnalyticsEnvironment(env);
+  return env.MEMENTO_ENV === 'prod' && environment !== 'production'
+    ? [
+        `events are tagged environment "${environment}" on production; production reports only count "production". Set POSTHOG_ENVIRONMENT=production or remove it`,
+      ]
+    : [];
+}
+
 export function readGrowthAnalyticsConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): (GrowthAnalyticsConfig & {identitySecret: string}) | null {
-  if (
-    env.NODE_ENV === 'test' ||
-    !env.POSTHOG_PROJECT_TOKEN?.trim() ||
-    (env.POSTHOG_IDENTITY_SECRET?.trim().length || 0) < 32 ||
-    !env.POSTHOG_HOST?.trim()
-  )
-    return null;
-  try {
-    const host = new URL(env.POSTHOG_HOST);
-    if (
-      host.protocol !== 'https:' ||
-      host.username ||
-      host.password ||
-      host.search ||
-      host.hash ||
-      host.pathname !== '/'
-    )
-      return null;
-    return {
-      token: env.POSTHOG_PROJECT_TOKEN.trim(),
-      host: host.origin,
-      identitySecret: env.POSTHOG_IDENTITY_SECRET.trim(),
-    };
-  } catch {
-    return null;
-  }
+  if (growthAnalyticsProblems(env).length) return null;
+  return {
+    token: env.POSTHOG_PROJECT_TOKEN!.trim(),
+    host: new URL(env.POSTHOG_HOST!).origin,
+    identitySecret: env.POSTHOG_IDENTITY_SECRET!.trim(),
+  };
 }
 
 function safeProperties(input: GrowthProperties): GrowthProperties {
