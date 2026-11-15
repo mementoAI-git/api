@@ -1,8 +1,12 @@
 import {
+  ANALYTICS_ENVIRONMENT,
   createGrowthAnalytics,
   GrowthEventInput,
+  growthAnalyticsProblems,
+  growthAnalyticsWarnings,
   readGrowthAnalyticsConfig,
 } from './core';
+import logger from '../../utils/logger';
 import {createPostHogPublisher} from './http';
 import {createMongoGrowthOutboxStore} from './mongo';
 
@@ -42,7 +46,26 @@ export async function flushGrowthAnalytics(): Promise<void> {
   }
 }
 /** Start after MongoDB connection; API and worker processes may both run this. */
+/** One line at startup, so a misconfigured server can't drop events silently. */
+export function reportGrowthAnalyticsStatus(
+  log: Pick<typeof logger, 'info' | 'warn'> = logger,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  if (env.NODE_ENV === 'test') return;
+  const problems = growthAnalyticsProblems(env);
+  if (problems.length) {
+    log.warn(
+      `Growth analytics is off, no signups or activity are recorded: ${problems.join('; ')}`,
+    );
+    return;
+  }
+  log.info(`Growth analytics is on (environment "${ANALYTICS_ENVIRONMENT}")`);
+  for (const warning of growthAnalyticsWarnings(env))
+    log.warn(`Growth analytics: ${warning}`);
+}
+
 export function startGrowthAnalytics(): () => Promise<void> {
+  reportGrowthAnalyticsStatus();
   if (isGrowthAnalyticsEnabled() && !timer) {
     timer = setInterval(() => {
       void flushGrowthAnalytics();
