@@ -297,6 +297,76 @@ jobs:
             "echo 'SSH connection OK'"
 
       # ────────────────────────────────────────────────────────
+      # PostHog settings: GitHub secrets -> server .env.
+      # The values go to the server inside the stdin script, never
+      # on a command line. The apps read them when the release is
+      # activated below.
+      # ────────────────────────────────────────────────────────
+      - name: Sync PostHog settings
+        shell: bash
+        env:
+          POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          POSTHOG_IDENTITY_SECRET: ${{ secrets.POSTHOG_IDENTITY_SECRET_DEV }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$POSTHOG_PROJECT_TOKEN" ] \
+            || [ -z "$POSTHOG_HOST" ] \
+            || [ -z "$POSTHOG_IDENTITY_SECRET" ]; then
+            echo "::warning::PostHog secrets are not all set; the development .env was left unchanged."
+            exit 0
+          fi
+
+          # Strict formats keep the values safe to embed in the script.
+          if ! [[ "$POSTHOG_PROJECT_TOKEN" =~ ^phc_[A-Za-z0-9]+$ ]]; then
+            echo "::error::POSTHOG_PROJECT_TOKEN must look like phc_..."
+            exit 1
+          fi
+          if ! [[ "$POSTHOG_HOST" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
+            echo "::error::POSTHOG_HOST must be a bare https origin"
+            exit 1
+          fi
+          if ! [[ "$POSTHOG_IDENTITY_SECRET" =~ ^[A-Za-z0-9]{32,}$ ]]; then
+            echo "::error::POSTHOG_IDENTITY_SECRET_DEV must be 32+ letters or digits"
+            exit 1
+          fi
+
+          ssh \
+            -T \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -i ~/.ssh/deploy_key \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "bash -s -- '$DEPLOY_ROOT/.env'" <<REMOTE
+          set -euo pipefail
+          ENV_FILE="\$1"
+          if [ ! -f "\$ENV_FILE" ]; then
+            echo "::error::\$ENV_FILE does not exist"
+            exit 1
+          fi
+          TMP="\$(mktemp "\$ENV_FILE.XXXXXX")"
+          trap 'rm -f "\$TMP"' EXIT
+          grep -v -E '^(export )?POSTHOG_(PROJECT_TOKEN|HOST|IDENTITY_SECRET)=' \
+            "\$ENV_FILE" > "\$TMP" || true
+          {
+            echo 'POSTHOG_PROJECT_TOKEN=$POSTHOG_PROJECT_TOKEN'
+            echo 'POSTHOG_HOST=$POSTHOG_HOST'
+            echo 'POSTHOG_IDENTITY_SECRET=$POSTHOG_IDENTITY_SECRET'
+          } >> "\$TMP"
+          if cmp -s "\$TMP" "\$ENV_FILE"; then
+            echo "PostHog settings are already current."
+            exit 0
+          fi
+          chmod --reference="\$ENV_FILE" "\$TMP"
+          mv -f "\$TMP" "\$ENV_FILE"
+          trap - EXIT
+          echo "PostHog settings written to \$ENV_FILE."
+          REMOTE
+
+      # ────────────────────────────────────────────────────────
       # Upload inactive release
       # ────────────────────────────────────────────────────────
       - name: Create release directory
