@@ -77,6 +77,8 @@ A synthetic `analytics_setup_verified` event received HTTP 200 from ingestion us
 
 ## Checking the settings and recovering missed signups
 
+The deploy workflows write the three settings into the server `.env` on every release, from these GitHub repository secrets: `POSTHOG_PROJECT_TOKEN` and `POSTHOG_HOST` (shared), plus `POSTHOG_IDENTITY_SECRET_PROD` and `POSTHOG_IDENTITY_SECRET_DEV` (one per environment, never rotated casually: changing one changes every recipient hash). If any secret is missing the step warns and leaves `.env` alone. Other lines in `.env` are kept. Rotate a value with `gh secret set` and redeploy.
+
 Analytics switches itself off when any of the three settings above is missing or invalid, and records nothing while off. The API and worker now log one line at startup saying whether it is on, or which setting is wrong (names only, never values), and both deploy workflows print a GitHub warning after a release when it is off or when production events would be tagged with an environment other than `production`. Check a server by hand with:
 
 ```sh
