@@ -8,7 +8,14 @@ import {
 } from '../helpers/database';
 import {createTestApp} from '../helpers/app';
 
-// The apps' own Google OAuth clients (public identifiers, also in the mobile app).
+// Memento's Google OAuth clients (public identifiers, also in the mobile app).
+const MEMENTO_WEB =
+  '246773083886-bu35mshe7kbnhe329rka30k50t120vde.apps.googleusercontent.com';
+const MEMENTO_IOS =
+  '246773083886-nkljj6mafpodch7a8mv1g5khn91sv8a4.apps.googleusercontent.com';
+const MEMENTO_ANDROID =
+  '246773083886-r71s166vm87ldt4g59pvnlma706jaurd.apps.googleusercontent.com';
+// The clients built into earlier app builds.
 const WEB =
   '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com';
 const IOS =
@@ -91,6 +98,23 @@ describe('Google sign-in from the apps', () => {
 
   it("accepts the apps' own clients even when GOOGLE_ID is another project's", async () => {
     setGoogleEnv({GOOGLE_ID: OTHER_PROJECT});
+    googleSays({aud: WEB, azp: IOS});
+
+    expect((await signIn('ios')).status).toBe(200);
+  });
+
+  it("accepts Memento's iPhone and Android clients with no server setting", async () => {
+    setGoogleEnv({});
+    googleSays({aud: MEMENTO_WEB, azp: MEMENTO_IOS});
+    expect((await signIn('ios')).status).toBe(200);
+
+    vi.restoreAllMocks();
+    googleSays({aud: MEMENTO_WEB, azp: MEMENTO_ANDROID});
+    expect((await signIn('android')).status).toBe(200);
+  });
+
+  it('keeps accepting the clients built into earlier app builds', async () => {
+    setGoogleEnv({GOOGLE_ID: MEMENTO_WEB});
     googleSays({aud: WEB, azp: IOS});
 
     expect((await signIn('ios')).status).toBe(200);
