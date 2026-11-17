@@ -171,15 +171,21 @@ const WA_PREFIX = 'webauthn:challenge:';
 const WA_TTL = 5 * 60;
 
 /**
- * The apps' own Google OAuth clients (project 680261459129, also built into
- * the mobile app). Always accepted, so a server setting can only add clients.
- * Replacing them is what broke native sign-in: a phone's token has the web
- * client as its audience and the iOS or Android client as its authorized
- * party, and both must be ours.
+ * The apps' own Google OAuth clients. Always accepted, so a server setting can
+ * only add clients. Replacing them is what broke native sign-in: a phone's
+ * token has the web client as its audience and the iOS or Android client as
+ * its authorized party, and both must be ours.
+ *
+ * Project 246773083886 is Memento's (its consent screen says Memento) and is
+ * built into the mobile app. Project 680261459129 ("SSO Test") was built into
+ * earlier app builds, so it stays until those builds are gone.
  */
 const MEMENTO_GOOGLE_CLIENT_IDS = [
-  '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com', // web
-  '680261459129-nupaa1nhgpkolmiicmcho7ffipl939lf.apps.googleusercontent.com', // iOS
+  '246773083886-bu35mshe7kbnhe329rka30k50t120vde.apps.googleusercontent.com', // web
+  '246773083886-nkljj6mafpodch7a8mv1g5khn91sv8a4.apps.googleusercontent.com', // iOS
+  '246773083886-r71s166vm87ldt4g59pvnlma706jaurd.apps.googleusercontent.com', // Android
+  '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com', // earlier builds: web
+  '680261459129-nupaa1nhgpkolmiicmcho7ffipl939lf.apps.googleusercontent.com', // earlier builds: iOS
 ];
 
 /** Google clients whose ID tokens may sign in: ours plus any the server names. */
