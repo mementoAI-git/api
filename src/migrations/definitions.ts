@@ -349,4 +349,66 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
       );
     },
   },
+  {
+    id: '202611180001_voice_usage_indexes_and_history',
+    up: async db => {
+      const usage = db.collection('voice_usages');
+      // Production runs with autoIndex off: one record per call, and fast monthly totals.
+      await usage.createIndex({user: 1, call_started_at: 1}, {unique: true});
+      await usage.createIndex({user: 1, month: 1});
+      // Calls made before voice minutes were tracked, so all-time totals include them.
+      // Each ended call becomes one record from its saved length; months are UTC
+      // (their time zone was never kept). Calls that ended after a member's first
+      // tracked call are already counted, so they are skipped. Re-running only
+      // raises what is there.
+      const firstTracked = new Map<string, number>();
+      for await (const row of usage.aggregate<{_id: string; first: number}>([
+        {$group: {_id: '$user', first: {$min: '$call_started_at'}}},
+      ])) {
+        firstTracked.set(String(row._id), row.first);
+      }
+      const calls = db.collection('voice_calls').find(
+        {duration_seconds: {$gt: 0}},
+        {
+          projection: {
+            user: 1,
+            duration_seconds: 1,
+            ended_at: 1,
+            updated_at: 1,
+          },
+        },
+      );
+      let batch: mongo.AnyBulkWriteOperation[] = [];
+      for await (const call of calls) {
+        const endedAt = new Date(call.ended_at ?? call.updated_at).getTime();
+        if (!Number.isFinite(endedAt)) continue;
+        const tracked = firstTracked.get(String(call.user));
+        if (tracked !== undefined && endedAt >= tracked) continue;
+        const seconds = Math.min(
+          6 * 60 * 60,
+          Math.round(call.duration_seconds),
+        );
+        const startedAt = endedAt - seconds * 1000;
+        batch.push({
+          updateOne: {
+            filter: {user: String(call.user), call_started_at: startedAt},
+            update: {
+              $max: {seconds},
+              $setOnInsert: {
+                month: new Date(startedAt).toISOString().slice(0, 7),
+                created_at: new Date(),
+              },
+              $set: {updated_at: new Date()},
+            },
+            upsert: true,
+          },
+        });
+        if (batch.length >= 500) {
+          await usage.bulkWrite(batch, {ordered: false});
+          batch = [];
+        }
+      }
+      if (batch.length) await usage.bulkWrite(batch, {ordered: false});
+    },
+  },
 ];
