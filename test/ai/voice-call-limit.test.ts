@@ -25,6 +25,25 @@ import {
 } from '../helpers/database';
 import {createTestApp} from '../helpers/app';
 import {createUserFixture, issueLegacyAccessToken} from '../helpers/factories';
+import Subscription from '../../src/module/database/model/subscription';
+import VoiceUsage from '../../src/module/database/model/voice-usage';
+import {
+  FREE_VOICE_SECONDS_PER_MONTH,
+  recordEndedVoiceCall,
+  voiceUsageMonth,
+} from '../../src/module/api/billing/voice-allowance';
+
+async function createProUser() {
+  const user = await createUserFixture();
+  await Subscription.create({
+    user_id: user.id,
+    tier: 'pro',
+    status: 'active',
+    payment_provider: 'polar',
+    current_period_end: new Date('2099-01-01'),
+  });
+  return user;
+}
 
 const ORIGINAL = process.env.VOICE_MAX_CALL_MINUTES;
 afterEach(() => {
@@ -66,7 +85,7 @@ describe('GET /ai/ephemeral-token with a time limit', () => {
 
   it('starts the clock on a new call and tells the app the limit', async () => {
     process.env.VOICE_MAX_CALL_MINUTES = '30';
-    const user = await createUserFixture();
+    const user = await createProUser();
 
     const res = await token(issueLegacyAccessToken(user));
 
@@ -81,7 +100,7 @@ describe('GET /ai/ephemeral-token with a time limit', () => {
 
   it('keeps the original start time when the call reconnects', async () => {
     process.env.VOICE_MAX_CALL_MINUTES = '30';
-    const user = await createUserFixture();
+    const user = await createProUser();
     const startedTenMinutesAgo = issueCallTicket(user.id, Date.now() - 600_000);
 
     const res = await token(issueLegacyAccessToken(user), {
@@ -97,7 +116,7 @@ describe('GET /ai/ephemeral-token with a time limit', () => {
 
   it('refuses to reconnect a call past its limit', async () => {
     process.env.VOICE_MAX_CALL_MINUTES = '30';
-    const user = await createUserFixture();
+    const user = await createProUser();
     const startedAnHourAgo = issueCallTicket(user.id, Date.now() - 3_600_000);
 
     const res = await token(issueLegacyAccessToken(user), {
@@ -111,11 +130,160 @@ describe('GET /ai/ephemeral-token with a time limit', () => {
 
   it('adds nothing when no limit is set', async () => {
     delete process.env.VOICE_MAX_CALL_MINUTES;
-    const user = await createUserFixture();
+    const user = await createProUser();
 
     const res = await token(issueLegacyAccessToken(user));
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual({token: 'gemini-token'});
+  });
+});
+
+describe('free plan monthly voice minutes', () => {
+  beforeAll(connectTestDatabase);
+  afterEach(clearTestDatabase);
+  afterAll(closeTestDatabase);
+
+  const token = (auth: string, query: Record<string, string> = {}) =>
+    request(createTestApp())
+      .get('/ai/ephemeral-token')
+      .query(query)
+      .set('Authorization', `Bearer ${auth}`);
+
+  const usedEarlier = (userId: string, seconds: number) =>
+    VoiceUsage.create({
+      user: userId,
+      call_started_at: Date.now() - 86_400_000,
+      month: voiceUsageMonth(Date.now()),
+      seconds,
+    });
+
+  it('lets a free member call, limited to the minutes left this month', async () => {
+    delete process.env.VOICE_MAX_CALL_MINUTES;
+    const user = await createUserFixture();
+    await usedEarlier(user.id, 60 * 60);
+
+    const res = await token(issueLegacyAccessToken(user));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      token: 'gemini-token',
+      call_seconds_left: 30 * 60,
+      call_ticket: expect.any(String),
+      call_limit_reason: 'free_monthly',
+    });
+  });
+
+  it('counts a reconnecting call’s time so far against the month', async () => {
+    delete process.env.VOICE_MAX_CALL_MINUTES;
+    const user = await createUserFixture();
+    const startedTenMinutesAgo = Date.now() - 600_000;
+    const ticket = issueCallTicket(user.id, startedTenMinutesAgo);
+
+    const res = await token(issueLegacyAccessToken(user), {
+      resume_handle: 'resume-1',
+      call_ticket: ticket,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.call_ticket).toBe(ticket);
+    expect(res.body.data.call_seconds_left).toBeGreaterThan(
+      FREE_VOICE_SECONDS_PER_MONTH - 610,
+    );
+    expect(res.body.data.call_seconds_left).toBeLessThanOrEqual(
+      FREE_VOICE_SECONDS_PER_MONTH - 600,
+    );
+    const call = await VoiceUsage.findOne({
+      user: user.id,
+      call_started_at: startedTenMinutesAgo,
+    }).lean();
+    expect(call?.seconds).toBeGreaterThanOrEqual(600);
+  });
+
+  it('asks a free member to upgrade once the month’s minutes are used', async () => {
+    delete process.env.VOICE_MAX_CALL_MINUTES;
+    const user = await createUserFixture();
+    await usedEarlier(user.id, FREE_VOICE_SECONDS_PER_MONTH);
+
+    const res = await token(issueLegacyAccessToken(user));
+
+    expect(res.status).toBe(402);
+    expect(res.body.details).toMatchObject({
+      error: 'subscription_required',
+      feature: 'voice_mode',
+    });
+  });
+
+  it('ignores minutes used in an earlier month', async () => {
+    delete process.env.VOICE_MAX_CALL_MINUTES;
+    const user = await createUserFixture();
+    await VoiceUsage.create({
+      user: user.id,
+      call_started_at: Date.now() - 40 * 86_400_000,
+      month: '2000-01',
+      seconds: FREE_VOICE_SECONDS_PER_MONTH,
+    });
+
+    const res = await token(issueLegacyAccessToken(user));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.call_seconds_left).toBe(FREE_VOICE_SECONDS_PER_MONTH);
+  });
+
+  it('uses the per-call limit when it ends sooner than the free minutes', async () => {
+    process.env.VOICE_MAX_CALL_MINUTES = '30';
+    const user = await createUserFixture();
+
+    const res = await token(issueLegacyAccessToken(user));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      call_seconds_left: 1800,
+      call_limit_reason: 'call',
+    });
+  });
+
+  it('counts the reported length of an ended call', async () => {
+    delete process.env.VOICE_MAX_CALL_MINUTES;
+    const user = await createUserFixture();
+    const auth = issueLegacyAccessToken(user);
+    const started = await token(auth);
+    const ticket = String(started.body.data.call_ticket);
+    const startedAt = Number(ticket.split('.')[0]);
+    // An older call this month, so the end report has to pick the right one.
+    await usedEarlier(user.id, 60);
+    // The call ran for four minutes.
+    await VoiceUsage.updateOne(
+      {user: user.id, call_started_at: startedAt},
+      {$set: {call_started_at: startedAt - 240_000}},
+    );
+
+    const res = await request(createTestApp())
+      .post('/ai/voice/calls/session-1/end')
+      .set('Authorization', `Bearer ${auth}`)
+      .send({duration_seconds: 235});
+
+    expect(res.status).toBe(200);
+    const call = await VoiceUsage.findOne({
+      user: user.id,
+      call_started_at: startedAt - 240_000,
+    }).lean();
+    expect(call?.seconds).toBe(235);
+  });
+
+  it('never counts more than the call has existed', async () => {
+    const user = await createUserFixture();
+    const startedAt = Date.now() - 60_000;
+    await VoiceUsage.create({
+      user: user.id,
+      call_started_at: startedAt,
+      month: voiceUsageMonth(startedAt),
+    });
+
+    await recordEndedVoiceCall(user.id, 65);
+
+    const call = await VoiceUsage.findOne({user: user.id}).lean();
+    expect(call?.seconds).toBeGreaterThanOrEqual(59);
+    expect(call?.seconds).toBeLessThanOrEqual(61);
   });
 });

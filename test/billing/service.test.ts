@@ -322,12 +322,12 @@ void test('summary exposes the actual interval and recurring management capabili
       '../../src/module/api/billing/access'
     );
     assert.equal(
-      (await checkFeatureAccess('user_1', 'voice_mode')).allowed,
+      (await checkFeatureAccess('user_1', 'supermemory')).allowed,
       false,
     );
     sub.current_period_end = new Date('2099-01-01');
     assert.equal(
-      (await checkFeatureAccess('user_1', 'voice_mode')).allowed,
+      (await checkFeatureAccess('user_1', 'supermemory')).allowed,
       true,
     );
   } finally {
@@ -381,4 +381,28 @@ void test('older subscriptions resolve their interval from Polar rather than gue
     interval.mock.restore();
     update.mock.restore();
   }
+});
+
+void test('free summary includes the month’s voice minutes', async () => {
+  const user = await createUserFixture();
+  const {getSubscriptionSummary} = await import(
+    '../../src/module/api/billing/service'
+  );
+  const VoiceUsage = (
+    await import('../../src/module/database/model/voice-usage')
+  ).default;
+  const {voiceUsageMonth} = await import(
+    '../../src/module/api/billing/voice-allowance'
+  );
+  await VoiceUsage.create({
+    user: user.id,
+    call_started_at: Date.now(),
+    month: voiceUsageMonth(Date.now()),
+    seconds: 600,
+  });
+  const free = await getSubscriptionSummary(user.id);
+  assert.equal(free.data.usage.voice_seconds_limit, 5400);
+  assert.equal(free.data.usage.voice_seconds_used, 600);
+  assert.equal(free.data.usage.voice_seconds_left, 4800);
+  assert.ok(free.data.usage.voice_allowance_resets_at);
 });
