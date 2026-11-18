@@ -95,6 +95,13 @@ router.post(
   ctrl.runVoiceTool,
 );
 router.post(
+  '/voice/usage',
+  gaurd,
+  validate(dto.voiceUsageSchema),
+  ctrl.recordVoiceUsage,
+);
+router.get('/voice/usage', gaurd, ctrl.getVoiceUsage);
+router.post(
   '/voice/calls/:sessionId/end',
   gaurd,
   validate(dto.voiceCallEndSchema),

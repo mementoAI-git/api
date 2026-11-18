@@ -281,26 +281,37 @@ export async function checkFeatureAccess(
 }
 
 /**
- * Voice access for one token request of a call. Paid plans are unlimited
- * (null). For a free member it records how long this call has run so far,
- * then returns the seconds of this month's allowance still left, refusing
- * with an upgrade prompt once it is used up.
+ * Voice access for one token request of a call. Records how long the call has
+ * run so far, on every plan (the apps show voice minutes to everyone). Paid
+ * plans are unlimited (null). For a free member it returns the seconds of
+ * this month's allowance still left, refusing with an upgrade prompt once it
+ * is used up. The month is the member's own (their time zone).
  */
 export async function voiceSecondsLeftForCall(
   userId: string,
   callStartedAt: number,
   now = Date.now(),
+  timeZone = 'UTC',
 ): Promise<number | null> {
-  const subscription = await Subscription.findOne({user_id: userId}).lean();
+  const [subscription] = await Promise.all([
+    Subscription.findOne({user_id: userId}).lean(),
+    recordVoiceCallSeconds(
+      userId,
+      callStartedAt,
+      Math.max(0, (now - callStartedAt) / 1000),
+      timeZone,
+    ),
+  ]);
   if (isPaidTier(resolveEffectiveTier(subscription))) return null;
-  await recordVoiceCallSeconds(
-    userId,
-    callStartedAt,
-    Math.max(0, (now - callStartedAt) / 1000),
-  );
   const left =
     FREE_VOICE_SECONDS_PER_MONTH -
-    (await voiceSecondsUsedThisMonth(userId, now));
+    (await voiceSecondsUsedThisMonth(userId, now, timeZone));
   if (left <= 0) throwSubscriptionRequired('voice_mode');
   return Math.floor(left);
+}
+
+/** Whether the member is on the free plan (no paid tier in effect). */
+export async function isFreeMember(userId: string): Promise<boolean> {
+  const subscription = await Subscription.findOne({user_id: userId}).lean();
+  return !isPaidTier(resolveEffectiveTier(subscription));
 }

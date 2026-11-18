@@ -4,6 +4,13 @@
  */
 export const QUICK_NOTE_TITLE = 'Quick note';
 
+/**
+ * Placeholder for captures that ask to be named (`auto_title`). It matches
+ * GENERIC_QUICK_CAPTURE_TITLE_RE, so the enrichment worker replaces it with
+ * an AI title from the transcript, and it stays when nothing could be heard.
+ */
+export const AUTO_TITLE_PLACEHOLDER = 'Voice note';
+
 export const GENERIC_QUICK_CAPTURE_TITLE_RE =
   /^(thought|thoughts|quick capture|quick note|a note|note|memory|untitled|new memory|my thought|a passing thought|voice note|photo note|journal entry)\.?$/i;
 

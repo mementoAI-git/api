@@ -13,6 +13,8 @@ import ObservationView from '../../src/module/database/model/observation-view';
 import Bookmark from '../../src/module/database/model/bookmarks';
 import Migration from '../../src/module/database/model/migration';
 import AiMetric from '../../src/module/database/model/ai-metric';
+import VoiceUsage from '../../src/module/database/model/voice-usage';
+import VoiceCall from '../../src/module/database/model/voice-call';
 import {
   getMigrationStatus,
   migrateUp,
@@ -240,5 +242,71 @@ describe('database migrations', () => {
       ]),
     );
     expect(ObservationView.collection.name).toBe('observation_views');
+  });
+
+  it('indexes voice usage and copies in calls made before it was tracked', async () => {
+    const tracked = Date.parse('2026-11-10T12:00:00Z');
+    // A member with history, one call of which is already tracked live.
+    await VoiceUsage.create({
+      user: 'user-1',
+      call_started_at: tracked,
+      month: '2026-11',
+      seconds: 120,
+    });
+    await VoiceCall.collection.insertMany([
+      {
+        user: 'user-1',
+        session_id: 'a',
+        duration_seconds: 300,
+        ended_at: new Date('2026-10-02T10:05:00Z'),
+      },
+      {
+        user: 'user-1',
+        session_id: 'b',
+        duration_seconds: 120,
+        ended_at: new Date(tracked + 120_000),
+      },
+      {
+        user: 'user-2',
+        session_id: 'c',
+        duration_seconds: 60,
+        ended_at: new Date('2026-11-01T09:01:00Z'),
+      },
+      {
+        user: 'user-2',
+        session_id: 'd',
+        duration_seconds: 0,
+        ended_at: new Date('2026-11-02T09:00:00Z'),
+      },
+    ]);
+
+    await migrateUp();
+
+    const indexes = await mongoose.connection
+      .db!.collection(VoiceUsage.collection.name)
+      .indexes();
+    expect(indexes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: {user: 1, call_started_at: 1},
+          unique: true,
+        }),
+        expect.objectContaining({key: {user: 1, month: 1}}),
+      ]),
+    );
+    const rows = await VoiceUsage.find(
+      {},
+      {_id: 0, user: 1, seconds: 1, month: 1},
+    )
+      .sort({user: 1, call_started_at: 1})
+      .lean();
+    // The October call is copied in; the tracked call is not counted twice; empty calls are skipped.
+    expect(rows).toEqual([
+      {user: 'user-1', seconds: 300, month: '2026-10'},
+      {user: 'user-1', seconds: 120, month: '2026-11'},
+      {user: 'user-2', seconds: 60, month: '2026-11'},
+    ]);
+    expect(VoiceUsage.collection.name).toBe('voice_usages');
+    expect(VoiceCall.collection.name).toBe('voice_calls');
   });
 });

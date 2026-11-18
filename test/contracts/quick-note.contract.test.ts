@@ -8,6 +8,7 @@ import {
 } from '../helpers/database';
 import {createTestApp} from '../helpers/app';
 import {createUserFixture, issueLegacyAccessToken} from '../helpers/factories';
+import {shouldOverwriteQuickCaptureTitle} from '../../src/utils/quick-note';
 
 vi.mock('../../src/module/api/user/service', async original => ({
   ...(await original<typeof import('../../src/module/api/user/service')>()),
@@ -37,6 +38,27 @@ describe('quick-note save contract', () => {
     });
     expect((await Memory.findById(response.body.data._id))?.title).toBe(
       'Quick note',
+    );
+  });
+
+  it('starts an auto-titled capture with a placeholder the worker can rename', async () => {
+    const user = await createUserFixture();
+    const response = await request(createTestApp())
+      .post('/memories/quick-capture')
+      .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`)
+      .send({
+        body: 'A recorded memory',
+        visibility: 'private',
+        auto_title: true,
+      });
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      title: 'Voice note',
+      capture_source: 'quick',
+      enrichment_status: 'pending',
+    });
+    expect(shouldOverwriteQuickCaptureTitle(response.body.data.title)).toBe(
+      true,
     );
   });
 
