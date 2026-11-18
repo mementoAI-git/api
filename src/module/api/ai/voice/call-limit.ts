@@ -43,37 +43,56 @@ export function readCallTicket(userId: string, ticket: string): number | null {
 }
 
 export type VoiceCallTime = {
-  max_call_seconds: number;
+  /** The per-call limit, when VOICE_MAX_CALL_MINUTES is set. */
+  max_call_seconds?: number;
   call_seconds_left: number;
   call_ticket: string;
+  /** Why the call ends when it does: the per-call limit, or the free plan's monthly minutes. */
+  call_limit_reason: 'call' | 'free_monthly';
 };
 
+/** When the call started: the ticket's time, or now for a new call (or an unreadable ticket). */
+export function callStartedAt(
+  userId: string,
+  ticket: unknown,
+  now = Date.now(),
+): number {
+  return (typeof ticket === 'string' && readCallTicket(userId, ticket)) || now;
+}
+
 /**
- * The call's time allowance for a token request, or null when calls are not
- * limited. A missing or unreadable ticket starts the clock now (a new call, or
- * an older app that does not send one). A call past its limit is refused.
+ * The call's time allowance for a token request, or null when the call has
+ * no limit. Two limits can apply: the per-call limit (VOICE_MAX_CALL_MINUTES)
+ * and, on the free plan, the seconds left of the month's voice minutes
+ * (freeSecondsLeft). The sooner one wins. A missing or unreadable ticket
+ * starts the clock now (a new call, or an older app that does not send one).
+ * A call past its per-call limit is refused.
  */
 export function voiceCallTime(
   userId: string,
   ticket: unknown,
   now = Date.now(),
+  freeSecondsLeft: number | null = null,
 ): VoiceCallTime | null {
   const limit = voiceCallLimitSeconds();
-  if (!limit) return null;
-  const startedAt =
-    (typeof ticket === 'string' && readCallTicket(userId, ticket)) || now;
-  const left = Math.round(limit - (now - startedAt) / 1000);
-  if (left <= 0) {
+  if (!limit && freeSecondsLeft === null) return null;
+  const startedAt = callStartedAt(userId, ticket, now);
+  const callLeft = limit
+    ? Math.min(limit, Math.round(limit - (now - startedAt) / 1000))
+    : Infinity;
+  if (callLeft <= 0) {
     throw new ServiceError(
       'This call has reached its time limit. Start a new call to keep talking.',
       StatusCodes.FORBIDDEN,
       {reason: 'voice_call_limit', max_call_seconds: limit},
     );
   }
+  const freeFirst = freeSecondsLeft !== null && freeSecondsLeft < callLeft;
   return {
-    max_call_seconds: limit,
-    call_seconds_left: Math.min(limit, left),
+    ...(limit ? {max_call_seconds: limit} : {}),
+    call_seconds_left: freeFirst ? freeSecondsLeft : callLeft,
     call_ticket:
       startedAt === now ? issueCallTicket(userId, now) : String(ticket),
+    call_limit_reason: freeFirst ? 'free_monthly' : 'call',
   };
 }

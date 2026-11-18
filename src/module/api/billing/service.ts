@@ -1,3 +1,4 @@
+import {getFreeVoiceAllowance} from './voice-allowance';
 import {
   verifyAppleStoreKit2Jws,
   verifyLegacyAppleReceipt,
@@ -101,6 +102,17 @@ export async function getSubscriptionSummary(userId: string) {
     );
   }
 
+  const tier = resolveEffectiveTier(subscription);
+  // Free members get monthly voice minutes; paid plans have no voice limit.
+  const voice =
+    tier === 'free'
+      ? await getFreeVoiceAllowance(userId)
+      : {
+          voice_seconds_limit: null,
+          voice_seconds_used: null,
+          voice_seconds_left: null,
+          voice_allowance_resets_at: null,
+        };
   const cancellationEnded = Boolean(
     subscription.cancel_at_period_end &&
       subscription.current_period_end &&
@@ -111,7 +123,7 @@ export async function getSubscriptionSummary(userId: string) {
     data: {
       // The tier the feature gates use (staging Pro included), so the apps
       // never show a plan the member can no longer use.
-      tier: resolveEffectiveTier(subscription),
+      tier,
       billing_interval: subscription.billing_interval,
       can_manage_subscription:
         subscription.payment_provider === 'polar' &&
@@ -141,6 +153,7 @@ export async function getSubscriptionSummary(userId: string) {
         over_limit: storage.over_limit,
         beneficiary_count: usage?.beneficiary_count || 0,
         timed_message_count: usage?.timed_message_count || 0,
+        ...voice,
       },
     },
   };
