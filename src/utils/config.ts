@@ -115,8 +115,11 @@ export const VOICE_SPEAKER_DUPLEX_DENYLIST = (
 
 // Percentage of users (0-100) whose voice calls use the faster end-of-turn
 // silence window. Validated at startup by runtime-config.
+// Share of users on the 450 ms turn arm (VOICE_TURN_FAST). Everyone by
+// default: staging has run it for all calls since October. Set 0 on a server
+// to go back to the 800 ms arm.
 export const VOICE_TURN_AB_PERCENT = Number(
-  process.env.VOICE_TURN_AB_PERCENT || 0,
+  process.env.VOICE_TURN_AB_PERCENT || 100,
 );
 
 export const VOICE_PROVIDER_DEFAULT = (
