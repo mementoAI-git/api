@@ -1,5 +1,8 @@
 import {memoryCaptured, memoryShared} from '../../../services/growth-events';
-import {AUTO_TITLE_PLACEHOLDER, QUICK_NOTE_TITLE} from '../../../utils/quick-note';
+import {
+  AUTO_TITLE_PLACEHOLDER,
+  QUICK_NOTE_TITLE,
+} from '../../../utils/quick-note';
 import logger from '../../../utils/logger';
 import {
   moveMemoryToDeleted,
@@ -496,7 +499,8 @@ export async function quickCaptureMemory(
     payload.transcript_uncertain === 'true';
 
   // A capture that asks to be named starts as a placeholder the enrichment worker replaces.
-  const autoTitle = payload.auto_title === true || payload.auto_title === 'true';
+  const autoTitle =
+    payload.auto_title === true || payload.auto_title === 'true';
 
   const memory = await Memory.create({
     title: autoTitle ? AUTO_TITLE_PLACEHOLDER : QUICK_CAPTURE_PLACEHOLDER_TITLE,

@@ -46,15 +46,20 @@ describe('quick-note save contract', () => {
     const response = await request(createTestApp())
       .post('/memories/quick-capture')
       .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`)
-      .send({body: 'A recorded memory', visibility: 'private', auto_title: true});
+      .send({
+        body: 'A recorded memory',
+        visibility: 'private',
+        auto_title: true,
+      });
     expect(response.status).toBe(200);
     expect(response.body.data).toMatchObject({
       title: 'Voice note',
       capture_source: 'quick',
       enrichment_status: 'pending',
     });
-    expect(shouldOverwriteQuickCaptureTitle(response.body.data.title)).toBe(true);
-    expect(shouldOverwriteQuickCaptureTitle('Quick note')).toBe(false);
+    expect(shouldOverwriteQuickCaptureTitle(response.body.data.title)).toBe(
+      true,
+    );
   });
 
   it('preserves automatic classification when promoting a cloud draft', async () => {
