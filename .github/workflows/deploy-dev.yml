@@ -393,15 +393,28 @@ jobs:
             exit 1
           fi
 
-          # Accept the .p8 as pasted (several lines) or already on one
-          # line with literal \n.
-          KEY_FLAT="$(printf '%s\n' "$APPLE_SIGNIN_PRIVATE_KEY" \
-            | sed 's/\\n/\n/g' | tr -d '\r' \
-            | awk 'NF { gsub(/^[ \t]+|[ \t]+$/, ""); printf "%s%s", (n++ ? "\\n" : ""), $0 }')"
+          # Accept the .p8 however it was pasted: several lines, one line
+          # with literal \n, wrapped in quotes, prefixed with the variable
+          # name, or with the base64 run together.
+          BODY="$(printf '%s' "$APPLE_SIGNIN_PRIVATE_KEY" | tr -d '\r' \
+            | sed -E 's/^[[:space:]]*(export[[:space:]]+)?APPLE_SIGNIN_PRIVATE_KEY=//' \
+            | sed 's/\\n/ /g' | tr '\n\t"'"'"'' '    ' \
+            | sed -E 's/-----(BEGIN|END) PRIVATE KEY-----/ /g' | tr -d ' ')"
+          HAS_BEGIN=no; HAS_END=no
+          [[ "$APPLE_SIGNIN_PRIVATE_KEY" == *"-----BEGIN PRIVATE KEY-----"* ]] && HAS_BEGIN=yes
+          [[ "$APPLE_SIGNIN_PRIVATE_KEY" == *"-----END PRIVATE KEY-----"* ]] && HAS_END=yes
+          KEY_FLAT="-----BEGIN PRIVATE KEY-----"
+          REST="$BODY"
+          while [ -n "$REST" ]; do KEY_FLAT="$KEY_FLAT\\n${REST:0:64}"; REST="${REST:64}"; done
+          KEY_FLAT="$KEY_FLAT\\n-----END PRIVATE KEY-----"
 
-          # Strict format keeps the value safe to embed in the script.
-          if ! [[ "$KEY_FLAT" =~ ^-----BEGIN\ PRIVATE\ KEY-----(\\n[A-Za-z0-9+/=]+)+\\n-----END\ PRIVATE\ KEY-----$ ]]; then
-            echo "::error::APPLE_SIGNIN_PRIVATE_KEY must be the whole .p8 file, BEGIN and END lines included"
+          # Strict format keeps the value safe to embed in the script, and
+          # openssl confirms it is a real private key.
+          if [ -z "$BODY" ] || ! [[ "$BODY" =~ ^[A-Za-z0-9+/]+=*$ ]] \
+            || ! printf '%b\n' "$KEY_FLAT" | openssl pkey -noout 2>/dev/null; then
+            BAD="$(printf '%s' "$BODY" | tr -d 'A-Za-z0-9+/=' | wc -c | tr -d ' ')"
+            LINES="$(printf '%s\n' "$APPLE_SIGNIN_PRIVATE_KEY" | wc -l | tr -d ' ')"
+            echo "::error::APPLE_SIGNIN_PRIVATE_KEY is not a complete .p8 file (lines: $LINES, BEGIN line: $HAS_BEGIN, END line: $HAS_END, key characters: ${#BODY}, characters not allowed in a key: $BAD). Open the .p8 in a plain-text editor and paste all of it."
             exit 1
           fi
 
