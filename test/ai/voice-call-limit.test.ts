@@ -29,6 +29,7 @@ import Subscription from '../../src/module/database/model/subscription';
 import VoiceUsage from '../../src/module/database/model/voice-usage';
 import {
   FREE_VOICE_SECONDS_PER_MONTH,
+  nextVoiceAllowanceReset,
   recordEndedVoiceCall,
   voiceUsageMonth,
 } from '../../src/module/api/billing/voice-allowance';
@@ -128,14 +129,19 @@ describe('GET /ai/ephemeral-token with a time limit', () => {
     expect(res.body.details).toMatchObject({reason: 'voice_call_limit'});
   });
 
-  it('adds nothing when no limit is set', async () => {
+  it('sends only the call ticket when no limit is set', async () => {
     delete process.env.VOICE_MAX_CALL_MINUTES;
     const user = await createProUser();
 
     const res = await token(issueLegacyAccessToken(user));
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({token: 'gemini-token'});
+    // The ticket names the call for reconnects and usage check-ins; no time limit.
+    expect(res.body.data).toEqual({
+      token: 'gemini-token',
+      call_ticket: expect.any(String),
+    });
+    expect(readCallTicket(user.id, res.body.data.call_ticket)).not.toBeNull();
   });
 });
 
@@ -285,5 +291,133 @@ describe('free plan monthly voice minutes', () => {
     const call = await VoiceUsage.findOne({user: user.id}).lean();
     expect(call?.seconds).toBeGreaterThanOrEqual(59);
     expect(call?.seconds).toBeLessThanOrEqual(61);
+  });
+});
+
+describe('voice months in the member’s time zone', () => {
+  it('counts a call towards the month where the member is', () => {
+    const lateOnTheLast = Date.parse('2026-11-30T23:30:00Z');
+    expect(voiceUsageMonth(lateOnTheLast)).toBe('2026-11');
+    // Lagos is an hour ahead: it is already 00:30 on 1 December there.
+    expect(voiceUsageMonth(lateOnTheLast, 'Africa/Lagos')).toBe('2026-12');
+    expect(voiceUsageMonth(lateOnTheLast, 'America/New_York')).toBe('2026-11');
+  });
+
+  it('resets at midnight on the 1st, local time', () => {
+    const now = Date.parse('2026-11-18T12:00:00Z');
+    expect(nextVoiceAllowanceReset(now).toISOString()).toBe(
+      '2026-12-01T00:00:00.000Z',
+    );
+    expect(nextVoiceAllowanceReset(now, 'Africa/Lagos').toISOString()).toBe(
+      '2026-11-30T23:00:00.000Z',
+    );
+    expect(nextVoiceAllowanceReset(now, 'America/New_York').toISOString()).toBe(
+      '2026-12-01T05:00:00.000Z',
+    );
+    // December rolls over into the next year.
+    expect(
+      nextVoiceAllowanceReset(Date.parse('2026-12-10T12:00:00Z')).toISOString(),
+    ).toBe('2027-01-01T00:00:00.000Z');
+  });
+});
+
+describe('voice minutes for every plan', () => {
+  beforeAll(connectTestDatabase);
+  afterEach(clearTestDatabase);
+  afterAll(closeTestDatabase);
+
+  it('records a Pro member’s calls too, with no limit', async () => {
+    delete process.env.VOICE_MAX_CALL_MINUTES;
+    const user = await createProUser();
+    const res = await request(createTestApp())
+      .get('/ai/ephemeral-token')
+      .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.call_seconds_left).toBeUndefined();
+    expect(await VoiceUsage.countDocuments({user: user.id})).toBe(1);
+  });
+
+  it('a check-in records the call’s length from its ticket and the server clock', async () => {
+    const user = await createUserFixture();
+    const auth = issueLegacyAccessToken(user);
+    const startedAt = Date.now() - 125_000;
+
+    const res = await request(createTestApp())
+      .post('/ai/voice/usage')
+      .set('Authorization', `Bearer ${auth}`)
+      .send({
+        call_ticket: issueCallTicket(user.id, startedAt),
+        timezone: 'Africa/Lagos',
+      });
+
+    expect(res.status).toBe(200);
+    const call = await VoiceUsage.findOne({
+      user: user.id,
+      call_started_at: startedAt,
+    }).lean();
+    expect(call?.seconds).toBeGreaterThanOrEqual(124);
+    expect(call?.seconds).toBeLessThanOrEqual(126);
+    expect(call?.month).toBe(voiceUsageMonth(startedAt, 'Africa/Lagos'));
+  });
+
+  it('refuses a check-in with a ticket it did not issue to this member', async () => {
+    const user = await createUserFixture();
+    const other = await createUserFixture();
+    const res = await request(createTestApp())
+      .post('/ai/voice/usage')
+      .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`)
+      .send({call_ticket: issueCallTicket(other.id, Date.now() - 60_000)});
+
+    expect(res.status).toBe(400);
+    expect(await VoiceUsage.countDocuments()).toBe(0);
+  });
+
+  it('reports this month and all time, with the free allowance on the free plan', async () => {
+    const user = await createUserFixture();
+    const now = Date.now();
+    await VoiceUsage.create([
+      {
+        user: user.id,
+        call_started_at: now - 3_600_000,
+        month: voiceUsageMonth(now),
+        seconds: 600,
+      },
+      {
+        user: user.id,
+        call_started_at: now - 7_200_000,
+        month: voiceUsageMonth(now),
+        seconds: 300,
+      },
+      {user: user.id, call_started_at: 1, month: '2020-01', seconds: 1200},
+    ]);
+
+    const res = await request(createTestApp())
+      .get('/ai/voice/usage')
+      .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({
+      month: voiceUsageMonth(now),
+      month_seconds: 900,
+      all_time_seconds: 2100,
+      free_seconds_limit: FREE_VOICE_SECONDS_PER_MONTH,
+      free_seconds_left: FREE_VOICE_SECONDS_PER_MONTH - 900,
+      month_resets_at: expect.any(String),
+    });
+  });
+
+  it('has no allowance on a paid plan', async () => {
+    const user = await createProUser();
+    const res = await request(createTestApp())
+      .get('/ai/voice/usage')
+      .set('Authorization', `Bearer ${issueLegacyAccessToken(user)}`);
+
+    expect(res.body.data).toMatchObject({
+      month_seconds: 0,
+      all_time_seconds: 0,
+      free_seconds_limit: null,
+      free_seconds_left: null,
+    });
   });
 });
