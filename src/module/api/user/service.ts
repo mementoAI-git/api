@@ -79,6 +79,8 @@ import {
 import {requestArchiveExportByEmail} from '../archive/service';
 import {publishAccountPurge} from '../../../services/queues/system';
 import logger from '../../../utils/logger';
+import {revokeAppleToken} from '../auth/providers/apple-tokens';
+import {decryptStoreSecret} from '../billing/providers/token-vault';
 import {persistUploadedFiles} from '../file/service';
 import {reconcileStorageUsage} from '../billing/storage-quota';
 
@@ -660,6 +662,33 @@ export async function updateContext(payload: IUpdateContext, user_id: string) {
   return {message: 'User context updated successfully', data: null};
 }
 
+/**
+ * Apple requires apps with Sign in with Apple to revoke the user's token when
+ * they delete their account. A failure is logged and never blocks deletion.
+ */
+async function revokeAppleSignIn(user_id: string) {
+  const user = await User.findById(user_id)
+    .select('+apple_refresh_token')
+    .lean();
+  if (!user?.apple_refresh_token) return;
+  try {
+    const revoked = await revokeAppleToken(
+      decryptStoreSecret(user.apple_refresh_token),
+    );
+    if (revoked) {
+      await User.updateOne({_id: user_id}, {$set: {apple_refresh_token: null}});
+    }
+  } catch (error) {
+    logger.warn(
+      {
+        userId: user_id,
+        errorCode: error instanceof Error ? error.name : 'unknown',
+      },
+      'Could not revoke the Sign in with Apple token',
+    );
+  }
+}
+
 export type DeleteAccountOptions = {
   reason?: string;
   details?: string;
@@ -741,6 +770,7 @@ export async function deleteUser(
     return command.id;
   });
   await invalidateSecurityState(user_id);
+  await revokeAppleSignIn(user_id);
 
   // The dispatcher starts the purge once available_at passes. Publish now only
   // if the grace period is already over (e.g. a repeated request after it).
