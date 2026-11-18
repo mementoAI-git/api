@@ -1,4 +1,9 @@
-import {callStartedAt, voiceCallTime} from './voice/call-limit';
+import {
+  callStartedAt,
+  issueCallTicket,
+  readCallTicket,
+  voiceCallTime,
+} from './voice/call-limit';
 import {
   confirmChatAction as confirmChatActionService,
   undoChatAction as undoChatActionService,
@@ -13,7 +18,11 @@ import * as service from './service';
 import {IRequest} from '../../../utils/interface';
 import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
-import {voiceSecondsLeftForCall} from '../billing/access';
+import {isFreeMember, voiceSecondsLeftForCall} from '../billing/access';
+import {
+  getVoiceUsageSummary,
+  recordVoiceCallSeconds,
+} from '../billing/voice-allowance';
 import * as voiceTurns from './voice/turns';
 import {searchMemoriesForVoice} from './voice/memory-search';
 import {validTimeZone} from './voice/local-time';
@@ -201,15 +210,16 @@ export async function getEphemeralToken(
   const timer = new StepTimer();
   try {
     // The plan check runs alongside preparing the session (both wait on the
-    // database); the session is only returned once access is confirmed. On
-    // the free plan it also counts this call's time against the month's
-    // voice minutes and says how many are left.
+    // database); the session is only returned once access is confirmed. It
+    // also records this call's time so far (every plan), and on the free plan
+    // says how many of the month's voice minutes are left.
     const now = Date.now();
     const access = timer.time('access', () =>
       voiceSecondsLeftForCall(
         req.auth.id,
         callStartedAt(req.auth.id, req.query.call_ticket, now),
         now,
+        validTimeZone(req.query.timezone),
       ),
     );
     // Settled here so a refusal waits for the checks below rather than going unhandled.
@@ -284,11 +294,22 @@ export async function getEphemeralToken(
       {userId: req.auth.id, ms: timer.total(), steps: timer.steps},
       'Voice session prepared',
     );
+    // Every call gets a ticket, limited or not: reconnects keep the call's
+    // start, and usage check-ins (POST /ai/voice/usage) name the call by it.
+    const startedAt = callStartedAt(req.auth.id, req.query.call_ticket, now);
     return responsHandler(
       res,
       StatusCodes.OK,
       message,
-      callTime ? {...data, ...callTime} : data,
+      callTime
+        ? {...data, ...callTime}
+        : {
+            ...data,
+            call_ticket:
+              startedAt === now
+                ? issueCallTicket(req.auth.id, now)
+                : String(req.query.call_ticket),
+          },
     );
   } catch (error) {
     next(error);
@@ -306,6 +327,55 @@ export async function recordVoiceTurns(
       req.body,
     );
     return responsHandler(res, StatusCodes.OK, message, data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * A live call's check-in, sent about once a minute and when the call ends.
+ * The call's length comes from its signed ticket and the server's clock, so
+ * an app that closes without saying goodbye loses at most a minute.
+ */
+export async function recordVoiceUsage(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const now = Date.now();
+    const startedAt = readCallTicket(req.auth.id, String(req.body.call_ticket));
+    if (!startedAt || startedAt > now)
+      throw new BadRequestException('Invalid call_ticket');
+    const timeZone = validTimeZone(req.body.timezone);
+    await recordVoiceCallSeconds(
+      req.auth.id,
+      startedAt,
+      (now - startedAt) / 1000,
+      timeZone,
+    );
+    return responsHandler(res, StatusCodes.OK, 'Voice usage recorded', {
+      call_seconds: Math.round((now - startedAt) / 1000),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/** Voice minutes this month and all time, for the Insights cards. */
+export async function getVoiceUsage(
+  req: IRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const data = await getVoiceUsageSummary(
+      req.auth.id,
+      await isFreeMember(req.auth.id),
+      Date.now(),
+      validTimeZone(req.query.timezone),
+    );
+    return responsHandler(res, StatusCodes.OK, 'Voice usage', data);
   } catch (error) {
     next(error);
   }

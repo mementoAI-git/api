@@ -37,6 +37,8 @@ export interface IQuickCapturePayload {
   /** Comma-separated or JSON array of beneficiary IDs */
   beneficiaries?: string[] | string;
   transcript_uncertain?: boolean | string;
+  /** Name the capture from its content instead of keeping "Quick note" (mobile recorder). */
+  auto_title?: boolean | string;
   /** Idempotency / client reference (optional) */
   capture_client_id?: string;
   /** Daily prompt: catalog prompt id when prompt_type is static */

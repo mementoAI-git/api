@@ -191,6 +191,13 @@ const voiceCallParamsSchema = z.strictObject({
   sessionId: z.string().trim().min(1, 'sessionId is required').max(128),
 });
 
+export const voiceUsageSchema = z.object({
+  body: z.strictObject({
+    call_ticket: z.string().min(3).max(200),
+    timezone: z.string().max(64).optional(),
+  }),
+});
+
 export const voiceCallEndSchema = z.object({
   params: voiceCallParamsSchema,
   body: z.strictObject({
