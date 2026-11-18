@@ -49,6 +49,8 @@
     "growth:check-config:prod": "node build/src/scripts/growth-analytics/check-config.js",
     "growth:backfill-signups": "ts-node src/scripts/growth-analytics/backfill-signups.ts",
     "growth:backfill-signups:prod": "node build/src/scripts/growth-analytics/backfill-signups.js",
+    "growth:launch-report": "ts-node src/scripts/growth-analytics/launch-report.ts",
+    "growth:launch-report:prod": "node build/src/scripts/growth-analytics/launch-report.js",
     "files:backfill-thumbnails": "ts-node src/scripts/backfill-thumbnail-keys.ts",
     "explore:upload-artwork": "ts-node src/scripts/upload-explore-artwork.ts",
     "capsules:backfill-recipients": "ts-node src/scripts/backfill-capsule-recipients.ts",
