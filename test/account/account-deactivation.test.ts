@@ -1,4 +1,7 @@
+import {generateKeyPairSync} from 'crypto';
+import axios from 'axios';
 import bcrypt from 'bcryptjs';
+import {encryptStoreSecret} from '../../src/module/api/billing/providers/token-vault';
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {login} from '../../src/module/api/auth/service';
 import {deleteUser} from '../../src/module/api/user/service';
@@ -61,6 +64,62 @@ describe('account deactivation grace period', () => {
     expect(result.data).toMatchObject({deactivated: true, grace_days: 14});
     expect(publish).not.toHaveBeenCalled();
     expect(deactivated).toHaveBeenCalledTimes(1);
+  });
+
+  it("revokes the account's Sign in with Apple token and forgets it", async () => {
+    vi.spyOn(mail, 'sendAccountDeactivated').mockResolvedValue(undefined);
+    process.env.IAP_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString(
+      'base64',
+    );
+    process.env.APPLE_SIGNIN_KEY_ID = 'KEY123ABCD';
+    process.env.APPLE_SIGNIN_PRIVATE_KEY = generateKeyPairSync('ec', {
+      namedCurve: 'prime256v1',
+    })
+      .privateKey.export({format: 'pem', type: 'pkcs8'})
+      .toString();
+    const post = vi.spyOn(axios, 'post').mockResolvedValue({data: ''} as any);
+    const user = await passwordUser();
+    await User.updateOne(
+      {_id: user.id},
+      {$set: {apple_refresh_token: encryptStoreSecret('apple-refresh-1')}},
+    );
+
+    await deleteUser(user.id);
+
+    expect(post.mock.calls[0][0]).toBe('https://appleid.apple.com/auth/revoke');
+    expect(String(post.mock.calls[0][1])).toContain('token=apple-refresh-1');
+    const stored = await User.findById(user.id)
+      .select('+apple_refresh_token')
+      .lean()
+      .orFail();
+    expect(stored.apple_refresh_token).toBeNull();
+    delete process.env.APPLE_SIGNIN_KEY_ID;
+    delete process.env.APPLE_SIGNIN_PRIVATE_KEY;
+  });
+
+  it('still deletes the account when Apple revocation fails', async () => {
+    vi.spyOn(mail, 'sendAccountDeactivated').mockResolvedValue(undefined);
+    process.env.IAP_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString(
+      'base64',
+    );
+    process.env.APPLE_SIGNIN_KEY_ID = 'KEY123ABCD';
+    process.env.APPLE_SIGNIN_PRIVATE_KEY = generateKeyPairSync('ec', {
+      namedCurve: 'prime256v1',
+    })
+      .privateKey.export({format: 'pem', type: 'pkcs8'})
+      .toString();
+    vi.spyOn(axios, 'post').mockRejectedValue(new Error('apple down'));
+    const user = await passwordUser();
+    await User.updateOne(
+      {_id: user.id},
+      {$set: {apple_refresh_token: encryptStoreSecret('apple-refresh-1')}},
+    );
+
+    const result = await deleteUser(user.id);
+
+    expect(result.data).toMatchObject({deactivated: true});
+    delete process.env.APPLE_SIGNIN_KEY_ID;
+    delete process.env.APPLE_SIGNIN_PRIVATE_KEY;
   });
 
   it('does not purge before the grace period ends', async () => {

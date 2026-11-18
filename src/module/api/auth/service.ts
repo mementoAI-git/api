@@ -42,6 +42,7 @@ import {
 import axios from 'axios';
 import mail from '../../mail';
 import User from '../../database/model/user';
+import logger from '../../../utils/logger';
 import otp from '../../../services/otp';
 import redis from '../../../services/redis';
 import {PasswordRecoveryCodes} from '../../../services/password-recovery';
@@ -61,6 +62,8 @@ import {
   rotateSession,
 } from './session-service';
 import {verifyAppleIdentity} from './providers/apple';
+import {exchangeAppleAuthorizationCode} from './providers/apple-tokens';
+import {encryptStoreSecret} from '../billing/providers/token-vault';
 import {invalidateSecurityState} from './security-state';
 import {
   isWithinDeletionGrace,
@@ -367,6 +370,12 @@ export async function oauthAuthorization(
   if (!user.providers.includes(userinfo.provider)) {
     user.providers.push(userinfo.provider);
     await user.save();
+  }
+
+  // The app sends Apple's one-time code with the identity token. Its refresh
+  // token is what Apple needs to revoke the sign-in when the account is deleted.
+  if (id_token && code && compareStrings(provider, 'apple')) {
+    await rememberAppleToken(user.id, code);
   }
 
   // Google or Apple proves the email, not the second factor: an account with
@@ -830,6 +839,22 @@ export async function setPassword(payload: ISetPassword) {
   await invalidateSecurityState(user.id);
 
   return {data: null, message: 'Password reset successful'};
+}
+
+async function rememberAppleToken(userId: string, code: string) {
+  try {
+    const refreshToken = await exchangeAppleAuthorizationCode(code);
+    if (!refreshToken) return;
+    await User.updateOne(
+      {_id: userId},
+      {$set: {apple_refresh_token: encryptStoreSecret(refreshToken)}},
+    );
+  } catch (error) {
+    logger.warn(
+      {userId, errorCode: error instanceof Error ? error.name : 'unknown'},
+      'Could not store the Sign in with Apple token',
+    );
+  }
 }
 
 async function getOauthUser(

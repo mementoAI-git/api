@@ -73,6 +73,8 @@ export interface IUser {
   private_key: string;
   public_key: string;
   refresh_token?: string;
+  /** Sign in with Apple refresh token, encrypted; revoked when the account is deleted. */
+  apple_refresh_token?: string | null;
   refresh_tokens?: string[];
   session_version?: number;
   purge_status?: 'active' | 'purge_pending' | 'purged';
@@ -149,6 +151,7 @@ const user = new Schema<IUser>(
     private_key: String,
     public_key: String,
     refresh_token: String,
+    apple_refresh_token: {type: String, default: null, select: false},
     refresh_tokens: {
       type: [String],
       default: [],
