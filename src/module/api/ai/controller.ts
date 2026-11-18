@@ -1,4 +1,4 @@
-import {voiceCallTime} from './voice/call-limit';
+import {callStartedAt, voiceCallTime} from './voice/call-limit';
 import {
   confirmChatAction as confirmChatActionService,
   undoChatAction as undoChatActionService,
@@ -13,6 +13,7 @@ import * as service from './service';
 import {IRequest} from '../../../utils/interface';
 import {StatusCodes} from 'http-status-codes';
 import {assertAccess} from '../billing/service';
+import {voiceSecondsLeftForCall} from '../billing/access';
 import * as voiceTurns from './voice/turns';
 import {searchMemoriesForVoice} from './voice/memory-search';
 import {validTimeZone} from './voice/local-time';
@@ -200,10 +201,19 @@ export async function getEphemeralToken(
   const timer = new StepTimer();
   try {
     // The plan check runs alongside preparing the session (both wait on the
-    // database); the session is only returned once access is confirmed.
+    // database); the session is only returned once access is confirmed. On
+    // the free plan it also counts this call's time against the month's
+    // voice minutes and says how many are left.
+    const now = Date.now();
     const access = timer.time('access', () =>
-      assertAccess(req.auth.id, 'voice_mode'),
+      voiceSecondsLeftForCall(
+        req.auth.id,
+        callStartedAt(req.auth.id, req.query.call_ticket, now),
+        now,
+      ),
     );
+    // Settled here so a refusal waits for the checks below rather than going unhandled.
+    access.catch(() => {});
     for (const flag of ['shared_space', 'share_inputs']) {
       if (
         req.query[flag] !== undefined &&
@@ -233,7 +243,7 @@ export async function getEphemeralToken(
         : undefined;
     const timeZone = validTimeZone(req.query.timezone);
     // Refuses a call past its time limit before any session work starts.
-    const callTime = voiceCallTime(req.auth.id, req.query.call_ticket);
+    voiceCallTime(req.auth.id, req.query.call_ticket, now);
     const {memoryTool, callActions, serverTools, screenControl, screenFields} =
       parseVoiceClientCapabilities(req.query.capabilities);
     const prepared = service.createEphemeralToken(
@@ -262,7 +272,13 @@ export async function getEphemeralToken(
     );
     // If access is refused, the prepared session is dropped unseen.
     prepared.catch(() => {});
-    await access;
+    const freeSecondsLeft = await access;
+    const callTime = voiceCallTime(
+      req.auth.id,
+      req.query.call_ticket,
+      now,
+      freeSecondsLeft,
+    );
     const {message, data} = await prepared;
     logger.info(
       {userId: req.auth.id, ms: timer.total(), steps: timer.steps},

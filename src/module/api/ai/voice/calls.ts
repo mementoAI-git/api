@@ -1,3 +1,4 @@
+import {recordEndedVoiceCall} from '../../billing/voice-allowance';
 import {z} from 'zod';
 import Memory from '../../../database/model/memory';
 import Message from '../../../database/model/message';
@@ -68,6 +69,7 @@ export async function endVoiceCall(
     await Message.exists({user: userId, voice_session_id: sessionId}),
   );
   const duration = Math.round(payload.duration_seconds);
+  await recordEndedVoiceCall(userId, payload.duration_seconds);
 
   const call = await VoiceCall.findOneAndUpdate(
     {user: userId, session_id: sessionId},
@@ -267,6 +269,8 @@ export async function saveVoiceCallRecording(
   sessionId: string,
   payload: VoiceCallRecordingBody,
 ) {
+  // The web app reports a call's length here rather than at /end.
+  await recordEndedVoiceCall(userId, payload.duration_seconds);
   // Idempotency check: if a story was already created for this session, return
   // the existing ids without touching anything.
   const existingCall = await VoiceCall.findOne({

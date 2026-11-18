@@ -12,6 +12,11 @@ import Subscription, {
   type SubscriptionTier,
 } from '../../database/model/subscription';
 import Usage, {type IUsage} from '../../database/model/usage';
+import {
+  FREE_VOICE_SECONDS_PER_MONTH,
+  recordVoiceCallSeconds,
+  voiceSecondsUsedThisMonth,
+} from './voice-allowance';
 
 type FeatureKey =
   | 'voice_mode'
@@ -51,7 +56,9 @@ const FEATURE_ALIASES: Record<string, FeatureKey> = {
 };
 
 const FEATURE_MESSAGES: Record<string, string> = {
-  voice_mode: 'Voice mode requires Pro or Legacy.',
+  // Older mobile builds spot the voice paywall by "Voice mode requires Pro".
+  voice_mode:
+    'You’ve used this month’s 90 free voice minutes. Voice mode requires Pro or Legacy to keep talking.',
   supermemory: 'Supermemory requires Pro or Legacy.',
   upload_quality: 'High-quality uploads require Pro or Legacy.',
   storage: 'Storage limit reached. Upgrade to continue uploading.',
@@ -201,6 +208,17 @@ export async function checkFeatureAccess(
 
   switch (normalized) {
     case 'voice_mode':
+      // Free members get a monthly allowance (see voice-allowance.ts).
+      if (
+        (await voiceSecondsUsedThisMonth(userId)) < FREE_VOICE_SECONDS_PER_MONTH
+      ) {
+        return {allowed: true};
+      }
+      return {
+        allowed: false,
+        requiredTier: 'pro',
+        reason: FEATURE_MESSAGES.voice_mode,
+      };
     case 'supermemory':
     case 'upload_quality':
       return {
@@ -260,4 +278,29 @@ export async function checkFeatureAccess(
     default:
       return {allowed: true};
   }
+}
+
+/**
+ * Voice access for one token request of a call. Paid plans are unlimited
+ * (null). For a free member it records how long this call has run so far,
+ * then returns the seconds of this month's allowance still left, refusing
+ * with an upgrade prompt once it is used up.
+ */
+export async function voiceSecondsLeftForCall(
+  userId: string,
+  callStartedAt: number,
+  now = Date.now(),
+): Promise<number | null> {
+  const subscription = await Subscription.findOne({user_id: userId}).lean();
+  if (isPaidTier(resolveEffectiveTier(subscription))) return null;
+  await recordVoiceCallSeconds(
+    userId,
+    callStartedAt,
+    Math.max(0, (now - callStartedAt) / 1000),
+  );
+  const left =
+    FREE_VOICE_SECONDS_PER_MONTH -
+    (await voiceSecondsUsedThisMonth(userId, now));
+  if (left <= 0) throwSubscriptionRequired('voice_mode');
+  return Math.floor(left);
 }
