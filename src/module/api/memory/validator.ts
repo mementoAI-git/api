@@ -65,6 +65,11 @@ export default {
       .isBoolean()
       .withMessage('transcript_uncertain must be a boolean')
       .toBoolean(),
+    body('auto_title')
+      .optional()
+      .isBoolean()
+      .withMessage('auto_title must be a boolean')
+      .toBoolean(),
     body('capture_client_id')
       .optional()
       .isString()
