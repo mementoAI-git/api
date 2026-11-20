@@ -41,6 +41,7 @@ import File from '../../src/module/database/model/file';
 import Memory from '../../src/module/database/model/memory';
 import VoiceCall from '../../src/module/database/model/voice-call';
 import {queueStoryInsights} from '../../src/services/queues/insights';
+import {queueQuickCaptureEnrichment} from '../../src/services/queues/quick-capture';
 import {
   clearTestDatabase,
   closeTestDatabase,
@@ -170,6 +171,23 @@ describe('POST /ai/voice/calls/:sessionId/recording', () => {
       .send({file_id: audioFile.id, duration_seconds: 10, segments: SEGMENTS});
 
     expect(queueStoryInsights).not.toHaveBeenCalled();
+  });
+
+  it('starts with a placeholder title and queues the call to be named from what was said', async () => {
+    const {user, token, audioFile} = await setup();
+    vi.mocked(queueQuickCaptureEnrichment).mockClear();
+
+    const res = await request(createTestApp())
+      .post('/ai/voice/calls/sess-name/recording')
+      .set('Authorization', `Bearer ${token}`)
+      .send({file_id: audioFile.id, duration_seconds: 10, segments: SEGMENTS});
+
+    const memory = await Memory.findById(res.body.data.memory_id).lean();
+    expect(memory!.title).toMatch(/^Conversation with Memento · /);
+    expect(queueQuickCaptureEnrichment).toHaveBeenCalledWith({
+      user_id: user.id,
+      memory_id: res.body.data.memory_id,
+    });
   });
 
   it('rejects a file belonging to another user with 404', async () => {
