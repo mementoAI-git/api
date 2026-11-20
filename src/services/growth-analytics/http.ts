@@ -1,6 +1,27 @@
 import type {GrowthAnalyticsConfig, OutboxEvent} from './core';
 
-/** Official public batch ingestion endpoint; no user-agent, IP or person traits. */
+/**
+ * The signup event creates the account's PostHog person, holding only
+ * non-identifying traits (signup time, how they joined, environment), so
+ * cohorts and retention can include every account. Later events stay
+ * person-less and attach to that person by distinct ID.
+ */
+function personFields(row: OutboxEvent) {
+  if (row.event !== 'growth_account_created')
+    return {$process_person_profile: false};
+  const traits: Record<string, unknown> = {
+    signed_up_at: row.timestamp.toISOString(),
+  };
+  for (const key of [
+    'acquisition_source',
+    'registration_method',
+    'environment',
+  ] as const)
+    if (row.properties[key] !== undefined) traits[key] = row.properties[key];
+  return {$process_person_profile: true, $set_once: traits};
+}
+
+/** Official public batch ingestion endpoint; no user-agent, IP or contact details. */
 export function createPostHogPublisher(
   config: GrowthAnalyticsConfig,
   send: (input: string, init: RequestInit) => Promise<Response> = fetch,
@@ -23,7 +44,7 @@ export function createPostHogPublisher(
             ...row.properties,
             distinct_id: row.distinctId,
             $geoip_disable: true,
-            $process_person_profile: false,
+            ...personFields(row),
           },
         })),
       }),
