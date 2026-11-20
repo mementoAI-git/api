@@ -11,7 +11,12 @@ export interface IVoiceUsage {
   call_started_at: number;
   /** The calendar month (UTC) the call counts towards, as YYYY-MM. */
   month: string;
+  /** Seconds counted against the month: time connected, less long silences. */
   seconds: number;
+  /** When the call connected, from the app's first connected check-in (ms). */
+  counted_from?: number;
+  /** Seconds of long silence the app reported; never counted. */
+  quiet_seconds?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -22,6 +27,8 @@ const voiceUsageSchema = new Schema<IVoiceUsage>(
     call_started_at: {type: Number, required: true},
     month: {type: String, required: true},
     seconds: {type: Number, default: 0},
+    counted_from: {type: Number},
+    quiet_seconds: {type: Number, default: 0},
   },
   {timestamps: {createdAt: 'created_at', updatedAt: 'updated_at'}},
 );
