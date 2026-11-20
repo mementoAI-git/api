@@ -361,6 +361,108 @@ describe('voice minutes for every plan', () => {
     expect(call?.month).toBe(voiceUsageMonth(startedAt, 'Africa/Lagos'));
   });
 
+  const checkIn = (auth: string, body: Record<string, unknown>) =>
+    request(createTestApp())
+      .post('/ai/voice/usage')
+      .set('Authorization', `Bearer ${auth}`)
+      .send(body);
+
+  it('starts the clock when the call connects, not when its token was fetched ahead of the tap', async () => {
+    const user = await createUserFixture();
+    const auth = issueLegacyAccessToken(user);
+    // The token (and ticket) were fetched three minutes before the call connected.
+    const ticketAt = Date.now() - 180_000;
+    const ticket = issueCallTicket(user.id, ticketAt);
+
+    await checkIn(auth, {call_ticket: ticket, connected: true});
+    const connected = await VoiceUsage.findOne({user: user.id}).lean();
+    expect(connected?.seconds).toBe(0);
+    expect(connected?.counted_from).toBeGreaterThan(ticketAt + 170_000);
+
+    // Two minutes into the call.
+    await VoiceUsage.updateOne(
+      {user: user.id},
+      {$set: {counted_from: Date.now() - 120_000}},
+    );
+    await checkIn(auth, {call_ticket: ticket, connected: true});
+    const call = await VoiceUsage.findOne({user: user.id}).lean();
+    expect(call?.seconds).toBeGreaterThanOrEqual(119);
+    expect(call?.seconds).toBeLessThanOrEqual(121);
+  });
+
+  it('does not count long silences the app reports', async () => {
+    const user = await createUserFixture();
+    const auth = issueLegacyAccessToken(user);
+    const ticket = issueCallTicket(user.id, Date.now() - 600_000);
+    await checkIn(auth, {call_ticket: ticket, connected: true});
+    // Ten minutes connected, six of them in a long silence after its first minute.
+    await VoiceUsage.updateOne(
+      {user: user.id},
+      {$set: {counted_from: Date.now() - 600_000}},
+    );
+
+    await checkIn(auth, {
+      call_ticket: ticket,
+      connected: true,
+      quiet_seconds: 360,
+    });
+
+    const call = await VoiceUsage.findOne({user: user.id}).lean();
+    expect(call?.seconds).toBeGreaterThanOrEqual(239);
+    expect(call?.seconds).toBeLessThanOrEqual(241);
+    expect(call?.quiet_seconds).toBe(360);
+  });
+
+  it('keeps silences uncounted when an end report or reconnect arrives later', async () => {
+    const user = await createUserFixture();
+    const auth = issueLegacyAccessToken(user);
+    const startedAt = Date.now() - 600_000;
+    const ticket = issueCallTicket(user.id, startedAt);
+    await VoiceUsage.create({
+      user: user.id,
+      call_started_at: startedAt,
+      month: voiceUsageMonth(startedAt),
+      counted_from: startedAt,
+      quiet_seconds: 360,
+      seconds: 240,
+    });
+
+    // A reconnect's token request, and the app's end report of the full ten minutes.
+    await request(createTestApp())
+      .get('/ai/ephemeral-token')
+      .query({resume_handle: 'resume-1', call_ticket: ticket})
+      .set('Authorization', `Bearer ${auth}`);
+    await recordEndedVoiceCall(user.id, 600);
+
+    const call = await VoiceUsage.findOne({user: user.id}).lean();
+    expect(call?.seconds).toBeGreaterThanOrEqual(240);
+    expect(call?.seconds).toBeLessThanOrEqual(242);
+  });
+
+  it('never lowers what was already counted', async () => {
+    const user = await createUserFixture();
+    const auth = issueLegacyAccessToken(user);
+    const startedAt = Date.now() - 300_000;
+    const ticket = issueCallTicket(user.id, startedAt);
+    await VoiceUsage.create({
+      user: user.id,
+      call_started_at: startedAt,
+      month: voiceUsageMonth(startedAt),
+      counted_from: startedAt,
+      seconds: 280,
+    });
+
+    await checkIn(auth, {
+      call_ticket: ticket,
+      connected: true,
+      quiet_seconds: 200,
+    });
+
+    expect((await VoiceUsage.findOne({user: user.id}).lean())?.seconds).toBe(
+      280,
+    );
+  });
+
   it('refuses a check-in with a ticket it did not issue to this member', async () => {
     const user = await createUserFixture();
     const other = await createUserFixture();

@@ -295,12 +295,7 @@ export async function voiceSecondsLeftForCall(
 ): Promise<number | null> {
   const [subscription] = await Promise.all([
     Subscription.findOne({user_id: userId}).lean(),
-    recordVoiceCallSeconds(
-      userId,
-      callStartedAt,
-      Math.max(0, (now - callStartedAt) / 1000),
-      timeZone,
-    ),
+    recordVoiceCallSeconds(userId, callStartedAt, {now, timeZone}),
   ]);
   if (isPaidTier(resolveEffectiveTier(subscription))) return null;
   const left =

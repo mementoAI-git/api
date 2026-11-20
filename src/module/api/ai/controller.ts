@@ -333,9 +333,11 @@ export async function recordVoiceTurns(
 }
 
 /**
- * A live call's check-in, sent about once a minute and when the call ends.
- * The call's length comes from its signed ticket and the server's clock, so
- * an app that closes without saying goodbye loses at most a minute.
+ * A live call's check-in, sent when the call connects, about once a minute,
+ * and when it ends. The call's length comes from the server's clock, counted
+ * from its first connected check-in (or its signed ticket, for older apps), so
+ * an app that closes without saying goodbye loses at most a minute. Long
+ * silences the app reports (quiet_seconds) are not counted.
  */
 export async function recordVoiceUsage(
   req: IRequest,
@@ -348,12 +350,15 @@ export async function recordVoiceUsage(
     if (!startedAt || startedAt > now)
       throw new BadRequestException('Invalid call_ticket');
     const timeZone = validTimeZone(req.body.timezone);
-    await recordVoiceCallSeconds(
-      req.auth.id,
-      startedAt,
-      (now - startedAt) / 1000,
+    await recordVoiceCallSeconds(req.auth.id, startedAt, {
+      now,
       timeZone,
-    );
+      connected: req.body.connected === true,
+      quietSeconds:
+        typeof req.body.quiet_seconds === 'number'
+          ? req.body.quiet_seconds
+          : undefined,
+    });
     return responsHandler(res, StatusCodes.OK, 'Voice usage recorded', {
       call_seconds: Math.round((now - startedAt) / 1000),
     });
