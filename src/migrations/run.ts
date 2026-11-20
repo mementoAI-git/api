@@ -25,4 +25,8 @@ void main()
   .finally(async () => {
     const mongoose = await import('../module/database/connection');
     await mongoose.default.disconnect();
+    // A migration may load a module that opens Redis or a BullMQ queue (e.g. to
+    // queue jobs); those handles keep Node alive and hang the deploy. Exit
+    // explicitly once the work is done.
+    process.exit(process.exitCode ?? 0); // eslint-disable-line n/no-process-exit
   });
