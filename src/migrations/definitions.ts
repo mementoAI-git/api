@@ -4,6 +4,7 @@ import type {DatabaseMigration} from './index';
 import {createHash, randomUUID} from 'crypto';
 import {runExploreTopicsMigration} from '../module/database/migrations/explore-topics-v2';
 import {seedExploreStarterQuestions} from '../module/database/seed/explore-prompts.seed';
+import {queueQuickCaptureEnrichment} from '../services/queues/quick-capture';
 
 type Db = mongo.Db;
 type ObjectId = mongo.ObjectId;
@@ -409,6 +410,27 @@ export const MIGRATIONS: readonly DatabaseMigration[] = [
         }
       }
       if (batch.length) await usage.bulkWrite(batch, {ordered: false});
+    },
+  },
+  {
+    id: '202611200001_name_saved_voice_calls',
+    up: async db => {
+      // Voice calls were saved as "Conversation with Memento · <date>" and never named.
+      // Queue each one still carrying that title; the worker names it from the
+      // transcript and leaves any title a member has since written alone.
+      const calls = db.collection('memories').find(
+        {
+          capture_source: 'voice_call',
+          title: {$regex: /^conversation with memento/i},
+        },
+        {projection: {_id: 1, user: 1}},
+      );
+      for await (const memory of calls) {
+        await queueQuickCaptureEnrichment({
+          user_id: String(memory.user),
+          memory_id: String(memory._id),
+        });
+      }
     },
   },
 ];
