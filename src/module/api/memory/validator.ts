@@ -55,11 +55,11 @@ export default {
         return value;
       })
       .isArray()
-      .withMessage('Beneficiaries must be an array'),
+      .withMessage('Connections must be an array'),
     body('beneficiaries.*')
       .optional()
       .isMongoId()
-      .withMessage('Each beneficiary must be a valid Mongo ID'),
+      .withMessage('Each connection must be a valid ID'),
     body('transcript_uncertain')
       .optional()
       .isBoolean()

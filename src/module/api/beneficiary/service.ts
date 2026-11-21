@@ -51,7 +51,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   }
 
   if (compareStrings(benefactor.email, email)) {
-    throw new BadRequestException("Can't add self as a beneficiary");
+    throw new BadRequestException("You can't add yourself as a connection");
   }
 
   const beneficiary = await Beneficiary.findOne({benefactor: user_id, email});
@@ -60,7 +60,11 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
     throw new BadRequestException('This connection is unavailable');
   if (beneficiary) {
     if (beneficiary.status !== 'removed' || access_scope !== 'shared_only')
-      throw new BadRequestException('Beneficiary has already been invited');
+      throw new BadRequestException(
+        beneficiary.status === 'accepted'
+          ? 'This person is already one of your connections'
+          : 'This person has already been invited',
+      );
     await acquireUsageSlot(user_id, 'beneficiary_count', 2, 'beneficiaries');
     Object.assign(beneficiary, {
       name,
@@ -144,8 +148,8 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
     }
     await track(
       {
-        title: 'Beneficiary Invited',
-        description: `Invited beneficiary: "${name}"`,
+        title: 'Connection Invited',
+        description: `Invited connection: "${name}"`,
         type: 'beneficiary',
         action: 'created',
         reference: data.id,
@@ -155,7 +159,7 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
   }
 
   void forgetUserContext(user_id);
-  return {message: 'Beneficiary added successfully', data};
+  return {message: 'Connection added successfully', data};
 }
 
 export async function list(
@@ -213,7 +217,7 @@ export async function list(
   }));
 
   return {
-    message: 'Beneficiary retrieved successfully',
+    message: 'Connections retrieved successfully',
     data: {...data, docs: docsWithGroups},
   };
 }
@@ -228,7 +232,7 @@ export async function del(id: string, user_id: string) {
         {session},
       );
       if (!beneficiary) {
-        throw new NotFoundException('Beneficiary not found');
+        throw new NotFoundException('Connection not found');
       }
       await applyUsageDelta(user_id, 'beneficiary_count', -1, session);
     });
@@ -238,8 +242,8 @@ export async function del(id: string, user_id: string) {
 
   await track(
     {
-      title: 'Beneficiary Deleted',
-      description: `Deleted beneficiary: "${beneficiary!.name}"`,
+      title: 'Connection Removed',
+      description: `Removed connection: "${beneficiary!.name}"`,
       type: 'beneficiary',
       action: 'deleted',
       reference: beneficiary!.id,
@@ -248,7 +252,7 @@ export async function del(id: string, user_id: string) {
   );
 
   void forgetUserContext(user_id);
-  return {message: 'Beneficiary deleted successfully', data: beneficiary!};
+  return {message: 'Connection removed successfully', data: beneficiary!};
 }
 
 export async function update(
@@ -263,13 +267,13 @@ export async function update(
 
   if (!isEmpty(payload?.email)) {
     if (compareStrings(user.email, payload.email)) {
-      throw new BadRequestException("Can't add self as a beneficiary");
+      throw new BadRequestException("You can't add yourself as a connection");
     }
   }
 
   const beneficiary = await Beneficiary.findOne({_id: id, benefactor: user_id});
   if (!beneficiary) {
-    throw new NotFoundException('Beneficiary not found');
+    throw new NotFoundException('Connection not found');
   }
   if (beneficiary.status !== 'pending') {
     throw new BadRequestException(`Invite has been ${beneficiary.status}`);
@@ -312,8 +316,8 @@ export async function update(
 
   await track(
     {
-      title: 'Beneficiary Updated',
-      description: `Updated beneficiary: "${beneficiary.name}"`,
+      title: 'Connection Updated',
+      description: `Updated connection: "${beneficiary.name}"`,
       type: 'beneficiary',
       action: 'updated',
       reference: beneficiary.id,
@@ -322,7 +326,7 @@ export async function update(
   );
 
   void forgetUserContext(user_id);
-  return {message: 'Beneficiary updated successfully', data};
+  return {message: 'Connection updated successfully', data};
 }
 
 export async function resendInvite(
@@ -333,10 +337,10 @@ export async function resendInvite(
 
   const beneficiary = await Beneficiary.findOne({email, benefactor: user_id});
   if (!beneficiary) {
-    throw new NotFoundException('Beneficiary not found');
+    throw new NotFoundException('Connection not found');
   }
   if (beneficiary.status === 'accepted') {
-    throw new BadRequestException('Beneficiary already accepted');
+    throw new BadRequestException('This invitation has already been accepted');
   }
   if (beneficiary.user && (await isPairBlocked(user_id, beneficiary.user)))
     throw new BadRequestException('This connection is unavailable');

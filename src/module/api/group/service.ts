@@ -95,7 +95,7 @@ export async function addMembers(
     benefactor: user_id,
   });
   if (isEmpty(beneficiaries)) {
-    throw new NotFoundException('Beneficiaries not found');
+    throw new NotFoundException('Connections not found');
   }
 
   await Group.updateOne(
@@ -123,7 +123,7 @@ export async function removeMember(
     benefactor: user_id,
   });
   if (!beneficiary) {
-    throw new NotFoundException('Beneficiary not found');
+    throw new NotFoundException('Connection not found');
   }
 
   await Group.updateOne({_id: id}, {$pull: {members: beneficiaryId}});
