@@ -292,13 +292,13 @@ const listPeople: Handler = async (_args, {userId}) => {
   return said(
     [
       people.length
-        ? `Their beneficiaries:\n${people
+        ? `Their connections:\n${people
             .map(
               p =>
                 `- ${p.name || 'Unnamed'}${p.relationship ? ` (${p.relationship})` : ''}: ${status(p.status)}`,
             )
             .join('\n')}`
-        : 'They have no beneficiaries yet.',
+        : 'They have no connections yet.',
       groups.length
         ? `Their groups:\n${groups
             .map(
@@ -318,7 +318,7 @@ const whoCanSee: Handler = async (args, context) => {
   const access = await storyAccess(context.userId, String(story._id));
   const who = await describeAccess(context.userId, access);
   return {
-    text: `Story "${story.title || 'Untitled'}"${storyLinks(story, context, targets)} is ${who}.${access.visibility === 'everyone' ? ' Everyone means all their beneficiaries and the people they are connected with in Memento.' : ''}`,
+    text: `Story "${story.title || 'Untitled'}"${storyLinks(story, context, targets)} is ${who}.${access.visibility === 'everyone' ? ' Everyone means it is public: anyone with the link can read it.' : ''}`,
     targets,
   };
 };

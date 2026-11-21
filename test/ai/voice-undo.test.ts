@@ -188,7 +188,7 @@ describe('voice undo and repeated calls', () => {
 
   it('removes an added beneficiary and says the invite already went', async () => {
     const user = await createUserFixture();
-    await confirmed(user.id, 'add_beneficiary', {
+    await confirmed(user.id, 'add_connection', {
       name: 'Chidi',
       email: 'chidi@example.com',
       relationship: 'friend',

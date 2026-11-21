@@ -78,7 +78,7 @@ export const CHAT_TOOL_DECLARATIONS = [
   {
     name: 'list_people',
     description:
-      'Their beneficiaries (with relationship and invitation status) and groups.',
+      'Their connections (with relationship and invitation status) and groups.',
     parameters: {type: 'object', properties: {}},
   },
   {
