@@ -54,7 +54,7 @@ export default {
     body('recipients.*')
       .optional()
       .custom(isRecipient)
-      .withMessage('Each recipient must be a valid beneficiary ID or email'),
+      .withMessage('Each recipient must be a valid connection ID or email'),
     body('schedule_date')
       .optional()
       .isISO8601()

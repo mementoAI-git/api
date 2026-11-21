@@ -2,17 +2,20 @@ import {readFileSync, readdirSync, statSync} from 'fs';
 import * as path from 'path';
 import ts from 'typescript';
 import {describe, expect, it} from 'vitest';
-import {CHAT_TOOL_DECLARATIONS} from '../../src/module/api/ai/chat-tools/declarations';
-import {CALL_ACTION_DECLARATIONS} from '../../src/module/api/ai/live-session-config';
-import {SERVER_TOOL_DECLARATIONS} from '../../src/module/api/ai/voice/server-tool-declarations';
+import {CHAT_TOOL_DECLARATIONS} from '../src/module/api/ai/chat-tools/declarations';
+import {CALL_ACTION_DECLARATIONS} from '../src/module/api/ai/live-session-config';
+import {SERVER_TOOL_DECLARATIONS} from '../src/module/api/ai/voice/server-tool-declarations';
 
 // Memento's product language: "connection", never "beneficiary"; "your
 // Memento", never an "AI twin" or "digital twin". The AI repeats the words it
 // is given, so everything it reads (prompts, tool declarations, tool results)
-// and everything it says for us must use them.
+// must use them, and so must every message the API sends to the apps.
 const OLD_TERMS = /beneficiar|\btwin\b/i;
 
-const AI_SOURCE_DIRS = ['src/utils/ai-prompt', 'src/module/api/ai'];
+const SOURCE_DIR = 'src';
+
+/** The Swagger docs describe the /beneficiaries routes for developers only. */
+const EXCLUDED_DIRS = ['src/docs'];
 
 /**
  * Screen names the clients already use as open_screen destinations. The web
@@ -49,6 +52,8 @@ const STOPWORDS = new Set([
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap(entry => {
     const full = path.join(dir, entry);
+    const relative = path.relative(process.cwd(), full);
+    if (EXCLUDED_DIRS.includes(relative)) return [];
     if (statSync(full).isDirectory()) return sourceFiles(full);
     return full.endsWith('.ts') && !full.endsWith('.test.ts') ? [full] : [];
   });
@@ -61,6 +66,11 @@ function isFieldList(text: string): boolean {
     words.every(word => /^[a-z_][a-z0-9_.]*$/.test(word)) &&
     !words.some(word => STOPWORDS.has(word))
   );
+}
+
+/** Prose with field names like `beneficiaryIds` taken out. */
+function withoutIdentifiers(text: string): string {
+  return text.replace(/\b[a-z]+[A-Z]\w*\b/g, '');
 }
 
 /** Every string and template literal in the file, without comments. */
@@ -89,7 +99,7 @@ function literals(file: string): string[] {
   return found;
 }
 
-describe('AI product language', () => {
+describe('product language', () => {
   it('declares no tool or parameter in the old terms', () => {
     let declarations = JSON.stringify([
       ...CHAT_TOOL_DECLARATIONS,
@@ -102,19 +112,20 @@ describe('AI product language', () => {
     expect(declarations).not.toMatch(OLD_TERMS);
   });
 
-  const files = AI_SOURCE_DIRS.flatMap(dir =>
-    sourceFiles(path.join(process.cwd(), dir)),
-  );
+  const files = sourceFiles(path.join(process.cwd(), SOURCE_DIR));
 
-  it('covers the AI source files', () => {
-    expect(files.length).toBeGreaterThan(20);
+  it('covers the API source files', () => {
+    expect(files.length).toBeGreaterThan(200);
   });
 
   it.each(files.map(file => path.relative(process.cwd(), file)))(
     'keeps the old terms out of the text in %s',
     file => {
       const offending = literals(path.join(process.cwd(), file)).filter(
-        text => /\s/.test(text) && !isFieldList(text) && OLD_TERMS.test(text),
+        text =>
+          /\s/.test(text) &&
+          !isFieldList(text) &&
+          OLD_TERMS.test(withoutIdentifiers(text)),
       );
       expect(offending).toEqual([]);
     },
@@ -126,5 +137,8 @@ describe('AI product language', () => {
       false,
     );
     expect(isFieldList('added them as a beneficiary')).toBe(false);
+    expect(
+      OLD_TERMS.test(withoutIdentifiers('beneficiaryIds must be an array')),
+    ).toBe(false);
   });
 });
