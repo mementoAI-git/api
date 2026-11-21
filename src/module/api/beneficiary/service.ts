@@ -60,7 +60,11 @@ export async function create(payload: CreateBeneficiaryBody, user_id: string) {
     throw new BadRequestException('This connection is unavailable');
   if (beneficiary) {
     if (beneficiary.status !== 'removed' || access_scope !== 'shared_only')
-      throw new BadRequestException('This person has already been invited');
+      throw new BadRequestException(
+        beneficiary.status === 'accepted'
+          ? 'This person is already one of your connections'
+          : 'This person has already been invited',
+      );
     await acquireUsageSlot(user_id, 'beneficiary_count', 2, 'beneficiaries');
     Object.assign(beneficiary, {
       name,
@@ -213,7 +217,7 @@ export async function list(
   }));
 
   return {
-    message: 'Connection retrieved successfully',
+    message: 'Connections retrieved successfully',
     data: {...data, docs: docsWithGroups},
   };
 }
