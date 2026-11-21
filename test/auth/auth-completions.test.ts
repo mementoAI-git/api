@@ -4,6 +4,7 @@ import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import redis from '../../src/services/redis';
 import otp from '../../src/services/otp';
 import AuthSession from '../../src/module/database/model/auth-session';
+import mail from '../../src/module/mail';
 import User from '../../src/module/database/model/user';
 import {createSession} from '../../src/module/api/auth/session-service';
 import {
@@ -188,5 +189,27 @@ describe('authentication completion paths', () => {
     expect(
       await AuthSession.countDocuments({user_id: user.id, revoked_at: null}),
     ).toBe(0);
+  });
+
+  it('alerts on a password reset, but not on a first password from an invite', async () => {
+    const alert = vi.spyOn(mail, 'sendSecurityAlert').mockResolvedValue();
+    vi.spyOn(otp, 'delete').mockResolvedValue(undefined);
+    const existing = await createUserFixture();
+    const invited = await createUserFixture({password: ''});
+    const consume = vi.spyOn(otp, 'consume');
+    for (const user of [invited, existing]) {
+      consume.mockResolvedValueOnce({
+        valid: true,
+        email: user.email,
+        alreadyUsed: false,
+      });
+      await auth.setPassword({token: 'reset', password: 'NewStrongPassword1!'});
+    }
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith(
+      expect.objectContaining({email: existing.email, event: 'password_reset'}),
+    );
   });
 });

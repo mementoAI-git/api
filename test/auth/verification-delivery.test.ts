@@ -66,7 +66,7 @@ describe('web email verification delivery', () => {
       {format: 'numeric', length: 6},
     );
     const message = send.mock.calls[0][0] as {subject: string; html: string};
-    expect(message.subject).toBe('Your Memento Verification Code');
+    expect(message.subject).toBe('Your Memento verification code');
     expect(message.html).toContain('012345');
     expect(message.html).not.toContain('/confirm-email?token=');
   });

@@ -1,15 +1,13 @@
 <%- include('components/header') %>
-  <h1 class="subject"><%= isConnection ? 'Connection Invite' : 'Beneficiary Invite' %></h1>
-  <%- include('components/greetings', { name }) %>
-    <p>
-      <% if (isConnection) { %>
-        You have been invited to connect on Memento and keep memories together in a private shared space.
-        You choose what to share. Your Memento stays private unless you activate it.
-      <% } else { %>
-        You have been invited to join Memento as a beneficiary. Click the button below to accept the invitation and create your account.
-      <% } %>
-    </p>
-
-    <%- include('components/btn-link', { title: 'Accept Invitation' , url }) %>
-      <%- include('components/closing-text') %>
-        <%- include('components/footer') %>
+<%- include('components/title', { text: isConnection ? `${inviterName} wants to` : `${inviterName} added you as a`, emphasis: isConnection ? 'connect' : 'connection' }) %>
+<%- include('components/greetings') %>
+<% if (isConnection) { %>
+  <p><%= inviterName %> invited you to connect on Memento, so you can keep memories together in a private shared space.</p>
+  <p>You choose what to share. Everything else in your Memento stays private.</p>
+<% } else { %>
+  <p><%= inviterName %> uses Memento to preserve their stories and added you to their people. Accept the invitation to receive the memories and time capsules they choose to pass on to you.</p>
+<% } %>
+<%- include('components/btn-link', { title: 'Accept invitation', url }) %>
+<p class="small muted">Not expecting this? You can ignore this email and nothing will be shared with you.</p>
+<%- include('components/closing-text') %>
+<%- include('components/footer') %>
