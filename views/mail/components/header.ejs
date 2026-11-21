@@ -1,392 +1,250 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
-    rel="stylesheet">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
   <title>Memento</title>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
-
-    * {
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+    body {
       margin: 0;
       padding: 0;
-      leading-trim: NONE;
-      text-decoration: none;
-      box-sizing: border-box;
-    }
-
-    body>center {
-      padding: 0px 20px;
+      width: 100%;
+      background-color: #130A08;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
     }
 
     img {
-      max-width: 100%;
-      height: auto;
+      border: 0;
+      outline: none;
+      text-decoration: none;
+      -ms-interpolation-mode: bicubic;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 560px;
+    }
+
+    .stage {
+      padding: 96px 16px 0 16px;
+    }
+
+    .card {
+      background-color: #FFFFFF;
+      border-radius: 28px;
+      padding: 48px 48px 44px 48px;
+    }
+
+    .wordmark {
+      font-family: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+      font-weight: 500;
+      font-size: 30px;
+      line-height: 36px;
+      color: #1C1410;
+    }
+
+    .title {
+      margin: 32px 0 28px 0;
+      font-family: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+      font-weight: 500;
+      font-size: 40px;
+      line-height: 46px;
+      color: #1C1410;
+    }
+
+    .title em {
+      font-style: italic;
+    }
+
+    p,
+    li {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 17px;
+      line-height: 27px;
+      color: #1C1410;
     }
 
     p {
-      margin: 15px 0px;
+      margin: 0 0 20px 0;
+    }
+
+    ul {
+      margin: 0 0 24px 0;
+      padding: 0 0 0 22px;
+    }
+
+    li {
+      margin: 0 0 4px 0;
+      padding-left: 4px;
     }
 
     a {
-      text-decoration: none;
+      color: #E98246;
+      text-decoration: underline;
     }
 
-    span {
-      display: block;
-    }
-
-    ul,
-    ol,
-    li {
-      list-style: none;
-      list-style-type: none;
-      margin: 0;
-      padding: 0;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
-      font-weight: 400;
-      font-size: 16px;
-      line-height: 24px;
-      letter-spacing: 0%;
-      color: #000626E5;
-    }
-
-    .logo {
-      font-family: "EB Garamond", Georgia, 'Times New Roman', serif;
-      font-optical-sizing: auto;
-      font-weight: 500;
-      font-style: normal;
-      color: #52A1DD;
-      font-size: 40px;
-      line-height: 48px;
-    }
-
-    .body,
-    .footer {
-      padding: 40px;
-    }
-
-    .body {
-      background-color: white;
-      box-shadow: 0px 20px 25px -5px #0000001A;
-      box-shadow: 0px 10px 10px -5px #0000000A;
-      border: 1px solid #0000000D;
-      border-radius: 8px;
-      max-width: 632px;
-    }
-
-    .body p {
-      font-weight: 400;
-      font-size: 16px;
-      leading-trim: NONE;
-      line-height: 24px;
-      letter-spacing: 0%;
-      color: #000626E5;
-
-
-    }
-
-    .subject {
-      font-family: "EB Garamond", Georgia, 'Times New Roman', serif;
-      font-weight: 500;
-      font-style: Medium;
-      font-size: 40px;
-      leading-trim: NONE;
-      line-height: 48px;
-      letter-spacing: 0px;
-
-    }
-
-    .code-container {
-      background: #F1F6FD;
-      border-radius: 8px;
-      padding: 24px;
-      margin-bottom: 24px;
-    }
-
-    .mail-image {
-      width: 100%;
-      max-width: 100%;
-      max-height: 314px;
-      height: auto;
-      object-fit: cover;
-      margin-bottom: 24px;
-      display: block;
-    }
-
-    .code-text {
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
-      font-weight: 700;
-      font-size: 36px;
-      leading-trim: NONE;
-      line-height: 100%;
-      letter-spacing: 5px;
-      color: #1570EF;
-    }
-
-    .btn {
-      background: #52A1DD;
-      width: auto;
-      min-width: 207px;
-      height: 48px;
-      border-radius: 999px;
-      border-width: 1px;
-      padding-top: 14px;
-      padding-right: 32px;
-      padding-bottom: 14px;
-      padding-left: 32px;
-      margin-bottom: 24px;
-    }
-
-    .btn span,
-    .btn td,
-    .btn a {
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+    strong {
       font-weight: 600;
-      font-size: 14px;
-      line-height: 20px;
-      letter-spacing: 0%;
-      color: white;
-      text-decoration: none;
     }
 
-    .btn-link {
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
-      font-weight: 400;
-      font-size: 14px;
-      width: 90%;
-      max-width: 400px;
-      text-overflow: ellipsis;
-      overflow: hidden;
-      line-height: 18px;
-      letter-spacing: 0%;
-      color: #4C64D9;
-      ;
+    .muted {
+      color: #8C8784;
     }
 
-    .footer-link {
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
-      font-weight: 700;
-      font-size: 12px;
-      leading-trim: NONE;
-      line-height: 18px;
-      letter-spacing: 0%;
-      color: #1E1E1EB2;
+    .small {
+      font-size: 15px;
+      line-height: 23px;
+    }
 
+    .quote {
+      margin: 0 0 24px 0;
+      padding: 16px 20px;
+      background-color: #F4F4F4;
+      border: 1px solid #E8E8E8;
+      border-radius: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 25px;
+      color: #4A4441;
+    }
+
+    .details {
+      width: 100%;
+      margin: 0 0 24px 0;
+      background-color: #F4F4F4;
+      border: 1px solid #E8E8E8;
+      border-radius: 10px;
+    }
+
+    .details td {
+      padding: 6px 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 15px;
+      line-height: 23px;
+      color: #1C1410;
+      vertical-align: top;
+    }
+
+    .details .label {
+      width: 110px;
+      color: #8C8784;
+    }
+
+    .details .first {
+      padding-top: 16px;
+    }
+
+    .details .last {
+      padding-bottom: 16px;
+    }
+
+    .signoff {
+      margin: 28px 0 0 0;
+    }
+
+    .footer {
+      padding: 32px 24px 64px 24px;
     }
 
     .footer p {
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
-      font-weight: 400;
-      font-size: 12px;
-      leading-trim: NONE;
-      line-height: 18px;
-      letter-spacing: 0%;
-      color: #000933A6;
+      margin: 0 0 10px 0;
+      font-size: 13px;
+      line-height: 20px;
+      color: #8F8986;
     }
 
-    .closing-text span a {
-      font-weight: 700;
-      font-size: 16px;
-      color: #1570EF;
+    .footer a {
+      color: #E98246;
       text-decoration: underline;
-      font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+    }
+
+    .preheader {
+      display: none !important;
+      visibility: hidden;
+      mso-hide: all;
+      font-size: 1px;
+      line-height: 1px;
+      max-height: 0;
+      max-width: 0;
+      opacity: 0;
+      overflow: hidden;
     }
 
     @media screen and (max-width: 600px) {
-      body {
-        width: 100% !important;
-        min-width: 100% !important;
+      .stage {
+        padding: 48px 20px 0 20px !important;
       }
 
-      center {
-        width: 100% !important;
-        min-width: 100% !important;
-        padding: 10px 0 !important;
+      .card {
+        padding: 32px 28px 32px 28px !important;
+        border-radius: 22px !important;
       }
 
-      table[role="presentation"] {
-        width: 100% !important;
-        max-width: 100% !important;
-      }
-
-      .body,
-      .footer {
-        padding: 16px !important;
-      }
-
-      .body p {
-        font-size: 14px !important;
-        line-height: 20px !important;
-        margin: 12px 0px !important;
-      }
-
-      .subject {
-        font-size: 28px !important;
+      .wordmark {
+        font-size: 26px !important;
         line-height: 32px !important;
-        margin-bottom: 16px !important;
       }
 
-      .logo {
-        font-size: 32px !important;
-        line-height: 40px !important;
+      .logo-icon {
+        width: 32px !important;
+        height: 32px !important;
       }
 
-      .code-container {
-        padding: 16px !important;
-        margin-bottom: 16px !important;
-      }
-
-      .code-text {
+      .title {
+        margin: 24px 0 22px 0 !important;
         font-size: 24px !important;
-        letter-spacing: 3px !important;
-        word-break: break-all;
-        word-wrap: break-word;
+        line-height: 32px !important;
       }
 
-      .btn {
-        width: 100% !important;
-        min-width: 100% !important;
-        padding-left: 16px !important;
-        padding-right: 16px !important;
-        margin-bottom: 16px !important;
-      }
-
-      .btn a {
-        display: block !important;
-        text-align: center !important;
-        width: 100% !important;
-      }
-
-      .btn-link {
-        font-size: 14px !important;
-        line-height: 20px !important;
-        display: inline-block;
-        white-space: normal;
-        word-break: break-all;
-        word-wrap: break-word;
-        max-width: 90%;
-      }
-
-      .mail-image {
-        margin-bottom: 16px !important;
-      }
-
-      .footer-link {
-        font-size: 11px !important;
-        display: block !important;
-        padding-bottom: 8px !important;
-      }
-
-      .footer-link:last-child {
-        padding-bottom: 0 !important;
-      }
-
-      .footer p {
-        font-size: 11px !important;
-        line-height: 16px !important;
-      }
-
-      ul {
-        padding-left: 20px !important;
-      }
-
-      ul li {
-        font-size: 14px !important;
-        line-height: 20px !important;
-        margin-bottom: 8px !important;
-      }
-
-      .social-links,
-      .footer-links {
-        max-width: 100% !important;
-        width: 100% !important;
-        display: block !important;
-      }
-
-      .social-links tr,
-      .footer-links tr {
+      .btn-cell {
         display: block !important;
         width: 100% !important;
       }
 
-      .social-links td,
-      .footer-links td {
+      .btn-cell a {
         display: block !important;
-        padding-right: 0 !important;
-        padding-bottom: 8px !important;
-        width: 100% !important;
-        text-align: left !important;
       }
 
-      .social-links td:last-child,
-      .footer-links td:last-child {
-        padding-bottom: 0 !important;
+      .code {
+        font-size: 30px !important;
       }
 
-      table[style*="max-width"] {
-        max-width: 100% !important;
-        width: 100% !important;
-      }
-    }
-
-    @media screen and (max-width: 480px) {
-      body>center {
-        padding: 0px 5px !important;
-      }
-
-      center {
-        padding: 10px 0 !important;
-      }
-
-      .body,
       .footer {
-        padding: 12px !important;
-      }
-
-      .subject {
-        font-size: 24px !important;
-        line-height: 28px !important;
-      }
-
-      .code-text {
-        font-size: 20px !important;
-        letter-spacing: 2px !important;
+        padding: 28px 20px 48px 20px !important;
       }
     }
   </style>
 </head>
 
-<body style="overflow-x:hidden">
-  <center style="width: 100%; background-color: #F9FAFB;">
-    <table role="presentation" width="648" cellspacing="0" cellpadding="0" border="0" align="center"
-      style="width: 100%; max-width: 648px;">
-      <tr>
-        <td align="center">
-          <center style="width: 100%; max-width: 648px; height:100%">
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
-              <tr>
-                <td align="center">
-                  <center style="width: 100%; max-width: 640px;">
-                    <table width="100%" style="margin-bottom: 24px" cellspacing="0" cellpadding="0" border="0"
-                      align="center">
-                      <tr>
-                        <td align="center">
-                          <span class="logo">Memento.</span>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <table cellspacing="0" cellpadding="0" border="0">
-                      <tr>
-                        <td>
-                          <div class="body">
-                            <!--  Body Starts -->
-                            <!-- Content Section -->
+<body>
+  <% if (preheader) { %>
+    <div class="preheader"><%= preheader %>&#847; &zwnj; &nbsp; &#847; &zwnj; &nbsp; &#847; &zwnj; &nbsp;</div>
+  <% } %>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#130A08" style="width: 100%; background-color: #130A08;">
+    <tr>
+      <td align="center" valign="top" background="<%= backdropUrl %>" bgcolor="#130A08" style="background-color: #130A08; background-image: url('<%= backdropUrl %>'); background-repeat: repeat-x; background-position: top center;">
+        <table role="presentation" class="container" width="560" cellspacing="0" cellpadding="0" border="0">
+          <tr>
+            <td class="stage">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td class="card" bgcolor="#FFFFFF">
+                    <a href="<%= appUrl %>" style="text-decoration: none;">
+                      <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                        <tr>
+                          <td style="padding-right: 10px; vertical-align: middle;">
+                            <img class="logo-icon" src="<%= logoUrl %>" width="36" height="36" alt="" style="display: block; width: 36px; height: 36px; border-radius: 9px;">
+                          </td>
+                          <td style="vertical-align: middle;">
+                            <span class="wordmark">Memento.</span>
+                          </td>
+                        </tr>
+                      </table>
+                    </a>

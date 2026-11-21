@@ -27,6 +27,7 @@ import PurgeStage from '../../src/module/database/model/purge-stage';
 import PushDevice from '../../src/module/database/model/push-device';
 import Subscription from '../../src/module/database/model/subscription';
 import Usage from '../../src/module/database/model/usage';
+import mail from '../../src/module/mail';
 import User from '../../src/module/database/model/user';
 import {
   PURGE_MANIFEST,
@@ -439,5 +440,21 @@ describe('account purge pipeline', () => {
     expect(await PurgeCommand.findById(stale.id).lean()).toMatchObject({
       status: 'completed',
     });
+  });
+
+  it('confirms the deletion once, to the address captured at request time', async () => {
+    const confirm = vi.spyOn(mail, 'sendDeleteAccount').mockResolvedValue();
+    vi.spyOn(storage, 'deleteFileEverywhere').mockResolvedValue(undefined);
+    const user = await createUserFixture();
+    await deleteUser(user.id);
+    await endGracePeriod(user.id);
+    const command = await PurgeCommand.findOne({user_id: user.id}).orFail();
+
+    await processPurgeCommand(command.id);
+    await processPurgeCommand(command.id);
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledWith({email: user.email, name: ''});
   });
 });

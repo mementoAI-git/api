@@ -1,0 +1,11 @@
+<%- include('components/header') %>
+<%- include('components/title', { text: `${inviteeName} accepted your`, emphasis: 'invite' }) %>
+<%- include('components/greetings') %>
+<% if (isConnection) { %>
+  <p><%= inviteeName %> accepted your invitation to connect. You now share a private space on Memento where you can keep memories together.</p>
+<% } else { %>
+  <p><%= inviteeName %> accepted your invitation and is now one of your people. They'll receive the memories and time capsules you choose to pass on to them.</p>
+<% } %>
+<%- include('components/btn-link', { title: 'View your people', url: peopleUrl, showUrl: false }) %>
+<%- include('components/closing-text') %>
+<%- include('components/footer') %>

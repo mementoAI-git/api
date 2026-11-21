@@ -1,23 +1,13 @@
-<% if (url) { %>
-  <table class="btn" cellspacing="0" cellpadding="0" border="0">
-    <tr>
-      <td align="center" style="text-align: center;">
-        <a style="text-align: center;" href="<%= url %>">
-          <%= title %>
-        </a>
-      </td>
-    </tr>
-  </table>
-  <table cellspacing="0" cellpadding="0" border="0">
-    <tr>
-      <td>
-        <span>
-          <strong>Or copy and paste the following URL into your browser:</strong>
-        </span>
-        <a href="<%= url %>" class="btn-link">
-          <%= url %>
-        </a>
-      </td>
-    </tr>
-  </table>
-  <% } %>
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 8px 0 24px 0;">
+  <tr>
+    <td class="btn-cell" align="center" bgcolor="#E98246" style="border-radius: 999px; background-color: #E98246;">
+      <a href="<%= url %>" style="display: inline-block; padding: 15px 30px; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 20px; font-weight: 600; color: #FFFFFF; text-decoration: none; border-radius: 999px;"><%= title %></a>
+    </td>
+  </tr>
+</table>
+<% if (typeof showUrl === 'undefined' || showUrl) { %>
+  <p class="small muted">
+    If the button doesn't work, copy this link into your browser:<br>
+    <a href="<%= url %>" style="color: #E98246; word-break: break-all;"><%= url %></a>
+  </p>
+<% } %>

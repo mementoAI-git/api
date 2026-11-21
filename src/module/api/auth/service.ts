@@ -40,7 +40,7 @@ import {
   UnauthorizedException,
 } from '../../../utils/service-error';
 import axios from 'axios';
-import mail from '../../mail';
+import mail, {notifyInBackground} from '../../mail';
 import User from '../../database/model/user';
 import logger from '../../../utils/logger';
 import otp from '../../../services/otp';
@@ -564,6 +564,14 @@ export async function completePasskeyRegistration(
   };
 
   await User.findByIdAndUpdate(userId, {$push: {passkeys: newPasskey}});
+  notifyInBackground('security.passkey_added', () =>
+    mail.sendSecurityAlert({
+      email: user.email,
+      name: user.first_name,
+      event: 'passkey_added',
+      device: device_name,
+    }),
+  );
 
   return {
     data: {credential_id: credential.id, device_name},
@@ -826,17 +834,28 @@ export async function setPassword(payload: ISetPassword) {
 
   const password = await hashPassword(payload.password);
 
+  // Read the previous document: a first password set through an invitation
+  // is not a change worth alerting about.
   const user = await User.findOneAndUpdate(
     {email: result.email},
     {
       $set: {password, refresh_token: null, refresh_tokens: []},
       $inc: {session_version: 1},
     },
-    {new: true},
+    {new: false},
   );
   if (!user) throw new NotFoundException('User not found');
   await revokeAllSessions(user.id);
   await invalidateSecurityState(user.id);
+  if (user.password) {
+    notifyInBackground('security.password_reset', () =>
+      mail.sendSecurityAlert({
+        email: user.email,
+        name: user.first_name,
+        event: 'password_reset',
+      }),
+    );
+  }
 
   return {data: null, message: 'Password reset successful'};
 }

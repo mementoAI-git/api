@@ -63,6 +63,8 @@ export interface IUser {
   /** never | skipped | completed */
   onboarding_status?: string;
   onboarding_step_reached?: number;
+  /** Set when the welcome email is claimed, so finishing or skipping onboarding sends it once. */
+  welcome_email_sent_at?: Date | null;
   skipped_deep_personalization?: boolean;
   providers: string[];
   preferences: IUserPreferences;
@@ -198,6 +200,7 @@ const user = new Schema<IUser>(
       enum: ['never', 'skipped', 'completed', 'in_progress'],
       default: 'never',
     },
+    welcome_email_sent_at: {type: Date, default: null},
     verified: {
       type: Boolean,
       default: false,

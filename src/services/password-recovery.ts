@@ -1,6 +1,8 @@
 import {createHash, randomInt, randomUUID} from 'node:crypto';
 
 const TTL = 10 * 60;
+/** How long a recovery code stays valid, shown in the recovery email. */
+export const RECOVERY_CODE_TTL_SECONDS = TTL;
 const COOLDOWN = 60;
 const MAX_ATTEMPTS = 5;
 

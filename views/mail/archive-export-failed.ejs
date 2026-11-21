@@ -1,0 +1,7 @@
+<%- include('components/header') %>
+<%- include('components/title', { text: "We couldn't prepare your", emphasis: 'archive' }) %>
+<%- include('components/greetings') %>
+<p>When you deleted your account, you asked for a copy of your stories, time capsules and attachments. Something went wrong while we were preparing it, and we're sorry.</p>
+<p>Your account is still in its grace period. To get your archive, write to <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a> and we'll prepare it for you by hand. You can also sign in to restore your account and download the archive yourself.</p>
+<%- include('components/closing-text') %>
+<%- include('components/footer') %>

@@ -41,7 +41,9 @@ describe('connection mode in the existing invitation flow', () => {
       name: 'Ada',
       access_scope: 'shared_only',
     } as never);
-    expect(sender.mock.calls[0][0].subject).toBe('[Memento] Connection Invite');
+    expect(sender.mock.calls[0][0].subject).toBe(
+      'Someone invited you to connect on Memento',
+    );
     expect(sender.mock.calls[0][0].html).toContain('shared space');
     expect(sender.mock.calls[0][0].html).not.toContain('as a beneficiary');
     await mail.sendBeneficiaryInvite({
@@ -51,7 +53,7 @@ describe('connection mode in the existing invitation flow', () => {
       access_scope: 'full_vault',
     } as never);
     expect(sender.mock.calls[1][0].subject).toBe(
-      '[Memento] Beneficiary Invite',
+      'Someone added you as a connection on Memento',
     );
   });
 

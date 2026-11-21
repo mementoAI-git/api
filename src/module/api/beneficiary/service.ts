@@ -3,7 +3,7 @@ import {
   invitationDelivered,
   connectionActivated,
 } from '../../../services/growth-events';
-import mail from '../../mail';
+import mail, {notifyInBackground} from '../../mail';
 import {
   compareStrings,
   filterGenerator,
@@ -410,6 +410,27 @@ export async function acceptInvite(payload: IAcceptInivite) {
   // Both sides' overviews list their people.
   void forgetUserContext(String(beneficiary.benefactor));
   void forgetUserContext(user.id);
+
+  const acceptedBy = user;
+  notifyInBackground('people.invite_accepted', async () => {
+    const inviter = await User.findById(beneficiary.benefactor)
+      .select('email first_name')
+      .lean();
+    if (!inviter?.email) return;
+    const inviteeName =
+      [acceptedBy.first_name, acceptedBy.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim() ||
+      beneficiary.name ||
+      email;
+    await mail.sendInviteAccepted({
+      email: inviter.email,
+      name: inviter.first_name,
+      inviteeName,
+      isConnection: beneficiary.access_scope === 'shared_only',
+    });
+  });
 
   return {message: 'Invite retrieved successfully', data: {token}};
 }
