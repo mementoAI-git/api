@@ -616,7 +616,18 @@ describe('voice content actions', () => {
   });
 
   describe('confirmed first', () => {
-    it('adds a beneficiary only after the host confirms the read-back', async () => {
+    it('still answers the old add_beneficiary name with the read-back', async () => {
+      // Voice sessions that started before the rename still call it.
+      const user = await createUserFixture();
+      const outcome = await runVoiceServerTool(user.id, 'add_beneficiary', {
+        name: 'Emeka',
+        email: 'emeka@example.com',
+      });
+      expect(outcome.result).toContain('Nothing has happened yet');
+      expect(beneficiaryService.create).not.toHaveBeenCalled();
+    });
+
+    it('adds a connection only after the host confirms the read-back', async () => {
       const user = await createUserFixture();
       const args = {
         name: 'Emeka',

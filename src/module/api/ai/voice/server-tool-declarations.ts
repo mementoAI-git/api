@@ -227,7 +227,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     name: 'set_story_visibility',
     behavior: Behavior.BLOCKING,
     description:
-      'Change who can see one of the host\'s stories, when they ask. only_me makes it private to them and stops sharing it with anyone ("make it private"). everyone lets all their connections see it; use it only when they explicitly ask for everyone. everyone needs confirmation: the first call only reads it back with a code.',
+      'Change who can see one of the host\'s stories, when they ask. only_me makes it private to them and stops sharing it with anyone ("make it private"). everyone makes it public: anyone with the link can read it, not only their connections; use it only when they explicitly ask for everyone. everyone needs confirmation: the first call only reads it back with a code.',
     parameters: {
       type: Type.OBJECT,
       properties: {

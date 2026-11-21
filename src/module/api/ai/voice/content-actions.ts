@@ -647,7 +647,7 @@ const setStoryVisibility: Handler = async (userId, args) => {
       userId,
       'set_story_visibility',
       {...args, story: id},
-      `Make "${title}" visible to everyone: all their connections in Memento will be able to see it. It is ${now} now.`,
+      `Make "${title}" visible to everyone: anyone with the link will be able to read it, not only their connections. It is ${now} now.`,
     );
     if (pending) return pending;
   }
@@ -905,6 +905,9 @@ export const CONTENT_ACTION_HANDLERS: Record<string, Handler> = {
   draft_capsule: draftCapsule,
   schedule_capsule: scheduleCapsule,
   add_connection: addBeneficiary,
+  // Old name, kept undeclared for voice sessions and chat confirmation
+  // cards that started before the rename. Remove after one release.
+  add_beneficiary: addBeneficiary,
   delete_story: deleteStory,
   send_feedback: sendFeedback,
 };

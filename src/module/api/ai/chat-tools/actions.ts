@@ -29,10 +29,22 @@ export const CHAT_ACTION_NAMES = [
   'undo_last_action',
 ] as const;
 
+/**
+ * Old names that confirmation cards already in chats still send. Accepted by
+ * the Confirm button, never declared, so the model does not see them. Remove
+ * after one release.
+ */
+const LEGACY_ACTION_NAMES: Record<string, ChatActionName> = {
+  add_beneficiary: 'add_connection',
+};
+
 export type ChatActionName = (typeof CHAT_ACTION_NAMES)[number];
 
 export function isChatAction(name: string): name is ChatActionName {
-  return (CHAT_ACTION_NAMES as readonly string[]).includes(name);
+  return (
+    (CHAT_ACTION_NAMES as readonly string[]).includes(name) ||
+    Object.prototype.hasOwnProperty.call(LEGACY_ACTION_NAMES, name)
+  );
 }
 
 /** Gemini's schema (Type.OBJECT and so on) as the JSON Schema Groq takes. */

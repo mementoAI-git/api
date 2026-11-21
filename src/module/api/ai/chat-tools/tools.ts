@@ -318,7 +318,7 @@ const whoCanSee: Handler = async (args, context) => {
   const access = await storyAccess(context.userId, String(story._id));
   const who = await describeAccess(context.userId, access);
   return {
-    text: `Story "${story.title || 'Untitled'}"${storyLinks(story, context, targets)} is ${who}.${access.visibility === 'everyone' ? ' Everyone means all their connections in Memento.' : ''}`,
+    text: `Story "${story.title || 'Untitled'}"${storyLinks(story, context, targets)} is ${who}.${access.visibility === 'everyone' ? ' Everyone means it is public: anyone with the link can read it.' : ''}`,
     targets,
   };
 };
