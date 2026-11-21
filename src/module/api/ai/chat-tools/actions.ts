@@ -23,7 +23,7 @@ export const CHAT_ACTION_NAMES = [
   'bookmark_story',
   'tag_story',
   'rename_story',
-  'add_beneficiary',
+  'add_connection',
   'delete_story',
   'send_feedback',
   'undo_last_action',

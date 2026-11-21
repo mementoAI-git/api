@@ -201,7 +201,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     name: 'share_story',
     behavior: Behavior.BLOCKING,
     description:
-      'Share one of the host\'s stories with particular beneficiaries or groups, by name, when they ask ("share my Lagos story with my sister"). Only the people and groups it is shared with can see it; it never makes a story public. Needs confirmation: the first call only reads it back with a code.',
+      'Share one of the host\'s stories with particular connections or groups, by name, when they ask ("share my Lagos story with my sister"). Only the people and groups it is shared with can see it; it never makes a story public. Needs confirmation: the first call only reads it back with a code.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -212,7 +212,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
         with: {
           type: Type.ARRAY,
           items: {type: Type.STRING},
-          description: 'Names of their beneficiaries or groups.',
+          description: 'Names of their connections or groups.',
         },
         confirmation: {
           type: Type.STRING,
@@ -227,7 +227,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     name: 'set_story_visibility',
     behavior: Behavior.BLOCKING,
     description:
-      'Change who can see one of the host\'s stories, when they ask. only_me makes it private to them and stops sharing it with anyone ("make it private"). everyone lets all their beneficiaries and the people they are connected with see it; use it only when they explicitly ask for everyone. everyone needs confirmation: the first call only reads it back with a code.',
+      'Change who can see one of the host\'s stories, when they ask. only_me makes it private to them and stops sharing it with anyone ("make it private"). everyone lets all their connections see it; use it only when they explicitly ask for everyone. everyone needs confirmation: the first call only reads it back with a code.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -304,7 +304,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     name: 'draft_capsule',
     behavior: Behavior.BLOCKING,
     description:
-      'Start a time capsule as a draft, when the host asks: a title, the message in their words, and optionally which of their beneficiaries it is for. It is only a draft; nothing is sent or scheduled.',
+      'Start a time capsule as a draft, when the host asks: a title, the message in their words, and optionally which of their connections it is for. It is only a draft; nothing is sent or scheduled.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -315,7 +315,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
         },
         recipient: {
           type: Type.STRING,
-          description: "A beneficiary's name, if they said who it is for.",
+          description: "A connection's name, if they said who it is for.",
         },
       },
       required: ['title', 'message'],
@@ -347,10 +347,10 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
-    name: 'add_beneficiary',
+    name: 'add_connection',
     behavior: Behavior.BLOCKING,
     description:
-      "Add someone as one of the host's beneficiaries, which emails them an invitation. Needs their name and email. Needs confirmation: the first call only reads it back with a code.",
+      "Add someone as one of the host's connections, which emails them an invitation. Needs their name and email. Needs confirmation: the first call only reads it back with a code.",
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -418,7 +418,7 @@ export const SERVER_TOOL_DECLARATIONS: FunctionDeclaration[] = [
     name: UNDO_LAST_ACTION_TOOL_NAME,
     behavior: Behavior.BLOCKING,
     description:
-      'Reverse the last thing you did for the host (a profile change, a save, a rename, an edit to a story, tags, a bookmark, a share or visibility change, a corrected observation, a capsule, a deleted story, a beneficiary) when they say "undo that", "change it back" or "put it back". Each call undoes one action, newest first, from the last half hour. Feedback that was sent cannot be unsent.',
+      'Reverse the last thing you did for the host (a profile change, a save, a rename, an edit to a story, tags, a bookmark, a share or visibility change, a corrected observation, a capsule, a deleted story, a new connection) when they say "undo that", "change it back" or "put it back". Each call undoes one action, newest first, from the last half hour. Feedback that was sent cannot be unsent.',
   },
 ];
 

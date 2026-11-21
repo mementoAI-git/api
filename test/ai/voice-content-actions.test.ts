@@ -227,7 +227,7 @@ describe('voice content actions', () => {
       expect(outcome.result).toMatch(/No story matched/);
     });
 
-    it('drafts a capsule for a beneficiary by name, without scheduling it', async () => {
+    it('drafts a capsule for a connection by name, without scheduling it', async () => {
       const user = await createUserFixture();
       const ada = await Beneficiary.create({
         benefactor: user.id,
@@ -258,7 +258,7 @@ describe('voice content actions', () => {
       expect(outcome.result).toMatch(/draft and not scheduled/);
     });
 
-    it('asks who a capsule is for when the name is not a beneficiary', async () => {
+    it('asks who a capsule is for when the name is not a connection', async () => {
       const user = await createUserFixture();
       const outcome = await runVoiceServerTool(user.id, 'draft_capsule', {
         title: 'Hi',
@@ -266,7 +266,7 @@ describe('voice content actions', () => {
         recipient: 'Zed',
       });
       expect(capsuleService.createCapsule).not.toHaveBeenCalled();
-      expect(outcome.result).toMatch(/not one of their beneficiaries/);
+      expect(outcome.result).toMatch(/not one of their connections/);
     });
 
     it('says plainly when a service refuses', async () => {
@@ -487,7 +487,7 @@ describe('voice content actions', () => {
       );
     });
 
-    it('shares with a beneficiary and a group by name after confirmation, never publicly', async () => {
+    it('shares with a connection and a group by name after confirmation, never publicly', async () => {
       const user = await createUserFixture();
       const lagos = await story(user.id, 'Trip to Lagos');
       const ada = await Beneficiary.create({
@@ -624,14 +624,14 @@ describe('voice content actions', () => {
         relationship: 'brother',
       };
 
-      const first = await runVoiceServerTool(user.id, 'add_beneficiary', args);
+      const first = await runVoiceServerTool(user.id, 'add_connection', args);
       expect(first.result).toContain('Nothing has happened yet');
       expect(first.result).toContain(
         'emails an invitation to emeka@example.com',
       );
       expect(beneficiaryService.create).not.toHaveBeenCalled();
 
-      const second = await runVoiceServerTool(user.id, 'add_beneficiary', {
+      const second = await runVoiceServerTool(user.id, 'add_connection', {
         ...args,
         confirmation: codeIn(first.result),
       });
@@ -651,12 +651,12 @@ describe('voice content actions', () => {
 
     it('will not use a code for different details than were read back', async () => {
       const user = await createUserFixture();
-      const first = await runVoiceServerTool(user.id, 'add_beneficiary', {
+      const first = await runVoiceServerTool(user.id, 'add_connection', {
         name: 'Emeka',
         email: 'emeka@example.com',
       });
 
-      const swapped = await runVoiceServerTool(user.id, 'add_beneficiary', {
+      const swapped = await runVoiceServerTool(user.id, 'add_connection', {
         name: 'Emeka',
         email: 'attacker@example.com',
         confirmation: codeIn(first.result),
