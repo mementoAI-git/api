@@ -88,11 +88,16 @@ describe('email templates', () => {
       expect(html).not.toMatch(/unsubscribe/i);
       // Memento is "your Memento", never an "AI twin" or "digital twin".
       expect(html).not.toMatch(/\btwin\b|beneficiar/i);
-      // Every text link uses the brand orange.
-      for (const link of html.match(/<a [^>]*>/g) ?? []) {
+      // Text links are brand orange on the white card and grey on the dark
+      // footer, where orange reads badly.
+      const [card, footer] = html.split('class="footer"');
+      for (const link of card.match(/<a [^>]*>/g) ?? []) {
         if (!link.includes('btn') && !/text-decoration: none/.test(link)) {
           expect(link).toContain('color: #E98246');
         }
+      }
+      for (const link of footer.match(/<a [^>]*>/g) ?? []) {
+        expect(link).toMatch(/color: #(B5AFAA|8F8986)/);
       }
       expect(html).not.toMatch(
         /assets\/images\/(welcome|delete-account|beneficiary-invite|feedback-received)\.png/,

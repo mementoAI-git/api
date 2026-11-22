@@ -53,11 +53,11 @@ export function createServer(): Application {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     next();
   });
-  app.use('/assets', express.static(path.join(process.cwd(), 'public')));
-  app.use(
-    '/.well-known',
-    express.static(path.join(process.cwd(), 'public/.well-known')),
-  );
+  // The build copies public/ next to the compiled src/, and the release ships
+  // only build/, so resolve it from here rather than from the working dir.
+  const publicDir = path.join(__dirname, '..', 'public');
+  app.use('/assets', express.static(publicDir));
+  app.use('/.well-known', express.static(path.join(publicDir, '.well-known')));
 
   app.use(httpLogger);
   setupBullBoard(app);
