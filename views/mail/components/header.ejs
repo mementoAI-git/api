@@ -45,17 +45,17 @@
     .wordmark {
       font-family: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
       font-weight: 500;
-      font-size: 30px;
-      line-height: 36px;
+      font-size: 20px;
+      line-height: 20px;
       color: #1C1410;
     }
 
     .title {
-      margin: 32px 0 28px 0;
+      margin: 28px 0 20px 0;
       font-family: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
       font-weight: 500;
-      font-size: 40px;
-      line-height: 46px;
+      font-size: 24px;
+      line-height: 32px;
       color: #1C1410;
     }
 
@@ -161,7 +161,7 @@
     }
 
     .footer a {
-      color: #E98246;
+      color: #B5AFAA;
       text-decoration: underline;
     }
 
@@ -187,20 +187,8 @@
         border-radius: 22px !important;
       }
 
-      .wordmark {
-        font-size: 26px !important;
-        line-height: 32px !important;
-      }
-
-      .logo-icon {
-        width: 32px !important;
-        height: 32px !important;
-      }
-
       .title {
-        margin: 24px 0 22px 0 !important;
-        font-size: 24px !important;
-        line-height: 32px !important;
+        margin: 24px 0 18px 0 !important;
       }
 
       .btn-cell {
@@ -230,6 +218,11 @@
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#130A08" style="width: 100%; background-color: #130A08;">
     <tr>
       <td align="center" valign="top" background="<%= backdropUrl %>" bgcolor="#130A08" style="background-color: #130A08; background-image: url('<%= backdropUrl %>'); background-repeat: repeat-x; background-position: top center;">
+        <!--[if gte mso 9]>
+        <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="mso-width-percent:1000;height:900px;">
+          <v:fill type="tile" src="<%= backdropUrl %>" color="#130A08" />
+          <v:textbox inset="0,0,0,0">
+        <![endif]-->
         <table role="presentation" class="container" width="560" cellspacing="0" cellpadding="0" border="0">
           <tr>
             <td class="stage">
@@ -239,8 +232,8 @@
                     <a href="<%= appUrl %>" style="text-decoration: none;">
                       <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                         <tr>
-                          <td style="padding-right: 10px; vertical-align: middle;">
-                            <img class="logo-icon" src="<%= logoUrl %>" width="36" height="36" alt="" style="display: block; width: 36px; height: 36px; border-radius: 9px;">
+                          <td style="padding-right: 8px; vertical-align: middle;">
+                            <img class="logo-icon" src="<%= logoUrl %>" width="20" height="20" alt="" style="display: block; width: 20px; height: 20px; border-radius: 5px;">
                           </td>
                           <td style="vertical-align: middle;">
                             <span class="wordmark">Memento.</span>
