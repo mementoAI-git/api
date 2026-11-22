@@ -162,6 +162,20 @@ Redis runs locally using Docker. See the [Docker Setup](#docker-setup) section b
 
 Production configuration, rollback expectations, and compatibility evidence are documented in [the compatibility registry](docs/compatibility-registry.md). Do not remove legacy read paths until the supported-client window, telemetry threshold, and explicit approval are all recorded.
 
+### Deploying from your machine
+
+When GitHub Actions is unavailable (for example, the month's minutes are used up), deploy with the same steps the workflows run:
+
+```bash
+cp .deploy.env.example .deploy.env   # once: server host, user and your SSH key
+scripts/deploy.sh dev                # from the dev branch
+scripts/deploy.sh prod               # from main; asks you to type DEPLOY
+```
+
+The script refuses to run unless you are on the right branch with a clean tree that matches `origin`. It then runs lint, the contract check, the tests and the build, uploads an immutable release to `/opt/memento/backend-<env>/releases/`, installs its dependencies, runs migrations, switches `current`, reloads PM2 and checks `/ready`. If activation fails, the server-side script rolls back to the previous release by itself.
+
+`scripts/deploy/<env>/*.sh` are the workflows' own remote scripts, copied verbatim; `test/scripts/deploy-scripts.test.ts` fails if they drift apart. Your SSH key must be in the server's `authorized_keys` for the deploy user.
+
 ## Billing and Storage
 
 ### Staging Pro access

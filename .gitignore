@@ -16,3 +16,6 @@ yarn.lock
 .claude
 # Keep repo-level AI guidance versioned with the backend.
 .env.prod
+
+# Local settings for scripts/deploy.sh
+.deploy.env
