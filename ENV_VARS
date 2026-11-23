@@ -50,6 +50,7 @@
    - MAIL_HOST: SMTP server host.
    - MAIL_PORT: SMTP server port (defaults to 465).
    - MAIL_USER / MAIL_PASSWORD: SMTP credentials.
+   - MAIL_FROM_NAME: Sender display name (defaults to "Memento").
    - DEV_MAILS / SUPPORT_MAILS: Comma-separated lists of email addresses.
    - DISCORD_FEEDBACK_WEBHOOK_URL: Discord webhook for feedback notifications.
 

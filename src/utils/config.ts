@@ -71,6 +71,9 @@ export const MAIL_HOST = process.env.MAIL_HOST;
 export const MAIL_PORT = process.env.MAIL_PORT || 465;
 export const MAIL_USER = process.env.MAIL_USER;
 export const MAIL_PASSWORD = process.env.MAIL_PASSWORD;
+// Display name shown as the sender in inboxes (otherwise clients show the
+// address's local part, e.g. "info").
+export const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || 'Memento';
 
 export const GOOGLE_ID = process.env.GOOGLE_ID;
 export const GOOGLE_SECRET = process.env.GOOGLE_SECRET;
