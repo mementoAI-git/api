@@ -1,44 +1,12 @@
 <%- include('components/header') %>
-
-  <h1 class="subject">
-    🔔 New Feedback Received
-    <span class="badge badge-<%= type.toLowerCase().replace(/\s+/g, '-') %>">
-      <%= type %>
-    </span>
-  </h1>
-
-  <div class="meta">
-    <p><strong>From:</strong>
-      <%= name %> (<%= email %>)
-    </p>
-    <p><strong>Type:</strong>
-      <%= type %>
-    </p>
-    <p><strong>Submitted:</strong>
-      <%= submittedAt %>
-    </p>
-    <p><strong>Feedback ID:</strong> <code><%= feedbackId %></code></p>
-  </div>
-
-  <h3>Message:</h3>
-  <blockquote class="message-box">
-    <%= message %>
-  </blockquote>
-
-  <% if (screenshotUrl) { %>
-    <h3>Screenshot:</h3>
-    <p class="screenshot">
-      <img src="<%= screenshotUrl %>" alt="User Screenshot"><br>
-      <small><a href="<%= screenshotUrl %>">View full size</a></small>
-    </p>
-    <% } %>
-
-      <%- include('components/btn-link', { title: `Reply to ${name}`, url: `mailto:${email}` }) %>
-
-        <p class="footer-note">
-          <strong>Quick Actions:</strong><br>
-          Hit reply or click the button above to respond to <%= name %> at <%= email %>.
-        </p>
-
-        <%- include('components/closing-text') %>
-          <%- include('components/footer') %>
+<%- include('components/title', { text: `New ${label} from`, emphasis: name }) %>
+<%- include('components/details', { rows: [['From', userEmail ? `${name} (${userEmail})` : name], ['Type', type], ['Submitted', submittedAt], ['Feedback ID', feedbackId]] }) %>
+<div class="quote" style="white-space: pre-wrap;"><%= message %></div>
+<% if (screenshotUrl) { %>
+  <p class="small muted">Screenshot</p>
+  <p><a href="<%= screenshotUrl %>"><img src="<%= screenshotUrl %>" alt="Screenshot attached to the feedback" width="478" style="display: block; width: 100%; max-width: 478px; height: auto; border: 1px solid #E8E7E6; border-radius: 8px;"></a></p>
+<% } %>
+<% if (userEmail) { %>
+  <%- include('components/btn-link', { title: `Reply to ${name}`, url: `mailto:${userEmail}`, showUrl: false }) %>
+<% } %>
+<%- include('components/footer') %>

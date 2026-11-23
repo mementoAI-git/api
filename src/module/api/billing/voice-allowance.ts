@@ -70,33 +70,92 @@ export function nextVoiceAllowanceReset(
   return new Date(instant);
 }
 
+export type VoiceCallReport = {
+  /** The server's clock now, in milliseconds. */
+  now?: number;
+  timeZone?: string;
+  /**
+   * Sent by apps while the call is connected. The first one starts the call's
+   * clock, so time spent before the call connected (a token fetched ahead of
+   * the tap) is never counted. Without it the clock runs from the ticket.
+   */
+  connected?: boolean;
+  /**
+   * Total seconds of long silences in the call so far, as the app measured
+   * them: the part of each silence after its first minute. Not counted.
+   */
+  quietSeconds?: number;
+  /** A length the app reported at the end of the call; the count never exceeds it. */
+  reportedSeconds?: number;
+};
+
 /**
- * Records how long a call has run. Only ever raises the recorded time, so a
- * late or repeated report cannot shrink it. The call counts towards the month
- * it started in, in the member's time zone.
+ * Records how long a call has been in use: from the moment it connected (or its
+ * ticket, for apps that don't say), less its long silences, never more than it
+ * has existed or than the app reported, and capped at six hours. Only ever raises
+ * the recorded time, so a late or repeated report cannot shrink it. The call
+ * counts towards the month it started in, in the member's time zone.
  */
 export async function recordVoiceCallSeconds(
   userId: string,
   callStartedAt: number,
-  seconds: number,
-  timeZone = 'UTC',
+  {
+    now = Date.now(),
+    timeZone = 'UTC',
+    connected = false,
+    quietSeconds,
+    reportedSeconds,
+  }: VoiceCallReport = {},
 ): Promise<void> {
-  const value = Math.max(0, Math.min(MAX_CALL_SECONDS, Math.round(seconds)));
-  await VoiceUsage.updateOne(
-    {user: userId, call_started_at: callStartedAt},
+  const quiet = Math.max(
+    0,
+    Math.min(MAX_CALL_SECONDS, Math.round(quietSeconds ?? 0)),
+  );
+  const elapsed = {
+    $divide: [
+      {$subtract: [now, {$ifNull: ['$counted_from', callStartedAt]}]},
+      1000,
+    ],
+  };
+  const used = {
+    $subtract: [
+      reportedSeconds === undefined
+        ? elapsed
+        : {$min: [elapsed, Math.max(0, reportedSeconds)]},
+      '$quiet_seconds',
+    ],
+  };
+  const pipeline = [
     {
-      $max: {seconds: value},
-      $setOnInsert: {month: voiceUsageMonth(callStartedAt, timeZone)},
+      $set: {
+        month: {$ifNull: ['$month', voiceUsageMonth(callStartedAt, timeZone)]},
+        created_at: {$ifNull: ['$created_at', '$$NOW']},
+        updated_at: '$$NOW',
+        quiet_seconds: {$max: [{$ifNull: ['$quiet_seconds', 0]}, quiet]},
+        ...(connected && {counted_from: {$ifNull: ['$counted_from', now]}}),
+      },
     },
-    {upsert: true},
-  ).catch(async error => {
-    // Two requests for a new call can race to create it; the loser retries as an update.
-    if ((error as {code?: number})?.code !== 11000) throw error;
-    await VoiceUsage.updateOne(
-      {user: userId, call_started_at: callStartedAt},
-      {$max: {seconds: value}},
-    );
-  });
+    {
+      $set: {
+        seconds: {
+          $max: [
+            {$ifNull: ['$seconds', 0]},
+            {
+              $round: [{$min: [MAX_CALL_SECONDS, {$max: [0, used]}]}, 0],
+            },
+          ],
+        },
+      },
+    },
+  ];
+  const filter = {user: userId, call_started_at: callStartedAt};
+  await VoiceUsage.collection
+    .updateOne(filter, pipeline, {upsert: true})
+    .catch(async error => {
+      // Two requests for a new call can race to create it; the loser retries as an update.
+      if ((error as {code?: number})?.code !== 11000) throw error;
+      await VoiceUsage.collection.updateOne(filter, pipeline);
+    });
 }
 
 /** How far back an end report may land from the call's real start (a late send, a slow connect). */
@@ -107,8 +166,9 @@ const END_REPORT_LATE_MS = 60_000;
  * Counts a finished call's reported length. The apps report the length when a
  * call ends or its recording is saved, but not which call ticket it had, so
  * the call is the one that started closest to (now - length). The length can
- * never exceed how long ago that call started. Apps that send usage check-ins
- * have usually recorded the call already; this only fills in what they missed.
+ * never exceed how long the call has been connected, and its long silences
+ * stay uncounted. Apps that send usage check-ins have usually recorded the
+ * call already; this only fills in what they missed.
  */
 export async function recordEndedVoiceCall(
   userId: string,
@@ -133,11 +193,10 @@ export async function recordEndedVoiceCall(
       ? next
       : best,
   );
-  await recordVoiceCallSeconds(
-    userId,
-    call.call_started_at,
-    Math.min(durationSeconds, (now - call.call_started_at) / 1000),
-  );
+  await recordVoiceCallSeconds(userId, call.call_started_at, {
+    now,
+    reportedSeconds: durationSeconds,
+  });
 }
 
 /** Seconds of voice mode used in the member's current month. */

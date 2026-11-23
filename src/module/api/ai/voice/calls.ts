@@ -6,6 +6,8 @@ import File from '../../../database/model/file';
 import VoiceCall, {IVoiceCallSummary} from '../../../database/model/voice-call';
 import {assertOwnedMemory} from '../../memory/access';
 import {createMemory} from '../../memory/service';
+import {queueQuickCaptureEnrichment} from '../../../../services/queues/quick-capture';
+import {VOICE_CALL_PLACEHOLDER_TITLE} from '../../../../utils/quick-note';
 import {extractJson} from '../../../../utils/helpers';
 import {
   BadRequestException,
@@ -352,7 +354,8 @@ export async function saveVoiceCallRecording(
     );
 
   const dateLabel = formatCallDate(new Date());
-  const title = `Conversation with Memento · ${dateLabel}`;
+  // A placeholder until the enrichment worker names the call from what was said.
+  const title = `${VOICE_CALL_PLACEHOLDER_TITLE} · ${dateLabel}`;
 
   // Create the Story memory using the existing service so all side effects
   // (streak, search indexing, enrichment cache bust) run as normal.
@@ -372,6 +375,10 @@ export async function saveVoiceCallRecording(
     undefined,
     {skipInsights: true},
   );
+  void queueQuickCaptureEnrichment({
+    user_id: userId,
+    memory_id: String(memory._id),
+  });
 
   // Upsert the VoiceCall record so a recording that arrives before /end still
   // creates a coherent record.

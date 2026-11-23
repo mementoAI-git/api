@@ -28,6 +28,21 @@ describe('PostHog HTTP delivery', () => {
         event: 'growth_account_created',
         distinctId: 'user-id',
         timestamp: new Date('2026-10-01Z'),
+        properties: {
+          analytics_source: 'api',
+          environment: 'production',
+          registration_method: 'oauth',
+          acquisition_source: 'organic',
+        },
+        attempts: 1,
+        nextAttemptAt: new Date(),
+      },
+      {
+        key: 'internal-key-2',
+        uuid: 'stable-event-uuid-2',
+        event: 'growth_user_active',
+        distinctId: 'user-id',
+        timestamp: new Date('2026-10-02Z'),
         properties: {analytics_source: 'api'},
         attempts: 1,
         nextAttemptAt: new Date(),
@@ -43,6 +58,27 @@ describe('PostHog HTTP delivery', () => {
           timestamp: '2026-10-01T00:00:00.000Z',
           properties: {
             analytics_source: 'api',
+            environment: 'production',
+            registration_method: 'oauth',
+            acquisition_source: 'organic',
+            distinct_id: 'user-id',
+            $geoip_disable: true,
+            // Signup creates the person with non-identifying traits only.
+            $process_person_profile: true,
+            $set_once: {
+              signed_up_at: '2026-10-01T00:00:00.000Z',
+              environment: 'production',
+              registration_method: 'oauth',
+              acquisition_source: 'organic',
+            },
+          },
+        },
+        {
+          uuid: 'stable-event-uuid-2',
+          event: 'growth_user_active',
+          timestamp: '2026-10-02T00:00:00.000Z',
+          properties: {
+            analytics_source: 'api',
             distinct_id: 'user-id',
             $geoip_disable: true,
             $process_person_profile: false,
@@ -56,6 +92,7 @@ describe('PostHog HTTP delivery', () => {
     });
     expect(request?.signal).toBeDefined();
     expect(payload).not.toContain('internal-key');
+    expect(payload).not.toContain('@');
   });
 
   it('rejects failed HTTP delivery so the outbox retries', async () => {

@@ -1,0 +1,8 @@
+<table role="presentation" class="details" width="100%" cellspacing="0" cellpadding="0" border="0">
+  <% rows.forEach(function (row, index) { %>
+    <tr>
+      <td width="110" class="label<%= index === 0 ? ' first' : '' %><%= index === rows.length - 1 ? ' last' : '' %>"><%= row[0] %></td>
+      <td style="width: 100%;" class="<%= index === 0 ? 'first' : '' %><%= index === rows.length - 1 ? ' last' : '' %>"><%= row[1] %></td>
+    </tr>
+  <% }) %>
+</table>

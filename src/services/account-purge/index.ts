@@ -1,3 +1,4 @@
+import mail, {notifyInBackground} from '../../module/mail';
 import ActivePrompt from '../../module/database/model/active-prompt';
 import ArchiveExport from '../../module/database/model/archive-export';
 import Activity from '../../module/database/model/activities';
@@ -518,6 +519,9 @@ export async function processPurgeCommand(commandId: string): Promise<void> {
 
   try {
     for (const stage of STAGES) await runStage(command, stage);
+    // The command holds the only copy of the address once the tombstone is
+    // written, and it is cleared below, so confirm the deletion now.
+    const confirmationEmail = command.email;
     await PurgeCommand.findByIdAndUpdate(command.id, {
       $set: {
         status: 'completed',
@@ -526,6 +530,11 @@ export async function processPurgeCommand(commandId: string): Promise<void> {
         last_error_code: null,
       },
     });
+    if (confirmationEmail) {
+      notifyInBackground('account.deleted', () =>
+        mail.sendDeleteAccount({email: confirmationEmail, name: ''}),
+      );
+    }
   } catch (error) {
     await PurgeCommand.findByIdAndUpdate(command.id, {
       $set: {status: 'failed', last_error_code: errorCode(error)},

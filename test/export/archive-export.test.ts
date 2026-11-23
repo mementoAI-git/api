@@ -26,6 +26,7 @@ import {
   getArchiveDownload,
   getArchiveExport,
 } from '../../src/module/api/archive/service';
+import mail from '../../src/module/mail';
 import ArchiveExport from '../../src/module/database/model/archive-export';
 import Capsule from '../../src/module/database/model/capsule';
 import File from '../../src/module/database/model/file';
@@ -181,5 +182,30 @@ describe('archive export', () => {
       progress: {attachments_total: 1, attachments_exported: 0},
       warnings: [`Attachment ${file.id} could not be included.`],
     });
+  });
+
+  it('emails the deleting owner only once the last retry has failed', async () => {
+    const failed = vi
+      .spyOn(mail, 'sendArchiveExportFailed')
+      .mockResolvedValue();
+    const user = await createUserFixture({first_name: 'Ada'});
+    storage.uploadToS3.mockRejectedValue(new Error('bucket unavailable'));
+    const job = await ArchiveExport.create({
+      user_id: user.id,
+      expires_at: new Date(Date.now() + 60_000),
+      email_on_complete: true,
+    });
+
+    await expect(buildArchiveExport(job.id)).rejects.toThrow(
+      'bucket unavailable',
+    );
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(failed).not.toHaveBeenCalled();
+
+    await expect(
+      buildArchiveExport(job.id, {finalAttempt: true}),
+    ).rejects.toThrow('bucket unavailable');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(failed).toHaveBeenCalledWith({email: user.email, name: 'Ada'});
   });
 });

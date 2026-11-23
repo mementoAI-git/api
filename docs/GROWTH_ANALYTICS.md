@@ -60,6 +60,8 @@ Set these on both API and worker processes before deploying the `analytics` bran
 - `POSTHOG_IDENTITY_SECRET`: a server-only random secret of at least 32 characters; generate with `openssl rand -hex 32`. Keep it stable and out of client builds.
 - `POSTHOG_ENVIRONMENT`: `production` only for the real production deployment. Local configuration uses `development`. If omitted, `MEMENTO_ENV=dev` maps to `staging` and `MEMENTO_ENV=prod` maps to `production`, even when both use `NODE_ENV=production`.
 
+`growth_account_created` creates the account's PostHog person with only `signed_up_at`, `acquisition_source`, `registration_method` and `environment` (set once). All other API events are person-less and attach to that person by distinct ID, so cohorts and retention include every account. No email, name or content is ever sent as a person property.
+
 Without ingestion configuration the adapters are no-ops; normal app behavior is preserved. The API and workers can publish concurrently using database leases. Requests do not make ingestion HTTP calls. Delivery receipts stay durable for retry and idempotency; include the new analytics collections in account erasure/retention planning before enabling any future automatic cleanup.
 
 ## Saved PostHog insights

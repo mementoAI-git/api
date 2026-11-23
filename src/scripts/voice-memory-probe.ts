@@ -62,7 +62,7 @@ const SEARCH_RESULT =
 /** Confirmed actions: the code the probe's read-back hands out. */
 const PROBE_CODE = 'PROBE234';
 const CONFIRMED_TOOLS = new Set([
-  'add_beneficiary',
+  'add_connection',
   'schedule_capsule',
   'delete_story',
   'send_feedback',
@@ -195,15 +195,15 @@ const EXPECTATIONS: Expectation[] = [
   },
   {
     question:
-      "Add Emeka as a beneficiary. He's my brother, his email is emeka@example.com.",
-    tool: 'add_beneficiary',
+      "Add Emeka as a connection. He's my brother, his email is emeka@example.com.",
+    tool: 'add_connection',
     args: {email: /^emeka@example\.com$/i},
     followUp: 'Yes, go ahead.',
     confirmed: true,
   },
   {
     question:
-      "Add Emeka as a beneficiary. He's my brother, his email is emeka@example.com.",
+      "Add Emeka as a connection. He's my brother, his email is emeka@example.com.",
     followUp: "No, wait. Don't do that.",
     neverConfirmed: true,
   },

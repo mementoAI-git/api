@@ -39,7 +39,7 @@ import * as storage from '../../../services/storage';
 import speakeasy from 'speakeasy';
 import Qr from 'qrcode';
 import {z} from 'zod';
-import mail from '../../mail';
+import mail, {notifyInBackground} from '../../mail';
 import {OnboardingBody} from './dto';
 import ai from '../../../services/ai';
 import {gatherMemoryInsightsSummaryContext} from '../../../utils/ai-prompt';
@@ -114,6 +114,13 @@ export async function setPassword(payload: ISetPassword, user_id: string) {
 
   const password = await hashPassword(new_password);
   await user.updateOne({password});
+  notifyInBackground('security.password_changed', () =>
+    mail.sendSecurityAlert({
+      email: user.email,
+      name: user.first_name,
+      event: 'password_changed',
+    }),
+  );
 
   return {message: 'Password updated successfully', data: null};
 }
@@ -457,6 +464,13 @@ export async function verifyTOTP({token}: IVerifyTOTP, user_id: string) {
 
   if (!user?.two_factor?.enabled) {
     await user.updateOne({'two_factor.enabled': true});
+    notifyInBackground('security.two_factor_enabled', () =>
+      mail.sendSecurityAlert({
+        email: user.email,
+        name: user.first_name,
+        event: 'two_factor_enabled',
+      }),
+    );
   }
 
   return {data: {verified}, message: 'Verification successful'};
@@ -468,12 +482,22 @@ export async function disable2FA(user_id: string) {
     throw new NotFoundException('User not found');
   }
 
+  const wasEnabled = Boolean(user.two_factor?.enabled);
   await user.updateOne({
     two_factor: {
       enabled: false,
       secret: null,
     },
   });
+  if (wasEnabled) {
+    notifyInBackground('security.two_factor_disabled', () =>
+      mail.sendSecurityAlert({
+        email: user.email,
+        name: user.first_name,
+        event: 'two_factor_disabled',
+      }),
+    );
+  }
 
   return {data: null, message: '2FA disabled successfully'};
 }
@@ -495,14 +519,44 @@ export async function deletePasskey(user_id: string, credential_id: string) {
   const user = await User.findById(user_id);
   if (!user) throw new NotFoundException('User not found');
 
-  const exists = (user.passkeys || []).some(
+  const passkey = (user.passkeys || []).find(
     pk => pk.credential_id === credential_id,
   );
-  if (!exists) throw new NotFoundException('Passkey not found');
+  if (!passkey) throw new NotFoundException('Passkey not found');
 
   await User.updateOne({_id: user_id}, {$pull: {passkeys: {credential_id}}});
+  notifyInBackground('security.passkey_removed', () =>
+    mail.sendSecurityAlert({
+      email: user.email,
+      name: user.first_name,
+      event: 'passkey_removed',
+      device: passkey.device_name,
+    }),
+  );
 
   return {data: null, message: 'Passkey removed successfully'};
+}
+
+/**
+ * Sends the welcome email the first time someone gets into Memento, whether
+ * they finish onboarding or skip it. The atomic claim keeps a later
+ * completion, a retry, or a second device from sending it again.
+ */
+function sendWelcomeOnce(user_id: string): void {
+  notifyInBackground('account.welcome', async () => {
+    const claimed = await User.findOneAndUpdate(
+      {_id: user_id, welcome_email_sent_at: null},
+      {$set: {welcome_email_sent_at: new Date()}},
+      {new: true},
+    )
+      .select('email first_name last_name nickname')
+      .lean();
+    if (!claimed?.email) return;
+    await mail.sendWelcome({
+      email: claimed.email,
+      name: claimed.nickname || claimed.first_name || claimed.last_name || '',
+    });
+  });
 }
 
 export async function completeOnboarding(
@@ -513,6 +567,7 @@ export async function completeOnboarding(
   if (!user) {
     throw new NotFoundException('User not found');
   }
+  const alreadyCompleted = user.onboarding_status === 'completed';
 
   // Create or update persona
   if (payload) {
@@ -586,10 +641,9 @@ export async function completeOnboarding(
     });
   }
 
-  void mail.sendWelcome({
-    email: user.email,
-    name: user?.nickname || user?.first_name || user?.last_name || '',
-  });
+  // Accounts that finished onboarding before the send-once flag existed
+  // already had their welcome; only a first completion sends one.
+  if (!alreadyCompleted) sendWelcomeOnce(user_id);
 
   return {data: null, message: 'Onboarding completed successfully'};
 }
@@ -1066,6 +1120,7 @@ export async function skipOnboarding(
       {session},
     );
   });
+  sendWelcomeOnce(user_id);
 
   return {
     message: 'Onboarding skipped',

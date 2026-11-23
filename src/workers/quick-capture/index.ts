@@ -1,6 +1,7 @@
 import {
   GENERIC_QUICK_CAPTURE_TITLE_RE as GENERIC_TITLE_RE,
   attachmentOnlyTitle,
+  isVoiceCallPlaceholderTitle,
   shouldOverwriteQuickCaptureTitle,
 } from '../../utils/quick-note';
 import File from '../../module/database/model/file';
@@ -29,6 +30,23 @@ function stripHtml(html: string): string {
     .replace(/&nbsp;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/** Longest voice call transcript sent for naming; the start says what it was about. */
+const VOICE_CALL_SOURCE_CHARS = 16000;
+
+/** A saved voice call's body as "You: …" / "Memento: …" lines, so the speakers stay clear. */
+function voiceCallTranscript(html: string): string {
+  return html
+    .split(/<\/p>/i)
+    .map(paragraph =>
+      stripHtml(
+        paragraph.replace(/<strong>\s*(You|Memento)\s*<\/strong>/i, '$1:'),
+      ),
+    )
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, VOICE_CALL_SOURCE_CHARS);
 }
 
 const ALLOWED_CATEGORIES = new Set([
@@ -138,6 +156,7 @@ TITLE RULES:
 - Do not invent emotions, motives, events, relationships, or details.
 - Do not use generic titles such as "Thought", "Quick capture", "Note", "Memory", "Voice note", "Journal entry", or "A passing thought" when readable content exists.
 - If a reflection prompt is supplied, title the person's response rather than the prompt itself.
+- If the source is a conversation between the person ("You") and Memento, title what the person talked about, not the conversation. Never use "Conversation with Memento", "Chat", "Call", or "Talk with Memento".
 - If the source is empty or unusable, use "A passing thought".
 
 TRANSCRIPT RULES:
@@ -251,6 +270,9 @@ export default function startQuickCaptureWorker(connection: RedisConnection) {
       }
 
       const isQuickCapture = memory.capture_source === 'quick';
+      // A saved voice call: its body is already the transcript, and the call's turns
+      // feed insights directly, so this only names it (and tags it when untagged).
+      const isVoiceCall = memory.capture_source === 'voice_call';
 
       const isStory = !memory.type || memory.type === 'story';
 
@@ -258,10 +280,17 @@ export default function startQuickCaptureWorker(connection: RedisConnection) {
         return;
       }
 
-      const voice = await transcribeMemoryAudio(user_id, memory.attachments);
+      const voice = isVoiceCall
+        ? {text: '', recordings: 0}
+        : await transcribeMemoryAudio(user_id, memory.attachments);
 
       // Spoken words inform the title and tags; the story's own body stays as written.
-      const plain = [stripHtml(memory.body || ''), voice.text]
+      const plain = [
+        isVoiceCall
+          ? voiceCallTranscript(memory.body || '')
+          : stripHtml(memory.body || ''),
+        voice.text,
+      ]
         .filter(Boolean)
         .join('\n\n');
 
@@ -283,7 +312,8 @@ export default function startQuickCaptureWorker(connection: RedisConnection) {
             }),
           enrichment_status: 'complete',
         });
-        if (memory.status === 'save') queueSavedStoryJobs(user_id, memory_id);
+        if (memory.status === 'save' && !isVoiceCall)
+          queueSavedStoryJobs(user_id, memory_id);
         return;
       }
 
@@ -345,6 +375,15 @@ ${plain || '(empty)'}
           isQuickCapture &&
           shouldOverwriteQuickCaptureTitle(memory.title || '');
 
+        // A voice call keeps its placeholder rather than a title cut from the transcript.
+        const voiceCallTitle = normalizeGeneratedTitle(parsed?.title);
+        const shouldSetVoiceCallTitle =
+          isVoiceCall &&
+          isVoiceCallPlaceholderTitle(memory.title || '') &&
+          Boolean(voiceCallTitle) &&
+          !GENERIC_TITLE_RE.test(voiceCallTitle) &&
+          !isVoiceCallPlaceholderTitle(voiceCallTitle);
+
         const category = normalizeCategory(parsed?.category);
 
         // Members hear a recording, not its transcript, so there's nothing to warn about.
@@ -360,6 +399,10 @@ ${plain || '(empty)'}
         await Memory.findByIdAndUpdate(memory_id, {
           ...(shouldSetQuickCaptureTitle && {
             title: nextQuickCaptureTitle,
+          }),
+
+          ...(shouldSetVoiceCallTitle && {
+            title: voiceCallTitle,
           }),
 
           ...(tags.length > 0 && {
@@ -382,6 +425,7 @@ ${plain || '(empty)'}
 
         if (
           updated &&
+          !isVoiceCall &&
           (!updated.type || updated.type === 'story') &&
           updated.status === 'save' &&
           updated.body &&
@@ -410,6 +454,7 @@ ${plain || '(empty)'}
         });
 
         if (
+          !isVoiceCall &&
           fallback.status === 'save' &&
           fallback.body &&
           fallback.body.trim().length > 0

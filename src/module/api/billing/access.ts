@@ -63,7 +63,7 @@ const FEATURE_MESSAGES: Record<string, string> = {
   upload_quality: 'High-quality uploads require Pro or Legacy.',
   storage: 'Storage limit reached. Upgrade to continue uploading.',
   time_capsule_window: 'Free plans can only schedule up to 6 months ahead.',
-  beneficiaries: 'Free plans can only add up to 2 beneficiaries.',
+  beneficiaries: 'Free plans can only add up to 2 connections.',
   timed_messages: 'Free plans can only create up to 5 timed messages.',
 };
 
@@ -295,12 +295,7 @@ export async function voiceSecondsLeftForCall(
 ): Promise<number | null> {
   const [subscription] = await Promise.all([
     Subscription.findOne({user_id: userId}).lean(),
-    recordVoiceCallSeconds(
-      userId,
-      callStartedAt,
-      Math.max(0, (now - callStartedAt) / 1000),
-      timeZone,
-    ),
+    recordVoiceCallSeconds(userId, callStartedAt, {now, timeZone}),
   ]);
   if (isPaidTier(resolveEffectiveTier(subscription))) return null;
   const left =

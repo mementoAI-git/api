@@ -13,7 +13,7 @@ import {NotFoundException} from '../../../utils/service-error';
 import * as storage from '../../../services/storage';
 import {generatePresignedUrl, uploadToS3} from '../../../services/storage/s3';
 import {queueArchiveExport} from '../../../services/queues/system';
-import mail from '../../mail';
+import mail, {notifyInBackground} from '../../mail';
 
 const EXPORT_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -92,7 +92,10 @@ function htmlEscape(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export async function buildArchiveExport(exportId: string): Promise<void> {
+export async function buildArchiveExport(
+  exportId: string,
+  options: {finalAttempt?: boolean} = {},
+): Promise<void> {
   const job = await ArchiveExport.findById(exportId);
   if (!job || job.status === 'complete') return;
   await job.updateOne({$set: {status: 'processing', error: null}});
@@ -242,6 +245,20 @@ export async function buildArchiveExport(exportId: string): Promise<void> {
         ),
       },
     });
+    // Only the owner who is deleting their account is waiting on an email;
+    // tell them once the queue has stopped retrying.
+    if (options.finalAttempt && job.email_on_complete) {
+      notifyInBackground('archive.export_failed', async () => {
+        const owner = await User.findById(job.user_id)
+          .select('email first_name nickname')
+          .lean();
+        if (!owner?.email) return;
+        await mail.sendArchiveExportFailed({
+          email: owner.email,
+          name: owner.first_name || owner.nickname || '',
+        });
+      });
+    }
     throw error;
   } finally {
     if (temporaryDirectory) {

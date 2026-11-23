@@ -1,12 +1,9 @@
 <%- include('components/header') %>
-  <h1 class="subject">Your Verification Code</h1>
-  <%- include('components/greetings', { name }) %>
-    <p>
-      Here is your verification code to confirm your email address on Memento:
-    </p>
-    <%- include('components/code', { code, note: "This code will expire in 10 minutes. Enter it in the app to continue." }) %>
-    <p>
-      If you didn’t request this code, please ignore this email. Your account is safe.
-    </p>
-    <%- include('components/closing-text') %>
+<%- include('components/title', { text: 'Your verification', emphasis: 'code' }) %>
+<%- include('components/greetings') %>
+<p>Enter this code in Memento to confirm your email address.</p>
+<%- include('components/code', { code, note: `This code expires in ${expiresIn}. Never share it with anyone.` }) %>
+<p class="small muted">Once you're verified, you can talk to your Memento, write or record your first story, and keep the moments that matter.</p>
+<p class="small muted">If you didn't ask for this code, you can ignore this email.</p>
+<%- include('components/closing-text') %>
 <%- include('components/footer') %>

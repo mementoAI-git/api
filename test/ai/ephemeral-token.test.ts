@@ -210,7 +210,7 @@ describe('createEphemeralToken', () => {
         'update_profile',
         'open_story',
         'save_story',
-        'add_beneficiary',
+        'add_connection',
       ]),
     );
     expect(data.tools).toEqual(['search_memories', ...SERVER_TOOL_NAMES]);

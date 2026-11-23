@@ -14,6 +14,19 @@ export const AUTO_TITLE_PLACEHOLDER = 'Voice note';
 export const GENERIC_QUICK_CAPTURE_TITLE_RE =
   /^(thought|thoughts|quick capture|quick note|a note|note|memory|untitled|new memory|my thought|a passing thought|voice note|photo note|journal entry)\.?$/i;
 
+/**
+ * The title a saved voice call starts with ("Conversation with Memento · 18 Nov 2026").
+ * The enrichment worker replaces it with what the member talked about.
+ */
+export const VOICE_CALL_PLACEHOLDER_TITLE = 'Conversation with Memento';
+
+/** True while a voice call story still carries its placeholder title. */
+export function isVoiceCallPlaceholderTitle(currentTitle: string): boolean {
+  return /^conversation with memento(\s*·.*)?$/i.test(
+    (currentTitle || '').trim(),
+  );
+}
+
 /** True while a story still carries a placeholder rather than a title the member wrote. */
 export function shouldOverwriteQuickCaptureTitle(
   currentTitle: string,

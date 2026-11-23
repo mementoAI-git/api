@@ -184,7 +184,9 @@ export default function startSystemWorker(connection: RedisConnection) {
       if (compareStrings(job.name, queueNames.system.jobs.archiveExport)) {
         const data = job.data as {exportId?: string};
         if (!data.exportId) throw new Error('Archive export id is required');
-        await buildArchiveExport(data.exportId);
+        await buildArchiveExport(data.exportId, {
+          finalAttempt: job.attemptsMade + 1 >= (job.opts.attempts ?? 1),
+        });
       }
       if (
         compareStrings(job.name, queueNames.system.jobs.dispatchArchiveExports)

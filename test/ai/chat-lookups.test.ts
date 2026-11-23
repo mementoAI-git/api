@@ -378,6 +378,21 @@ describe('chat lookups', () => {
       ).toBe(2);
     });
 
+    it('expires a card that still carries the old add_beneficiary name', async () => {
+      // Cards already in chats keep the old tool name and a code bound to it;
+      // Confirm should ask the host to try again, not fail as unknown.
+      const user = await createUserFixture();
+      const chat = await conversation(user.id);
+      await expect(
+        confirmChatAction(
+          user.id,
+          'add_beneficiary',
+          {name: 'Emeka', email: 'emeka@example.com', confirmation: 'ABCDEFGH'},
+          String(chat._id),
+        ),
+      ).rejects.toMatchObject({statusCode: 409});
+    });
+
     it('shows what it did with an Undo that reverses exactly that action', async () => {
       const user = await createUserFixture();
       const chat = await conversation(user.id);

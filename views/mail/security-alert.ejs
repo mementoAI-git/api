@@ -1,0 +1,10 @@
+<%- include('components/header') %>
+<%- include('components/title', { text: heading, emphasis }) %>
+<%- include('components/greetings') %>
+<p><%= summary %></p>
+<%- include('components/details', { rows: details }) %>
+<p><strong>Was this you?</strong> Then there's nothing else to do.</p>
+<p>If it wasn't you, reset your password now and write to us at <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a> so we can help secure your account.</p>
+<%- include('components/btn-link', { title: 'Reset your password', url: resetUrl, showUrl: false }) %>
+<%- include('components/closing-text') %>
+<%- include('components/footer') %>

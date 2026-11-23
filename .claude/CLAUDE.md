@@ -70,3 +70,11 @@ Use the typed errors from `src/utils/service-error.ts` in services (`BadRequestE
 ### API Documentation
 
 Swagger/OpenAPI docs are available at `/docs` when the server is running. Source files are in `src/docs/`.
+
+## Product language
+
+Apply these to all user-facing copy: emails (`views/mail/`), API messages, prompts and docs.
+
+- Call the AI "your Memento" (for example "Talk to your Memento"). It doubles as the user's digital mind. Never call it an "AI twin" or "digital twin".
+- Say "people" and "connection" for the people a user invites (for example "Ada Lovelace added you as a connection"). Never say "beneficiary" in user-facing copy. Internal code names such as the `beneficiary` model may stay.
+- Memento has launched and signup is open. Don't describe it as a private beta, and don't ask for invite codes.

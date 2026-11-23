@@ -34,7 +34,7 @@ import {failed} from './tool-errors';
  *   bookmark, tag, rename or add to a story, correct an observation, make a
  *   story private, draft a capsule. All are easy to undo. Explaining an
  *   observation only reads.
- * - Confirmed first: adding a beneficiary (emails an invite), scheduling a
+ * - Confirmed first: adding a connection (emails an invite), scheduling a
  *   capsule, deleting a story, replacing a story's whole text, sharing a
  *   story, making a story visible to everyone, forgetting an observation,
  *   sending feedback. The first call only reads the action back with a code;
@@ -493,7 +493,7 @@ export async function describeAccess(userId: string, access: Access) {
         .lean(),
     ]);
     const names = [
-      ...people.map(p => String(p.name || 'a beneficiary')),
+      ...people.map(p => String(p.name || 'a connection')),
       ...groups.map(g => `the group ${String(g.name || 'unnamed')}`),
     ];
     return `shared only with ${names.join(', ') || 'specific people'}`;
@@ -540,7 +540,7 @@ const shareStory: Handler = async (userId, args) => {
   if (!story) return NO_STORY;
   const wanted = names(args.with);
   if (!wanted.length)
-    return say('Ask which beneficiaries or groups to share it with.');
+    return say('Ask which connections or groups to share it with.');
   const id = String(story._id);
   const title = story.title || 'Untitled';
 
@@ -573,7 +573,7 @@ const shareStory: Handler = async (userId, args) => {
       continue;
     }
     return say(
-      `Nothing was shared. "${name}" is not one of their beneficiaries or groups. Ask who they meant, or offer to add them as a beneficiary first.`,
+      `Nothing was shared. "${name}" is not one of their connections or groups. Ask who they meant, or offer to add them as a connection first.`,
     );
   }
 
@@ -647,7 +647,7 @@ const setStoryVisibility: Handler = async (userId, args) => {
       userId,
       'set_story_visibility',
       {...args, story: id},
-      `Make "${title}" visible to everyone: all their beneficiaries and the people they are connected with in Memento will be able to see it. It is ${now} now.`,
+      `Make "${title}" visible to everyone: anyone with the link will be able to read it, not only their connections. It is ${now} now.`,
     );
     if (pending) return pending;
   }
@@ -670,7 +670,7 @@ const setStoryVisibility: Handler = async (userId, args) => {
   };
 };
 
-/** One of the host's beneficiaries by name, for capsule recipients. */
+/** One of the host's connections by name, for capsule recipients. */
 async function findBeneficiary(userId: string, name: string) {
   if (!name) return undefined;
   const pattern = new RegExp(escapeRegex(name), 'i');
@@ -691,7 +691,7 @@ const draftCapsule: Handler = async (userId, args) => {
   const recipient = await findBeneficiary(userId, recipientName);
   if (recipientName && !recipient) {
     return say(
-      `"${recipientName}" is not one of their beneficiaries. Ask who it is for, or offer to add them as a beneficiary first.`,
+      `"${recipientName}" is not one of their connections. Ask who it is for, or offer to add them as a connection first.`,
     );
   }
   let created: {_id?: unknown};
@@ -801,14 +801,14 @@ const addBeneficiary: Handler = async (userId, args) => {
   const relationship = str(args.relationship, 60) || 'friend';
   if (!name || !EMAIL.test(email)) {
     return say(
-      'Adding a beneficiary needs their name and a valid email address. Ask for whichever is missing, and spell the email back.',
+      'Adding a connection needs their name and a valid email address. Ask for whichever is missing, and spell the email back.',
     );
   }
   const pending = confirmFirst(
     userId,
-    'add_beneficiary',
+    'add_connection',
     args,
-    `Add ${name} (${relationship}) as a beneficiary. This emails an invitation to ${email}.`,
+    `Add ${name} (${relationship}) as a connection. This emails an invitation to ${email}.`,
   );
   if (pending) return pending;
   let added: {_id?: unknown} | undefined;
@@ -821,11 +821,11 @@ const addBeneficiary: Handler = async (userId, args) => {
     return failed(error);
   }
   return {
-    result: `Added ${name} as a beneficiary and sent the invitation to ${email}.`,
+    result: `Added ${name} as a connection and sent the invitation to ${email}.`,
     undo: added
       ? {kind: 'remove_beneficiary', id: String(added._id), email}
       : undefined,
-    summary: `added ${name} as a beneficiary`,
+    summary: `added ${name} as a connection`,
     effects: [
       {type: 'refresh', what: 'beneficiaries'},
       {type: 'open', destination: 'beneficiaries'},
@@ -904,6 +904,9 @@ export const CONTENT_ACTION_HANDLERS: Record<string, Handler> = {
   set_story_visibility: setStoryVisibility,
   draft_capsule: draftCapsule,
   schedule_capsule: scheduleCapsule,
+  add_connection: addBeneficiary,
+  // Old name, kept undeclared for voice sessions and chat confirmation
+  // cards that started before the rename. Remove after one release.
   add_beneficiary: addBeneficiary,
   delete_story: deleteStory,
   send_feedback: sendFeedback,

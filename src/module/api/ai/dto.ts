@@ -195,6 +195,10 @@ export const voiceUsageSchema = z.object({
   body: z.strictObject({
     call_ticket: z.string().min(3).max(200),
     timezone: z.string().max(64).optional(),
+    /** The call is connected; the first such check-in starts its clock. */
+    connected: z.boolean().optional(),
+    /** Seconds of long silence so far (each silence after its first minute). */
+    quiet_seconds: z.number().min(0).max(86_400).optional(),
   }),
 });
 

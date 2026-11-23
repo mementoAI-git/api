@@ -87,7 +87,7 @@ export async function normalizeCapsuleRecipients(
       !['full_vault', 'capsules_only'].includes(beneficiary.access_scope)
     ) {
       throw new BadRequestException(
-        `Beneficiary "${beneficiary.name || beneficiary.email}" does not have capsule access permissions (${beneficiary.access_scope}).`,
+        `"${beneficiary.name || beneficiary.email}" can't receive time capsules with their current connection access.`,
       );
     }
 
