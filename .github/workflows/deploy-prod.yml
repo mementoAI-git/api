@@ -454,7 +454,8 @@ jobs:
       # Logs in to Zoho as the mailbox (MAIL_USER, an app password
       # when 2FA is on) and sends as MAIL_FROM_ADDRESS, an alias of
       # that mailbox. Values travel in the stdin script, never on a
-      # command line.
+      # command line. Port 587 (STARTTLS) because the server's
+      # provider blocks outbound 465.
       # ────────────────────────────────────────────────────────
       - name: Sync mail settings
         shell: bash
@@ -512,7 +513,7 @@ jobs:
             "\$ENV_FILE" > "\$TMP" || true
           {
             echo 'MAIL_HOST=$MAIL_HOST'
-            echo 'MAIL_PORT=465'
+            echo 'MAIL_PORT=587'
             echo 'MAIL_USER=$MAIL_USER'
             echo 'MAIL_FROM_ADDRESS=$MAIL_FROM_ADDRESS'
             echo 'MAIL_PASSWORD=$MAIL_PASSWORD'
