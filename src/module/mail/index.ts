@@ -5,6 +5,7 @@ import {
   DEV_MAILS,
   FRONTEND_URL,
   BACKEND_URL,
+  MAIL_FROM_ADDRESS,
   MAIL_FROM_NAME,
   MAIL_HOST,
   MAIL_PASSWORD,
@@ -204,8 +205,9 @@ class MailService {
         'mail.send: attempting SMTP send',
       );
       const info = await transport.sendMail({
-        from: {name: MAIL_FROM_NAME, address: MAIL_USER ?? ''},
         ...payload,
+        // Always last so every email shows "Memento" as the sender.
+        from: {name: MAIL_FROM_NAME, address: MAIL_FROM_ADDRESS ?? ''},
         to: recipients,
       });
       logger.info(

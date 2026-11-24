@@ -4,6 +4,8 @@ import type SMTPTransport from 'nodemailer/lib/smtp-transport';
 vi.mock('../../src/utils/config', async importOriginal => ({
   ...(await importOriginal<typeof import('../../src/utils/config')>()),
   MAIL_PORT: '465',
+  MAIL_USER: 'info@example.com',
+  MAIL_FROM_ADDRESS: 'noreply@example.com',
 }));
 
 import mail, {transport} from '../../src/module/mail';
@@ -15,6 +17,30 @@ describe('verification SMTP delivery', () => {
       port: 465,
       secure: true,
     });
+  });
+
+  it('logs in as MAIL_USER and sends as MAIL_FROM_ADDRESS', async () => {
+    expect((transport.options as SMTPTransport.Options).auth).toMatchObject({
+      user: 'info@example.com',
+    });
+    const sendMail = vi.spyOn(transport, 'sendMail').mockResolvedValue({
+      accepted: ['recipient@example.com'],
+      rejected: [],
+    } as never);
+    await expect(
+      mail.send({
+        to: 'recipient@example.com',
+        from: 'someone-else@example.com',
+        subject: 'Hi',
+        text: 'Hi',
+      }),
+    ).resolves.toBe(true);
+    expect(sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: {name: 'Memento', address: 'noreply@example.com'},
+      }),
+    );
+    sendMail.mockRestore();
   });
 
   it.each(['code', 'link'] as const)(
