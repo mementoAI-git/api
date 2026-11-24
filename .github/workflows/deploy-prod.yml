@@ -450,6 +450,84 @@ jobs:
           REMOTE
 
       # ────────────────────────────────────────────────────────
+      # Mail settings: GitHub secrets -> server .env.
+      # Logs in to Zoho as the mailbox (MAIL_USER, an app password
+      # when 2FA is on) and sends as MAIL_FROM_ADDRESS, an alias of
+      # that mailbox. Values travel in the stdin script, never on a
+      # command line.
+      # ────────────────────────────────────────────────────────
+      - name: Sync mail settings
+        shell: bash
+        env:
+          MAIL_HOST: ${{ secrets.MAIL_HOST }}
+          MAIL_USER: ${{ secrets.MAIL_USER }}
+          MAIL_FROM_ADDRESS: ${{ secrets.MAIL_FROM_ADDRESS }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$MAIL_HOST" ] || [ -z "$MAIL_USER" ] \
+            || [ -z "$MAIL_FROM_ADDRESS" ] || [ -z "$MAIL_PASSWORD" ]; then
+            echo "::warning::Mail secrets are not all set; the .env was left unchanged."
+            exit 0
+          fi
+
+          # Strict formats keep the values safe to embed in the script.
+          if ! [[ "$MAIL_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "::error::MAIL_HOST must be a bare host name, e.g. smtp.zoho.com"
+            exit 1
+          fi
+          EMAIL_RE='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]+$'
+          if ! [[ "$MAIL_USER" =~ $EMAIL_RE ]]; then
+            echo "::error::MAIL_USER must be an email address"
+            exit 1
+          fi
+          if ! [[ "$MAIL_FROM_ADDRESS" =~ $EMAIL_RE ]]; then
+            echo "::error::MAIL_FROM_ADDRESS must be an email address"
+            exit 1
+          fi
+          if ! [[ "$MAIL_PASSWORD" =~ ^[A-Za-z0-9]+$ ]]; then
+            echo "::error::MAIL_PASSWORD must be a Zoho app password (letters and digits only)"
+            exit 1
+          fi
+
+          ssh \
+            -T \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            -i ~/.ssh/deploy_key \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "bash -s -- '$DEPLOY_ROOT/.env'" <<REMOTE
+          set -euo pipefail
+          ENV_FILE="\$1"
+          if [ ! -f "\$ENV_FILE" ]; then
+            echo "::error::\$ENV_FILE does not exist"
+            exit 1
+          fi
+          TMP="\$(mktemp "\$ENV_FILE.XXXXXX")"
+          trap 'rm -f "\$TMP"' EXIT
+          grep -v -E '^(export )?MAIL_(HOST|PORT|USER|FROM_ADDRESS|PASSWORD)=' \
+            "\$ENV_FILE" > "\$TMP" || true
+          {
+            echo 'MAIL_HOST=$MAIL_HOST'
+            echo 'MAIL_PORT=465'
+            echo 'MAIL_USER=$MAIL_USER'
+            echo 'MAIL_FROM_ADDRESS=$MAIL_FROM_ADDRESS'
+            echo 'MAIL_PASSWORD=$MAIL_PASSWORD'
+          } >> "\$TMP"
+          if cmp -s "\$TMP" "\$ENV_FILE"; then
+            echo "Mail settings are already current."
+            exit 0
+          fi
+          chmod --reference="\$ENV_FILE" "\$TMP"
+          mv -f "\$TMP" "\$ENV_FILE"
+          trap - EXIT
+          echo "Mail settings written to \$ENV_FILE."
+          REMOTE
+
+      # ────────────────────────────────────────────────────────
       # Upload NEW release without touching current
       # ────────────────────────────────────────────────────────
       - name: Create release directory
