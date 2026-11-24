@@ -74,6 +74,9 @@ export const MAIL_PASSWORD = process.env.MAIL_PASSWORD;
 // Display name shown as the sender in inboxes (otherwise clients show the
 // address's local part, e.g. "info").
 export const MAIL_FROM_NAME = process.env.MAIL_FROM_NAME || 'Memento';
+// Address shown as the sender. Set it when sending from an alias of the
+// MAIL_USER mailbox (e.g. log in as info@, send as noreply@).
+export const MAIL_FROM_ADDRESS = process.env.MAIL_FROM_ADDRESS || MAIL_USER;
 
 export const GOOGLE_ID = process.env.GOOGLE_ID;
 export const GOOGLE_SECRET = process.env.GOOGLE_SECRET;

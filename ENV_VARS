@@ -49,7 +49,8 @@
   7. Mail & Communication
    - MAIL_HOST: SMTP server host.
    - MAIL_PORT: SMTP server port (defaults to 465).
-   - MAIL_USER / MAIL_PASSWORD: SMTP credentials.
+   - MAIL_USER / MAIL_PASSWORD: SMTP login (the mailbox, e.g. info@). With Zoho 2FA, MAIL_PASSWORD must be an app password.
+   - MAIL_FROM_ADDRESS: Sender address (defaults to MAIL_USER). Use for an alias of the MAIL_USER mailbox, e.g. noreply@.
    - MAIL_FROM_NAME: Sender display name (defaults to "Memento").
    - DEV_MAILS / SUPPORT_MAILS: Comma-separated lists of email addresses.
    - DISCORD_FEEDBACK_WEBHOOK_URL: Discord webhook for feedback notifications.
