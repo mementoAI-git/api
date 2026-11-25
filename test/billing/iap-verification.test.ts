@@ -126,6 +126,83 @@ describe('IAP Verification & Billing Service', () => {
     );
   });
 
+  // A tester's App Store sandbox subscription had lapsed; a Google Play
+  // purchase on the same account verified but left the plan on Free.
+  it('lets a Google Play purchase replace an App Store plan that has lapsed', async () => {
+    const user = await createUserFixture();
+    const lapsed = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+    await Subscription.create({
+      user_id: user.id,
+      tier: 'pro',
+      status: 'active',
+      payment_provider: 'apple',
+      billing_interval: 'monthly',
+      current_period_start: new Date(lapsed.getTime() - 30 * 24 * 60 * 60 * 1000),
+      current_period_end: lapsed,
+      provider_subscription_id: 'old_apple_tx',
+    });
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    iapVerifier.verifyGooglePlayPurchase.mockResolvedValueOnce({
+      verifiedTransactionId: 'play_token_1',
+      originalTransactionId: 'play_token_1',
+      productId: 'memento_pro_monthly',
+      purchaseDate: new Date(),
+      expiresAt,
+      environment: 'Test',
+      chainAliases: ['play_token_1'],
+      rawPayload: {subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE'},
+    });
+
+    const result = await verifyIapPurchase(user.id, {
+      platform: 'android',
+      productId: 'memento_pro_monthly',
+      transactionId: 'GPA.1',
+      purchaseToken: 'play_token_1',
+    });
+
+    expect(result.data.tier).toBe('pro');
+    const sub = await Subscription.findOne({user_id: user.id});
+    expect(sub?.payment_provider).toBe('google');
+    expect(sub?.provider_subscription_id).toBe('play_token_1');
+    expect(sub?.current_period_end?.toISOString()).toBe(expiresAt.toISOString());
+  });
+
+  it('leaves an App Store plan that is still paid for in charge', async () => {
+    const user = await createUserFixture();
+    const appleEnd = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
+    await Subscription.create({
+      user_id: user.id,
+      tier: 'pro',
+      status: 'active',
+      payment_provider: 'apple',
+      billing_interval: 'monthly',
+      current_period_start: new Date(),
+      current_period_end: appleEnd,
+      provider_subscription_id: 'live_apple_tx',
+    });
+    iapVerifier.verifyGooglePlayPurchase.mockResolvedValueOnce({
+      verifiedTransactionId: 'play_token_2',
+      originalTransactionId: 'play_token_2',
+      productId: 'memento_pro_monthly',
+      purchaseDate: new Date(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      environment: 'Test',
+      chainAliases: ['play_token_2'],
+      rawPayload: {},
+    });
+
+    await verifyIapPurchase(user.id, {
+      platform: 'android',
+      productId: 'memento_pro_monthly',
+      transactionId: 'GPA.2',
+      purchaseToken: 'play_token_2',
+    });
+
+    const sub = await Subscription.findOne({user_id: user.id});
+    expect(sub?.payment_provider).toBe('apple');
+    expect(sub?.provider_subscription_id).toBe('live_apple_tx');
+  });
+
   it('enforces anti-replay when another user attempts to claim the same store transaction', async () => {
     const user1 = await createUserFixture();
     const user2 = await createUserFixture();
