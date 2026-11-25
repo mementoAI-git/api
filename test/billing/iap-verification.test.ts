@@ -137,7 +137,9 @@ describe('IAP Verification & Billing Service', () => {
       status: 'active',
       payment_provider: 'apple',
       billing_interval: 'monthly',
-      current_period_start: new Date(lapsed.getTime() - 30 * 24 * 60 * 60 * 1000),
+      current_period_start: new Date(
+        lapsed.getTime() - 30 * 24 * 60 * 60 * 1000,
+      ),
       current_period_end: lapsed,
       provider_subscription_id: 'old_apple_tx',
     });
@@ -164,7 +166,9 @@ describe('IAP Verification & Billing Service', () => {
     const sub = await Subscription.findOne({user_id: user.id});
     expect(sub?.payment_provider).toBe('google');
     expect(sub?.provider_subscription_id).toBe('play_token_1');
-    expect(sub?.current_period_end?.toISOString()).toBe(expiresAt.toISOString());
+    expect(sub?.current_period_end?.toISOString()).toBe(
+      expiresAt.toISOString(),
+    );
   });
 
   it('leaves an App Store plan that is still paid for in charge', async () => {
