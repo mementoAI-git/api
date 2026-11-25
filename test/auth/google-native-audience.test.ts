@@ -15,6 +15,11 @@ const MEMENTO_IOS =
   '246773083886-nkljj6mafpodch7a8mv1g5khn91sv8a4.apps.googleusercontent.com';
 const MEMENTO_ANDROID =
   '246773083886-r71s166vm87ldt4g59pvnlma706jaurd.apps.googleusercontent.com';
+// Google Play re-signs the app, so installs from Play present Play's keys.
+const MEMENTO_ANDROID_PLAY =
+  '246773083886-b8001nmd44ved77u7he8kelkv7c9m405.apps.googleusercontent.com';
+const MEMENTO_ANDROID_PLAY_NEXT =
+  '246773083886-uies9o8pv3lv82h5ftdso9ljen1n9p0v.apps.googleusercontent.com';
 // The clients built into earlier app builds.
 const WEB =
   '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com';
@@ -111,6 +116,17 @@ describe('Google sign-in from the apps', () => {
     vi.restoreAllMocks();
     googleSays({aud: MEMENTO_WEB, azp: MEMENTO_ANDROID});
     expect((await signIn('android')).status).toBe(200);
+  });
+
+  // The Play internal build signed in with Google, then the API answered
+  // "Google ID token authorized party mismatch".
+  it('accepts tokens from apps installed from Google Play', async () => {
+    setGoogleEnv({});
+    for (const azp of [MEMENTO_ANDROID_PLAY, MEMENTO_ANDROID_PLAY_NEXT]) {
+      vi.restoreAllMocks();
+      googleSays({aud: MEMENTO_WEB, azp});
+      expect((await signIn('android')).status).toBe(200);
+    }
   });
 
   it('keeps accepting the clients built into earlier app builds', async () => {
