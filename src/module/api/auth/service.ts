@@ -186,7 +186,9 @@ const WA_TTL = 5 * 60;
 const MEMENTO_GOOGLE_CLIENT_IDS = [
   '246773083886-bu35mshe7kbnhe329rka30k50t120vde.apps.googleusercontent.com', // web
   '246773083886-nkljj6mafpodch7a8mv1g5khn91sv8a4.apps.googleusercontent.com', // iOS
-  '246773083886-r71s166vm87ldt4g59pvnlma706jaurd.apps.googleusercontent.com', // Android
+  '246773083886-r71s166vm87ldt4g59pvnlma706jaurd.apps.googleusercontent.com', // Android: EAS upload key (APKs installed directly)
+  '246773083886-b8001nmd44ved77u7he8kelkv7c9m405.apps.googleusercontent.com', // Android: Play app signing key (installs from Google Play)
+  '246773083886-uies9o8pv3lv82h5ftdso9ljen1n9p0v.apps.googleusercontent.com', // Android: Play's newer quantum-ready signing key
   '680261459129-g1l36cheppg1e29slepth6dpvngjqjj1.apps.googleusercontent.com', // earlier builds: web
   '680261459129-nupaa1nhgpkolmiicmcho7ffipl939lf.apps.googleusercontent.com', // earlier builds: iOS
 ];
