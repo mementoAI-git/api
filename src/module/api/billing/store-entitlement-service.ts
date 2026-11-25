@@ -8,6 +8,7 @@ import StoreNotificationEvent from '../../database/model/store-notification-even
 import Subscription from '../../database/model/subscription';
 import type {ISubscription} from '../../database/model/subscription';
 import type {HydratedDocument} from 'mongoose';
+import {providerIsPaying} from './access';
 import {
   storeIdentifierKey,
   uniqueStoreAliases,
@@ -190,10 +191,14 @@ export async function applyStoreSubscriptionSnapshot({
           {upsert: true, new: true, session},
         );
 
+        // A store purchase may replace the plan unless another provider is
+        // still being paid. An App Store subscription that lapsed must not
+        // stop a later Google Play purchase from switching Pro on.
         const providerCanMutate =
           !billingAccount?.payment_provider ||
           billingAccount.payment_provider === snapshot.provider ||
-          billingAccount.tier === 'free';
+          billingAccount.tier === 'free' ||
+          !providerIsPaying(billingAccount);
         if (providerCanMutate) {
           result = await Subscription.findOneAndUpdate(
             {user_id: userId},
