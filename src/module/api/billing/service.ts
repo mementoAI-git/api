@@ -195,9 +195,12 @@ export async function createCheckoutSession(
     throw new NotFoundException('User email is required for checkout');
   }
   const existing = await Subscription.findOne({user_id: userId}).lean();
+  // Only a plan someone is still paying for blocks a new checkout. A store
+  // subscription that lapsed without a notice still reads "active".
   if (
     existing?.provider_subscription_id &&
-    ['active', 'trialing', 'past_due'].includes(existing.status)
+    ['active', 'trialing', 'past_due'].includes(existing.status) &&
+    providerIsPaying(existing)
   ) {
     throw new BadRequestException(
       'Use Manage plan to change your existing subscription',

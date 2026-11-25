@@ -386,6 +386,34 @@ describe('one trial per member', () => {
     },
   );
 
+  // A tester's App Store sandbox plan ended on Oct 27 but still read
+  // "active"; the web checkout told them to manage their existing plan.
+  it('lets a member whose App Store plan lapsed start a web checkout', async () => {
+    const user = await createUserFixture();
+    await Subscription.create({
+      user_id: user.id,
+      tier: 'pro',
+      status: 'active',
+      payment_provider: 'apple',
+      provider_subscription_id: 'old_apple_tx',
+      current_period_end: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    });
+    expect(await startCheckout(user.id)).toMatchObject({allowTrial: false});
+  });
+
+  it('still sends a member with a live App Store plan to Manage plan', async () => {
+    const user = await createUserFixture();
+    await Subscription.create({
+      user_id: user.id,
+      tier: 'pro',
+      status: 'active',
+      payment_provider: 'apple',
+      provider_subscription_id: 'live_apple_tx',
+      current_period_end: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000),
+    });
+    await expect(startCheckout(user.id)).rejects.toThrow(/Use Manage plan/);
+  });
+
   it('records the trial from a subscription webhook and keeps it after cancellation', async () => {
     const user = await createUserFixture();
     polar.resolvePolarProductPlan.mockReturnValue({
